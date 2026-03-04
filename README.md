@@ -2,6 +2,12 @@
 
 A web dashboard for managing Claude Code agents and commands. Browse, create, edit, and visualize the relationships between your agents and commands stored in your `.claude` directory.
 
+## Screenshots
+
+![Main View](images/main-view.png)
+
+![Agent Details](images/agent-details.png)
+
 ## Features
 
 - **Dashboard** — Overview of agents, commands, model distribution, and quick links
