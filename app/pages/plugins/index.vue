@@ -1,5 +1,6 @@
 <script setup lang="ts">
-const { plugins, loading, fetchAll } = usePlugins()
+const { plugins, loading, fetchAll, toggleEnabled } = usePlugins()
+const toast = useToast()
 
 const searchQuery = ref('')
 
@@ -24,6 +25,15 @@ const groupedByMarketplace = computed(() => {
   }
   return groups
 })
+
+async function onToggle(id: string, enabled: boolean) {
+  try {
+    await toggleEnabled(id, enabled)
+    toast.add({ title: `Plugin ${enabled ? 'enabled' : 'disabled'}`, color: 'success' })
+  } catch {
+    toast.add({ title: 'Failed to update', color: 'error' })
+  }
+}
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
@@ -63,59 +73,70 @@ function formatDate(iso: string) {
 
           <!-- Plugin list -->
           <div class="space-y-1">
-            <NuxtLink
+            <div
               v-for="plugin in group"
               :key="plugin.id"
-              :to="`/plugins/${encodeURIComponent(plugin.id)}`"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group focus-ring"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group"
               style="border: 1px solid transparent;"
               @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'; ($event.currentTarget as HTMLElement).style.background = 'var(--surface-raised)'"
               @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'transparent'; ($event.currentTarget as HTMLElement).style.background = 'transparent'"
             >
-              <!-- Enabled indicator -->
-              <div
-                class="size-2.5 rounded-full shrink-0"
-                :style="{ background: plugin.enabled ? 'var(--success, #22c55e)' : 'var(--text-disabled)' }"
-              />
-
-              <!-- Name -->
-              <span class="font-mono text-[13px] font-medium w-44 shrink-0 truncate" style="color: var(--text-primary);">
-                {{ plugin.name }}
-              </span>
-
-              <!-- Version badge -->
-              <span
-                class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0"
-                style="background: rgba(255,255,255,0.06); color: var(--text-disabled);"
-              >
-                v{{ plugin.version }}
-              </span>
-
-              <!-- Description -->
-              <span class="flex-1 text-[12px] truncate" style="color: var(--text-tertiary);">
-                {{ plugin.description }}
-              </span>
-
-              <!-- Metadata -->
-              <div class="flex items-center gap-3 shrink-0">
-                <span
-                  v-if="plugin.skills.length"
-                  class="font-mono text-[10px]"
-                  style="color: var(--text-disabled);"
-                  :title="plugin.skills.join(', ')"
-                >
-                  {{ plugin.skills.length }} skill{{ plugin.skills.length === 1 ? '' : 's' }}
-                </span>
-                <span class="font-mono text-[10px]" style="color: var(--text-disabled);">
-                  {{ formatDate(plugin.installedAt) }}
-                </span>
-                <UIcon
-                  name="i-lucide-chevron-right"
-                  class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  style="color: var(--text-disabled);"
+              <!-- Toggle -->
+              <label class="field-toggle shrink-0" @click.stop>
+                <input
+                  type="checkbox"
+                  :checked="plugin.enabled"
+                  @change="onToggle(plugin.id, ($event.target as HTMLInputElement).checked)"
                 />
-              </div>
-            </NuxtLink>
+                <span class="field-toggle__track">
+                  <span class="field-toggle__thumb" />
+                </span>
+              </label>
+
+              <!-- Clickable area for navigation -->
+              <NuxtLink
+                :to="`/plugins/${encodeURIComponent(plugin.id)}`"
+                class="flex items-center gap-3 flex-1 min-w-0 focus-ring rounded"
+              >
+                <!-- Name -->
+                <span class="font-mono text-[13px] font-medium w-44 shrink-0 truncate" style="color: var(--text-primary);">
+                  {{ plugin.name }}
+                </span>
+
+                <!-- Version badge -->
+                <span
+                  class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0"
+                  style="background: rgba(255,255,255,0.06); color: var(--text-disabled);"
+                >
+                  v{{ plugin.version }}
+                </span>
+
+                <!-- Description -->
+                <span class="flex-1 text-[12px] truncate" style="color: var(--text-tertiary);">
+                  {{ plugin.description }}
+                </span>
+
+                <!-- Metadata -->
+                <div class="flex items-center gap-3 shrink-0">
+                  <span
+                    v-if="plugin.skills.length"
+                    class="font-mono text-[10px]"
+                    style="color: var(--text-disabled);"
+                    :title="plugin.skills.join(', ')"
+                  >
+                    {{ plugin.skills.length }} skill{{ plugin.skills.length === 1 ? '' : 's' }}
+                  </span>
+                  <span class="font-mono text-[10px]" style="color: var(--text-disabled);">
+                    {{ formatDate(plugin.installedAt) }}
+                  </span>
+                  <UIcon
+                    name="i-lucide-chevron-right"
+                    class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    style="color: var(--text-disabled);"
+                  />
+                </div>
+              </NuxtLink>
+            </div>
           </div>
         </div>
       </div>

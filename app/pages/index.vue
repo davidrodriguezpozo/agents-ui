@@ -5,6 +5,7 @@ const { claudeDir, set: setDir } = useClaudeDir()
 const { agents, fetchAll: fetchAgents } = useAgents()
 const { commands, fetchAll: fetchCommands } = useCommands()
 const { plugins, fetchAll: fetchPlugins } = usePlugins()
+const { skills, fetchAll: fetchSkills } = useSkills()
 const { settings, load: loadSettings } = useSettings()
 
 const dirInput = ref('')
@@ -12,14 +13,14 @@ const settingDir = ref(false)
 
 onMounted(async () => {
   dirInput.value = claudeDir.value || ''
-  await Promise.all([loadSettings(), fetchPlugins()])
+  await Promise.all([loadSettings(), fetchPlugins(), fetchSkills()])
 })
 
 async function changeDir() {
   settingDir.value = true
   try {
     await setDir(dirInput.value)
-    await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), loadSettings()])
+    await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), loadSettings()])
   } finally {
     settingDir.value = false
   }
@@ -46,6 +47,7 @@ const modelBreakdown = computed(() => {
 const totalChars = computed(() =>
   agents.value.reduce((sum, a) => sum + a.body.length, 0)
     + commands.value.reduce((sum, c) => sum + c.body.length, 0)
+    + skills.value.reduce((sum, s) => sum + s.body.length, 0)
 )
 </script>
 
@@ -96,13 +98,16 @@ const totalChars = computed(() =>
           <div class="text-[11px] mt-1" style="color: var(--text-disabled);">Commands</div>
         </NuxtLink>
 
-        <div
-          class="rounded-xl p-4"
+        <NuxtLink
+          to="/skills"
+          class="rounded-xl p-4 transition-all duration-150 focus-ring"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+          @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'"
+          @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'"
         >
-          <div class="font-mono text-[24px] font-bold" style="color: var(--text-primary);">{{ commandGroups }}</div>
-          <div class="text-[11px] mt-1" style="color: var(--text-disabled);">Groups</div>
-        </div>
+          <div class="font-mono text-[24px] font-bold" style="color: var(--text-primary);">{{ skills.length }}</div>
+          <div class="text-[11px] mt-1" style="color: var(--text-disabled);">Skills</div>
+        </NuxtLink>
 
         <NuxtLink
           to="/plugins"
@@ -213,8 +218,39 @@ const totalChars = computed(() =>
         </div>
       </div>
 
+      <!-- Quick actions for empty state -->
+      <div
+        v-if="agents.length === 0 && commands.length === 0"
+        class="rounded-xl p-6 space-y-4"
+        style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+      >
+        <h3 class="text-section-label">Get Started</h3>
+        <p class="text-[13px] leading-relaxed" style="color: var(--text-tertiary);">
+          Create agents to define specialized AI behaviors, and commands to build reusable workflows. Start by creating your first agent.
+        </p>
+        <div class="flex gap-3">
+          <NuxtLink
+            to="/agents"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors focus-ring"
+            style="background: var(--accent-muted); color: var(--accent); border: 1px solid rgba(45, 212, 191, 0.2);"
+          >
+            <UIcon name="i-lucide-cpu" class="size-4" />
+            Create an Agent
+          </NuxtLink>
+          <NuxtLink
+            to="/commands"
+            class="flex items-center gap-2 px-3 py-2 rounded-lg text-[13px] font-medium transition-colors focus-ring"
+            style="background: rgba(255,255,255,0.04); color: var(--text-secondary); border: 1px solid var(--border-subtle);"
+          >
+            <UIcon name="i-lucide-terminal" class="size-4" />
+            Create a Command
+          </NuxtLink>
+        </div>
+      </div>
+
       <!-- Graph CTA -->
       <NuxtLink
+        v-if="agents.length > 0 || commands.length > 0"
         to="/graph"
         class="block rounded-xl p-5 transition-all duration-150 focus-ring"
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
@@ -232,6 +268,18 @@ const totalChars = computed(() =>
           <UIcon name="i-lucide-arrow-right" class="size-4" style="color: var(--text-disabled);" />
         </div>
       </NuxtLink>
+
+      <!-- Keyboard shortcuts hint -->
+      <div class="flex items-center gap-4 px-2" style="color: var(--text-disabled);">
+        <span class="text-[11px] flex items-center gap-1.5">
+          <kbd class="text-[10px] font-mono px-1 py-px rounded" style="background: rgba(255,255,255,0.06);">⌘K</kbd>
+          Search
+        </span>
+        <span class="text-[11px] flex items-center gap-1.5">
+          <kbd class="text-[10px] font-mono px-1 py-px rounded" style="background: rgba(255,255,255,0.06);">⌘S</kbd>
+          Save
+        </span>
+      </div>
     </div>
   </div>
 </template>

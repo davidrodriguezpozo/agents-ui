@@ -4,12 +4,14 @@ const { claudeDir, load: loadConfig } = useClaudeDir()
 const { fetchAll: fetchAgents, agents } = useAgents()
 const { fetchAll: fetchCommands, commands } = useCommands()
 const { fetchAll: fetchPlugins, plugins } = usePlugins()
+const { fetchAll: fetchSkills, skills } = useSkills()
 
 const initialized = ref(false)
+const showSearch = ref(false)
 
 onMounted(async () => {
   await loadConfig()
-  await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins()])
+  await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills()])
   initialized.value = true
 })
 
@@ -17,6 +19,7 @@ const navLinks = [
   { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
   { label: 'Agents', icon: 'i-lucide-cpu', to: '/agents' },
   { label: 'Commands', icon: 'i-lucide-terminal', to: '/commands' },
+  { label: 'Skills', icon: 'i-lucide-sparkles', to: '/skills' },
   { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
 ]
 
@@ -33,6 +36,7 @@ function isActive(to: string) {
 function badgeFor(to: string) {
   if (to === '/agents') return agents.value.length || null
   if (to === '/commands') return commands.value.length || null
+  if (to === '/skills') return skills.value.length || null
   if (to === '/plugins') return plugins.value.length || null
   return null
 }
@@ -105,6 +109,19 @@ function badgeFor(to: string) {
           </NuxtLink>
         </nav>
 
+        <!-- Search shortcut -->
+        <div class="px-3 pb-2">
+          <button
+            class="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md transition-colors focus-ring"
+            style="color: var(--text-disabled); background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle);"
+            @click="showSearch = true"
+          >
+            <UIcon name="i-lucide-search" class="size-3.5" />
+            <span class="text-[12px] flex-1 text-left">Search</span>
+            <kbd class="text-[10px] font-mono px-1 py-px rounded" style="background: rgba(255,255,255,0.06);">⌘K</kbd>
+          </button>
+        </div>
+
         <!-- Footer: directory -->
         <div class="px-3 py-3" style="border-top: 1px solid var(--border-subtle);">
           <div class="font-mono text-[10px] truncate" style="color: var(--text-disabled);">
@@ -123,5 +140,6 @@ function badgeFor(to: string) {
         </div>
       </main>
     </div>
+    <GlobalSearch />
   </UApp>
 </template>

@@ -1,27 +1,27 @@
 <script setup lang="ts">
-import type { Agent, AgentFrontmatter } from '~/types'
+import type { Skill, SkillFrontmatter } from '~/types'
 
 const props = defineProps<{
   mode: 'create' | 'edit'
-  initial?: Agent
+  initial?: Skill
 }>()
 
 const emit = defineEmits<{
-  saved: [agent: Agent]
+  saved: [skill: Skill]
   cancel: []
 }>()
 
-const { create, update } = useAgents()
+const { create, update } = useSkills()
+const { agents } = useAgents()
 const toast = useToast()
 const saving = ref(false)
 const submitted = ref(false)
 
-const frontmatter = ref<AgentFrontmatter>({
+const frontmatter = ref<SkillFrontmatter>({
   name: props.initial?.frontmatter.name || '',
   description: props.initial?.frontmatter.description || '',
-  model: props.initial?.frontmatter.model,
-  color: props.initial?.frontmatter.color,
-  memory: props.initial?.frontmatter.memory,
+  context: props.initial?.frontmatter.context,
+  agent: props.initial?.frontmatter.agent,
 })
 
 const body = ref(props.initial?.body || '')
@@ -41,20 +41,32 @@ function fieldError(field: string) {
   return submitted.value ? errors.value[field] : undefined
 }
 
+const agentOptions = computed(() =>
+  agents.value.map(a => a.frontmatter.name)
+)
+
 async function save() {
   submitted.value = true
   if (!isValid.value) return
 
   saving.value = true
   try {
+    // Clean empty optional fields
+    const fm: SkillFrontmatter = {
+      name: frontmatter.value.name.trim(),
+      description: frontmatter.value.description.trim(),
+    }
+    if (frontmatter.value.context?.trim()) fm.context = frontmatter.value.context.trim()
+    if (frontmatter.value.agent?.trim()) fm.agent = frontmatter.value.agent.trim()
+
     const isEdit = props.mode === 'edit' && props.initial
-    const agent = isEdit
-      ? await update(props.initial!.slug, { frontmatter: frontmatter.value, body: body.value })
-      : await create({ frontmatter: frontmatter.value, body: body.value })
-    toast.add({ title: isEdit ? 'Agent updated' : 'Agent created', color: 'success' })
-    emit('saved', agent)
+    const skill = isEdit
+      ? await update(props.initial!.slug, { frontmatter: fm, body: body.value })
+      : await create({ frontmatter: fm, body: body.value })
+    toast.add({ title: isEdit ? 'Skill updated' : 'Skill created', color: 'success' })
+    emit('saved', skill)
   } catch (e: any) {
-    toast.add({ title: `Failed to ${props.mode} agent`, description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: `Failed to ${props.mode} skill`, description: e.data?.message || e.message, color: 'error' })
   } finally {
     saving.value = false
   }
@@ -63,7 +75,7 @@ async function save() {
 
 <template>
   <div class="p-6 space-y-4" style="background: var(--surface-overlay);">
-    <h3 class="text-page-title">{{ mode === 'edit' ? 'Edit Agent' : 'New Agent' }}</h3>
+    <h3 class="text-page-title">{{ mode === 'edit' ? 'Edit Skill' : 'New Skill' }}</h3>
 
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div class="field-group">
@@ -72,39 +84,16 @@ async function save() {
           v-model="frontmatter.name"
           class="field-input"
           :class="{ 'field-input--error': fieldError('name') }"
-          placeholder="my-agent"
+          placeholder="my-skill"
         />
         <span v-if="fieldError('name')" class="field-error">{{ fieldError('name') }}</span>
+        <span v-else class="field-hint">Skill identifier (used as directory name)</span>
       </div>
 
       <div class="field-group">
-        <label class="field-label">Model</label>
-        <div class="pill-picker">
-          <button
-            type="button"
-            class="pill-picker__option"
-            :class="{ 'pill-picker__option--active': !frontmatter.model }"
-            @click="frontmatter.model = undefined"
-          >none</button>
-          <button
-            type="button"
-            class="pill-picker__option pill-picker__option--opus"
-            :class="{ 'pill-picker__option--active': frontmatter.model === 'opus' }"
-            @click="frontmatter.model = 'opus'"
-          >opus</button>
-          <button
-            type="button"
-            class="pill-picker__option pill-picker__option--sonnet"
-            :class="{ 'pill-picker__option--active': frontmatter.model === 'sonnet' }"
-            @click="frontmatter.model = 'sonnet'"
-          >sonnet</button>
-          <button
-            type="button"
-            class="pill-picker__option pill-picker__option--haiku"
-            :class="{ 'pill-picker__option--active': frontmatter.model === 'haiku' }"
-            @click="frontmatter.model = 'haiku'"
-          >haiku</button>
-        </div>
+        <label class="field-label">Context</label>
+        <input v-model="frontmatter.context" class="field-input" placeholder="e.g. fork, worktree" />
+        <span class="field-hint">Execution context for this skill</span>
       </div>
     </div>
 
@@ -115,18 +104,32 @@ async function save() {
         rows="2"
         class="field-textarea"
         :class="{ 'field-input--error': fieldError('description') }"
-        placeholder="When to use this agent..."
+        placeholder="When to use this skill and what it does..."
       />
       <span v-if="fieldError('description')" class="field-error">{{ fieldError('description') }}</span>
     </div>
 
     <div class="field-group">
-      <label class="field-label">System Prompt</label>
+      <label class="field-label">Agent</label>
+      <input
+        v-model="frontmatter.agent"
+        class="field-input"
+        placeholder="Optional — link to an agent"
+        :list="agentOptions.length > 0 ? 'agent-opts' : undefined"
+      />
+      <datalist v-if="agentOptions.length > 0" id="agent-opts">
+        <option v-for="a in agentOptions" :key="a" :value="a" />
+      </datalist>
+      <span class="field-hint">Agent that handles this skill</span>
+    </div>
+
+    <div class="field-group">
+      <label class="field-label">Skill Prompt</label>
       <textarea
         v-model="body"
         class="editor-textarea editor-textarea--standalone"
         spellcheck="false"
-        placeholder="Agent instructions..."
+        placeholder="Instructions for this skill..."
       />
     </div>
 

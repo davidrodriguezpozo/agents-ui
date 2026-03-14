@@ -79,6 +79,15 @@ if (import.meta.client) {
 
 const charCount = computed(() => body.value.length)
 const lineCount = computed(() => body.value.split('\n').length)
+
+const isDirty = computed(() => {
+  if (!command.value) return false
+  return JSON.stringify(frontmatter.value) !== JSON.stringify(command.value.frontmatter)
+    || body.value !== command.value.body
+    || allowedToolsStr.value !== (command.value.frontmatter['allowed-tools'] || []).join(', ')
+})
+
+useUnsavedChanges(isDirty)
 </script>
 
 <template>
@@ -106,6 +115,7 @@ const lineCount = computed(() => body.value.split('\n').length)
         >
           Delete
         </button>
+        <span v-if="isDirty" class="text-[10px] font-mono" style="color: var(--warning);">unsaved</span>
         <UButton label="Save" icon="i-lucide-save" size="sm" :loading="saving" @click="save" />
       </template>
     </PageHeader>

@@ -33,11 +33,17 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Create memory directory if needed
+  // Create or clean up memory directory
+  const memoryDir = resolveClaudePath('agent-memory', newSlug)
   if (payload.frontmatter.memory && payload.frontmatter.memory !== 'none') {
-    const memoryDir = resolveClaudePath('agent-memory', newSlug)
     if (!existsSync(memoryDir)) {
       await mkdir(memoryDir, { recursive: true })
+    }
+  } else {
+    // Remove memory directory when memory is set to 'none' or unset
+    if (existsSync(memoryDir)) {
+      const { rm } = await import('node:fs/promises')
+      await rm(memoryDir, { recursive: true })
     }
   }
 

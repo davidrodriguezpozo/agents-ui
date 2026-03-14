@@ -6,6 +6,15 @@ const router = useRouter()
 
 const showCreateModal = ref(false)
 const searchQuery = ref('')
+const skillCounts = ref<Record<string, number>>({})
+
+onMounted(async () => {
+  try {
+    skillCounts.value = await $fetch<Record<string, number>>('/api/agents/skill-counts')
+  } catch {
+    // Non-critical — just don't show counts
+  }
+})
 
 const filteredAgents = computed(() => {
   if (!searchQuery.value) return agents.value
@@ -50,9 +59,6 @@ const filteredAgents = computed(() => {
           :to="`/agents/${agent.slug}`"
           class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-150 group focus-ring"
           style="border: 1px solid transparent;"
-          :style="{
-            ':hover': { borderColor: 'var(--border-default)', background: 'var(--surface-raised)' },
-          }"
           @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'; ($event.currentTarget as HTMLElement).style.background = 'var(--surface-raised)'"
           @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'transparent'; ($event.currentTarget as HTMLElement).style.background = 'transparent'"
         >
@@ -74,6 +80,16 @@ const filteredAgents = computed(() => {
             :class="[modelColors[agent.frontmatter.model].bg, modelColors[agent.frontmatter.model].text]"
           >
             {{ agent.frontmatter.model }}
+          </span>
+
+          <!-- Skills badge -->
+          <span
+            v-if="skillCounts[agent.frontmatter.name]"
+            class="flex items-center gap-1 text-[10px] font-mono font-medium px-1.5 py-px rounded-full shrink-0"
+            style="background: var(--accent-muted); color: var(--accent);"
+          >
+            <UIcon name="i-lucide-sparkles" class="size-3" />
+            {{ skillCounts[agent.frontmatter.name] }}
           </span>
 
           <!-- Description -->

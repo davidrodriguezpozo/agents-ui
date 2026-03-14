@@ -4,7 +4,7 @@ import type { PluginDetail, SkillFrontmatter } from '~/types'
 const route = useRoute()
 const router = useRouter()
 const toast = useToast()
-const { fetchOne, updateSkill } = usePlugins()
+const { fetchOne, updateSkill, toggleEnabled, uninstall } = usePlugins()
 
 const id = decodeURIComponent(route.params.id as string)
 const plugin = ref<PluginDetail | null>(null)
@@ -15,6 +15,10 @@ const editingSkill = ref<string | null>(null)
 const skillFrontmatters = ref<Record<string, SkillFrontmatter>>({})
 const skillBodies = ref<Record<string, string>>({})
 const savingSkill = ref(false)
+
+// Uninstall
+const showUninstallConfirm = ref(false)
+const uninstalling = ref(false)
 
 onMounted(async () => {
   try {
@@ -31,7 +35,7 @@ onMounted(async () => {
   }
 })
 
-function toggleSkill(slug: string) {
+function toggleSkillEditor(slug: string) {
   editingSkill.value = editingSkill.value === slug ? null : slug
 }
 
@@ -39,7 +43,6 @@ async function saveSkill(slug: string) {
   savingSkill.value = true
   try {
     await updateSkill(id, slug, skillFrontmatters.value[slug], skillBodies.value[slug])
-    // Update local state
     const skill = plugin.value?.skillDetails.find(s => s.slug === slug)
     if (skill) {
       skill.frontmatter = { ...skillFrontmatters.value[slug] }
@@ -50,6 +53,29 @@ async function saveSkill(slug: string) {
     toast.add({ title: 'Failed to save', description: e.message, color: 'error' })
   } finally {
     savingSkill.value = false
+  }
+}
+
+async function onToggle(enabled: boolean) {
+  try {
+    await toggleEnabled(id, enabled)
+    if (plugin.value) plugin.value.enabled = enabled
+    toast.add({ title: `Plugin ${enabled ? 'enabled' : 'disabled'}`, color: 'success' })
+  } catch {
+    toast.add({ title: 'Failed to update', color: 'error' })
+  }
+}
+
+async function onUninstall() {
+  uninstalling.value = true
+  try {
+    await uninstall(id)
+    toast.add({ title: 'Plugin uninstalled', color: 'success' })
+    router.push('/plugins')
+  } catch (e: any) {
+    toast.add({ title: 'Failed to uninstall', description: e.message, color: 'error' })
+  } finally {
+    uninstalling.value = false
   }
 }
 
@@ -83,6 +109,25 @@ if (import.meta.client) {
           class="size-2.5 rounded-full shrink-0"
           :style="{ background: plugin?.enabled ? 'var(--success, #22c55e)' : 'var(--text-disabled)' }"
         />
+      </template>
+      <template #right>
+        <button
+          class="text-[12px] px-2 py-1 rounded focus-ring"
+          style="color: var(--text-tertiary);"
+          @click="showUninstallConfirm = true"
+        >
+          Uninstall
+        </button>
+        <label v-if="plugin" class="field-toggle" title="Enable/disable plugin">
+          <input
+            type="checkbox"
+            :checked="plugin.enabled"
+            @change="onToggle(($event.target as HTMLInputElement).checked)"
+          />
+          <span class="field-toggle__track">
+            <span class="field-toggle__thumb" />
+          </span>
+        </label>
       </template>
     </PageHeader>
 
@@ -183,7 +228,7 @@ if (import.meta.client) {
               :style="{ background: editingSkill === skill.slug ? 'var(--surface-raised)' : 'transparent' }"
               @mouseenter="($event.currentTarget as HTMLElement).style.background = 'var(--surface-raised)'"
               @mouseleave="editingSkill !== skill.slug && (($event.currentTarget as HTMLElement).style.background = 'transparent')"
-              @click="toggleSkill(skill.slug)"
+              @click="toggleSkillEditor(skill.slug)"
             >
               <UIcon
                 :name="editingSkill === skill.slug ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
@@ -285,5 +330,21 @@ if (import.meta.client) {
         {{ plugin.installPath }}
       </div>
     </div>
+
+    <!-- Uninstall confirmation -->
+    <UModal v-model:open="showUninstallConfirm">
+      <template #content>
+        <div class="p-6 space-y-4" style="background: var(--surface-overlay);">
+          <h3 class="text-page-title">Uninstall Plugin</h3>
+          <p class="text-[13px]" style="color: var(--text-secondary);">
+            Uninstall <strong class="font-mono">{{ plugin?.name }}</strong>? This removes the plugin registration but keeps the files on disk.
+          </p>
+          <div class="flex justify-end gap-2">
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showUninstallConfirm = false" />
+            <UButton label="Uninstall" color="error" size="sm" :loading="uninstalling" @click="onUninstall" />
+          </div>
+        </div>
+      </template>
+    </UModal>
   </div>
 </template>

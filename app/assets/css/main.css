@@ -292,6 +292,23 @@
   color: var(--text-disabled);
 }
 
+/* Error state */
+.field-input--error,
+.field-input--error:hover {
+  border-color: var(--error);
+  background: rgba(248, 113, 113, 0.04);
+}
+
+.field-input--error:focus {
+  border-color: var(--error);
+  box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.15);
+}
+
+.field-error {
+  font-size: 11px;
+  color: var(--error);
+}
+
 /* Editor textarea (system prompt, command body, JSON, etc.) */
 .editor-textarea {
   width: 100%;

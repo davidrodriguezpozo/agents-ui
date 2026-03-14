@@ -93,6 +93,21 @@ export interface Skill {
   filePath: string
 }
 
+export interface AgentSkill {
+  slug: string
+  frontmatter: SkillFrontmatter
+  body: string
+  filePath: string
+  source: 'standalone' | 'plugin'
+  pluginId?: string
+  pluginName?: string
+}
+
+export interface SkillPayload {
+  frontmatter: SkillFrontmatter
+  body: string
+}
+
 export interface PluginDetail extends Plugin {
   skillDetails: Skill[]
 }

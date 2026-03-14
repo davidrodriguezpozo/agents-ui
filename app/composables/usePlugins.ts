@@ -17,6 +17,30 @@ export function usePlugins() {
     return await $fetch<PluginDetail>(`/api/plugins/${encodeURIComponent(id)}`)
   }
 
+  async function toggleEnabled(id: string, enabled: boolean) {
+    const { save } = useSettings()
+    const { settings } = useSettings()
+    if (!settings.value) return
+
+    const updated = {
+      ...settings.value,
+      enabledPlugins: {
+        ...(settings.value.enabledPlugins as Record<string, boolean>),
+        [id]: enabled,
+      },
+    }
+    await save(updated)
+
+    // Update local plugin state
+    const idx = plugins.value.findIndex(p => p.id === id)
+    if (idx >= 0) plugins.value[idx] = { ...plugins.value[idx], enabled }
+  }
+
+  async function uninstall(id: string) {
+    await $fetch(`/api/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    plugins.value = plugins.value.filter(p => p.id !== id)
+  }
+
   async function updateSkill(pluginId: string, skill: string, frontmatter: SkillFrontmatter, body: string) {
     return await $fetch('/api/plugins/skills/update', {
       method: 'PUT',
@@ -24,5 +48,5 @@ export function usePlugins() {
     })
   }
 
-  return { plugins, loading, fetchAll, fetchOne, updateSkill }
+  return { plugins, loading, fetchAll, fetchOne, toggleEnabled, uninstall, updateSkill }
 }

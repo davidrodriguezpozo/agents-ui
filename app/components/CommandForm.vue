@@ -9,6 +9,7 @@ const emit = defineEmits<{
 const { create, commands } = useCommands()
 const toast = useToast()
 const saving = ref(false)
+const submitted = ref(false)
 
 const frontmatter = ref<CommandFrontmatter>({
   name: '',
@@ -26,11 +27,24 @@ const existingDirs = computed(() => {
   return Array.from(dirs).sort()
 })
 
+const errors = computed(() => {
+  const e: Record<string, string> = {}
+  if (!frontmatter.value.name.trim()) e.name = 'Name is required'
+  else if (!/^[a-z0-9][a-z0-9-]*$/.test(frontmatter.value.name.trim()))
+    e.name = 'Use lowercase letters, numbers, and hyphens only'
+  if (!frontmatter.value.description.trim()) e.description = 'Description is required'
+  return e
+})
+
+const isValid = computed(() => Object.keys(errors.value).length === 0)
+
+function fieldError(field: string) {
+  return submitted.value ? errors.value[field] : undefined
+}
+
 async function save() {
-  if (!frontmatter.value.name) {
-    toast.add({ title: 'Name is required', color: 'error' })
-    return
-  }
+  submitted.value = true
+  if (!isValid.value) return
 
   saving.value = true
   try {
@@ -63,8 +77,14 @@ async function save() {
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
       <div class="field-group">
         <label class="field-label" data-required>Name</label>
-        <input v-model="frontmatter.name" class="field-input" placeholder="my-command" />
-        <span class="field-hint">e.g. gsd:my-command</span>
+        <input
+          v-model="frontmatter.name"
+          class="field-input"
+          :class="{ 'field-input--error': fieldError('name') }"
+          placeholder="my-command"
+        />
+        <span v-if="fieldError('name')" class="field-error">{{ fieldError('name') }}</span>
+        <span v-else class="field-hint">e.g. gsd:my-command</span>
       </div>
 
       <div class="field-group">
@@ -79,7 +99,14 @@ async function save() {
 
     <div class="field-group">
       <label class="field-label" data-required>Description</label>
-      <textarea v-model="frontmatter.description" rows="2" class="field-textarea" placeholder="What this command does..." />
+      <textarea
+        v-model="frontmatter.description"
+        rows="2"
+        class="field-textarea"
+        :class="{ 'field-input--error': fieldError('description') }"
+        placeholder="What this command does..."
+      />
+      <span v-if="fieldError('description')" class="field-error">{{ fieldError('description') }}</span>
     </div>
 
     <div class="field-group">
