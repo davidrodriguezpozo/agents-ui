@@ -7,6 +7,7 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const { fetchOne, update, remove } = useAgents()
+const { startAgentChat } = useChat()
 
 const slug = route.params.slug as string
 const agent = ref<Agent | null>(null)
@@ -132,6 +133,14 @@ const quality = computed(() => scoreAgent(frontmatter.value, body.value))
         />
       </template>
       <template #right>
+        <UButton
+          label="Chat"
+          icon="i-lucide-message-circle"
+          size="sm"
+          variant="soft"
+          :disabled="!agent"
+          @click="startAgentChat({ slug, name: agent!.frontmatter.name, color: getAgentColor(agent!.frontmatter.color) })"
+        />
         <a
           :href="`/api/agents/${slug}/export`"
           download
@@ -152,6 +161,12 @@ const quality = computed(() => scoreAgent(frontmatter.value, body.value))
     </PageHeader>
 
     <div v-if="agent" class="px-6 py-5 space-y-6">
+      <FeatureCallout
+        feature-key="agentDetail"
+        message="This is where you configure your agent — its name, instructions, and what it can do."
+        action="Start by writing clear instructions in the Instructions tab."
+      />
+
       <!-- Draft recovery banner -->
       <div
         v-if="hasDraft"
@@ -319,6 +334,10 @@ const quality = computed(() => scoreAgent(frontmatter.value, body.value))
           <h3 class="text-section-label flex items-center gap-2">
             <UIcon name="i-lucide-sparkles" class="size-3.5" style="color: var(--accent);" />
             Skills
+            <HelpTip
+              title="What are skills?"
+              body="Skills give your agent specialized capabilities — like knowing how to review code or write tests."
+            />
           </h3>
           <span class="font-mono text-[10px] text-meta">{{ agentSkills.length }}</span>
         </div>
@@ -367,6 +386,14 @@ const quality = computed(() => scoreAgent(frontmatter.value, body.value))
         </div>
       </div>
 
+      <!-- Skills empty state -->
+      <ExampleBlock v-if="!agentSkills.length" title="What does a skill look like?" class="max-w-md">
+        <div class="space-y-2 text-[11px]" style="color: var(--text-secondary);">
+          <p><strong style="color: var(--text-primary);">test-driven-development</strong> — A skill that teaches an agent to write tests before implementation.</p>
+          <p class="text-[10px]" style="color: var(--text-tertiary);">Skills give your agent specialized knowledge. They appear here when linked to this agent.</p>
+        </div>
+      </ExampleBlock>
+
       <!-- Quality Score -->
       <details v-if="quality.issues.length" class="group">
         <summary
@@ -407,7 +434,13 @@ const quality = computed(() => scoreAgent(frontmatter.value, body.value))
         style="border: 1px solid var(--border-subtle);"
       >
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">
-          <h3 class="text-section-label">Instructions</h3>
+          <h3 class="text-section-label flex items-center gap-2">
+            Instructions
+            <HelpTip
+              title="What are actions?"
+              body="Actions are reusable workflows (like slash commands) that this agent can perform."
+            />
+          </h3>
           <div class="flex items-center gap-3">
             <span class="font-mono text-[10px] text-meta">
               {{ lineCount }} lines

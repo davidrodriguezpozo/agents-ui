@@ -111,7 +111,10 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
       </div>
 
       <div class="field-group">
-        <label class="field-label" data-required>What does it do?</label>
+        <label class="field-label" data-required>
+          What does it do?
+          <HelpTip title="Good descriptions" body="A good description helps you remember what this agent does, and helps Claude know when to use it." />
+        </label>
         <textarea
           v-model="frontmatter.description"
           rows="2"
@@ -126,7 +129,10 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
     <!-- Step 2: Model & Memory -->
     <div v-else-if="step === 2" class="space-y-5">
       <div class="space-y-3">
-        <label class="field-label">Which AI model should it use?</label>
+        <label class="field-label">
+          Which AI model should it use?
+          <HelpTip title="Which model?" body="'Fast & efficient' is great for simple tasks. 'Balanced' works for most things. 'Most capable' handles complex reasoning." />
+        </label>
         <div class="space-y-1.5">
           <button
             v-for="opt in modelOptions"
@@ -158,6 +164,14 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
           </button>
         </div>
       </div>
+
+      <ExampleBlock title="See what a good agent looks like">
+        <div class="space-y-1.5 text-[11px]" style="color: var(--text-secondary);">
+          <p><strong>Name:</strong> email-drafter</p>
+          <p><strong>Instructions:</strong> "You are an email drafting assistant. Help the user write clear, professional emails. Before drafting, ask about the recipient, goal, and tone..."</p>
+          <p class="text-[10px]" style="color: var(--text-tertiary);">Good instructions are specific about behavior, tone, and rules.</p>
+        </div>
+      </ExampleBlock>
 
       <div class="space-y-3">
         <label class="field-label">Should it remember things?</label>

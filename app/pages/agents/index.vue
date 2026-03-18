@@ -135,6 +135,16 @@ async function useTemplate(templateId: string) {
           <p class="text-[13px] text-label">No agents yet. Start from a template or create your own.</p>
         </div>
 
+        <ExampleBlock title="What does a good agent look like?" class="max-w-md mx-auto mb-6">
+          <div class="space-y-2 text-[11px]" style="color: var(--text-secondary);">
+            <div class="rounded-lg p-3" style="background: var(--surface-base); border: 1px solid var(--border-subtle);">
+              <p><strong style="color: var(--text-primary);">code-reviewer</strong> <span class="text-[10px]" style="color: var(--text-disabled);">← This name is short and descriptive</span></p>
+              <p class="mt-1">"Reviews pull requests for bugs, style, and security." <span class="text-[10px]" style="color: var(--text-disabled);">← Explains what it does in one sentence</span></p>
+              <p class="mt-1 text-[10px]" style="color: var(--text-tertiary);">"Check for bugs, flag security issues, suggest improvements..." <span style="color: var(--text-disabled);">← Instructions are specific</span></p>
+            </div>
+          </div>
+        </ExampleBlock>
+
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <button
             v-for="template in agentTemplates"

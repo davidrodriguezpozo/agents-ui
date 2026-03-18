@@ -268,7 +268,10 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <div
         class="rounded-xl p-5 space-y-4 bg-card"
       >
-        <h3 class="text-section-label">Enabled Plugins</h3>
+        <h3 class="text-section-label flex items-center gap-2">
+          Extensions
+          <HelpTip title="Managing extensions" body="Enable or disable extensions here. Install new ones via the Claude Code CLI." />
+        </h3>
         <div v-if="plugins.length === 0" class="text-[13px] text-label">
           No plugins configured.
         </div>

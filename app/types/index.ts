@@ -39,6 +39,12 @@ export interface Settings {
   enabledPlugins?: Record<string, boolean>
   statusLine?: { type: string; command: string }
   alwaysThinkingEnabled?: boolean
+  onboardingCompleted?: boolean
+  guidanceSeen?: {
+    agentDetail?: boolean
+    explore?: boolean
+    chat?: boolean
+  }
   [key: string]: unknown
 }
 
@@ -110,4 +116,43 @@ export interface SkillPayload {
 
 export interface PluginDetail extends Plugin {
   skillDetails: Skill[]
+}
+
+export interface SkillInvocation {
+  skill: string
+  args: string | null
+}
+
+export type WizardStep = 1 | 2 | 3
+
+export interface WorkflowStep {
+  id: string
+  agentSlug: string
+  label: string
+}
+
+export interface Workflow {
+  slug: string
+  name: string
+  description: string
+  steps: WorkflowStep[]
+  createdAt: string
+  lastRunAt?: string
+  filePath: string
+}
+
+export interface WorkflowPayload {
+  name: string
+  description: string
+  steps: WorkflowStep[]
+}
+
+export interface StepExecution {
+  stepId: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+  input: string
+  output: string
+  error?: string
+  startedAt?: number
+  completedAt?: number
 }
