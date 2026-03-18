@@ -171,7 +171,7 @@ onMounted(() => fetchPlugins())
 
       <!-- Templates Tab -->
       <template v-if="activeTab === 'templates'">
-        <p class="text-[12px] leading-relaxed text-label">
+        <p class="text-[13px] leading-relaxed text-label">
           Ready-made configurations you can create with one click. Customize them after creation.
         </p>
 
@@ -283,7 +283,7 @@ onMounted(() => fetchPlugins())
 
       <!-- Extensions Tab -->
       <template v-if="activeTab === 'extensions'">
-        <p class="text-[12px] leading-relaxed text-label">
+        <p class="text-[13px] leading-relaxed text-label">
           Extensions add new features and capabilities to your agents.
         </p>
 

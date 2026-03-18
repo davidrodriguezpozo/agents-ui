@@ -35,7 +35,7 @@ async function useTemplate(templateId: string) {
   <div class="space-y-8">
     <!-- Hero -->
     <div class="text-center space-y-3 pt-2">
-      <h2 class="text-[17px] font-semibold">Welcome to Agent Manager</h2>
+      <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">Welcome to Agent Manager</h2>
       <p class="text-[13px] text-label max-w-lg mx-auto leading-relaxed">
         This tool helps you configure how Claude Code behaves. Create <strong class="text-body">agents</strong> with custom instructions, build reusable <strong class="text-body">commands</strong>, and organize <strong class="text-body">skills</strong> — all without touching the terminal.
       </p>

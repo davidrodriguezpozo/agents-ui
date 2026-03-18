@@ -25,7 +25,6 @@ function openWorkingDirPopover() {
   dirSuggestions.value = []
   selectedSuggestionIdx.value = -1
   showWorkingDirPopover.value = true
-  // Fetch initial suggestions if there's already a path
   if (workingDirInput.value) fetchDirSuggestions(workingDirInput.value)
 }
 
@@ -54,7 +53,6 @@ function onDirInput() {
 function selectSuggestion(suggestion: { name: string; path: string; hasChildren: boolean }) {
   workingDirInput.value = suggestion.path
   selectedSuggestionIdx.value = -1
-  // If it has children, fetch next level
   if (suggestion.hasChildren) {
     fetchDirSuggestions(suggestion.path)
   } else {
@@ -145,7 +143,7 @@ function badgeFor(to: string) {
     <div class="flex h-screen overflow-hidden" style="background: var(--surface-base);">
       <!-- Mobile hamburger (md:hidden) -->
       <button
-        class="fixed top-4 left-4 z-30 md:hidden p-2 rounded-lg cursor-pointer"
+        class="fixed top-4 left-4 z-30 md:hidden p-2 rounded-lg cursor-pointer press-scale"
         style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle); color: var(--text-secondary);"
         @click="sidebarOpen = true"
       >
@@ -153,35 +151,37 @@ function badgeFor(to: string) {
       </button>
 
       <!-- Backdrop (mobile only) -->
-      <div
-        v-if="sidebarOpen"
-        class="fixed inset-0 z-30 md:hidden"
-        style="background: rgba(0, 0, 0, 0.5);"
-        @click="sidebarOpen = false"
-      />
+      <Transition name="fade">
+        <div
+          v-if="sidebarOpen"
+          class="fixed inset-0 z-30 md:hidden"
+          style="background: rgba(0, 0, 0, 0.5); backdrop-filter: blur(4px);"
+          @click="sidebarOpen = false"
+        />
+      </Transition>
 
       <!-- Sidebar -->
       <aside
-        class="w-[220px] shrink-0 flex flex-col relative h-full overflow-hidden fixed inset-y-0 left-0 z-40 -translate-x-full md:relative md:z-auto md:translate-x-0 transition-transform duration-200"
+        class="sidebar w-[200px] shrink-0 flex flex-col relative h-full overflow-hidden fixed inset-y-0 left-0 z-40 -translate-x-full md:relative md:z-auto md:translate-x-0 transition-transform duration-200"
         :class="{ 'translate-x-0': sidebarOpen }"
         style="background: var(--sidebar-bg); border-right: 1px solid var(--border-subtle);"
       >
-        <!-- Ambient glow at top -->
+        <!-- Ambient glow at top — stronger -->
         <div
-          class="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-24 pointer-events-none"
-          style="background: radial-gradient(ellipse, rgba(229, 169, 62, 0.06) 0%, transparent 70%);"
+          class="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-32 pointer-events-none"
+          style="background: radial-gradient(ellipse, rgba(229, 169, 62, 0.1) 0%, transparent 70%);"
         />
 
         <!-- Brand -->
-        <div class="h-[60px] flex items-center gap-3 px-5 relative">
+        <div class="h-[56px] flex items-center gap-2.5 px-4 relative">
           <div
-            class="size-8 rounded-lg flex items-center justify-center relative"
-            style="background: linear-gradient(135deg, rgba(229, 169, 62, 0.15) 0%, rgba(229, 169, 62, 0.05) 100%); border: 1px solid rgba(229, 169, 62, 0.12);"
+            class="size-7 rounded-lg flex items-center justify-center relative"
+            style="background: linear-gradient(135deg, rgba(229, 169, 62, 0.18) 0%, rgba(229, 169, 62, 0.06) 100%); border: 1px solid rgba(229, 169, 62, 0.15);"
           >
-            <UIcon name="i-lucide-bot" class="size-4" style="color: var(--accent);" />
+            <UIcon name="i-lucide-bot" class="size-3.5" style="color: var(--accent);" />
           </div>
           <div class="flex flex-col">
-            <span class="text-[12px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-sans);">
+            <span class="text-[12px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
               Agent Manager
             </span>
             <span class="text-[9px] font-mono tracking-wider uppercase" style="color: var(--text-disabled);">
@@ -191,30 +191,31 @@ function badgeFor(to: string) {
         </div>
 
         <!-- Primary Nav -->
-        <nav class="flex-1 px-3 pt-1 space-y-0.5 overflow-y-auto">
+        <nav class="flex-1 px-2.5 pt-1 space-y-0.5 overflow-y-auto">
           <NuxtLink
             v-for="link in navLinks"
             :key="link.to"
             :to="link.to"
-            class="group flex items-center gap-2.5 px-3 py-[8px] rounded-lg text-[13px] transition-all duration-150 relative focus-ring"
+            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[13px] transition-all duration-150 relative focus-ring"
+            :class="{ 'nav-item--active': isActive(link.to) }"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              background: isActive(link.to) ? 'var(--accent-muted)' : 'transparent',
               fontWeight: isActive(link.to) ? '500' : '400',
+              background: isActive(link.to) ? 'var(--accent-muted)' : undefined,
             }"
           >
-            <!-- Active indicator -->
+            <!-- Active indicator bar -->
             <div
               v-if="isActive(link.to)"
-              class="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full"
-              style="background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);"
+              class="absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-4 rounded-r-full"
+              style="background: var(--accent); box-shadow: 0 0 10px var(--accent-glow);"
             />
-            <UIcon :name="link.icon" class="size-[15px] shrink-0" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
+            <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
             <span class="flex-1" style="font-family: var(--font-sans);">{{ link.label }}</span>
             <span
               v-if="badgeFor(link.to)"
-              class="font-mono text-[10px] tabular-nums"
-              style="color: var(--text-disabled);"
+              class="font-mono text-[10px] tabular-nums transition-colors duration-150"
+              :style="{ color: isActive(link.to) ? 'var(--accent)' : 'var(--text-disabled)' }"
             >
               {{ badgeFor(link.to) }}
             </span>
@@ -227,27 +228,27 @@ function badgeFor(to: string) {
             v-for="link in navSecondary"
             :key="link.to"
             :to="link.to"
-            class="group flex items-center gap-2.5 px-3 py-[8px] rounded-lg text-[13px] transition-all duration-150 relative focus-ring"
+            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[13px] transition-all duration-150 relative focus-ring"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
-              background: isActive(link.to) ? 'var(--accent-muted)' : 'transparent',
               fontWeight: isActive(link.to) ? '500' : '400',
+              background: isActive(link.to) ? 'var(--accent-muted)' : undefined,
             }"
           >
             <div
               v-if="isActive(link.to)"
-              class="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 rounded-r-full"
-              style="background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);"
+              class="absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-4 rounded-r-full"
+              style="background: var(--accent); box-shadow: 0 0 10px var(--accent-glow);"
             />
-            <UIcon :name="link.icon" class="size-[15px] shrink-0" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
+            <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
             <span style="font-family: var(--font-sans);">{{ link.label }}</span>
           </NuxtLink>
         </nav>
 
         <!-- Search shortcut -->
-        <div class="px-3 pb-3">
+        <div class="px-2.5 pb-2.5">
           <button
-            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer press-scale"
             style="color: var(--text-disabled); background: var(--input-bg); border: 1px solid var(--border-subtle);"
             @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-tertiary)'"
             @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-disabled)'"
@@ -260,9 +261,9 @@ function badgeFor(to: string) {
         </div>
 
         <!-- Chat with Claude -->
-        <div class="px-3 pb-1">
+        <div class="px-2.5 pb-1">
           <button
-            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer press-scale"
             :style="{
               color: chatOpen ? 'var(--accent)' : 'var(--text-tertiary)',
               background: chatOpen ? 'var(--accent-muted)' : 'transparent',
@@ -274,7 +275,7 @@ function badgeFor(to: string) {
               <div
                 v-if="chatOpen"
                 class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
-                style="background: var(--accent); box-shadow: 0 0 6px var(--accent-glow);"
+                style="background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);"
               />
             </div>
             <span class="text-[12px] flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
@@ -283,9 +284,9 @@ function badgeFor(to: string) {
         </div>
 
         <!-- Theme toggle -->
-        <div class="px-3 pb-1">
+        <div class="px-2.5 pb-1">
           <button
-            class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-150 focus-ring"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring press-scale"
             style="color: var(--text-tertiary);"
             @click="toggleTheme"
           >
@@ -297,10 +298,10 @@ function badgeFor(to: string) {
         </div>
 
         <!-- Footer: working directory -->
-        <div class="px-3 pb-3" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
+        <div class="px-2.5 pb-2.5" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
           <UPopover v-model:open="showWorkingDirPopover" :ui="{ width: 'w-[280px]' }">
             <button
-              class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer text-left"
+              class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer text-left press-scale"
               style="color: var(--text-disabled); border: 1px solid var(--border-subtle);"
               @click="openWorkingDirPopover"
             >
@@ -317,7 +318,7 @@ function badgeFor(to: string) {
             </button>
             <template #content>
               <div class="p-3 space-y-3">
-                <div class="text-[12px] font-semibold" style="color: var(--text-primary);">Working Directory</div>
+                <div class="text-[13px] font-semibold" style="color: var(--text-primary); font-family: var(--font-sans);">Working Directory</div>
                 <p class="text-[11px] leading-relaxed" style="color: var(--text-secondary);">
                   Set the project directory for all chat conversations. Claude will operate in this directory.
                 </p>
@@ -402,3 +403,21 @@ function badgeFor(to: string) {
     <ChatPanel v-model:open="chatOpen" />
   </UApp>
 </template>
+
+<style scoped>
+/* Nav item hover with smooth background reveal */
+.nav-item {
+  transition: background 0.15s, color 0.15s;
+}
+.nav-item:hover {
+  background: var(--surface-hover);
+}
+
+/* Fade transition for mobile backdrop */
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+</style>

@@ -80,7 +80,7 @@ async function createBlank() {
     </PageHeader>
 
     <div class="px-6 py-4">
-      <p class="text-[12px] mb-4 leading-relaxed text-label">
+      <p class="text-[13px] mb-4 leading-relaxed text-label">
         Chain agents together into multi-step pipelines that pass work from one agent to the next.
       </p>
 
@@ -133,7 +133,7 @@ async function createBlank() {
               <UIcon name="i-lucide-git-branch" class="size-6" style="color: var(--accent);" />
             </div>
           </div>
-          <h3 class="text-[15px] font-medium" style="color: var(--text-primary);">Chain your agents together</h3>
+          <h3 class="text-[18px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">Chain your agents together</h3>
           <p class="text-[13px] text-label max-w-md mx-auto">
             Create workflows that pass work from one agent to the next. Start from a template or create your own.
           </p>

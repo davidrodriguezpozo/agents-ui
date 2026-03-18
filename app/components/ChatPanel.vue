@@ -144,7 +144,7 @@ function isLastAssistantStreaming(idx: number): boolean {
     <div
       v-if="open"
       class="chat-panel fixed right-0 top-0 bottom-0 z-50 w-full md:w-[640px] flex flex-col overflow-hidden"
-      style="background: var(--surface-base);"
+      style="background: var(--surface-raised); border-left: 1px solid var(--border-subtle);"
     >
       <!-- Edge glow line -->
       <div class="absolute left-0 top-0 bottom-0 w-px" style="background: var(--border-subtle);">
@@ -191,7 +191,7 @@ function isLastAssistantStreaming(idx: number): boolean {
 
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="text-[13px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-sans);">
+              <span class="text-[14px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
                 Claude
               </span>
               <span
@@ -282,7 +282,7 @@ function isLastAssistantStreaming(idx: number): boolean {
           </div>
 
           <div class="text-center space-y-2">
-            <p class="text-[15px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-sans);">
+            <p class="text-[18px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
               How can I help?
             </p>
             <p class="text-[12px] max-w-[280px] leading-relaxed" style="color: var(--text-tertiary);">
@@ -311,7 +311,7 @@ function isLastAssistantStreaming(idx: number): boolean {
         <!-- Message bubbles -->
         <template v-for="(msg, idx) in messages" :key="msg.id">
           <!-- User message -->
-          <div v-if="msg.role === 'user'" class="flex justify-end">
+          <div v-if="msg.role === 'user'" class="flex justify-end chat-msg-enter">
             <div
               class="max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 text-[13px] leading-relaxed"
               style="background: var(--accent-muted); border: 1px solid rgba(229, 169, 62, 0.1); color: var(--text-primary); font-family: var(--font-sans);"
@@ -321,7 +321,7 @@ function isLastAssistantStreaming(idx: number): boolean {
           </div>
 
           <!-- Assistant message -->
-          <div v-else class="flex gap-3">
+          <div v-else class="flex gap-3 chat-msg-enter">
             <!-- Avatar -->
             <div class="shrink-0 pt-0.5">
               <div
@@ -691,5 +691,14 @@ function isLastAssistantStreaming(idx: number): boolean {
 }
 .chat-prose :deep(tr:nth-child(even)) {
   background: var(--surface-raised);
+}
+
+/* Message slide-in animation */
+@keyframes chatMsgEnter {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.chat-msg-enter {
+  animation: chatMsgEnter 0.25s ease both;
 }
 </style>

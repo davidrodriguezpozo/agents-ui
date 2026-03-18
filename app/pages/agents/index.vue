@@ -58,7 +58,7 @@ async function useTemplate(templateId: string) {
     </PageHeader>
 
     <div class="px-6 py-4">
-      <p class="text-[12px] mb-4 leading-relaxed text-label">
+      <p class="text-[13px] mb-4 leading-relaxed text-label">
         Specialized AI assistants with custom instructions and behavior.
       </p>
 
@@ -88,29 +88,37 @@ async function useTemplate(templateId: string) {
       <!-- Agent card grid -->
       <div v-else-if="filteredAgents.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         <NuxtLink
-          v-for="agent in filteredAgents"
+          v-for="(agent, idx) in filteredAgents"
           :key="agent.slug"
           :to="`/agents/${agent.slug}`"
-          class="rounded-xl p-4 focus-ring hover-card relative overflow-hidden group bg-card"
+          class="stagger-item rounded-xl p-4 focus-ring hover-card relative overflow-hidden group bg-card"
         >
-          <!-- Color accent bar -->
+          <!-- Color accent bar — thicker -->
           <div
-            class="absolute inset-x-0 top-0 h-[3px]"
+            class="absolute inset-x-0 top-0 h-[4px] transition-opacity duration-200"
             :style="{ background: getAgentColor(agent.frontmatter.color) }"
           />
 
-          <!-- Header: name + model -->
-          <div class="flex items-center gap-2.5 mb-2">
+          <!-- Hover glow in agent color -->
+          <div
+            class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
+            :style="{ background: 'radial-gradient(ellipse at top, ' + getAgentColor(agent.frontmatter.color) + '08 0%, transparent 60%)' }"
+          />
+
+          <!-- Header: icon + name + model -->
+          <div class="flex items-center gap-3 mb-2 relative">
             <div
-              class="size-2.5 rounded-full shrink-0"
-              :style="{ background: getAgentColor(agent.frontmatter.color) }"
-            />
-            <span class="text-[13px] font-medium truncate">
+              class="size-8 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
+              :style="{ background: getAgentColor(agent.frontmatter.color) + '18', border: '1px solid ' + getAgentColor(agent.frontmatter.color) + '25' }"
+            >
+              <UIcon name="i-lucide-cpu" class="size-3.5" :style="{ color: getAgentColor(agent.frontmatter.color) }" />
+            </div>
+            <span class="text-[13px] font-medium truncate flex-1">
               {{ agent.frontmatter.name }}
             </span>
             <span
               v-if="agent.frontmatter.model && modelColors[agent.frontmatter.model]"
-              class="ml-auto text-[10px] font-mono font-medium px-1.5 py-px rounded-full shrink-0"
+              class="text-[10px] font-mono font-medium px-1.5 py-px rounded-full shrink-0"
               :class="[modelColors[agent.frontmatter.model].bg, modelColors[agent.frontmatter.model].text]"
             >
               {{ agent.frontmatter.model }}
@@ -118,9 +126,17 @@ async function useTemplate(templateId: string) {
           </div>
 
           <!-- Description -->
-          <p v-if="agent.frontmatter.description" class="text-[12px] leading-relaxed line-clamp-2 text-label">
+          <p v-if="agent.frontmatter.description" class="text-[12px] leading-relaxed line-clamp-2 text-label relative">
             {{ agent.frontmatter.description }}
           </p>
+
+          <!-- Skill count badge -->
+          <div v-if="skillCounts[agent.slug]" class="mt-3 pt-3 relative" style="border-top: 1px solid var(--border-subtle);">
+            <span class="text-[10px] text-meta flex items-center gap-1.5">
+              <UIcon name="i-lucide-sparkles" class="size-3" style="color: var(--accent);" />
+              {{ skillCounts[agent.slug] }} skill{{ skillCounts[agent.slug] === 1 ? '' : 's' }}
+            </span>
+          </div>
         </NuxtLink>
       </div>
 

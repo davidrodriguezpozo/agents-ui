@@ -30,7 +30,7 @@ const filteredSkills = computed(() => {
     </PageHeader>
 
     <div class="px-6 py-4">
-      <p class="text-[12px] mb-4 leading-relaxed text-label">
+      <p class="text-[13px] mb-4 leading-relaxed text-label">
         Specific capabilities that can be added to agents and invoked as slash commands.
       </p>
 

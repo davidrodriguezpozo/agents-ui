@@ -46,7 +46,7 @@ const filteredCount = computed(() =>
     </PageHeader>
 
     <div class="px-6 py-4">
-      <p class="text-[12px] mb-4 leading-relaxed text-label">
+      <p class="text-[13px] mb-4 leading-relaxed text-label">
         Reusable workflows you can trigger with a slash command (e.g., /deploy).
       </p>
 

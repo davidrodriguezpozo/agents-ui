@@ -39,7 +39,7 @@ function finish() {
         </div>
 
         <div class="space-y-2">
-          <h2 class="text-[20px] font-semibold tracking-tight" style="font-family: var(--font-sans);">
+          <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
             Set up Agent Manager
           </h2>
           <p class="text-[13px] text-label leading-relaxed max-w-sm mx-auto">
@@ -98,7 +98,7 @@ function finish() {
         </div>
 
         <div class="space-y-2">
-          <h2 class="text-[20px] font-semibold tracking-tight" style="font-family: var(--font-sans);">
+          <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
             You're all set
           </h2>
           <p class="text-[13px] text-label leading-relaxed max-w-sm mx-auto">

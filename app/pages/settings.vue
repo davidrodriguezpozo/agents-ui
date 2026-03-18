@@ -211,7 +211,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <div
         class="rounded-xl p-5 space-y-4 bg-card"
       >
-        <h3 class="text-section-label">General</h3>
+        <h3 class="text-section-title">General</h3>
 
         <div class="space-y-4">
           <!-- Always Thinking toggle -->
@@ -240,7 +240,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <div
         class="rounded-xl p-5 space-y-4 bg-card"
       >
-        <h3 class="text-section-label">Status Line</h3>
+        <h3 class="text-section-title">Status Line</h3>
         <p class="text-[12px] text-meta">
           Shows custom information in Claude Code's interface. Use a bash command to display dynamic content.
         </p>
@@ -250,7 +250,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             <label class="field-label">Type</label>
             <select v-model="statusLineType" class="field-select">
               <option value="">None</option>
-              <option value="bash">bash</option>
+              <option value="command">command</option>
             </select>
           </div>
           <div class="field-group">
@@ -311,7 +311,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         class="rounded-xl p-5 space-y-4 bg-card"
       >
         <div class="flex items-center justify-between">
-          <h3 class="text-section-label">Automations</h3>
+          <h3 class="text-section-title">Automations</h3>
           <UButton label="Add Automation" icon="i-lucide-plus" size="xs" variant="soft" @click="showAddHookModal = true" />
         </div>
         <p class="text-[12px] text-meta">
@@ -369,7 +369,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         style="border: 1px solid var(--border-subtle);"
       >
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">
-          <h3 class="text-section-label">settings.json</h3>
+          <h3 class="text-section-title">settings.json</h3>
           <div class="flex items-center gap-3">
             <span class="font-mono text-[10px] text-meta">
               {{ lineCount }} lines
