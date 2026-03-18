@@ -1,25 +1,67 @@
 import { readFile } from 'node:fs/promises'
+import { readdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { resolveClaudePath } from '../../utils/claudeDir'
 import { parseFrontmatter } from '../../utils/frontmatter'
 import type { SkillFrontmatter } from '~/types'
 
+interface InstalledEntry {
+  installPath: string
+  [key: string]: unknown
+}
+
+async function readJson<T>(path: string): Promise<T | null> {
+  try {
+    if (!existsSync(path)) return null
+    const raw = await readFile(path, 'utf-8')
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')!
-  const skillPath = join(resolveClaudePath('skills', slug), 'SKILL.md')
 
-  if (!existsSync(skillPath)) {
-    throw createError({ statusCode: 404, message: `Skill not found: ${slug}` })
+  // 1. Check standalone skills
+  const standalonePath = join(resolveClaudePath('skills', slug), 'SKILL.md')
+  if (existsSync(standalonePath)) {
+    const raw = await readFile(standalonePath, 'utf-8')
+    const { frontmatter, body } = parseFrontmatter<SkillFrontmatter>(raw)
+    return {
+      slug,
+      frontmatter: { name: slug, ...frontmatter },
+      body,
+      filePath: standalonePath,
+    }
   }
 
-  const raw = await readFile(skillPath, 'utf-8')
-  const { frontmatter, body } = parseFrontmatter<SkillFrontmatter>(raw)
+  // 2. Check plugin skills
+  const installedPath = resolveClaudePath('plugins', 'installed_plugins.json')
+  const installed = await readJson<{ plugins: Record<string, InstalledEntry[]> }>(installedPath)
 
-  return {
-    slug,
-    frontmatter: { name: slug, ...frontmatter },
-    body,
-    filePath: skillPath,
+  if (installed?.plugins) {
+    for (const entries of Object.values(installed.plugins)) {
+      const entry = entries[0]
+      if (!entry) continue
+
+      const pluginSkillsDir = join(entry.installPath, 'skills')
+      if (!existsSync(pluginSkillsDir)) continue
+
+      const skillPath = join(pluginSkillsDir, slug, 'SKILL.md')
+      if (existsSync(skillPath)) {
+        const raw = await readFile(skillPath, 'utf-8')
+        const { frontmatter, body } = parseFrontmatter<SkillFrontmatter>(raw)
+        return {
+          slug,
+          frontmatter: { name: slug, ...frontmatter },
+          body,
+          filePath: skillPath,
+        }
+      }
+    }
   }
+
+  throw createError({ statusCode: 404, message: `Skill not found: ${slug}` })
 })
