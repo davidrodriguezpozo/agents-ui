@@ -38,7 +38,17 @@ export default defineNuxtConfig({
     pageTransition: { name: 'page', mode: 'out-in' },
   },
 
+  components: [
+    { path: '~/components/chat', pathPrefix: false },
+    { path: '~/components/studio', pathPrefix: false },
+    { path: '~/components' },
+  ],
+
   colorMode: {
     preference: 'light',
+  },
+
+  routeRules: {
+    '/templates': { redirect: '/explore' },
   },
 })

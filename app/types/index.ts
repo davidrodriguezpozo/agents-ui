@@ -156,3 +156,45 @@ export interface StepExecution {
   startedAt?: number
   completedAt?: number
 }
+
+// ── Chat ──────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  thinking?: string
+  timestamp: number
+}
+
+export type StreamActivity =
+  | { type: 'thinking' }
+  | { type: 'tool'; name: string; elapsed: number }
+  | { type: 'writing' }
+  | null
+
+// ── History ───────────────────────────────────────
+
+export interface ToolCallRecord {
+  toolName: string
+  elapsed: number
+  timestamp: number
+}
+
+export interface ConversationSession {
+  id: string
+  agentSlug: string
+  messages: ChatMessage[]
+  toolCalls: ToolCallRecord[]
+  tokenUsage: { input: number; output: number }
+  duration: number
+  createdAt: string
+}
+
+export interface ConversationSummary {
+  id: string
+  agentSlug: string
+  messageCount: number
+  firstUserMessage: string
+  createdAt: string
+}

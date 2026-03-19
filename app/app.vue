@@ -118,7 +118,7 @@ const navLinks = [
 ]
 
 const navSecondary = [
-  { label: 'Templates', icon: 'i-lucide-layout-template', to: '/templates' },
+  { label: 'Explore', icon: 'i-lucide-compass', to: '/explore' },
   { label: 'Graph', icon: 'i-lucide-workflow', to: '/graph' },
   { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
 ]
