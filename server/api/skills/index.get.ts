@@ -82,5 +82,51 @@ export default defineEventHandler(async () => {
     }
   }
 
+  // 3. GitHub-imported skills
+  const githubDir = resolveClaudePath('github')
+  if (existsSync(githubDir)) {
+    const registry = await readImportsRegistry()
+
+    for (const entry of registry.imports) {
+      if (!existsSync(entry.localPath)) continue
+
+      const scanRoot = entry.targetPath
+        ? join(entry.localPath, entry.targetPath)
+        : entry.localPath
+
+      if (!existsSync(scanRoot)) continue
+
+      const walkForSkills = async (dir: string) => {
+        const entries = await readdir(dir, { withFileTypes: true })
+        for (const item of entries) {
+          if (item.name.startsWith('.')) continue
+          const fullPath = join(dir, item.name)
+          if (item.isDirectory()) {
+            const skillPath = join(fullPath, 'SKILL.md')
+            if (existsSync(skillPath)) {
+              const raw = await readFile(skillPath, 'utf-8')
+              const { frontmatter, body } = parseFrontmatter<SkillFrontmatter>(raw)
+              if (frontmatter.name && frontmatter.description) {
+                if (entry.selectedSkills.length === 0 || entry.selectedSkills.includes(item.name)) {
+                  skills.push({
+                    slug: item.name,
+                    frontmatter: { name: item.name, ...frontmatter },
+                    body,
+                    filePath: skillPath,
+                    source: 'github',
+                    githubRepo: `${entry.owner}/${entry.repo}`,
+                  })
+                }
+              }
+            }
+            await walkForSkills(fullPath)
+          }
+        }
+      }
+
+      await walkForSkills(scanRoot)
+    }
+  }
+
   return skills.sort((a, b) => a.slug.localeCompare(b.slug))
 })

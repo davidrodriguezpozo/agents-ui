@@ -1035,9 +1035,23 @@ button:not(:disabled),
 .stagger-item:nth-child(10) {
   animation-delay: 360ms;
 }
-.stagger-item:nth-child(n + 11) {
-  animation-delay: 0ms;
-  animation-duration: 0.15s;
+.stagger-item:nth-child(11) {
+  animation-delay: 400ms;
+}
+.stagger-item:nth-child(12) {
+  animation-delay: 440ms;
+}
+.stagger-item:nth-child(13) {
+  animation-delay: 480ms;
+}
+.stagger-item:nth-child(14) {
+  animation-delay: 520ms;
+}
+.stagger-item:nth-child(15) {
+  animation-delay: 560ms;
+}
+.stagger-item:nth-child(n + 16) {
+  animation-delay: 600ms;
 }
 
 /* Content stagger for page sections */

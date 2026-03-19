@@ -88,6 +88,12 @@ const filteredSkills = computed(() => {
             agent: {{ skill.frontmatter.agent }}
           </span>
 
+          <!-- GitHub badge -->
+          <ImportBadge
+            v-if="skill.source === 'github' && skill.githubRepo"
+            :repo="skill.githubRepo"
+          />
+
           <!-- Description -->
           <span class="flex-1 text-[12px] truncate text-label">
             {{ skill.frontmatter.description }}

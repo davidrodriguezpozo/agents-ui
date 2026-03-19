@@ -97,6 +97,8 @@ export interface Skill {
   frontmatter: SkillFrontmatter
   body: string
   filePath: string
+  source?: 'local' | 'github' | 'plugin'
+  githubRepo?: string
 }
 
 export interface AgentSkill {
@@ -112,6 +114,68 @@ export interface AgentSkill {
 export interface SkillPayload {
   frontmatter: SkillFrontmatter
   body: string
+}
+
+// ── GitHub Imports ──────────────────────────────────
+
+export interface ScannedSkill {
+  slug: string
+  name: string
+  description: string
+  category: string | null
+  tags: string[]
+  filePath: string
+  hasSupporting: boolean
+  conflict: boolean
+}
+
+export interface ScanResult {
+  owner: string
+  repo: string
+  branch: string
+  targetPath: string
+  skills: ScannedSkill[]
+  detectionMethod: 'frontmatter' | 'skills-index'
+}
+
+export interface GithubImport {
+  owner: string
+  repo: string
+  url: string
+  targetPath: string
+  localPath: string
+  importedAt: string
+  lastChecked: string
+  currentSha: string
+  remoteSha: string
+  selectedSkills: string[]
+}
+
+export interface GithubImportsRegistry {
+  imports: GithubImport[]
+}
+
+// ── Marketplace ─────────────────────────────────────
+
+export interface AvailablePlugin {
+  name: string
+  description: string
+  author?: { name: string; email?: string }
+  skillCount: number
+  commandCount: number
+  installed: boolean
+  marketplace: string
+}
+
+export interface MarketplaceSource {
+  name: string
+  sourceType: string
+  sourceUrl: string
+  lastUpdated: string
+}
+
+export interface MarketplaceData {
+  marketplaces: Record<string, { plugins: AvailablePlugin[] }>
 }
 
 export interface PluginDetail extends Plugin {

@@ -10,6 +10,7 @@ const { agents } = useAgents()
 
 const slug = route.params.slug as string
 const skill = ref<Skill | null>(null)
+const isImported = computed(() => skill.value?.source === 'github')
 const saving = ref(false)
 
 const frontmatter = ref<SkillFrontmatter>({ name: '', description: '' })
@@ -82,6 +83,21 @@ async function deleteSkill() {
   }
 }
 
+async function editCopy() {
+  if (!skill.value) return
+  const { create } = useSkills()
+  try {
+    const copy = await create({
+      frontmatter: { ...skill.value.frontmatter, name: skill.value.frontmatter.name + ' (copy)' },
+      body: skill.value.body,
+    })
+    toast.add({ title: 'Copy created', color: 'success' })
+    router.push(`/skills/${copy.slug}`)
+  } catch (e: any) {
+    toast.add({ title: 'Failed to create copy', description: e.data?.message || e.message, color: 'error' })
+  }
+}
+
 // Cmd+S to save
 if (import.meta.client) {
   const onKeydown = (e: KeyboardEvent) => {
@@ -138,14 +154,17 @@ const agentOptions = computed(() =>
         >
           <UIcon name="i-lucide-download" class="size-3.5" />
         </a>
-        <button
-          class="text-[12px] px-2 py-1 rounded focus-ring text-label"
-          @click="showDeleteConfirm = true"
-        >
-          Delete
-        </button>
-        <span v-if="isDirty" class="text-[10px] font-mono unsaved-pulse" style="color: var(--warning);">unsaved</span>
-        <UButton label="Save" icon="i-lucide-save" size="sm" :loading="saving" @click="save" />
+        <template v-if="!isImported">
+          <button
+            class="text-[12px] px-2 py-1 rounded focus-ring text-label"
+            @click="showDeleteConfirm = true"
+          >
+            Delete
+          </button>
+          <span v-if="isDirty" class="text-[10px] font-mono unsaved-pulse" style="color: var(--warning);">unsaved</span>
+          <UButton label="Save" icon="i-lucide-save" size="sm" :loading="saving" @click="save" />
+        </template>
+        <UButton v-else label="Edit a copy" icon="i-lucide-copy" size="sm" @click="editCopy" />
       </template>
     </PageHeader>
 
@@ -162,6 +181,21 @@ const agentOptions = computed(() =>
         </span>
         <button class="text-[12px] font-medium px-2 py-1 rounded hover-bg" style="color: var(--info, #3b82f6);" @click="restoreDraft">Restore</button>
         <button class="text-[12px] px-2 py-1 rounded hover-bg text-meta" @click="clearDraft">Dismiss</button>
+      </div>
+
+      <!-- Read-only banner for imported skills -->
+      <div
+        v-if="isImported"
+        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
+      >
+        <svg class="size-4 shrink-0 text-label" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+        </svg>
+        <span class="text-[12px] flex-1 text-label">
+          This skill is imported from GitHub and is read-only. Updates from the source may overwrite local changes.
+        </span>
+        <UButton label="Edit a copy" size="xs" variant="soft" @click="editCopy" />
       </div>
 
       <!-- Configuration -->
@@ -212,12 +246,12 @@ const agentOptions = computed(() =>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div class="field-group">
               <label class="field-label">Name</label>
-              <input v-model="frontmatter.name" class="field-input" />
+              <input v-model="frontmatter.name" class="field-input" :disabled="isImported" />
               <span class="field-hint">Identifier for this skill. Also used as the slash command name.</span>
             </div>
             <div class="field-group">
               <label class="field-label">Availability</label>
-              <input v-model="frontmatter.context" class="field-input" placeholder="Leave blank for always available" />
+              <input v-model="frontmatter.context" class="field-input" :disabled="isImported" placeholder="Leave blank for always available" />
               <span class="field-hint">Restrict when this skill appears (e.g., only in certain repos)</span>
             </div>
             <div class="field-group">
@@ -225,6 +259,7 @@ const agentOptions = computed(() =>
               <input
                 v-model="frontmatter.agent"
                 class="field-input"
+                :disabled="isImported"
                 placeholder="Optional — link to an agent"
                 :list="agentOptions.length > 0 ? 'agent-opts-detail' : undefined"
               />
@@ -237,7 +272,7 @@ const agentOptions = computed(() =>
 
           <div class="field-group">
             <label class="field-label">Description</label>
-            <textarea v-model="frontmatter.description" rows="2" class="field-textarea" />
+            <textarea v-model="frontmatter.description" rows="2" class="field-textarea" :disabled="isImported" />
             <span class="field-hint">Helps Claude decide when to use this skill. Be specific about the trigger.</span>
           </div>
         </div>
@@ -264,6 +299,7 @@ const agentOptions = computed(() =>
           class="editor-textarea"
           style="min-height: 500px;"
           spellcheck="false"
+          :disabled="isImported"
           placeholder="Skill instructions..."
         />
       </div>

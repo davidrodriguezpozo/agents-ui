@@ -6,6 +6,7 @@ const { agents, fetchAll: fetchAgents } = useAgents();
 const { commands, fetchAll: fetchCommands } = useCommands();
 const { plugins, fetchAll: fetchPlugins } = usePlugins();
 const { skills, fetchAll: fetchSkills } = useSkills();
+const { imports: githubImports, fetchImports } = useGithubImports();
 const { settings, load: loadSettings } = useSettings();
 
 const dirInput = ref("");
@@ -46,7 +47,7 @@ function animateCounter(target: number, key: keyof typeof animatedCounts) {
 
 onMounted(async () => {
   dirInput.value = claudeDir.value || "";
-  await Promise.all([loadSettings(), fetchPlugins(), fetchSkills()]);
+  await Promise.all([loadSettings(), fetchPlugins(), fetchSkills(), fetchImports()]);
 
   // Animate counters after data loads
   nextTick(() => {

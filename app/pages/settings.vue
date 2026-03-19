@@ -2,6 +2,14 @@
 import type { Settings } from '~/types'
 
 const { settings, loading, load, save } = useSettings()
+const {
+  imports: githubImports,
+  loading: importsLoading,
+  fetchImports: fetchGithubImports,
+  checkUpdates,
+  updateImport,
+  removeImport,
+} = useGithubImports()
 const toast = useToast()
 
 const rawJson = ref('')
@@ -12,6 +20,37 @@ onMounted(async () => {
   await load()
   syncRawJson()
 })
+
+onMounted(async () => {
+  await fetchGithubImports()
+})
+
+async function onUpdateImport(owner: string, repo: string) {
+  try {
+    await updateImport(owner, repo)
+    toast.add({ title: 'Import updated', color: 'success' })
+  } catch {
+    toast.add({ title: 'Update failed', color: 'error' })
+  }
+}
+
+async function onRemoveImport(owner: string, repo: string) {
+  try {
+    await removeImport(owner, repo)
+    toast.add({ title: 'Import removed', color: 'success' })
+  } catch {
+    toast.add({ title: 'Remove failed', color: 'error' })
+  }
+}
+
+async function onCheckUpdates() {
+  try {
+    await checkUpdates()
+    toast.add({ title: 'Update check complete', color: 'success' })
+  } catch {
+    toast.add({ title: 'Update check failed', color: 'error' })
+  }
+}
 
 watch(settings, () => syncRawJson())
 
@@ -298,6 +337,65 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                 class="p-1.5 -m-0.5 rounded focus-ring text-meta"
                 aria-label="Remove plugin from settings"
                 @click="removePlugin(plugin.name)"
+              >
+                <UIcon name="i-lucide-x" class="size-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- GitHub Imports -->
+      <div class="rounded-xl p-5 space-y-4 bg-card">
+        <div class="flex items-center justify-between">
+          <h3 class="text-section-title">GitHub Imports</h3>
+          <UButton
+            v-if="githubImports.length > 0"
+            label="Check for updates"
+            icon="i-lucide-refresh-cw"
+            size="xs"
+            variant="soft"
+            @click="onCheckUpdates"
+          />
+        </div>
+        <p class="text-[12px] text-meta">
+          Manage skill repositories imported from GitHub.
+        </p>
+
+        <div v-if="githubImports.length === 0" class="text-[13px] text-label">
+          No GitHub imports. Use the Explore page to import skills from GitHub.
+        </div>
+
+        <div v-else class="space-y-2">
+          <div
+            v-for="entry in githubImports"
+            :key="`${entry.owner}/${entry.repo}`"
+            class="flex items-center justify-between py-2 px-3 rounded-lg"
+            style="background: var(--input-bg);"
+          >
+            <div class="flex-1 min-w-0">
+              <span class="font-mono text-[12px] text-body">{{ entry.owner }}/{{ entry.repo }}</span>
+              <span class="text-[10px] text-meta ml-2">{{ entry.selectedSkills.length }} skills</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <span
+                v-if="entry.currentSha !== entry.remoteSha"
+                class="text-[10px] font-medium px-2 py-0.5 rounded-full"
+                style="background: rgba(59, 130, 246, 0.1); color: var(--info, #3b82f6);"
+              >
+                Update available
+              </span>
+              <UButton
+                v-if="entry.currentSha !== entry.remoteSha"
+                label="Update"
+                size="xs"
+                variant="soft"
+                @click="onUpdateImport(entry.owner, entry.repo)"
+              />
+              <button
+                class="p-1.5 -m-0.5 rounded focus-ring text-meta"
+                aria-label="Remove import"
+                @click="onRemoveImport(entry.owner, entry.repo)"
               >
                 <UIcon name="i-lucide-x" class="size-3.5" />
               </button>
