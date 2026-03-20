@@ -134,7 +134,10 @@ const filteredSkills = computed(() => {
           </div>
         </div>
         <p class="text-[13px] text-label">Skills teach agents specific capabilities. Link a skill to an agent to extend what it can do.</p>
-        <UButton label="Create a skill" size="sm" @click="showCreateModal = true" />
+        <div class="flex items-center gap-2">
+          <UButton label="Create a skill" size="sm" @click="showCreateModal = true" />
+          <UButton label="Import from GitHub" size="sm" variant="outline" to="/explore?tab=imported" />
+        </div>
       </div>
     </div>
 

@@ -465,6 +465,35 @@ const statItems = computed(() => [
                 />
               </div>
             </NuxtLink>
+
+            <NuxtLink
+              to="/explore"
+              class="block rounded-xl p-4 focus-ring hover-card bg-card group"
+            >
+              <div class="flex items-center gap-3">
+                <div
+                  class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                  style="
+                    background: var(--accent-muted);
+                    border: 1px solid rgba(229, 169, 62, 0.12);
+                  "
+                >
+                  <UIcon
+                    name="i-lucide-compass"
+                    class="size-4"
+                    style="color: var(--accent)"
+                  />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="text-[13px] font-medium">Explore</div>
+                  <div class="text-[11px] text-label">Templates & extensions</div>
+                </div>
+                <UIcon
+                  name="i-lucide-arrow-right"
+                  class="size-4 text-meta opacity-0 group-hover:opacity-100 transition-all duration-200 group-hover:translate-x-0.5"
+                />
+              </div>
+            </NuxtLink>
           </div>
         </div>
       </div>

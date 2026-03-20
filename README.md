@@ -1,20 +1,77 @@
+<div align="center">
+
 # agents-ui
 
-A web dashboard for managing Claude Code agents and commands. Browse, create, edit, and visualize the relationships between your agents and commands stored in your `.claude` directory.
+**A visual dashboard for managing your Claude Code agents, commands, skills, and workflows.**
 
-## Screenshots
+Manage everything in your `.claude` directory — without touching the terminal.
 
-![Main View](images/main-view.png)
+<!-- Replace with your hero GIF after recording -->
+![agents-ui demo](docs/images/hero.gif)
 
-![Agent Details](images/agent-details.png)
+[Quick Start](#quick-start) · [Features](#features) · [Contributing](CONTRIBUTING.md)
+
+</div>
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/davidrodriguezpozo/agents-ui.git
+cd agents-ui
+bun install
+bun run dev
+```
+
+Open **http://localhost:3000** — that's it. agents-ui reads your `~/.claude` directory and you're ready to go.
+
+> **Prerequisites:** [Bun](https://bun.sh) (or Node.js 18+). If using Node, replace `bun` with `npm` or `pnpm`.
+
+---
 
 ## Features
 
-- **Dashboard** — Overview of agents, commands, model distribution, and quick links
-- **Agent Management** — Create, edit, and delete agents with frontmatter metadata (model, color, memory type)
-- **Command Management** — Organize commands in nested directories with allowed-tools configuration
-- **Relationship Graph** — Interactive node-edge visualization of agent/command dependencies using VueFlow
-- **Settings** — Configure plugins and system preferences
+### Agent Management
+Create, edit, and organize AI agents with custom instructions, models, and memory settings. Pick from templates or build from scratch.
+
+![Agent Editor](docs/images/agent-editor.png)
+
+### Command Builder
+Build reusable slash commands with argument hints and allowed-tools configuration. Organize in nested directories.
+
+### Relationship Graph
+Interactive visualization of how your agents, commands, and skills connect. See the big picture at a glance.
+
+![Relationship Graph](docs/images/graph.png)
+
+### Agent Studio
+Test your agents live — send messages, inspect execution, and refine instructions in real time.
+
+![Agent Studio](docs/images/studio.png)
+
+### Workflow Builder
+Chain agents into multi-step pipelines with a visual editor. Define execution order and inspect results.
+
+<!-- ![Workflow Builder](docs/images/workflows.png) -->
+
+### Skill Management
+Browse, create, and import skills from GitHub. Teach your agents new capabilities.
+
+### Explore & Templates
+Discover agent templates, browse extensions, and import community skills — all from one place.
+
+![Explore](docs/images/explore.png)
+
+---
+
+## Why agents-ui?
+
+**If you already use Claude Code:** You manage agents by editing markdown files in `~/.claude/agents/`, commands in `~/.claude/commands/`, and skills scattered across directories. agents-ui gives you a visual layer on top — see everything at a glance, catch misconfigurations, and iterate faster.
+
+**If you're new to Claude Code:** The CLI can feel overwhelming. agents-ui gives you a GUI to get started — create your first agent from a template, see what each setting does, and build confidence before diving into the terminal.
+
+---
 
 ## Tech Stack
 
@@ -23,48 +80,16 @@ A web dashboard for managing Claude Code agents and commands. Browse, create, ed
 - [VueFlow](https://vueflow.dev) for graph visualization
 - [Bun](https://bun.sh) as package manager
 
-## Setup
-
-```bash
-bun install
-```
-
-## Development
-
-```bash
-bun run dev
-```
-
-The app runs on `http://localhost:3000` by default.
-
-## Build
-
-```bash
-bun run build
-bun run preview
-```
-
 ## Environment Variables
 
-| Variable    | Description                          | Default    |
-| ----------- | ------------------------------------ | ---------- |
+| Variable     | Description                          | Default     |
+| ------------ | ------------------------------------ | ----------- |
 | `CLAUDE_DIR` | Path to your Claude config directory | `~/.claude` |
 
-## Project Structure
+## Contributing
 
-```
-app/
-├── components/     # AgentForm, CommandForm, PageHeader
-├── composables/    # useAgents, useCommands, useClaudeDir, useSettings
-├── pages/          # Dashboard, agents/, commands/, graph, settings
-├── types/          # TypeScript type definitions
-└── utils/          # Color mappings
-
-server/
-├── api/            # REST endpoints for agents, commands, config, settings
-└── utils/          # Frontmatter parsing, relationship extraction
-```
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for setup instructions and guidelines.
 
 ## License
 
-MIT
+[MIT](LICENSE)
