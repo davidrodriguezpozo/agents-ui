@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ChatMessage } from '~/types'
+import type { ChatMessage, PermissionRequest } from '~/types'
 
 const props = defineProps<{
   agentSlug: string
@@ -7,7 +7,7 @@ const props = defineProps<{
   isDraft: boolean
 }>()
 
-const { messages, isStreaming, error, activity, toolCalls, sendMessage, stopStreaming, clearChat } = useStudioChat()
+const { messages, isStreaming, error, activity, toolCalls, sendMessage, stopStreaming, clearChat, pendingPermissions, isAnsweringPermission, answerPermission } = useStudioChat()
 const { workingDir, displayPath: projectDisplayPath } = useWorkingDir()
 
 const input = ref('')
@@ -40,9 +40,11 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 const statusText = computed(() => {
+  if (pendingPermissions.value.length) return 'Needs your OK'
   if (!isStreaming.value) return messages.value.length ? 'Ready' : 'Online'
   const a = activity.value
   if (!a) return 'Starting' + '.'.repeat(streamingDots.value)
+  if (a.type === 'permission') return 'Needs your OK'
   if (a.type === 'thinking') return 'Thinking' + '.'.repeat(streamingDots.value)
   if (a.type === 'tool') return (TOOL_LABELS[a.name] || a.name) + '.'.repeat(streamingDots.value)
   if (a.type === 'writing') return 'Responding' + '.'.repeat(streamingDots.value)
@@ -70,10 +72,13 @@ async function handleSend() {
         <span v-if="isDraft" class="text-[9px] font-mono px-1.5 py-px rounded-full" style="background: rgba(229, 169, 62, 0.1); color: var(--accent);">Draft</span>
         <span class="text-[9px] font-mono tracking-widest uppercase px-1.5 py-px rounded-full transition-all" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', color: isStreaming ? 'var(--accent)' : 'var(--text-disabled)' }">{{ statusText }}</span>
       </div>
-      <button v-if="messages.length" class="p-1 rounded-md hover-bg transition-all" style="color: var(--text-disabled);" title="Clear conversation" @click="clearChat">
+      <button v-if="messages.length" class="p-1 rounded-md hover-bg transition-all" style="color: var(--text-disabled);" title="New conversation" @click="clearChat">
         <UIcon name="i-lucide-rotate-ccw" class="size-3" />
       </button>
     </div>
+
+    <RunSettings />
+    <ConversationHistory :agent-slug="agentSlug" />
 
     <div ref="messagesContainer" class="flex-1 overflow-y-auto px-4 py-3 space-y-4">
       <div v-if="!messages.length" class="flex flex-col items-center justify-center h-full gap-3">
@@ -86,6 +91,17 @@ async function handleSend() {
       </template>
 
       <div v-if="error" class="text-[11px] rounded-lg px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">{{ error }}</div>
+    </div>
+
+    <!-- Blocked on you: the agent cannot move until these are answered -->
+    <div v-if="pendingPermissions.length" class="shrink-0 px-5 pb-1 pt-2 space-y-2">
+      <PermissionPrompt
+        v-for="request in pendingPermissions"
+        :key="request.id"
+        :request="(request as PermissionRequest)"
+        :busy="isAnsweringPermission(request.id)"
+        @answer="answerPermission(request.id, $event)"
+      />
     </div>
 
     <ChatInput ref="inputRef" v-model="input" :placeholder="`Ask ${agentName} something...`" :disabled="isStreaming" :is-streaming="isStreaming" :project-display-path="projectDisplayPath" @send="handleSend" @stop="stopStreaming" />

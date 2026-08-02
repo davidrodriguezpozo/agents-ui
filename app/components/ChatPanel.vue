@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import type { ChatMessage } from '~/types'
+import type { ChatMessage, PermissionRequest } from '~/types'
 
 const props = defineProps<{ open: boolean }>()
 const emit = defineEmits<{ 'update:open': [value: boolean] }>()
 
-const { messages, isStreaming, error, activity, usedTools, sendMessage, stopStreaming, clearChat, activeAgent, pendingInput, clearAgent } = useChat()
+const { messages, isStreaming, error, activity, usedTools, sendMessage, stopStreaming, clearChat, activeAgent, pendingInput, clearAgent, pendingPermissions, isAnsweringPermission, answerPermission } = useChat()
 const { displayPath: projectDisplayPath } = useWorkingDir()
 const { fetchAll: fetchAgents } = useAgents()
 const { fetchAll: fetchCommands } = useCommands()
@@ -70,9 +70,11 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 const statusText = computed(() => {
+  if (pendingPermissions.value.length) return 'Needs your OK'
   if (!isStreaming.value) return messages.value.length ? 'Ready' : 'Online'
   const a = activity.value
   if (!a) return 'Starting' + '.'.repeat(streamingDots.value)
+  if (a.type === 'permission') return 'Needs your OK'
   if (a.type === 'thinking') return 'Thinking' + '.'.repeat(streamingDots.value)
   if (a.type === 'tool') return (TOOL_LABELS[a.name] || a.name) + '.'.repeat(streamingDots.value)
   if (a.type === 'writing') return 'Responding' + '.'.repeat(streamingDots.value)
@@ -187,6 +189,17 @@ function handleQuickAction(prompt: string) {
           <UIcon name="i-lucide-alert-circle" class="size-3.5 shrink-0 mt-0.5" />
           <span>{{ error }}</span>
         </div>
+      </div>
+
+      <!-- Blocked on you: the agent cannot move until one of these is answered -->
+      <div v-if="pendingPermissions.length" class="shrink-0 px-5 pb-1 pt-2 space-y-2">
+        <PermissionPrompt
+          v-for="request in pendingPermissions"
+          :key="request.id"
+          :request="(request as PermissionRequest)"
+          :busy="isAnsweringPermission(request.id)"
+          @answer="answerPermission(request.id, $event)"
+        />
       </div>
 
       <!-- Input -->

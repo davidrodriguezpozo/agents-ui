@@ -1,3 +1,5 @@
+import type { Scope } from '~/types'
+
 interface CrudOptions {
   stateKey: string
   label?: string
@@ -25,17 +27,25 @@ export function useCrud<T extends { slug: string }, P = unknown>(basePath: strin
   }
 
   async function fetchOne(slug: string) {
-    return await $fetch<T>(`${basePath}/${slug}`) as T
+    return await $fetch<T>(`${basePath}/${encodeURIComponent(slug)}`) as T
   }
 
-  async function create(payload: P) {
-    const item = await $fetch<T>(basePath, { method: 'POST', body: payload as Record<string, unknown> }) as T
+  /** Creates in the given scope, or the currently selected create scope. */
+  async function create(payload: P, scope?: Scope) {
+    const { withScope } = useScope()
+    const item = await $fetch<T>(withScope(basePath, scope), {
+      method: 'POST',
+      body: payload as Record<string, unknown>,
+    }) as T
     items.value.push(item)
     return item
   }
 
   async function update(slug: string, payload: P) {
-    const item = await $fetch<T>(`${basePath}/${slug}`, { method: 'PUT', body: payload as Record<string, unknown> }) as T
+    const item = await $fetch<T>(`${basePath}/${encodeURIComponent(slug)}`, {
+      method: 'PUT',
+      body: payload as Record<string, unknown>,
+    }) as T
     const idx = items.value.findIndex(i => i.slug === slug)
     if (idx >= 0) items.value[idx] = item
     else items.value.push(item)
@@ -43,7 +53,7 @@ export function useCrud<T extends { slug: string }, P = unknown>(basePath: strin
   }
 
   async function remove(slug: string) {
-    await $fetch(`${basePath}/${slug}`, { method: 'DELETE' as const })
+    await $fetch(`${basePath}/${encodeURIComponent(slug)}`, { method: 'DELETE' as const })
     items.value = items.value.filter(i => i.slug !== slug)
   }
 

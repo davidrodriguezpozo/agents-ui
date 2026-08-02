@@ -1,24 +1,8 @@
-import { readFile, writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { resolveClaudePath } from '../../../utils/claudeDir'
+import { writeFile } from 'node:fs/promises'
+import { getScopeRoots } from '../../../utils/scope'
 import { serializeFrontmatter } from '../../../utils/frontmatter'
+import { readInstalledPlugins, scanPluginComponents } from '../../../utils/pluginScan'
 import type { SkillFrontmatter } from '~/types'
-
-interface InstalledEntry {
-  installPath: string
-  [key: string]: unknown
-}
-
-async function readJson<T>(path: string): Promise<T | null> {
-  try {
-    if (!existsSync(path)) return null
-    const raw = await readFile(path, 'utf-8')
-    return JSON.parse(raw) as T
-  } catch {
-    return null
-  }
-}
 
 export default defineEventHandler(async (event) => {
   const { pluginId, skill, frontmatter, body } = await readBody<{
@@ -32,21 +16,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'pluginId and skill are required' })
   }
 
-  const installedPath = resolveClaudePath('plugins', 'installed_plugins.json')
-  const installed = await readJson<{ plugins: Record<string, InstalledEntry[]> }>(installedPath)
-  const entries = installed?.plugins?.[pluginId]
-  if (!entries?.length) {
+  const roots = getScopeRoots(event)
+  const records = await readInstalledPlugins(roots[0]!.dir)
+  const record = records.find(r => r.id === pluginId)
+  if (!record) {
     throw createError({ statusCode: 404, message: `Plugin not found: ${pluginId}` })
   }
 
-  const entry = entries[0]!
-  const skillPath = join(entry.installPath, 'skills', skill, 'SKILL.md')
-  if (!existsSync(skillPath)) {
+  // Resolve through the scanner so nested and `*-skills/` layouts work too.
+  const components = await scanPluginComponents(record.entry.installPath, record.name)
+  const match = components.skills.find(s => s.slug === skill)
+  if (!match) {
     throw createError({ statusCode: 404, message: `Skill not found: ${skill}` })
   }
 
-  const content = serializeFrontmatter(frontmatter, body)
-  await writeFile(skillPath, content, 'utf-8')
+  await writeFile(match.filePath, serializeFrontmatter(frontmatter, body), 'utf-8')
 
-  return { ok: true }
+  return { ok: true, filePath: match.filePath }
 })

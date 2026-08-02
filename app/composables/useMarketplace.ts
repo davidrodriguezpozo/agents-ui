@@ -70,17 +70,21 @@ export function useMarketplace() {
     return data.output
   }
 
-  const availablePlugins = computed(() => {
+  /** Every plugin the connected marketplaces offer, installed or not. */
+  const allPlugins = computed(() => {
     const all: AvailablePlugin[] = []
     for (const plugins of Object.values(marketplaceData.value)) {
-      all.push(...plugins.plugins.filter(p => !p.installed))
+      all.push(...plugins.plugins)
     }
     return all
   })
 
+  const availablePlugins = computed(() => allPlugins.value.filter(p => !p.installed))
+
   return {
     marketplaceData,
     sources,
+    allPlugins,
     loading,
     sourcesLoading,
     availablePlugins,

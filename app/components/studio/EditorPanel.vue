@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { AgentFrontmatter, AgentModel, AgentMemory, AgentSkill } from '~/types'
+import { AVAILABLE_TOOLS } from '~/types'
 
 const props = defineProps<{
   frontmatter: AgentFrontmatter
@@ -16,6 +17,7 @@ const emit = defineEmits<{
 const activeTab = ref<'instructions' | 'settings' | 'skills'>('instructions')
 
 const modelOptions: { label: string; value: AgentModel }[] = [
+  { label: 'Inherit', value: 'inherit' },
   { label: 'Opus', value: 'opus' },
   { label: 'Sonnet', value: 'sonnet' },
   { label: 'Haiku', value: 'haiku' },
@@ -27,8 +29,31 @@ const memoryOptions: { label: string; value: AgentMemory }[] = [
   { label: 'None', value: 'none' },
 ]
 
+const allTools = [...AVAILABLE_TOOLS]
+
 function updateFrontmatter(key: keyof AgentFrontmatter, value: unknown) {
   emit('update:frontmatter', { ...props.frontmatter, [key]: value })
+}
+
+/**
+ * `tools:` in frontmatter is what Claude Code reads to scope a subagent. An
+ * empty list means "inherit everything", so we only write the key when the user
+ * actually narrows it.
+ */
+const restrictTools = computed({
+  get: () => Boolean(props.frontmatter.tools?.length),
+  set: (value: boolean) => updateFrontmatter('tools', value ? allTools : undefined),
+})
+
+function toggleTool(tool: string) {
+  const current = props.frontmatter.tools ?? allTools
+  const next = current.includes(tool) ? current.filter(t => t !== tool) : [...current, tool]
+  updateFrontmatter('tools', next.length ? next : undefined)
+}
+
+function isToolEnabled(tool: string): boolean {
+  const tools = props.frontmatter.tools
+  return !tools?.length || tools.includes(tool)
 }
 </script>
 
@@ -72,6 +97,35 @@ function updateFrontmatter(key: keyof AgentFrontmatter, value: unknown) {
           <button v-for="opt in memoryOptions" :key="opt.value" class="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all" :style="{ background: frontmatter.memory === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.memory === opt.value ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'), color: frontmatter.memory === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('memory', opt.value)">{{ opt.label }}</button>
         </div>
       </div>
+      <div class="space-y-1">
+        <div class="flex items-center justify-between">
+          <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Tools</label>
+          <label class="flex items-center gap-1.5 text-[10px]" style="color: var(--text-tertiary);">
+            <input v-model="restrictTools" type="checkbox" class="size-3" />
+            Restrict
+          </label>
+        </div>
+        <p v-if="!restrictTools" class="text-[10px] leading-relaxed" style="color: var(--text-disabled);">
+          Inherits every tool available to the parent session — the Claude Code default when
+          <code>tools:</code> is omitted.
+        </p>
+        <div v-else class="flex flex-wrap gap-1 pt-0.5">
+          <button
+            v-for="tool in allTools"
+            :key="tool"
+            class="px-1.5 py-0.5 rounded text-[10px] font-mono transition-all"
+            :style="{
+              background: isToolEnabled(tool) ? 'var(--accent-muted)' : 'var(--surface-raised)',
+              color: isToolEnabled(tool) ? 'var(--accent)' : 'var(--text-disabled)',
+              border: '1px solid ' + (isToolEnabled(tool) ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'),
+            }"
+            @click="toggleTool(tool)"
+          >
+            {{ tool }}
+          </button>
+        </div>
+      </div>
+
       <div class="space-y-1">
         <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Color</label>
         <input type="color" :value="frontmatter.color || '#e5a93e'" class="w-8 h-8 rounded-lg cursor-pointer border" style="border-color: var(--border-subtle);" @input="updateFrontmatter('color', ($event.target as HTMLInputElement).value)" />

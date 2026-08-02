@@ -1,20 +1,26 @@
 import { rm } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { resolveClaudePath } from '../../utils/claudeDir'
+import { findSkill } from '../../utils/findSkill'
 
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')!
-  const skillDir = resolveClaudePath('skills', slug)
+  const found = await findSkill(event, slug)
 
-  if (!existsSync(skillDir)) {
+  if (!found) {
     throw createError({ statusCode: 404, message: `Skill not found: ${slug}` })
   }
 
+  if (found.source !== 'local') {
+    throw createError({
+      statusCode: 400,
+      message: `"${slug}" comes from ${found.source === 'plugin' ? `the ${found.pluginName} plugin` : 'a GitHub import'} — remove it from its source instead.`,
+    })
+  }
+
   try {
-    await rm(skillDir, { recursive: true })
+    await rm(found.dir, { recursive: true })
   } catch {
     throw createError({ statusCode: 500, message: `Failed to delete skill: ${slug}` })
   }
 
-  return { deleted: true, slug }
+  return { deleted: true, slug, scope: found.scope }
 })

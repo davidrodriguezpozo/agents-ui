@@ -1,5 +1,9 @@
-export type AgentModel = 'opus' | 'sonnet' | 'haiku'
+export type AgentModel = 'opus' | 'sonnet' | 'haiku' | 'inherit'
 export type AgentMemory = 'user' | 'project' | 'none'
+
+/** Where a definition lives: `~/.claude`, `<project>/.claude`, or inside a plugin. */
+export type Scope = 'user' | 'project'
+export type ItemSource = 'local' | 'plugin'
 
 export interface AgentFrontmatter {
   name: string
@@ -7,6 +11,8 @@ export interface AgentFrontmatter {
   model?: AgentModel
   color?: string
   memory?: AgentMemory
+  /** Tool allowlist, as Claude Code reads it from subagent frontmatter. */
+  tools?: string[]
 }
 
 export interface Agent {
@@ -16,6 +22,14 @@ export interface Agent {
   body: string
   hasMemory: boolean
   filePath: string
+  scope: Scope
+  source: ItemSource
+  /** Set when `source === 'plugin'`. */
+  pluginId?: string
+  pluginName?: string
+  /** Project root for project-scoped items. */
+  projectDir?: string
+  readOnly?: boolean
 }
 
 export interface CommandFrontmatter {
@@ -23,6 +37,7 @@ export interface CommandFrontmatter {
   description: string
   'argument-hint'?: string
   'allowed-tools'?: string[]
+  model?: string
 }
 
 export interface Command {
@@ -32,6 +47,14 @@ export interface Command {
   frontmatter: CommandFrontmatter
   body: string
   filePath: string
+  scope: Scope
+  source: ItemSource
+  /** How the command is typed in Claude Code, e.g. `/defender:pickup`. */
+  invocation: string
+  pluginId?: string
+  pluginName?: string
+  projectDir?: string
+  readOnly?: boolean
 }
 
 export interface Settings {
@@ -70,6 +93,15 @@ export interface CommandPayload {
   directory?: string
 }
 
+export interface PluginComponentCounts {
+  commands: number
+  agents: number
+  skills: number
+  hooks: number
+  mcpServers: number
+  scripts: number
+}
+
 export interface Plugin {
   id: string
   name: string
@@ -82,6 +114,71 @@ export interface Plugin {
   installPath: string
   skills: string[]
   author?: { name: string; email?: string }
+  counts: PluginComponentCounts
+}
+
+// ── Plugin components ───────────────────────────────
+
+export interface PluginCommand {
+  name: string
+  /** Full invocation, e.g. `/hd:debug` or `/defender:pickup`. */
+  invocation: string
+  namespace: string
+  description: string
+  argumentHint?: string
+  allowedTools?: string[]
+  model?: string
+  body: string
+  filePath: string
+  relPath: string
+}
+
+export interface PluginAgent {
+  name: string
+  description: string
+  model?: string
+  tools?: string[]
+  color?: string
+  body: string
+  filePath: string
+  relPath: string
+}
+
+export interface PluginSkill {
+  slug: string
+  /** Which directory it came from — `skills`, `workflow-skills`, … */
+  group: string
+  frontmatter: SkillFrontmatter
+  body: string
+  filePath: string
+}
+
+export interface PluginHookEntry {
+  event: string
+  matcher?: string
+  commands: string[]
+}
+
+export interface PluginMcpServer {
+  name: string
+  transport: string
+  target: string
+  configPath: string
+}
+
+export interface PluginScript {
+  name: string
+  filePath: string
+}
+
+export interface PluginComponents {
+  commands: PluginCommand[]
+  agents: PluginAgent[]
+  skills: PluginSkill[]
+  hooks: PluginHookEntry[]
+  mcpServers: PluginMcpServer[]
+  scripts: PluginScript[]
+  readmePath: string | null
 }
 
 export interface SkillFrontmatter {
@@ -99,6 +196,11 @@ export interface Skill {
   filePath: string
   source?: 'local' | 'github' | 'plugin'
   githubRepo?: string
+  scope?: Scope
+  pluginId?: string
+  pluginName?: string
+  projectDir?: string
+  readOnly?: boolean
 }
 
 export interface AgentSkill {
@@ -163,6 +265,7 @@ export interface AvailablePlugin {
   author?: { name: string; email?: string }
   skillCount: number
   commandCount: number
+  agentCount: number
   installed: boolean
   marketplace: string
 }
@@ -178,7 +281,9 @@ export interface MarketplaceData {
   marketplaces: Record<string, { plugins: AvailablePlugin[] }>
 }
 
-export interface PluginDetail extends Plugin {
+/** `skills` widens from a list of names to full skill records. */
+export type PluginDetail = Omit<Plugin, 'skills'> & PluginComponents & {
+  /** Plugin skills in the shape the standalone skill editor expects. */
   skillDetails: Skill[]
 }
 
@@ -203,6 +308,7 @@ export interface Workflow {
   createdAt: string
   lastRunAt?: string
   filePath: string
+  scope?: Scope
 }
 
 export interface WorkflowPayload {
@@ -235,7 +341,24 @@ export type StreamActivity =
   | { type: 'thinking' }
   | { type: 'tool'; name: string; elapsed: number }
   | { type: 'writing' }
+  | { type: 'permission'; name: string }
   | null
+
+/** A tool call waiting on the user before the agent can continue. */
+export interface PermissionRequest {
+  id: string
+  ownerId: string
+  toolName: string
+  input: Record<string, unknown>
+  toolUseId: string
+  decisionReason?: string
+  blockedPath?: string
+  /** Whether "allow for the rest of this run" is on offer. */
+  canRemember: boolean
+  createdAt: number
+}
+
+export type PermissionAnswer = { behavior: 'allow'; scope?: 'once' | 'session' } | { behavior: 'deny' }
 
 // ── History ───────────────────────────────────────
 
@@ -245,20 +368,90 @@ export interface ToolCallRecord {
   timestamp: number
 }
 
+export interface TokenUsage {
+  input: number
+  output: number
+  cacheRead: number
+  cacheCreation: number
+}
+
+export interface RunStats {
+  usage: TokenUsage
+  costUsd: number
+  durationMs: number
+  numTurns: number
+  model?: string
+  permissionDenials: { toolName: string }[]
+}
+
 export interface ConversationSession {
   id: string
   agentSlug: string
+  /** `studio` for agent testing, `manager` for the global assistant panel. */
+  origin: 'studio' | 'manager'
+  title: string
   messages: ChatMessage[]
   toolCalls: ToolCallRecord[]
-  tokenUsage: { input: number; output: number }
+  tokenUsage: TokenUsage
+  costUsd: number
   duration: number
+  model?: string
+  projectDir?: string
+  sdkSessionId?: string
   createdAt: string
+  updatedAt: string
 }
 
 export interface ConversationSummary {
   id: string
   agentSlug: string
+  origin: 'studio' | 'manager'
+  title: string
   messageCount: number
+  toolCallCount: number
+  tokenUsage: TokenUsage
+  costUsd: number
   firstUserMessage: string
   createdAt: string
+  updatedAt: string
 }
+
+// ── Run configuration (fidelity controls) ──────────
+
+export type PermissionMode = 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+
+export interface RunConfig {
+  /** Tool allowlist. Empty/undefined means "everything the CLI offers". */
+  allowedTools?: string[]
+  disallowedTools?: string[]
+  permissionMode: PermissionMode
+  maxTurns: number
+  /** Load `~/.claude`, `.claude/settings.json` and CLAUDE.md like the real CLI. */
+  loadProjectSettings: boolean
+  model?: string
+}
+
+export const DEFAULT_RUN_CONFIG: RunConfig = {
+  permissionMode: 'acceptEdits',
+  maxTurns: 40,
+  loadProjectSettings: true,
+}
+
+/** The full tool surface Claude Code exposes, for the per-agent tool picker. */
+export const AVAILABLE_TOOLS = [
+  'Task',
+  'Bash',
+  'Glob',
+  'Grep',
+  'Read',
+  'Edit',
+  'Write',
+  'NotebookEdit',
+  'WebFetch',
+  'WebSearch',
+  'TodoWrite',
+  'BashOutput',
+  'KillShell',
+  'Skill',
+  'SlashCommand',
+] as const

@@ -8,6 +8,7 @@ const { plugins, fetchAll: fetchPlugins } = usePlugins();
 const { skills, fetchAll: fetchSkills } = useSkills();
 const { imports: githubImports, fetchImports } = useGithubImports();
 const { settings, load: loadSettings } = useSettings();
+const { isSimple } = useUiMode();
 
 const dirInput = ref("");
 const settingDir = ref(false);
@@ -178,7 +179,10 @@ const statItems = computed(() => [
 </script>
 
 <template>
-  <div>
+  <!-- Simple mode gets a task-first landing page instead of the config dashboard -->
+  <SimpleHome v-if="isSimple" />
+
+  <div v-else>
     <PageHeader title="Dashboard" />
 
     <div class="px-6 py-5 stagger-section space-y-5">

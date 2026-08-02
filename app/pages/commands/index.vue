@@ -1,37 +1,36 @@
 <script setup lang="ts">
-const { commands, loading, error, groupedByDirectory, remove } = useCommands()
+const { commands, loading, error, groupedBySource } = useCommands()
 const router = useRouter()
-const toast = useToast()
 
 const showCreateModal = ref(false)
 const searchQuery = ref('')
-const expandedGroups = ref<Record<string, boolean>>({})
+const collapsedGroups = ref<Record<string, boolean>>({})
 
-function toggleGroup(dir: string) {
-  expandedGroups.value[dir] = !expandedGroups.value[dir]
+function toggleGroup(key: string) {
+  collapsedGroups.value[key] = !collapsedGroups.value[key]
 }
 
-function isExpanded(dir: string) {
-  return expandedGroups.value[dir] !== false // default expanded
+function isExpanded(key: string) {
+  return !collapsedGroups.value[key]
 }
 
-const filteredGrouped = computed(() => {
-  if (!searchQuery.value) return groupedByDirectory.value
-  const q = searchQuery.value.toLowerCase()
-  const result: Record<string, typeof commands.value> = {}
-  for (const [dir, cmds] of Object.entries(groupedByDirectory.value)) {
-    const filtered = cmds.filter(c =>
-      c.frontmatter.name.toLowerCase().includes(q) ||
-      c.frontmatter.description?.toLowerCase().includes(q)
-    )
-    if (filtered.length) result[dir] = filtered
-  }
-  return result
+const filteredGroups = computed(() => {
+  const q = searchQuery.value.trim().toLowerCase()
+  if (!q) return groupedBySource.value
+
+  return groupedBySource.value
+    .map(group => ({
+      ...group,
+      commands: group.commands.filter(c =>
+        c.invocation.toLowerCase().includes(q)
+        || c.frontmatter.description?.toLowerCase().includes(q)
+        || (c.pluginName || '').toLowerCase().includes(q)
+      ),
+    }))
+    .filter(group => group.commands.length > 0)
 })
 
-const filteredCount = computed(() =>
-  Object.values(filteredGrouped.value).reduce((sum, cmds) => sum + cmds.length, 0)
-)
+
 </script>
 
 <template>
@@ -47,7 +46,7 @@ const filteredCount = computed(() =>
 
     <div class="px-6 py-4">
       <p class="text-[13px] mb-4 leading-relaxed text-label">
-        Reusable workflows you can trigger with a slash command (e.g., /deploy).
+        Reusable workflows you can trigger with a slash command (e.g., /deploy). Grouped by where they come from.
       </p>
 
       <!-- Search -->
@@ -72,53 +71,69 @@ const filteredCount = computed(() =>
         <SkeletonRow v-for="i in 5" :key="i" />
       </div>
 
-      <div v-else-if="Object.keys(filteredGrouped).length" class="space-y-2">
-        <div v-for="(cmds, dir) in filteredGrouped" :key="dir">
+      <div v-else-if="filteredGroups.length" class="space-y-3">
+        <div v-for="group in filteredGroups" :key="group.key">
           <!-- Group header -->
-          <button
-            class="flex items-center gap-2 w-full text-left py-2.5 px-3 -mx-2 rounded-lg hover-bg focus-ring text-body"
-            @click="toggleGroup(dir)"
-          >
-            <UIcon
-              :name="isExpanded(dir) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
-              class="size-3.5 text-meta"
-            />
-            <UIcon name="i-lucide-folder" class="size-3.5 text-meta" />
-            <span class="font-mono text-[13px] font-medium">{{ dir }}</span>
-            <span class="font-mono text-[12px] text-meta">{{ cmds.length }}</span>
-          </button>
+          <div class="flex items-center gap-2">
+            <button
+              class="flex items-center gap-2 flex-1 text-left py-2.5 px-3 -mx-2 rounded-lg hover-bg focus-ring text-body"
+              @click="toggleGroup(group.key)"
+            >
+              <UIcon
+                :name="isExpanded(group.key) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                class="size-3.5 text-meta"
+              />
+              <UIcon
+                :name="group.icon"
+                class="size-3.5"
+                :style="{ color: group.kind === 'plugin' ? 'rgb(139, 92, 246)' : group.kind === 'project' ? 'rgb(34, 197, 94)' : 'var(--text-tertiary)' }"
+              />
+              <span class="text-[13px] font-medium">{{ group.label }}</span>
+              <span class="font-mono text-[12px] text-meta">{{ group.commands.length }}</span>
+            </button>
+
+            <NuxtLink
+              v-if="group.pluginId"
+              :to="`/plugins/${encodeURIComponent(group.pluginId)}`"
+              class="text-[11px] px-2 py-1 rounded focus-ring text-meta hover-bg shrink-0"
+            >
+              View plugin
+            </NuxtLink>
+          </div>
 
           <!-- Commands in group -->
-          <div v-if="isExpanded(dir)" class="ml-5 border-l space-y-px pl-3" style="border-color: var(--border-subtle);">
+          <div v-if="isExpanded(group.key)" class="ml-5 border-l space-y-px pl-3" style="border-color: var(--border-subtle);">
             <NuxtLink
-              v-for="cmd in cmds"
+              v-for="cmd in group.commands"
               :key="cmd.slug"
               :to="`/commands/${cmd.slug}`"
               class="flex items-center gap-3 px-3 py-2 rounded-lg group focus-ring hover-row"
             >
-              <!-- Terminal icon -->
               <span class="font-mono text-[10px] font-medium shrink-0 text-meta">&gt;_</span>
 
-              <!-- Name -->
-              <span class="text-[13px] font-medium w-44 shrink-0 truncate">
-                /{{ cmd.frontmatter.name }}
+              <!-- Real invocation, e.g. /defender:pickup -->
+              <span class="font-mono text-[12px] font-medium w-52 shrink-0 truncate" style="color: var(--accent);">
+                {{ cmd.invocation }}
               </span>
 
-              <!-- Argument hint badge -->
               <span
                 v-if="cmd.frontmatter['argument-hint']"
-                class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
+                class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle max-w-[160px] truncate"
               >
                 {{ cmd.frontmatter['argument-hint'] }}
               </span>
 
-              <!-- Description -->
               <span class="flex-1 text-[12px] truncate text-label">
                 {{ cmd.frontmatter.description }}
               </span>
 
-              <!-- Metadata -->
-              <div class="flex items-center gap-3 shrink-0">
+              <div class="flex items-center gap-2 shrink-0">
+                <SourceBadge
+                  :scope="cmd.scope"
+                  :source="cmd.source"
+                  :plugin-name="cmd.pluginName"
+                  :project-dir="cmd.projectDir"
+                />
                 <UIcon
                   name="i-lucide-chevron-right"
                   class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-meta"

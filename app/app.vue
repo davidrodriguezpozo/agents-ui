@@ -12,7 +12,11 @@ const showSearch = ref(false)
 const sidebarOpen = ref(false)
 const { isPanelOpen: chatOpen } = useChat()
 const { workingDir, displayPath, setWorkingDir, clearWorkingDir } = useWorkingDir()
+const { createScope, canUseProjectScope, projectClaudeExists, refresh: refreshScope, initProject } = useScope()
 const colorMode = useColorMode()
+const { isSimple, toggle: toggleMode } = useUiMode()
+const toast = useToast()
+const initializingProject = ref(false)
 
 const showWorkingDirPopover = ref(false)
 const workingDirInput = ref('')
@@ -90,6 +94,30 @@ function toggleTheme() {
 
 watch(() => route.path, () => { sidebarOpen.value = false })
 
+async function refreshAll() {
+  await loadConfig()
+  await refreshScope()
+  await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), fetchWorkflows()])
+}
+
+// Switching projects changes what every list contains, so reload on change.
+watch(workingDir, () => {
+  if (initialized.value) refreshAll()
+})
+
+async function createProjectConfig() {
+  initializingProject.value = true
+  try {
+    const result = await initProject()
+    toast.add({ title: 'Project config created', description: result.claudeDir, color: 'success' })
+    await refreshAll()
+  } catch (e: any) {
+    toast.add({ title: 'Could not create project config', description: e.data?.message || e.message, color: 'error' })
+  } finally {
+    initializingProject.value = false
+  }
+}
+
 // Cmd+J to toggle chat
 if (import.meta.client) {
   const chatHandler = (e: KeyboardEvent) => {
@@ -103,25 +131,42 @@ if (import.meta.client) {
 }
 
 onMounted(async () => {
-  await loadConfig()
-  await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), fetchWorkflows()])
+  await refreshAll()
   initialized.value = true
 })
 
-const navLinks = [
-  { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
-  { label: 'Agents', icon: 'i-lucide-cpu', to: '/agents' },
-  { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },
-  { label: 'Commands', icon: 'i-lucide-terminal', to: '/commands' },
-  { label: 'Skills', icon: 'i-lucide-sparkles', to: '/skills' },
-  { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
-]
+// Simple mode leads with what someone can do and what they own; the authoring
+// surface (agents, commands, workflows, graph) is advanced-only.
+const navLinks = computed(() => isSimple.value
+  ? [
+      { label: 'Home', icon: 'i-lucide-house', to: '/' },
+      { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
+      { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
+      { label: 'My skills', icon: 'i-lucide-sparkles', to: '/skills' },
+    ]
+  : [
+      { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
+      { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
+      { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
+      { label: 'Agents', icon: 'i-lucide-cpu', to: '/agents' },
+      { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },
+      { label: 'Commands', icon: 'i-lucide-terminal', to: '/commands' },
+      { label: 'Skills', icon: 'i-lucide-sparkles', to: '/skills' },
+      { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
+    ]
+)
 
-const navSecondary = [
-  { label: 'Explore', icon: 'i-lucide-compass', to: '/explore' },
-  { label: 'Graph', icon: 'i-lucide-workflow', to: '/graph' },
-  { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
-]
+const navSecondary = computed(() => isSimple.value
+  ? [
+      { label: 'Add tools', icon: 'i-lucide-compass', to: '/explore' },
+      { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
+    ]
+  : [
+      { label: 'Explore', icon: 'i-lucide-compass', to: '/explore' },
+      { label: 'Graph', icon: 'i-lucide-workflow', to: '/graph' },
+      { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
+    ]
+)
 
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
@@ -129,6 +174,11 @@ function isActive(to: string) {
 }
 
 function badgeFor(to: string) {
+  if (isSimple.value) {
+    // "My skills" means the ones this person owns — plugin skills aren't theirs.
+    if (to !== '/skills') return null
+    return skills.value.filter(s => s.source !== 'plugin' && s.source !== 'github').length || null
+  }
   if (to === '/agents') return agents.value.length || null
   if (to === '/commands') return commands.value.length || null
   if (to === '/skills') return skills.value.length || null
@@ -283,6 +333,21 @@ function badgeFor(to: string) {
           </button>
         </div>
 
+        <!-- Simple / advanced -->
+        <div class="px-2.5 pb-1">
+          <button
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring press-scale"
+            style="color: var(--text-tertiary);"
+            :title="isSimple ? 'Show agents, commands, workflows and the graph' : 'Hide the advanced authoring tools'"
+            @click="toggleMode"
+          >
+            <UIcon :name="isSimple ? 'i-lucide-settings-2' : 'i-lucide-minimize-2'" class="size-4" />
+            <span class="text-[12px]" style="font-family: var(--font-sans);">
+              {{ isSimple ? 'Advanced tools' : 'Simple view' }}
+            </span>
+          </button>
+        </div>
+
         <!-- Theme toggle -->
         <div class="px-2.5 pb-1">
           <button
@@ -379,6 +444,40 @@ function badgeFor(to: string) {
               </div>
             </template>
           </UPopover>
+          <!-- Where new items get written -->
+          <div v-if="workingDir" class="mt-2 space-y-1.5">
+            <div v-if="canUseProjectScope" class="flex items-center gap-1 p-0.5 rounded-lg" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
+              <button
+                v-for="option in [{ value: 'user' as const, label: 'Personal' }, { value: 'project' as const, label: 'Project' }]"
+                :key="option.value"
+                class="flex-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all"
+                :style="{
+                  background: createScope === option.value ? 'var(--accent-muted)' : 'transparent',
+                  color: createScope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+                }"
+                :title="option.value === 'project' ? 'New agents, commands and skills go in this project\'s .claude' : 'New items go in your global ~/.claude'"
+                @click="createScope = option.value"
+              >
+                {{ option.label }}
+              </button>
+            </div>
+
+            <button
+              v-else-if="!projectClaudeExists"
+              class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] transition-all hover-bg"
+              style="color: var(--text-disabled); border: 1px dashed var(--border-subtle);"
+              :disabled="initializingProject"
+              @click="createProjectConfig"
+            >
+              <UIcon
+                :name="initializingProject ? 'i-lucide-loader-2' : 'i-lucide-folder-plus'"
+                class="size-3 shrink-0"
+                :class="{ 'animate-spin': initializingProject }"
+              />
+              <span class="truncate">Add .claude to this project</span>
+            </button>
+          </div>
+
           <div class="font-mono text-[9px] truncate tracking-wide mt-1.5 px-1" style="color: var(--text-disabled);">
             {{ claudeDir || 'No config directory' }}
           </div>

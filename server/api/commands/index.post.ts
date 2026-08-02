@@ -1,12 +1,14 @@
 import { writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { resolveClaudePath } from '../../utils/claudeDir'
+import { getRequestScope, resolveForRequest } from '../../utils/scope'
 import { serializeFrontmatter } from '../../utils/frontmatter'
+import { localCommandInvocation } from '../../utils/collect'
 import type { CommandPayload } from '~/types'
 
 export default defineEventHandler(async (event) => {
   const payload = await readBody<CommandPayload>(event)
+  const scope = getRequestScope(event)
   const name = payload.frontmatter.name
   const directory = payload.directory || ''
 
@@ -16,12 +18,10 @@ export default defineEventHandler(async (event) => {
   const filename = `${fileBaseName}.md`
 
   const dir = directory
-    ? resolveClaudePath('commands', directory)
-    : resolveClaudePath('commands')
+    ? resolveForRequest(event, 'commands', ...directory.split('/'))
+    : resolveForRequest(event, 'commands')
 
-  if (!existsSync(dir)) {
-    await mkdir(dir, { recursive: true })
-  }
+  await mkdir(dir, { recursive: true })
 
   const filePath = join(dir, filename)
   if (existsSync(filePath)) {
@@ -42,5 +42,8 @@ export default defineEventHandler(async (event) => {
     frontmatter: payload.frontmatter,
     body: payload.body,
     filePath,
+    scope,
+    source: 'local' as const,
+    invocation: localCommandInvocation(directory, fileBaseName),
   }
 })

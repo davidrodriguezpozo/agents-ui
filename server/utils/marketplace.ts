@@ -22,6 +22,29 @@ interface ScannedPlugin {
   author?: { name: string; email?: string }
   skillCount: number
   commandCount: number
+  agentCount: number
+}
+
+/** Recursively count markdown files, so namespaced commands are included. */
+async function countMarkdown(dir: string): Promise<number> {
+  if (!existsSync(dir)) return 0
+
+  let count = 0
+  const walk = async (current: string) => {
+    const entries = await readdir(current, { withFileTypes: true }) as DirEntry[]
+    for (const entry of entries) {
+      if (entry.name.startsWith('.')) continue
+      if (entry.isDirectory()) await walk(join(current, entry.name))
+      else if (entry.name.endsWith('.md')) count++
+    }
+  }
+
+  try {
+    await walk(dir)
+  } catch {
+    return count
+  }
+  return count
 }
 
 export async function readKnownMarketplaces(): Promise<Record<string, KnownMarketplace>> {
@@ -35,17 +58,55 @@ export async function readKnownMarketplaces(): Promise<Record<string, KnownMarke
   }
 }
 
-export async function scanMarketplacePlugins(installLocation: string): Promise<ScannedPlugin[]> {
+/** Minimal shape of a `readdir` entry — this project has no @types/node. */
+interface DirEntry {
+  name: string
+  isDirectory(): boolean
+}
+
+interface MarketplaceManifest {
+  plugins?: { name: string; source?: string }[]
+}
+
+/**
+ * Every plugin directory a marketplace offers. The manifest is authoritative —
+ * it declares each plugin's `source` path (e.g. `./plugins/hd`) — so a repo can
+ * lay its plugins out however it likes. Falls back to scanning `plugins/` for
+ * marketplaces whose manifest omits the list.
+ */
+async function pluginDirs(installLocation: string): Promise<{ name: string; dir: string }[]> {
+  const manifestPath = join(installLocation, '.claude-plugin', 'marketplace.json')
+  const declared: { name: string; dir: string }[] = []
+
+  if (existsSync(manifestPath)) {
+    try {
+      const manifest = JSON.parse(await readFile(manifestPath, 'utf-8')) as MarketplaceManifest
+      for (const entry of manifest.plugins ?? []) {
+        const dir = entry.source
+          ? join(installLocation, entry.source)
+          : join(installLocation, 'plugins', entry.name)
+        declared.push({ name: entry.name, dir })
+      }
+    } catch {
+      // Malformed manifest — fall through to the directory scan
+    }
+  }
+
+  if (declared.length) return declared
+
   const pluginsDir = join(installLocation, 'plugins')
   if (!existsSync(pluginsDir)) return []
-
-  const plugins: ScannedPlugin[] = []
   const entries = await readdir(pluginsDir, { withFileTypes: true })
+  return entries
+    .filter((e: DirEntry) => e.isDirectory())
+    .map((e: DirEntry) => ({ name: e.name, dir: join(pluginsDir, e.name) }))
+}
 
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
+export async function scanMarketplacePlugins(installLocation: string): Promise<ScannedPlugin[]> {
+  const plugins: ScannedPlugin[] = []
 
-    const pluginDir = join(pluginsDir, entry.name)
+  for (const entry of await pluginDirs(installLocation)) {
+    const pluginDir = entry.dir
     const pluginJsonPath = join(pluginDir, '.claude-plugin', 'plugin.json')
 
     if (!existsSync(pluginJsonPath)) continue
@@ -59,16 +120,13 @@ export async function scanMarketplacePlugins(installLocation: string): Promise<S
       const skillsDir = join(pluginDir, 'skills')
       if (existsSync(skillsDir)) {
         const skillEntries = await readdir(skillsDir, { withFileTypes: true })
-        skillCount = skillEntries.filter(e => e.isDirectory()).length
+        skillCount = skillEntries.filter((e: DirEntry) => e.isDirectory()).length
       }
 
-      // Count commands
-      let commandCount = 0
-      const commandsDir = join(pluginDir, 'commands')
-      if (existsSync(commandsDir)) {
-        const cmdEntries = await readdir(commandsDir, { withFileTypes: true })
-        commandCount = cmdEntries.filter(e => e.isDirectory()).length
-      }
+      // Commands are markdown files, and may sit in namespace subdirectories —
+      // counting directories under-reports a flat plugin as zero.
+      const commandCount = await countMarkdown(join(pluginDir, 'commands'))
+      const agentCount = await countMarkdown(join(pluginDir, 'agents'))
 
       plugins.push({
         name: pluginJson.name || entry.name,
@@ -76,6 +134,7 @@ export async function scanMarketplacePlugins(installLocation: string): Promise<S
         author: pluginJson.author,
         skillCount,
         commandCount,
+        agentCount,
       })
     } catch {
       // Skip malformed plugins

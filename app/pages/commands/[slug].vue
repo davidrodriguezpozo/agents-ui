@@ -5,6 +5,9 @@ const route = useRoute()
 const router = useRouter()
 const toast = useToast()
 const { fetchOne, update, remove } = useCommands()
+const { runCommand } = useChat()
+
+const showRun = ref(false)
 
 const slug = route.params.slug as string
 const command = ref<Command | null>(null)
@@ -20,7 +23,9 @@ const allowedToolsStr = ref('')
 const { hasDraft, draftAge, loadDraft, clearDraft, scheduleSave } = useDraftRecovery(`command:${slug}`)
 
 watch([frontmatter, body], () => {
-  if (command.value) scheduleSave(frontmatter.value, body.value)
+  if (command.value && command.value.source !== 'plugin') {
+    scheduleSave(frontmatter.value, body.value)
+  }
 }, { deep: true })
 
 function restoreDraft() {
@@ -46,6 +51,7 @@ onMounted(async () => {
 })
 
 async function save() {
+  if (command.value?.source === 'plugin') return
   if (!frontmatter.value.name.trim()) {
     toast.add({ title: 'Name is required', color: 'error' })
     return
@@ -101,8 +107,12 @@ if (import.meta.client) {
 const charCount = computed(() => body.value.length)
 const lineCount = computed(() => body.value.split('\n').length)
 
+/** Plugin commands live inside an installed package — editing them here would
+ * be silently reverted on the next plugin update. */
+const readOnly = computed(() => command.value?.source === 'plugin')
+
 const isDirty = computed(() => {
-  if (!command.value) return false
+  if (!command.value || readOnly.value) return false
   return JSON.stringify(frontmatter.value) !== JSON.stringify(command.value.frontmatter)
     || body.value !== command.value.body
     || allowedToolsStr.value !== (command.value.frontmatter['allowed-tools'] || []).join(', ')
@@ -120,29 +130,64 @@ useUnsavedChanges(isDirty)
         </NuxtLink>
       </template>
       <template #trailing>
-        <span
-          v-if="command"
-          class="font-mono text-[10px] font-medium px-1.5 py-px rounded-full badge badge-subtle"
-        >
-          {{ command.directory }}
+        <span v-if="command" class="font-mono text-[12px]" style="color: var(--accent);">
+          {{ command.invocation }}
         </span>
+        <SourceBadge
+          v-if="command"
+          :scope="command.scope"
+          :source="command.source"
+          :plugin-name="command.pluginName"
+          :project-dir="command.projectDir"
+        />
       </template>
       <template #right>
-        <button
+        <UButton
+          v-if="command"
+          label="Run"
+          icon="i-lucide-play"
+          size="sm"
+          variant="soft"
+          @click="showRun = true"
+        />
+        <NuxtLink
+          v-if="readOnly && command?.pluginId"
+          :to="`/plugins/${encodeURIComponent(command.pluginId)}?tab=commands`"
           class="text-[12px] px-2 py-1 rounded focus-ring text-label"
-          @click="showDeleteConfirm = true"
         >
-          Delete
-        </button>
-        <span v-if="isDirty" class="text-[10px] font-mono unsaved-pulse" style="color: var(--warning);">unsaved</span>
-        <UButton label="Save" icon="i-lucide-save" size="sm" :loading="saving" @click="save" />
+          View in plugin
+        </NuxtLink>
+        <template v-else>
+          <button
+            class="text-[12px] px-2 py-1 rounded focus-ring text-label"
+            @click="showDeleteConfirm = true"
+          >
+            Delete
+          </button>
+          <span v-if="isDirty" class="text-[10px] font-mono unsaved-pulse" style="color: var(--warning);">unsaved</span>
+          <UButton label="Save" icon="i-lucide-save" size="sm" :loading="saving" @click="save" />
+        </template>
       </template>
     </PageHeader>
 
     <div v-if="command" class="px-6 py-5 space-y-6">
+      <!-- Read-only notice for plugin-provided commands -->
+      <div
+        v-if="readOnly"
+        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        style="background: rgba(139, 92, 246, 0.06); border: 1px solid rgba(139, 92, 246, 0.14);"
+      >
+        <UIcon name="i-lucide-puzzle" class="size-4 shrink-0" style="color: rgb(139, 92, 246);" />
+        <span class="text-[12px] flex-1 text-body">
+          <strong>{{ command.invocation }}</strong> comes from the
+          <strong>{{ command.pluginName }}</strong> plugin. It's shown read-only here — edits would be
+          overwritten the next time the plugin updates.
+        </span>
+      </div>
+
       <!-- Draft recovery banner -->
       <div
-        v-if="hasDraft"
+        v-if="hasDraft && !readOnly"
         class="rounded-xl px-4 py-3 flex items-center gap-3"
         style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.12);"
       >
@@ -163,25 +208,25 @@ useUnsavedChanges(isDirty)
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="field-group">
             <label class="field-label">Name</label>
-            <input v-model="frontmatter.name" class="field-input" />
+            <input v-model="frontmatter.name" class="field-input" :disabled="readOnly" />
             <span class="field-hint">The slash command name (e.g., "deploy" becomes /deploy)</span>
           </div>
           <div class="field-group">
             <label class="field-label">Expected Input</label>
-            <input v-model="frontmatter['argument-hint']" class="field-input" placeholder="file name or topic" />
+            <input v-model="frontmatter['argument-hint']" class="field-input" :disabled="readOnly" placeholder="file name or topic" />
             <span class="field-hint">Shown as a hint when users type this command</span>
           </div>
         </div>
 
         <div class="field-group">
           <label class="field-label">Description</label>
-          <textarea v-model="frontmatter.description" rows="2" class="field-textarea" />
+          <textarea v-model="frontmatter.description" rows="2" class="field-textarea" :disabled="readOnly" />
           <span class="field-hint">Helps Claude understand when to suggest this command</span>
         </div>
 
         <div class="field-group">
           <label class="field-label">Tool Permissions</label>
-          <input v-model="allowedToolsStr" class="field-input" placeholder="Read, Write, Bash" />
+          <input v-model="allowedToolsStr" class="field-input" :disabled="readOnly" placeholder="Read, Write, Bash" />
           <span class="field-hint">Restrict what Claude can do. Leave blank to allow all. Options: Read, Write, Edit, Bash, Glob, Grep</span>
         </div>
       </div>
@@ -206,6 +251,7 @@ useUnsavedChanges(isDirty)
           v-model="body"
           class="editor-textarea"
           style="min-height: 500px;"
+          :readonly="readOnly"
           spellcheck="false"
           placeholder="Command instructions..."
         />
@@ -226,6 +272,13 @@ useUnsavedChanges(isDirty)
     <div v-else class="flex justify-center py-16">
       <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-meta" />
     </div>
+
+    <!-- Run -->
+    <UModal v-model:open="showRun">
+      <template #content>
+        <RunModal :command="command" @close="showRun = false" />
+      </template>
+    </UModal>
 
     <!-- Delete confirmation -->
     <UModal v-model:open="showDeleteConfirm">

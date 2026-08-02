@@ -4,6 +4,7 @@ export const friendlyModelName: Record<AgentModel, string> = {
   opus: 'Most capable',
   sonnet: 'Balanced',
   haiku: 'Fast & efficient',
+  inherit: 'Same as the session',
 }
 
 export const friendlyToolName: Record<string, string> = {

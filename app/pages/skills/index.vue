@@ -3,17 +3,43 @@ const { skills, loading, error, fetchAll: fetchSkills } = useSkills()
 const router = useRouter()
 
 const showCreateModal = ref(false)
+const { isSimple } = useUiMode()
+const route = useRoute()
+
+// `?new=1` deep-links here from the simple-mode home page.
+onMounted(() => { if (route.query.new) showCreateModal.value = true })
 const showImportModal = ref(false)
 const searchQuery = ref('')
 
+const sourceFilter = ref<'all' | 'user' | 'project' | 'plugin'>('all')
+
+const sourceFilters = computed(() => {
+  const counts = { all: skills.value.length, user: 0, project: 0, plugin: 0 }
+  for (const s of skills.value) {
+    if (s.source === 'plugin') counts.plugin++
+    else if (s.scope === 'project') counts.project++
+    else counts.user++
+  }
+  return [
+    { key: 'all' as const, label: 'All', count: counts.all },
+    { key: 'user' as const, label: 'Personal', count: counts.user },
+    { key: 'project' as const, label: 'Project', count: counts.project },
+    { key: 'plugin' as const, label: 'Plugins', count: counts.plugin },
+  ].filter(f => f.key === 'all' || f.count > 0)
+})
+
 const filteredSkills = computed(() => {
-  if (!searchQuery.value) return skills.value
   const q = searchQuery.value.toLowerCase()
-  return skills.value.filter(s =>
-    s.frontmatter.name.toLowerCase().includes(q) ||
-    s.frontmatter.description?.toLowerCase().includes(q) ||
-    s.frontmatter.agent?.toLowerCase().includes(q)
-  )
+  return skills.value.filter((s) => {
+    if (sourceFilter.value === 'plugin' && s.source !== 'plugin') return false
+    if (sourceFilter.value === 'project' && (s.source === 'plugin' || s.scope !== 'project')) return false
+    if (sourceFilter.value === 'user' && (s.source === 'plugin' || s.scope === 'project')) return false
+    if (!q) return true
+    return s.frontmatter.name.toLowerCase().includes(q)
+      || s.frontmatter.description?.toLowerCase().includes(q)
+      || s.frontmatter.agent?.toLowerCase().includes(q)
+      || (s.pluginName || '').toLowerCase().includes(q)
+  })
 })
 </script>
 
@@ -25,7 +51,12 @@ const filteredSkills = computed(() => {
       </template>
       <template #right>
         <UButton label="Import" icon="i-lucide-upload" size="sm" variant="soft" @click="showImportModal = true" />
-        <UButton label="New Skill" icon="i-lucide-plus" size="sm" @click="showCreateModal = true" />
+        <UButton
+          :label="isSimple ? 'Teach Claude something' : 'New Skill'"
+          icon="i-lucide-plus"
+          size="sm"
+          @click="showCreateModal = true"
+        />
       </template>
     </PageHeader>
 
@@ -34,13 +65,28 @@ const filteredSkills = computed(() => {
         Specific capabilities that can be added to agents and invoked as slash commands.
       </p>
 
-      <!-- Search -->
-      <div class="mb-4">
+      <!-- Search + source filter -->
+      <div class="mb-4 flex items-center gap-3 flex-wrap">
         <input
           v-model="searchQuery"
           placeholder="Search skills..."
           class="field-search max-w-xs"
         />
+        <div v-if="sourceFilters.length > 2" class="flex items-center gap-1">
+          <button
+            v-for="filter in sourceFilters"
+            :key="filter.key"
+            class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all focus-ring"
+            :style="{
+              background: sourceFilter === filter.key ? 'var(--accent-muted)' : 'transparent',
+              color: sourceFilter === filter.key ? 'var(--accent)' : 'var(--text-tertiary)',
+            }"
+            @click="sourceFilter = filter.key"
+          >
+            {{ filter.label }}
+            <span class="font-mono text-[10px] ml-1 opacity-70">{{ filter.count }}</span>
+          </button>
+        </div>
       </div>
 
       <div
@@ -100,7 +146,14 @@ const filteredSkills = computed(() => {
           </span>
 
           <!-- Metadata -->
-          <div class="flex items-center gap-3 shrink-0">
+          <div class="flex items-center gap-2 shrink-0">
+            <SourceBadge
+              v-if="skill.source !== 'github'"
+              :scope="skill.scope"
+              :source="skill.source === 'plugin' ? 'plugin' : 'local'"
+              :plugin-name="skill.pluginName"
+              :project-dir="skill.projectDir"
+            />
             <UIcon
               name="i-lucide-chevron-right"
               class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-meta"
@@ -143,7 +196,14 @@ const filteredSkills = computed(() => {
 
     <UModal v-model:open="showCreateModal">
       <template #content>
+        <!-- Guided three-question flow for simple mode, raw form for advanced -->
+        <SkillWizard
+          v-if="isSimple"
+          @saved="(s) => { showCreateModal = false; router.push(`/skills/${s.slug}`) }"
+          @cancel="showCreateModal = false"
+        />
         <SkillForm
+          v-else
           mode="create"
           @saved="(s) => { showCreateModal = false; router.push(`/skills/${s.slug}`) }"
           @cancel="showCreateModal = false"

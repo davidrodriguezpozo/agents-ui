@@ -136,6 +136,21 @@ const agentOptions = computed(() =>
       </template>
       <template #trailing>
         <UIcon name="i-lucide-sparkles" class="size-4" style="color: var(--accent);" />
+        <SourceBadge
+          v-if="skill"
+          :scope="skill.scope"
+          :source="skill.source === 'plugin' ? 'plugin' : skill.source === 'github' ? 'github' : 'local'"
+          :plugin-name="skill.pluginName"
+          :github-repo="skill.githubRepo"
+          :project-dir="skill.projectDir"
+        />
+        <NuxtLink
+          v-if="skill?.pluginId"
+          :to="`/plugins/${encodeURIComponent(skill.pluginId)}?tab=skills`"
+          class="text-[11px] px-2 py-0.5 rounded focus-ring text-meta hover-bg"
+        >
+          View in plugin
+        </NuxtLink>
       </template>
       <template #right>
         <UButton

@@ -1,31 +1,29 @@
-import { readFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { resolveClaudePath } from '../../utils/claudeDir'
+import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
+import { findScopeContaining } from '../../utils/scope'
 import { parseFrontmatter } from '../../utils/frontmatter'
+import { collectCommands, localCommandInvocation } from '../../utils/collect'
+import { slugToPath } from '../../utils/commandPath'
 import type { CommandFrontmatter } from '~/types'
-
-function slugToPath(slug: string): { directory: string; filename: string } {
-  const parts = slug.split('--')
-  if (parts.length === 1) {
-    return { directory: '', filename: `${parts[0]}.md` }
-  }
-  const filename = `${parts.pop()}.md`
-  const directory = parts.join('/')
-  return { directory, filename }
-}
 
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')!
   const { directory, filename } = slugToPath(slug)
-  const filePath = directory
-    ? resolveClaudePath('commands', directory, filename)
-    : resolveClaudePath('commands', filename)
+  const segments = directory ? ['commands', ...directory.split('/'), filename] : ['commands', filename]
 
-  if (!existsSync(filePath)) {
+  const root = findScopeContaining(event, ...segments)
+
+  // Not on disk under a scope — it may be a plugin command, which is read-only
+  // but still worth showing rather than 404ing.
+  if (!root) {
+    const fromPlugin = (await collectCommands(event)).find(c => c.slug === slug)
+    if (fromPlugin) return { ...fromPlugin, lastModified: null }
+
     throw createError({ statusCode: 404, message: `Command not found: ${slug}` })
   }
 
-  const raw = await readFile(filePath, 'utf-8')
+  const filePath = join(root.dir, ...segments)
+  const [raw, fileStat] = await Promise.all([readFile(filePath, 'utf-8'), stat(filePath)])
   const { frontmatter, body } = parseFrontmatter<CommandFrontmatter>(raw)
 
   return {
@@ -35,5 +33,11 @@ export default defineEventHandler(async (event) => {
     frontmatter: { name: slug, ...frontmatter },
     body,
     filePath,
+    scope: root.scope,
+    source: 'local' as const,
+    invocation: localCommandInvocation(directory, filename.replace(/\.md$/, '')),
+    projectDir: root.projectDir,
+    readOnly: false,
+    lastModified: fileStat.mtimeMs,
   }
 })

@@ -1,30 +1,22 @@
 import { writeFile } from 'node:fs/promises'
-import { existsSync } from 'node:fs'
-import { resolveClaudePath } from '../../utils/claudeDir'
+import { join } from 'node:path'
+import { findScopeContaining } from '../../utils/scope'
 import { serializeFrontmatter } from '../../utils/frontmatter'
+import { localCommandInvocation } from '../../utils/collect'
+import { slugToPath } from '../../utils/commandPath'
 import type { CommandPayload } from '~/types'
-
-function slugToPath(slug: string): { directory: string; filename: string } {
-  const parts = slug.split('--')
-  if (parts.length === 1) {
-    return { directory: '', filename: `${parts[0]}.md` }
-  }
-  const filename = `${parts.pop()}.md`
-  const directory = parts.join('/')
-  return { directory, filename }
-}
 
 export default defineEventHandler(async (event) => {
   const slug = getRouterParam(event, 'slug')!
   const { directory, filename } = slugToPath(slug)
-  const filePath = directory
-    ? resolveClaudePath('commands', directory, filename)
-    : resolveClaudePath('commands', filename)
+  const segments = directory ? ['commands', ...directory.split('/'), filename] : ['commands', filename]
 
-  if (!existsSync(filePath)) {
+  const root = findScopeContaining(event, ...segments)
+  if (!root) {
     throw createError({ statusCode: 404, message: `Command not found: ${slug}` })
   }
 
+  const filePath = join(root.dir, ...segments)
   const payload = await readBody<CommandPayload>(event)
   const content = serializeFrontmatter(payload.frontmatter, payload.body)
   await writeFile(filePath, content, 'utf-8')
@@ -36,5 +28,9 @@ export default defineEventHandler(async (event) => {
     frontmatter: payload.frontmatter,
     body: payload.body,
     filePath,
+    scope: root.scope,
+    source: 'local' as const,
+    invocation: localCommandInvocation(directory, filename.replace(/\.md$/, '')),
+    projectDir: root.projectDir,
   }
 })

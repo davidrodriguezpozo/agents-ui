@@ -51,6 +51,21 @@ defineProps<{
       <span v-if="agent.hasMemory" class="text-[10px] px-1.5 py-0.5 rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
         Has memory
       </span>
+      <span
+        v-if="agent.frontmatter.tools?.length"
+        class="text-[10px] px-1.5 py-0.5 rounded-full"
+        style="background: var(--badge-subtle-bg); color: var(--text-disabled);"
+        :title="agent.frontmatter.tools.join(', ')"
+      >
+        {{ agent.frontmatter.tools.length }} tools
+      </span>
+      <SourceBadge
+        class="ml-auto"
+        :scope="agent.scope"
+        :source="agent.source"
+        :plugin-name="agent.pluginName"
+        :project-dir="agent.projectDir"
+      />
     </div>
   </NuxtLink>
 </template>

@@ -1,7 +1,7 @@
 import { writeFile, mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { existsSync } from 'node:fs'
-import { resolveClaudePath } from '../../utils/claudeDir'
+import { getRequestScope, resolveForRequest } from '../../utils/scope'
 import type { WorkflowPayload, Workflow } from '~/types'
 
 function slugify(name: string): string {
@@ -14,8 +14,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'name is required' })
   }
 
-  const dir = resolveClaudePath('workflows')
-  if (!existsSync(dir)) await mkdir(dir, { recursive: true })
+  const scope = getRequestScope(event)
+  const dir = resolveForRequest(event, 'workflows')
+  await mkdir(dir, { recursive: true })
 
   let slug = slugify(body.name)
   let filePath = join(dir, `${slug}.json`)
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
     counter++
   }
 
-  const workflow: Omit<Workflow, 'slug' | 'filePath'> = {
+  const workflow: Omit<Workflow, 'slug' | 'filePath' | 'scope'> = {
     name: body.name.trim(),
     description: body.description || '',
     steps: body.steps || [],
@@ -34,5 +35,5 @@ export default defineEventHandler(async (event) => {
   }
 
   await writeFile(filePath, JSON.stringify(workflow, null, 2), 'utf-8')
-  return { slug, filePath, ...workflow } as Workflow
+  return { slug, filePath, scope, ...workflow } as Workflow
 })

@@ -1,44 +1,30 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
-import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
-import { getClaudeDir, resolveClaudePath } from '../utils/claudeDir'
+import { resolveRunOptions, toQueryOptions } from '../utils/runOptions'
+import { createPermissionBroker, newPermissionOwnerId } from '../utils/permissionBroker'
+import type { PermissionMode } from '~/types'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
 }
 
-function defaultManagerPrompt(claudeDir: string): string {
-  return `You are an assistant integrated into the Agent Manager UI. The user is managing their Claude Code agents, commands, skills, and plugins through a web interface.
-
-The current working directory is the user's Claude configuration folder: ${claudeDir}
-
-## File structure
-
-- **Agents**: Markdown files in \`${claudeDir}/agents/\` with YAML frontmatter (name, description, model, color, memory)
-- **Commands**: Markdown files in \`${claudeDir}/commands/\` (can be in subdirectories) with YAML frontmatter (name, description, argument-hint, allowed-tools)
-- **Skills**: Each skill is a directory in \`${claudeDir}/skills/<name>/SKILL.md\` with YAML frontmatter (name, description, context, agent)
-- **Settings**: \`${claudeDir}/settings.json\` — global Claude Code settings
-
-## Capabilities
-
-You can create, read, update, and delete any of these files. You can also:
-- **Bulk operations**: Rename, update, or delete multiple agents/commands/skills at once. When doing bulk ops, list what you'll change and ask for confirmation before executing.
-- **Audit**: Review all agents/commands/skills and report on quality, missing fields, inconsistencies.
-- **Generate**: Create new agents/commands/skills from a plain-English description. Ask clarifying questions first.
-- **Refactor**: Reorganize commands into directories, split large agents into agent+skills, consolidate duplicates.
-
-## Rules
-
-- Always confirm what you did after making changes.
-- For destructive operations (delete, overwrite), list exactly what will be affected and ask for confirmation.
-- When creating agents, use the YAML frontmatter format with --- delimiters.
-- Keep the user informed of progress during multi-step operations.
-- If the user describes what they need in plain English, translate that into the right agent/command/skill configuration.`
+interface ChatRequest {
+  messages: ChatMessage[]
+  sessionId?: string
+  agentSlug?: string
+  projectDir?: string
+  systemPromptOverride?: string
+  /** Fidelity controls, surfaced in the Studio run settings. */
+  allowedTools?: string[]
+  disallowedTools?: string[]
+  permissionMode?: PermissionMode
+  maxTurns?: number
+  loadProjectSettings?: boolean
+  model?: string
 }
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ messages: ChatMessage[]; sessionId?: string; agentSlug?: string; projectDir?: string }>(event)
+  const body = await readBody<ChatRequest>(event)
 
   if (!body.messages?.length) {
     throw createError({ statusCode: 400, message: 'messages is required' })
@@ -49,27 +35,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'No user message found' })
   }
 
-  const claudeDir = getClaudeDir()
+  // Shared with the detached runner, so an interactive chat and a scheduled run
+  // build byte-identical sessions — agent prompt, model, tool policy, plugins.
+  const options = await resolveRunOptions(event, body)
+  const { agent, plugins, allowedTools, permissionMode, maxTurns, model } = options
 
-  // Build system prompt depending on whether an agent is active
-  let systemAppend: string
-
-  if (body.agentSlug) {
-    const agentPath = resolveClaudePath('agents', `${body.agentSlug}.md`)
-    if (existsSync(agentPath)) {
-      const { parseFrontmatter } = await import('../utils/frontmatter')
-      const raw = await readFile(agentPath, 'utf-8')
-      const { frontmatter, body: agentBody } = parseFrontmatter<{ name?: string }>(raw)
-      const agentName = frontmatter.name || body.agentSlug
-      systemAppend = `You are "${agentName}", a specialized agent. Follow these instructions precisely:\n\n${agentBody}\n\nThe current working directory is: ${claudeDir}`
-    } else {
-      systemAppend = defaultManagerPrompt(claudeDir)
-    }
-  } else {
-    systemAppend = defaultManagerPrompt(claudeDir)
-  }
-
-  // Set up SSE headers
   setResponseHeaders(event, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -77,28 +47,54 @@ export default defineEventHandler(async (event) => {
   })
 
   const sendEvent = (type: string, data: unknown) => {
+    if (event.node.res.writableEnded) return
     event.node.res.write(`data: ${JSON.stringify({ type, ...data as object })}\n\n`)
   }
 
+  // Kills the CLI subprocess when the browser goes away, instead of leaving it
+  // running against a stream nobody is reading.
+  const abortController = new AbortController()
+
+  // Any tool the CLI wants approval for is pushed to the browser, which answers
+  // through /api/permissions/:id. Without this the SDK errors the request and
+  // the run stalls with no prompt and no way to unstick it.
+  const broker = createPermissionBroker({
+    ownerId: newPermissionOwnerId(),
+    onRequest: request => sendEvent('permission_request', { request }),
+    onSettled: (request, decision) => sendEvent('permission_resolved', {
+      id: request.id,
+      behavior: decision.behavior,
+    }),
+  })
+
+  event.node.req.on('close', () => {
+    broker.dispose('The user closed the conversation before approving this tool.')
+    abortController.abort()
+  })
+
+  sendEvent('run_config', {
+    cwd: options.cwd,
+    model: model ?? 'inherit',
+    allowedTools: allowedTools ?? null,
+    permissionMode,
+    maxTurns,
+    agentSource: agent?.source ?? null,
+    agentScope: agent?.scope ?? null,
+    pluginName: agent?.pluginName ?? null,
+    plugins: plugins.length,
+  })
+
+  let sessionId = body.sessionId || null
+
   try {
-    let sessionId = body.sessionId || null
     let resultText = ''
 
     for await (const message of query({
       prompt: lastUserMessage.content,
       options: {
-        cwd: body.projectDir && existsSync(body.projectDir) ? body.projectDir : claudeDir,
-        allowedTools: ['Read', 'Write', 'Edit', 'Glob', 'Grep'],
-        permissionMode: 'bypassPermissions',
-        allowDangerouslySkipPermissions: true,
-        maxTurns: 10,
-        includePartialMessages: true,
-        systemPrompt: {
-          type: 'preset',
-          preset: 'claude_code',
-          append: systemAppend,
-        },
-        ...(sessionId ? { resume: sessionId } : {}),
+        ...toQueryOptions(options, sessionId),
+        canUseTool: broker.canUseTool,
+        abortController,
       },
     })) {
       // Capture session ID for resumption
@@ -126,7 +122,40 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      // Tool progress — surface what Claude is doing
+      // Tool calls with their inputs — what the execution inspector renders
+      if (message.type === 'assistant') {
+        const content = message.message?.content
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if ((block as { type?: string }).type === 'tool_use') {
+              const toolUse = block as { id: string; name: string; input: unknown }
+              sendEvent('tool_use', {
+                id: toolUse.id,
+                toolName: toolUse.name,
+                input: toolUse.input,
+              })
+            }
+          }
+        }
+      }
+
+      // Tool results, so the inspector can pair them with their calls
+      if (message.type === 'user') {
+        const content = message.message?.content
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if ((block as { type?: string }).type === 'tool_result') {
+              const result = block as { tool_use_id: string; content?: unknown; is_error?: boolean }
+              sendEvent('tool_result', {
+                id: result.tool_use_id,
+                isError: Boolean(result.is_error),
+                preview: previewToolResult(result.content),
+              })
+            }
+          }
+        }
+      }
+
       if (message.type === 'tool_progress') {
         sendEvent('tool_progress', {
           toolName: message.tool_name,
@@ -134,18 +163,48 @@ export default defineEventHandler(async (event) => {
         })
       }
 
-      // Final result
+      // Final result — carries usage, cost and any permission denials
       if ('result' in message) {
         resultText = message.result
-        sendEvent('result', { text: resultText, stopReason: message.stop_reason })
+        const usage = (message as { usage?: Record<string, number> }).usage ?? {}
+        sendEvent('result', {
+          text: resultText,
+          stopReason: message.stop_reason,
+          stats: {
+            usage: {
+              input: usage.input_tokens ?? 0,
+              output: usage.output_tokens ?? 0,
+              cacheRead: usage.cache_read_input_tokens ?? 0,
+              cacheCreation: usage.cache_creation_input_tokens ?? 0,
+            },
+            costUsd: (message as { total_cost_usd?: number }).total_cost_usd ?? 0,
+            durationMs: (message as { duration_ms?: number }).duration_ms ?? 0,
+            numTurns: (message as { num_turns?: number }).num_turns ?? 0,
+            model,
+            permissionDenials: ((message as { permission_denials?: { tool_name: string }[] }).permission_denials ?? [])
+              .map(d => ({ toolName: d.tool_name })),
+          },
+        })
       }
     }
 
-    sendEvent('done', { sessionId })
   } catch (err: unknown) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     sendEvent('error', { message: errorMessage })
+  } finally {
+    // `done` and `end()` are what release the composer in the browser, so they
+    // have to happen on every path out of here — including a thrown query.
+    broker.dispose('The conversation ended before this tool was approved.')
+    sendEvent('done', { sessionId })
+    event.node.res.end()
   }
-
-  event.node.res.end()
 })
+
+function previewToolResult(content: unknown): string {
+  const text = typeof content === 'string'
+    ? content
+    : Array.isArray(content)
+      ? content.map(c => (c as { text?: string })?.text ?? '').join('')
+      : ''
+  return text.length > 600 ? `${text.slice(0, 600)}…` : text
+}

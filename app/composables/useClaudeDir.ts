@@ -1,16 +1,22 @@
+import type { ProjectConfig } from './useScope'
+
 export function useClaudeDir() {
   const claudeDir = useState<string | null>('claudeDir', () => null)
   const exists = useState<boolean>('claudeDirExists', () => true)
   const loading = useState('claudeDirLoading', () => false)
   const error = useState<string | null>('claudeDirError', () => null)
+  const projectClaudeDir = useState<string | null>('projectClaudeDir', () => null)
+  const projectClaudeExists = useState('projectClaudeExists', () => false)
 
   async function load() {
     loading.value = true
     error.value = null
     try {
-      const data = await $fetch<{ claudeDir: string; exists: boolean }>('/api/config')
+      const data = await $fetch<ProjectConfig>('/api/config')
       claudeDir.value = data.claudeDir || null
       exists.value = data.exists
+      projectClaudeDir.value = data.projectClaudeDir
+      projectClaudeExists.value = data.projectExists
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Failed to load config'
       error.value = msg
@@ -26,5 +32,5 @@ export function useClaudeDir() {
     exists.value = true
   }
 
-  return { claudeDir, exists, loading, error, load, set }
+  return { claudeDir, exists, loading, error, projectClaudeDir, projectClaudeExists, load, set }
 }

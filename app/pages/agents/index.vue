@@ -9,6 +9,7 @@ const toast = useToast()
 const showCreateModal = ref(false)
 const showImportModal = ref(false)
 const searchQuery = ref('')
+const sourceFilter = ref<'all' | 'user' | 'project' | 'plugin'>('all')
 const skillCounts = ref<Record<string, number>>({})
 const creatingTemplate = ref<string | null>(null)
 
@@ -20,14 +21,35 @@ onMounted(async () => {
   }
 })
 
-const filteredAgents = computed(() => {
-  if (!searchQuery.value) return agents.value
-  const q = searchQuery.value.toLowerCase()
-  return agents.value.filter(a =>
-    a.frontmatter.name.toLowerCase().includes(q) ||
-    a.frontmatter.description?.toLowerCase().includes(q)
-  )
+const sourceFilters = computed(() => {
+  const counts = { all: agents.value.length, user: 0, project: 0, plugin: 0 }
+  for (const a of agents.value) {
+    if (a.source === 'plugin') counts.plugin++
+    else if (a.scope === 'project') counts.project++
+    else counts.user++
+  }
+  return [
+    { key: 'all' as const, label: 'All', count: counts.all },
+    { key: 'user' as const, label: 'Personal', count: counts.user },
+    { key: 'project' as const, label: 'Project', count: counts.project },
+    { key: 'plugin' as const, label: 'Plugins', count: counts.plugin },
+  ].filter(f => f.key === 'all' || f.count > 0)
 })
+
+const filteredAgents = computed(() => {
+  const q = searchQuery.value.toLowerCase()
+  return agents.value.filter((a) => {
+    if (sourceFilter.value === 'plugin' && a.source !== 'plugin') return false
+    if (sourceFilter.value === 'project' && (a.source === 'plugin' || a.scope !== 'project')) return false
+    if (sourceFilter.value === 'user' && (a.source === 'plugin' || a.scope === 'project')) return false
+    if (!q) return true
+    return a.frontmatter.name.toLowerCase().includes(q)
+      || a.frontmatter.description?.toLowerCase().includes(q)
+      || (a.pluginName || '').toLowerCase().includes(q)
+  })
+})
+
+
 
 async function useTemplate(templateId: string) {
   const template = agentTemplates.find(t => t.id === templateId)
@@ -62,13 +84,28 @@ async function useTemplate(templateId: string) {
         Specialized AI assistants with custom instructions and behavior.
       </p>
 
-      <!-- Search -->
-      <div class="mb-5">
+      <!-- Search + source filter -->
+      <div class="mb-5 flex items-center gap-3 flex-wrap">
         <input
           v-model="searchQuery"
           placeholder="Search agents..."
           class="field-search max-w-xs"
         />
+        <div v-if="sourceFilters.length > 2" class="flex items-center gap-1">
+          <button
+            v-for="filter in sourceFilters"
+            :key="filter.key"
+            class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all focus-ring"
+            :style="{
+              background: sourceFilter === filter.key ? 'var(--accent-muted)' : 'transparent',
+              color: sourceFilter === filter.key ? 'var(--accent)' : 'var(--text-tertiary)',
+            }"
+            @click="sourceFilter = filter.key"
+          >
+            {{ filter.label }}
+            <span class="font-mono text-[10px] ml-1 opacity-70">{{ filter.count }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- Error state -->
@@ -89,7 +126,7 @@ async function useTemplate(templateId: string) {
       <div v-else-if="filteredAgents.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
         <NuxtLink
           v-for="(agent, idx) in filteredAgents"
-          :key="agent.slug"
+          :key="`${agent.source}-${agent.scope}-${agent.slug}`"
           :to="`/agents/${agent.slug}`"
           class="stagger-item rounded-xl p-4 focus-ring hover-card relative overflow-hidden group bg-card"
         >
@@ -130,11 +167,24 @@ async function useTemplate(templateId: string) {
             {{ agent.frontmatter.description }}
           </p>
 
-          <!-- Skill count badge -->
-          <div v-if="skillCounts[agent.slug]" class="mt-3 pt-3 relative" style="border-top: 1px solid var(--border-subtle);">
-            <span class="text-[10px] text-meta flex items-center gap-1.5">
+          <!-- Provenance + skill count -->
+          <div class="mt-3 pt-3 relative flex items-center gap-2" style="border-top: 1px solid var(--border-subtle);">
+            <SourceBadge
+              :scope="agent.scope"
+              :source="agent.source"
+              :plugin-name="agent.pluginName"
+              :project-dir="agent.projectDir"
+            />
+            <span v-if="skillCounts[agent.slug]" class="text-[10px] text-meta flex items-center gap-1.5">
               <UIcon name="i-lucide-sparkles" class="size-3" style="color: var(--accent);" />
               {{ skillCounts[agent.slug] }} skill{{ skillCounts[agent.slug] === 1 ? '' : 's' }}
+            </span>
+            <span
+              v-if="agent.frontmatter.tools?.length"
+              class="text-[10px] text-meta ml-auto"
+              :title="agent.frontmatter.tools.join(', ')"
+            >
+              {{ agent.frontmatter.tools.length }} tools
             </span>
           </div>
         </NuxtLink>

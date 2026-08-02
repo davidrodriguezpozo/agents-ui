@@ -10,6 +10,7 @@ const { clearChat: clearStudioChat, toolCalls, isStreaming: studioStreaming } = 
 
 const frontmatter = ref<AgentFrontmatter>({ name: '', description: '' })
 const body = ref('')
+const provenance = ref<{ scope?: 'user' | 'project'; source?: 'local' | 'plugin'; pluginId?: string; pluginName?: string; projectDir?: string }>({})
 const savedBody = ref('')
 const savedFrontmatter = ref<AgentFrontmatter>({ name: '', description: '' })
 const loading = ref(true)
@@ -18,7 +19,11 @@ const lastModified = ref<number | null>(null)
 const skills = ref<AgentSkill[]>([])
 const loadingSkills = ref(false)
 
+/** Plugin subagents live inside an installed package — read-only here. */
+const readOnly = computed(() => provenance.value.source === 'plugin')
+
 const isDirty = computed(() => {
+  if (readOnly.value) return false
   return body.value !== savedBody.value ||
     JSON.stringify(frontmatter.value) !== JSON.stringify(savedFrontmatter.value)
 })
@@ -35,6 +40,13 @@ async function loadAgent() {
     body.value = agent.body as string
     savedBody.value = agent.body as string
     lastModified.value = (agent.lastModified as number) || null
+    provenance.value = {
+      scope: agent.scope as 'user' | 'project' | undefined,
+      source: agent.source as 'local' | 'plugin' | undefined,
+      pluginId: agent.pluginId as string | undefined,
+      pluginName: agent.pluginName as string | undefined,
+      projectDir: agent.projectDir as string | undefined,
+    }
   } catch {
     router.push('/agents')
   } finally {
@@ -60,6 +72,7 @@ onMounted(() => {
 })
 
 async function save() {
+  if (readOnly.value) return
   saving.value = true
   try {
     const result = await $fetch<{ slug: string; lastModified?: number }>(`/api/agents/${slug}`, {
@@ -116,23 +129,39 @@ useUnsavedChanges(isDirty)
           {{ frontmatter.name || 'Agent' }}
         </h1>
         <span v-if="isDirty" class="text-[9px] font-mono px-1.5 py-px rounded-full" style="background: rgba(229, 169, 62, 0.1); color: var(--accent);">Unsaved</span>
+        <SourceBadge
+          :scope="provenance.scope"
+          :source="provenance.source"
+          :plugin-name="provenance.pluginName"
+          :project-dir="provenance.projectDir"
+        />
       </div>
       <div class="flex items-center gap-2">
-        <button
-          class="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all"
-          :style="{
-            background: isDirty ? 'var(--accent)' : 'var(--surface-raised)',
-            color: isDirty ? 'white' : 'var(--text-disabled)',
-            border: isDirty ? 'none' : '1px solid var(--border-subtle)',
-          }"
-          :disabled="!isDirty || saving"
-          @click="save"
+        <NuxtLink
+          v-if="readOnly && provenance.pluginId"
+          :to="`/plugins/${encodeURIComponent(provenance.pluginId)}?tab=agents`"
+          class="px-3 py-1.5 rounded-lg text-[12px] font-medium"
+          style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-secondary);"
         >
-          {{ saving ? 'Saving...' : 'Save' }}
-        </button>
-        <button class="p-1.5 rounded-lg hover-bg transition-all" style="color: var(--text-disabled);" title="Delete agent" @click="showDeleteConfirm = true">
-          <UIcon name="i-lucide-trash-2" class="size-4" />
-        </button>
+          View in plugin
+        </NuxtLink>
+        <template v-else>
+          <button
+            class="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all"
+            :style="{
+              background: isDirty ? 'var(--accent)' : 'var(--surface-raised)',
+              color: isDirty ? 'white' : 'var(--text-disabled)',
+              border: isDirty ? 'none' : '1px solid var(--border-subtle)',
+            }"
+            :disabled="!isDirty || saving"
+            @click="save"
+          >
+            {{ saving ? 'Saving...' : 'Save' }}
+          </button>
+          <button class="p-1.5 rounded-lg hover-bg transition-all" style="color: var(--text-disabled);" title="Delete agent" @click="showDeleteConfirm = true">
+            <UIcon name="i-lucide-trash-2" class="size-4" />
+          </button>
+        </template>
       </div>
     </div>
 

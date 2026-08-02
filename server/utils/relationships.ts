@@ -4,11 +4,21 @@ interface PluginEntry {
   id: string
   name: string
   skills: string[]
+  agents?: string[]
+  commands?: string[]
+}
+
+interface CommandEntry {
+  slug: string
+  body: string
+  frontmatter: Record<string, unknown>
+  /** e.g. `/defender:pickup` — used to match references in other files. */
+  invocation?: string
 }
 
 export function extractRelationships(
   agents: { slug: string; body: string }[],
-  commands: { slug: string; body: string; frontmatter: Record<string, unknown> }[],
+  commands: CommandEntry[],
   skills: { slug: string; body: string; frontmatter: Record<string, unknown> }[] = [],
   plugins: PluginEntry[] = [],
 ): Relationship[] {
@@ -55,8 +65,10 @@ export function extractRelationships(
       }
     }
 
-    // Scan body for "spawn <agent>" patterns
-    const spawnMatches = cmd.body.matchAll(/[Ss]pawn(?:s|ed)?\s+(?:the\s+)?["']?([a-z][\w-]*)["']?/g)
+    // Scan body for "spawn/dispatch <agent>" patterns
+    const spawnMatches = cmd.body.matchAll(
+      /(?:[Ss]pawn(?:s|ed)?|[Dd]ispatch(?:es|ed)?|[Ll]aunch(?:es|ed)?|[Dd]elegates?\s+to)\s+(?:the\s+)?["'`]?([a-z][\w-]*)["'`]?/g
+    )
     for (const m of spawnMatches) {
       const name = m[1]
       if (agentNames.has(name)) {
@@ -71,9 +83,10 @@ export function extractRelationships(
       }
     }
 
-    // Scan for direct agent name mentions (only known agents)
+    // Direct agent-name mentions. Hyphenated names are specific enough to be a
+    // real reference; single bare words produce too many false positives.
     for (const agentSlug of agentNames) {
-      if (agentSlug.length < 4) continue // skip very short names to avoid false positives
+      if (!agentSlug.includes('-') || agentSlug.length < 6) continue
       const regex = new RegExp(`\\b${agentSlug.replace(/-/g, '[\\s-]')}\\b`, 'gi')
       if (regex.test(cmd.body)) {
         add({
@@ -88,14 +101,17 @@ export function extractRelationships(
     }
   }
 
-  // Scan agent bodies for command references
+  // Agents referencing commands by their real invocation (`/hd:debug`, `/review`)
+  const byInvocation = new Map<string, CommandEntry>()
+  for (const cmd of commands) {
+    if (cmd.invocation) byInvocation.set(cmd.invocation, cmd)
+  }
+
   for (const agent of agents) {
-    const cmdMatches = agent.body.matchAll(/\/(\w+[:\-]\w[\w-]*)/g)
-    for (const m of cmdMatches) {
-      const cmdName = m[1]
-      const matchingCmd = commands.find(c =>
-        c.frontmatter.name === cmdName || c.slug === cmdName.replace(/:/g, '--')
-      )
+    const invocationMatches = agent.body.matchAll(/\/([a-z][\w-]*(?::[\w-]+)*)/gi)
+    for (const m of invocationMatches) {
+      const matchingCmd = byInvocation.get(`/${m[1]}`)
+        ?? commands.find(c => c.frontmatter.name === m[1] || c.slug === m[1]!.replace(/:/g, '--'))
       if (matchingCmd) {
         add({
           sourceType: 'agent',
@@ -123,9 +139,8 @@ export function extractRelationships(
       })
     }
 
-    // Scan skill body for agent references
     for (const agentSlug of agentNames) {
-      if (agentSlug.length < 4) continue
+      if (!agentSlug.includes('-') || agentSlug.length < 6) continue
       const regex = new RegExp(`\\b${agentSlug.replace(/-/g, '[\\s-]')}\\b`, 'gi')
       if (regex.test(skill.body)) {
         add({
@@ -140,7 +155,7 @@ export function extractRelationships(
     }
   }
 
-  // Plugins: link plugin -> its skills
+  // Plugins own everything they ship
   for (const plugin of plugins) {
     for (const skillName of plugin.skills) {
       if (skillSlugs.has(skillName)) {
@@ -151,6 +166,33 @@ export function extractRelationships(
           targetSlug: skillName,
           type: 'spawns',
           evidence: `provides skill "${skillName}"`,
+        })
+      }
+    }
+
+    for (const agentName of plugin.agents ?? []) {
+      if (agentNames.has(agentName)) {
+        add({
+          sourceType: 'plugin',
+          sourceSlug: plugin.id,
+          targetType: 'agent',
+          targetSlug: agentName,
+          type: 'spawns',
+          evidence: `provides agent "${agentName}"`,
+        })
+      }
+    }
+
+    for (const invocation of plugin.commands ?? []) {
+      const cmd = byInvocation.get(invocation)
+      if (cmd) {
+        add({
+          sourceType: 'plugin',
+          sourceSlug: plugin.id,
+          targetType: 'command',
+          targetSlug: cmd.slug,
+          type: 'spawns',
+          evidence: `provides command "${invocation}"`,
         })
       }
     }

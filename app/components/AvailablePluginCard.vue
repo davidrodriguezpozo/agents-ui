@@ -31,6 +31,9 @@ defineExpose({ installing })
         <span v-if="plugin.skillCount" class="font-mono text-[10px] text-meta">
           {{ plugin.skillCount }} skill{{ plugin.skillCount === 1 ? '' : 's' }}
         </span>
+        <span v-if="plugin.agentCount" class="font-mono text-[10px] text-meta">
+          {{ plugin.agentCount }} agent{{ plugin.agentCount === 1 ? '' : 's' }}
+        </span>
         <span v-if="plugin.commandCount" class="font-mono text-[10px] text-meta">
           {{ plugin.commandCount }} cmd{{ plugin.commandCount === 1 ? '' : 's' }}
         </span>
