@@ -81,7 +81,7 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
     <div class="space-y-3">
       <div class="flex items-center justify-between">
         <h3 class="text-page-title">New Agent</h3>
-        <span class="text-[11px] font-mono text-meta">{{ step }}/{{ totalSteps }}</span>
+        <span class="type-mono">{{ step }}/{{ totalSteps }}</span>
       </div>
       <!-- Progress bar -->
       <div class="h-1 rounded-full overflow-hidden" style="background: var(--badge-subtle-bg);">
@@ -95,7 +95,7 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
 
     <!-- Step 1: Name & Purpose -->
     <div v-if="step === 1" class="space-y-4">
-      <p class="text-[12px] text-label leading-relaxed">
+      <p class="type-detail leading-relaxed">
         What should this agent be called, and what will it help you with?
       </p>
 
@@ -159,7 +159,7 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
               />
             </div>
             <div>
-              <span class="text-[13px] font-medium">{{ opt.label }}</span>
+              <span class="type-strong">{{ opt.label }}</span>
               <p class="text-[11px] text-label mt-0.5">{{ opt.desc }}</p>
             </div>
           </button>
@@ -201,7 +201,7 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
               />
             </div>
             <div>
-              <span class="text-[13px] font-medium">{{ opt.label }}</span>
+              <span class="type-strong">{{ opt.label }}</span>
               <p class="text-[11px] text-label mt-0.5">{{ opt.desc }}</p>
             </div>
           </button>
@@ -211,7 +211,7 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
 
     <!-- Step 3: Instructions -->
     <div v-else-if="step === 3" class="space-y-4">
-      <p class="text-[12px] text-label leading-relaxed">
+      <p class="type-detail leading-relaxed">
         Tell <strong class="text-body">{{ frontmatter.name }}</strong> how to behave. What tone should it use? What rules should it follow? You can always edit this later.
       </p>
 

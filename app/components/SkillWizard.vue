@@ -122,7 +122,7 @@ function back() {
       <div class="flex items-center gap-2">
         <UIcon name="i-lucide-sparkles" class="size-4" style="color: var(--accent);" />
         <h3 class="text-page-title">Teach Claude something</h3>
-        <span class="ml-auto font-mono text-[10px] text-meta">{{ step }} of 3</span>
+        <span class="ml-auto type-mono-meta">{{ step }} of 3</span>
       </div>
       <div class="flex gap-1">
         <div

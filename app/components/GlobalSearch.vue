@@ -125,7 +125,7 @@ if (import.meta.client) {
         <!-- Results -->
         <div class="flex-1 overflow-auto py-1">
           <div v-if="query && !results.length" class="flex flex-col items-center justify-center py-8">
-            <p class="text-[13px] text-label">No results found</p>
+            <p class="type-body">No results found</p>
           </div>
 
           <div v-if="!query" class="flex flex-col items-center justify-center py-8">
@@ -149,7 +149,7 @@ if (import.meta.client) {
             />
             <UIcon v-else :name="result.icon" class="size-4 shrink-0 text-meta" />
 
-            <span class="font-mono text-[13px] font-medium w-40 shrink-0 truncate">
+            <span class="font-mono type-strong w-40 shrink-0 truncate">
               {{ result.label }}
             </span>
 

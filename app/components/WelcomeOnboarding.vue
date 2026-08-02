@@ -37,7 +37,7 @@ async function useTemplate(templateId: string) {
     <!-- Hero -->
     <div class="text-center space-y-3 pt-2">
       <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">Welcome to Agent Manager</h2>
-      <p class="text-[13px] text-label max-w-lg mx-auto leading-relaxed">
+      <p class="type-body max-w-lg mx-auto leading-relaxed">
         This tool helps you configure how Claude Code behaves. Create <strong class="text-body">agents</strong> with custom instructions, build reusable <strong class="text-body">commands</strong>, and organize <strong class="text-body">skills</strong> — all without touching the terminal.
       </p>
     </div>
@@ -47,27 +47,27 @@ async function useTemplate(templateId: string) {
       <div class="rounded-md p-4 bg-card">
         <div class="flex items-center gap-2 mb-2">
           <UIcon name="i-lucide-cpu" class="size-4" style="color: var(--accent);" />
-          <span class="text-[13px] font-medium">Agents</span>
+          <span class="type-strong">Agents</span>
         </div>
-        <p class="text-[12px] text-label leading-relaxed">
+        <p class="type-detail leading-relaxed">
           Specialized AI assistants. Each agent has its own personality, instructions, and model. Think of them as different team members.
         </p>
       </div>
       <div class="rounded-md p-4 bg-card">
         <div class="flex items-center gap-2 mb-2">
           <UIcon name="i-lucide-terminal" class="size-4" style="color: var(--accent);" />
-          <span class="text-[13px] font-medium">Commands</span>
+          <span class="type-strong">Commands</span>
         </div>
-        <p class="text-[12px] text-label leading-relaxed">
+        <p class="type-detail leading-relaxed">
           Reusable workflows triggered with a slash (e.g., /deploy). Like shortcuts for things you do repeatedly.
         </p>
       </div>
       <div class="rounded-md p-4 bg-card">
         <div class="flex items-center gap-2 mb-2">
           <UIcon name="i-lucide-sparkles" class="size-4" style="color: var(--accent);" />
-          <span class="text-[13px] font-medium">Skills</span>
+          <span class="type-strong">Skills</span>
         </div>
-        <p class="text-[12px] text-label leading-relaxed">
+        <p class="type-detail leading-relaxed">
           Specific capabilities you can add to agents. A skill teaches an agent how to do one thing well.
         </p>
       </div>
@@ -92,14 +92,14 @@ async function useTemplate(templateId: string) {
 
           <div class="flex items-center gap-2.5 mb-2">
             <UIcon :name="template.icon" class="size-4 shrink-0 text-label" />
-            <span class="text-[13px] font-medium">{{ template.frontmatter.name }}</span>
+            <span class="type-strong">{{ template.frontmatter.name }}</span>
             <UIcon
               v-if="creating === template.id"
               name="i-lucide-loader-2"
               class="size-3.5 ml-auto animate-spin text-meta"
             />
           </div>
-          <p class="text-[12px] text-label leading-relaxed line-clamp-2">
+          <p class="type-detail leading-relaxed line-clamp-2">
             {{ template.frontmatter.description }}
           </p>
         </button>

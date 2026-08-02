@@ -36,7 +36,7 @@ watch(() => props.open, (val) => {
     <template #content>
       <div class="p-6 space-y-4 bg-overlay">
         <h3 class="text-page-title">Run Workflow</h3>
-        <p class="text-[12px] text-label">
+        <p class="type-detail">
           What should this workflow process? The output of each step becomes the input for the next.
         </p>
         <form @submit.prevent="onStart">

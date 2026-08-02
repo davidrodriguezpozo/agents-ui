@@ -134,7 +134,7 @@ const nextStepLabel = computed(() => {
           >
             {{ statusConfig[exec.status]?.label }}
           </span>
-          <span v-if="formatDuration(exec)" class="text-[10px] font-mono text-meta">
+          <span v-if="formatDuration(exec)" class="type-mono-meta">
             {{ formatDuration(exec) }}
           </span>
           <UIcon
@@ -148,7 +148,7 @@ const nextStepLabel = computed(() => {
         <div v-if="expandedStep === exec.stepId" class="px-4 pb-3 space-y-2">
           <!-- Input -->
           <details v-if="exec.input" class="group/input">
-            <summary class="text-[10px] font-mono text-meta cursor-pointer select-none">
+            <summary class="type-mono-meta cursor-pointer select-none">
               Input
             </summary>
             <div
@@ -161,7 +161,7 @@ const nextStepLabel = computed(() => {
 
           <!-- Output -->
           <div v-if="exec.output">
-            <div class="text-[10px] font-mono text-meta mb-1">Output</div>
+            <div class="type-mono-meta mb-1">Output</div>
             <div
               class="rounded-md p-2.5 text-[12px] leading-relaxed max-h-64 overflow-y-auto prose-sm"
               style="background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-secondary);"

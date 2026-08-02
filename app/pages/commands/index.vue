@@ -88,7 +88,7 @@ const filteredGroups = computed(() => {
                 class="size-3.5"
                 :style="{ color: group.kind === 'plugin' ? 'rgb(139, 92, 246)' : group.kind === 'project' ? 'rgb(34, 197, 94)' : 'var(--text-tertiary)' }"
               />
-              <span class="text-[13px] font-medium">{{ group.label }}</span>
+              <span class="type-strong">{{ group.label }}</span>
               <span class="font-mono text-[12px] text-meta">{{ group.commands.length }}</span>
             </button>
 
@@ -145,18 +145,21 @@ const filteredGroups = computed(() => {
       </div>
 
       <!-- Empty state: search miss -->
-      <div v-else-if="searchQuery" class="flex flex-col items-center justify-center py-16">
-        <p class="text-[13px] text-label">No commands match your search.</p>
-      </div>
+      <EmptyState
+        v-else-if="searchQuery"
+        icon="i-lucide-search-x"
+        title="No commands match your search"
+        description="Try a shorter search, or check a different tool."
+      />
 
       <!-- Empty state: no commands -->
       <div v-else class="flex flex-col items-center justify-center py-12 space-y-5">
-        <div class="rounded-md p-4 bg-card max-w-sm w-full font-mono text-[12px] text-label leading-relaxed">
+        <div class="rounded-md p-4 bg-card max-w-sm w-full font-mono type-detail leading-relaxed">
           <span class="text-meta"># Example: a deploy command</span><br>
           <span style="color: var(--accent);">/deploy</span> staging --skip-tests<br>
           <span class="text-meta"># Claude follows your command's instructions</span>
         </div>
-        <p class="text-[13px] text-label">Commands let you trigger repeatable workflows with a slash.</p>
+        <p class="type-body">Commands let you trigger repeatable workflows with a slash.</p>
         <UButton label="Create a command" size="sm" @click="showCreateModal = true" />
       </div>
     </div>

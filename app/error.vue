@@ -60,7 +60,7 @@ function retry() {
 
       <div class="space-y-2">
         <h1
-          class="text-[22px] font-semibold tracking-tight"
+          class="text-page-title"
           style="color: var(--text-primary); font-family: var(--font-display);"
         >
           {{ heading }}

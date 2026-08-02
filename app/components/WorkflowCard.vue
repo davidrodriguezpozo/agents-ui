@@ -35,7 +35,7 @@ function timeAgo(iso: string): string {
         <UIcon name="i-lucide-git-branch" class="size-4" style="color: var(--accent);" />
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-[13px] font-medium truncate" style="color: var(--text-primary);">{{ workflow.name }}</div>
+        <div class="type-strong truncate" style="color: var(--text-primary);">{{ workflow.name }}</div>
         <div class="text-[11px] mt-0.5 line-clamp-2" style="color: var(--text-tertiary);">
           {{ workflow.description || 'No description' }}
         </div>

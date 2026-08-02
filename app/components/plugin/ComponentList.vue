@@ -42,7 +42,7 @@ const filtered = computed(() => {
 <template>
   <div v-if="!items.length" class="flex flex-col items-center justify-center py-12 space-y-3">
     <UIcon :name="emptyIcon || 'i-lucide-inbox'" class="size-8 text-meta" />
-    <p class="text-[13px] text-label">{{ emptyLabel }}</p>
+    <p class="type-body">{{ emptyLabel }}</p>
   </div>
 
   <div v-else class="space-y-2">
@@ -85,7 +85,7 @@ const filtered = computed(() => {
       </button>
 
       <div v-if="expanded === item.key" style="border-top: 1px solid var(--border-subtle);">
-        <div v-if="item.subtitle" class="px-4 py-2 font-mono text-[11px] text-meta" style="background: var(--surface-base);">
+        <div v-if="item.subtitle" class="px-4 py-2 font-mono type-meta" style="background: var(--surface-base);">
           {{ item.subtitle }}
         </div>
         <div

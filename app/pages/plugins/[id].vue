@@ -306,7 +306,7 @@ if (import.meta.client) {
           <div v-else-if="activeTab === 'hooks'">
             <div v-if="!plugin.hooks.length" class="flex flex-col items-center justify-center py-12 space-y-3">
               <UIcon name="i-lucide-webhook" class="size-8 text-meta" />
-              <p class="text-[13px] text-label">This plugin registers no hooks.</p>
+              <p class="type-body">This plugin registers no hooks.</p>
             </div>
             <div v-else class="space-y-2">
               <div
@@ -338,7 +338,7 @@ if (import.meta.client) {
           <div v-else-if="activeTab === 'mcp'">
             <div v-if="!plugin.mcpServers.length" class="flex flex-col items-center justify-center py-12 space-y-3">
               <UIcon name="i-lucide-plug" class="size-8 text-meta" />
-              <p class="text-[13px] text-label">This plugin registers no MCP servers.</p>
+              <p class="type-body">This plugin registers no MCP servers.</p>
             </div>
             <div v-else class="space-y-2">
               <div
@@ -361,7 +361,7 @@ if (import.meta.client) {
           <div v-else-if="activeTab === 'skills'">
             <div v-if="!plugin.skillDetails.length" class="flex flex-col items-center justify-center py-12 space-y-3">
               <UIcon name="i-lucide-sparkles" class="size-8 text-meta" />
-              <p class="text-[13px] text-label">This plugin ships no skills.</p>
+              <p class="type-body">This plugin ships no skills.</p>
             </div>
 
             <div v-else class="space-y-2">
@@ -380,7 +380,7 @@ if (import.meta.client) {
                     :name="editingSkill === skill.slug ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
                     class="size-3.5 shrink-0 text-meta"
                   />
-                  <span class="text-[13px] font-medium w-40 shrink-0 truncate">
+                  <span class="type-strong w-40 shrink-0 truncate">
                     {{ skill.frontmatter.name }}
                   </span>
                   <span
@@ -427,10 +427,10 @@ if (import.meta.client) {
                     >
                       <h4 class="text-section-label">Instructions</h4>
                       <div class="flex items-center gap-3">
-                        <span class="font-mono text-[10px] text-meta">
+                        <span class="type-mono-meta">
                           {{ skillBodies[skill.slug]!.split('\n').length }} lines
                         </span>
-                        <span class="font-mono text-[10px] text-meta">
+                        <span class="type-mono-meta">
                           {{ skillBodies[skill.slug]!.length.toLocaleString() }} chars
                         </span>
                       </div>

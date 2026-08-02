@@ -83,7 +83,7 @@ function reset() {
 
     <!-- Step 1: URL input -->
     <template v-if="step === 'url'">
-      <p class="text-[12px] text-label leading-relaxed">
+      <p class="type-detail leading-relaxed">
         Paste a GitHub repository URL to scan for importable skills.
       </p>
 
@@ -121,7 +121,7 @@ function reset() {
     <!-- Step 2: Preview & select -->
     <template v-if="step === 'preview' && scanResult">
       <div class="flex items-center justify-between">
-        <p class="text-[12px] text-label">
+        <p class="type-detail">
           Found <strong>{{ scanResult.skills.length }}</strong> skills in
           <span class="font-mono">{{ scanResult.owner }}/{{ scanResult.repo }}</span>
         </p>
@@ -144,7 +144,7 @@ function reset() {
           />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="text-[13px] font-medium truncate">{{ skill.name }}</span>
+              <span class="type-strong truncate">{{ skill.name }}</span>
               <span
                 v-if="skill.conflict"
                 class="text-[9px] font-medium px-1.5 py-px rounded-full shrink-0"
@@ -188,7 +188,7 @@ function reset() {
     <template v-if="step === 'importing'">
       <div class="flex flex-col items-center py-8 space-y-3">
         <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-meta" />
-        <p class="text-[13px] text-label">Cloning repository...</p>
+        <p class="type-body">Cloning repository...</p>
       </div>
     </template>
 
@@ -201,8 +201,8 @@ function reset() {
         >
           <UIcon name="i-lucide-check" class="size-6" style="color: var(--success, #22c55e);" />
         </div>
-        <p class="text-[13px] font-medium">Import complete</p>
-        <p class="text-[12px] text-label">
+        <p class="type-strong">Import complete</p>
+        <p class="type-detail">
           {{ selected.size }} skill{{ selected.size === 1 ? '' : 's' }} imported from
           <span class="font-mono">{{ scanResult?.owner }}/{{ scanResult?.repo }}</span>
         </p>

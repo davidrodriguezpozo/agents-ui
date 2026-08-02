@@ -302,10 +302,10 @@ const agentOptions = computed(() =>
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">
           <h3 class="text-section-label">Instructions</h3>
           <div class="flex items-center gap-3">
-            <span class="font-mono text-[10px] text-meta">
+            <span class="type-mono-meta">
               {{ lineCount }} lines
             </span>
-            <span class="font-mono text-[10px] text-meta">
+            <span class="type-mono-meta">
               {{ charCount.toLocaleString() }} chars
             </span>
           </div>
@@ -341,7 +341,7 @@ const agentOptions = computed(() =>
       <template #content>
         <div class="p-6 space-y-4 bg-overlay">
           <h3 class="text-page-title">Delete Skill</h3>
-          <p class="text-[13px] text-label">
+          <p class="type-body">
             Permanently delete <strong>{{ skill?.frontmatter.name }}</strong>? This action cannot be undone.
           </p>
           <div class="flex justify-end gap-2">

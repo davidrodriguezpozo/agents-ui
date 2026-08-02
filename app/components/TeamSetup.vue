@@ -82,10 +82,10 @@ async function onInstall(marketplace: string, plugin: string) {
           <UIcon name="i-lucide-users" class="size-6" style="color: var(--accent);" />
         </div>
       </div>
-      <h2 class="text-[22px] font-semibold tracking-tight" style="font-family: var(--font-display);">
+      <h2 class="text-page-title" style="font-family: var(--font-display);">
         Get your team's tools
       </h2>
-      <p class="text-[13px] text-label max-w-md mx-auto leading-relaxed">
+      <p class="type-body max-w-md mx-auto leading-relaxed">
         Your team keeps its Claude tools in a shared repository. Connect it once and
         everything your team has built shows up here.
       </p>
@@ -168,7 +168,7 @@ async function onInstall(marketplace: string, plugin: string) {
         <h3 class="text-section-label">Add what you need</h3>
       </div>
 
-      <p v-if="!uninstalled.length && !installedCount" class="text-[12px] text-label">
+      <p v-if="!uninstalled.length && !installedCount" class="type-detail">
         That repository doesn't offer any plugins yet.
       </p>
 
@@ -183,7 +183,7 @@ async function onInstall(marketplace: string, plugin: string) {
           <div class="flex-1 min-w-0">
             <div class="text-[12px] font-medium truncate text-body">{{ plugin.name }}</div>
             <div class="text-[11px] truncate text-label">{{ plugin.description || 'No description' }}</div>
-            <div class="flex items-center gap-2 mt-0.5 font-mono text-[10px] text-meta">
+            <div class="flex items-center gap-2 mt-0.5 type-mono-meta">
               <span v-if="plugin.skillCount">{{ plugin.skillCount }} skills</span>
               <span v-if="plugin.commandCount">{{ plugin.commandCount }} commands</span>
               <span v-if="plugin.agentCount">{{ plugin.agentCount }} agents</span>
@@ -197,7 +197,7 @@ async function onInstall(marketplace: string, plugin: string) {
           />
         </div>
 
-        <p v-if="installedCount" class="text-[11px] text-meta pt-1">
+        <p v-if="installedCount" class="type-meta pt-1">
           {{ installedCount }} already added.
         </p>
       </div>
@@ -205,7 +205,7 @@ async function onInstall(marketplace: string, plugin: string) {
 
     <!-- Step 3 -->
     <div v-if="installedCount" class="text-center space-y-3 pt-1">
-      <p class="text-[13px] text-label">
+      <p class="type-body">
         You're set up. Everything your team installed is ready to use.
       </p>
       <UButton label="See what I can do" icon="i-lucide-arrow-right" size="sm" @click="emit('done')" />

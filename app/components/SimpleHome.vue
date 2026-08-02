@@ -66,10 +66,10 @@ function openRun(cmd: Command) {
     <div v-else class="space-y-7 max-w-5xl">
       <!-- Header -->
       <div class="space-y-1.5">
-        <h1 class="text-[22px] font-semibold tracking-tight" style="font-family: var(--font-display);">
+        <h1 class="text-page-title" style="font-family: var(--font-display);">
           What you can do
         </h1>
-        <p class="text-[13px] text-label leading-relaxed">
+        <p class="type-body leading-relaxed">
           These come from the tools your team installed. Pick one and Claude does the work.
         </p>
       </div>
@@ -136,22 +136,25 @@ function openRun(cmd: Command) {
       </div>
 
       <div v-else-if="search" class="py-10 text-center">
-        <p class="text-[13px] text-label">Nothing matches "{{ search }}".</p>
+        <p class="type-body">Nothing matches "{{ search }}".</p>
       </div>
 
-      <div v-else class="rounded-lg p-6 text-center space-y-3 bg-card">
-        <UIcon name="i-lucide-package-open" class="size-7 mx-auto text-meta" />
-        <p class="text-[13px] text-label">
-          Your team's tools don't include any ready-made actions yet.
-        </p>
-        <UButton label="Connect more tools" size="sm" variant="soft" @click="showSetup = true" />
+      <div v-else class="surface-card">
+        <EmptyState
+          variant="inset"
+          icon="i-lucide-package-open"
+          title="No ready-made actions yet"
+          description="The tools your team installed don't include any commands you can run directly. You can connect another repository, or teach Claude something yourself."
+          action-label="Connect more tools"
+          @action="showSetup = true"
+        />
       </div>
 
       <!-- Your own skills -->
       <div class="space-y-2.5">
         <div class="flex items-center gap-2">
           <h2 class="text-section-label">Things you taught Claude</h2>
-          <NuxtLink to="/skills" class="text-[11px] text-meta hover:text-label transition-colors">
+          <NuxtLink to="/skills" class="type-meta hover:text-label transition-colors">
             manage
           </NuxtLink>
         </div>
@@ -173,11 +176,16 @@ function openRun(cmd: Command) {
           </button>
         </div>
 
-        <div v-else class="rounded-lg p-5 text-center space-y-3 bg-card">
-          <p class="text-[13px] text-label">
-            You haven't taught Claude anything of your own yet.
-          </p>
-          <UButton label="Teach Claude something" icon="i-lucide-plus" size="sm" to="/skills?new=1" />
+        <div v-else class="surface-card">
+          <EmptyState
+            variant="inset"
+            icon="i-lucide-sparkles"
+            title="Nothing of your own yet"
+            description="Teach Claude something you explain to people often — how your team writes proposals, or where to find the numbers."
+            action-label="Teach Claude something"
+            action-icon="i-lucide-plus"
+            action-to="/skills?new=1"
+          />
         </div>
       </div>
     </div>

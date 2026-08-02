@@ -31,7 +31,7 @@ async function doAdd() {
 <template>
   <div class="p-6 space-y-4 bg-overlay">
     <h3 class="text-page-title">Add Marketplace</h3>
-    <p class="text-[12px] text-label leading-relaxed">
+    <p class="type-detail leading-relaxed">
       Add a marketplace source to discover and install plugins. Provide a GitHub URL or local directory path.
     </p>
 

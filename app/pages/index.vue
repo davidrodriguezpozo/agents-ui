@@ -216,7 +216,7 @@ const statItems = computed(() => [
       >
         <div class="flex items-center justify-between mb-3">
           <span class="text-section-title">Model Distribution</span>
-          <span class="text-[11px] text-meta font-mono"
+          <span class="type-meta font-mono"
             >{{ totalAgents }} agent{{ totalAgents === 1 ? "" : "s" }}</span
           >
         </div>
@@ -316,7 +316,7 @@ const statItems = computed(() => [
                 />
               </div>
               <div class="flex-1 min-w-0">
-                <span class="text-[13px] font-medium truncate block">
+                <span class="type-strong truncate block">
                   {{ agent.frontmatter.name }}
                 </span>
                 <span
@@ -418,7 +418,7 @@ const statItems = computed(() => [
                   />
                 </div>
                 <div class="flex-1 min-w-0">
-                  <div class="text-[13px] font-medium">Relationship Graph</div>
+                  <div class="type-strong">Relationship Graph</div>
                   <div class="text-[11px] text-label">
                     Visualize connections
                   </div>
@@ -449,7 +449,7 @@ const statItems = computed(() => [
                   />
                 </div>
                 <div class="flex-1 min-w-0">
-                  <div class="text-[13px] font-medium">Create Workflow</div>
+                  <div class="type-strong">Create Workflow</div>
                   <div class="text-[11px] text-label">Multi-step pipelines</div>
                 </div>
                 <UIcon
@@ -478,7 +478,7 @@ const statItems = computed(() => [
                   />
                 </div>
                 <div class="flex-1 min-w-0">
-                  <div class="text-[13px] font-medium">Explore</div>
+                  <div class="type-strong">Explore</div>
                   <div class="text-[11px] text-label">Templates & extensions</div>
                 </div>
                 <UIcon
@@ -518,7 +518,7 @@ const statItems = computed(() => [
             />
             Suggestions
           </h3>
-          <span class="font-mono text-[10px] text-meta">{{
+          <span class="type-mono-meta">{{
             suggestions.length
           }}</span>
         </div>
@@ -546,7 +546,7 @@ const statItems = computed(() => [
                     : 'var(--text-disabled)',
               }"
             />
-            <span class="text-[12px] text-label flex-1">{{ s.message }}</span>
+            <span class="type-detail flex-1">{{ s.message }}</span>
             <UIcon
               name="i-lucide-chevron-right"
               class="size-3.5 text-meta opacity-0 group-hover:opacity-100 transition-opacity"

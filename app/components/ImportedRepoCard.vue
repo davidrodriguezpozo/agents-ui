@@ -78,7 +78,7 @@ function formatDate(iso: string) {
           </svg>
         </div>
         <div class="flex-1 min-w-0">
-          <div class="text-[13px] font-medium truncate">{{ entry.owner }}/{{ entry.repo }}</div>
+          <div class="type-strong truncate">{{ entry.owner }}/{{ entry.repo }}</div>
           <span class="text-[10px] text-meta">{{ entry.selectedSkills.length }} skill{{ entry.selectedSkills.length === 1 ? '' : 's' }} selected</span>
         </div>
         <span
@@ -99,7 +99,7 @@ function formatDate(iso: string) {
       <div v-if="editing" class="space-y-2">
         <div v-if="loadingSkills" class="flex items-center gap-2 py-2">
           <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin text-meta" />
-          <span class="text-[12px] text-label">Loading skills...</span>
+          <span class="type-detail">Loading skills...</span>
         </div>
         <template v-else>
           <div class="max-h-48 overflow-y-auto space-y-0.5 rounded-md p-1" style="background: var(--surface-base);">

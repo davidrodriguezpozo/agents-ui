@@ -80,7 +80,7 @@ async function finishOnboarding() {
           <h2 class="text-[20px] font-semibold tracking-tight" style="font-family: var(--font-sans);">
             Welcome to Agent Manager
           </h2>
-          <p class="text-[13px] text-label leading-relaxed max-w-sm mx-auto">
+          <p class="type-body leading-relaxed max-w-sm mx-auto">
             Create AI assistants that work for you. We'll help you get set up in just a minute.
           </p>
         </div>
@@ -108,7 +108,7 @@ async function finishOnboarding() {
           <h2 class="text-[18px] font-semibold tracking-tight" style="font-family: var(--font-sans);">
             Set up your workspace
           </h2>
-          <p class="text-[13px] text-label leading-relaxed max-w-sm mx-auto">
+          <p class="type-body leading-relaxed max-w-sm mx-auto">
             We need to create a folder to store your agents and settings. This is the same folder Claude Code uses.
           </p>
         </div>
@@ -134,7 +134,7 @@ async function finishOnboarding() {
       <!-- Creating directory -->
       <div v-else-if="step === 'creating-dir'" class="flex flex-col items-center gap-4">
         <UIcon name="i-lucide-loader-2" class="size-8 animate-spin" style="color: var(--accent);" />
-        <p class="text-[13px] text-label">Setting up your workspace...</p>
+        <p class="type-body">Setting up your workspace...</p>
       </div>
 
       <!-- Step 3: Create first agent -->
@@ -143,7 +143,7 @@ async function finishOnboarding() {
           <h2 class="text-[18px] font-semibold tracking-tight" style="font-family: var(--font-sans);">
             Create your first agent
           </h2>
-          <p class="text-[13px] text-label">
+          <p class="type-body">
             Pick a template or describe what you need.
           </p>
         </div>
@@ -168,7 +168,7 @@ async function finishOnboarding() {
           <h2 class="text-[20px] font-semibold tracking-tight" style="font-family: var(--font-sans);">
             You're all set!
           </h2>
-          <p class="text-[13px] text-label leading-relaxed max-w-sm mx-auto">
+          <p class="type-body leading-relaxed max-w-sm mx-auto">
             Your first agent is ready. You can find it in My Agents, or chat with Claude anytime by pressing <kbd class="text-[10px] font-mono px-1 py-px rounded" style="background: var(--badge-subtle-bg);">&#x2318;J</kbd>.
           </p>
         </div>

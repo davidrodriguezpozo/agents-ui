@@ -256,7 +256,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <!-- Always Thinking toggle -->
           <div class="flex items-center justify-between">
             <div>
-              <div class="text-[13px] font-medium">Always Thinking</div>
+              <div class="type-strong">Always Thinking</div>
               <div class="text-[12px] mt-0.5 text-label">
                 When enabled, Claude takes more time to reason through complex problems before responding. Better answers, but slower and uses more resources.
               </div>
@@ -311,7 +311,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           Extensions
           <HelpTip title="Managing extensions" body="Enable or disable extensions here. Install new ones via the Claude Code CLI." />
         </h3>
-        <div v-if="plugins.length === 0" class="text-[13px] text-label">
+        <div v-if="plugins.length === 0" class="type-body">
           No plugins configured.
         </div>
         <div v-else class="space-y-2">
@@ -362,7 +362,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           Manage skill repositories imported from GitHub.
         </p>
 
-        <div v-if="githubImports.length === 0" class="text-[13px] text-label">
+        <div v-if="githubImports.length === 0" class="type-body">
           No GitHub imports. Use the Explore page to import skills from GitHub.
         </div>
 
@@ -416,7 +416,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           Run shell commands automatically when certain events happen in Claude Code.
         </p>
 
-        <div v-if="hooks.length === 0" class="text-[13px] text-label">
+        <div v-if="hooks.length === 0" class="type-body">
           No automations configured.
         </div>
 
@@ -425,7 +425,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             <div class="flex items-center gap-2 mb-1.5">
               <UIcon name="i-lucide-webhook" class="size-3.5 text-meta" />
               <span class="text-[12px] font-medium text-body">{{ hookEventLabels[hook.event] || hook.event }}</span>
-              <span class="font-mono text-[10px] text-meta">{{ hook.commands.length }}</span>
+              <span class="type-mono-meta">{{ hook.commands.length }}</span>
             </div>
             <div class="ml-5 space-y-1">
               <div
@@ -469,10 +469,10 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">
           <h3 class="text-section-title">settings.json</h3>
           <div class="flex items-center gap-3">
-            <span class="font-mono text-[10px] text-meta">
+            <span class="type-mono-meta">
               {{ lineCount }} lines
             </span>
-            <span class="font-mono text-[10px] text-meta">
+            <span class="type-mono-meta">
               {{ charCount.toLocaleString() }} chars
             </span>
           </div>

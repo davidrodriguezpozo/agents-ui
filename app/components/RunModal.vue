@@ -50,7 +50,7 @@ async function run() {
         <UIcon name="i-lucide-play" class="size-4" style="color: var(--accent);" />
         <h3 class="text-page-title">Run {{ command.invocation }}</h3>
       </div>
-      <p class="text-[13px] text-label leading-relaxed">
+      <p class="type-body leading-relaxed">
         {{ command.frontmatter.description || 'No description provided.' }}
       </p>
     </div>

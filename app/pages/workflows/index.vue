@@ -120,7 +120,7 @@ async function createBlank() {
 
       <!-- Empty state: search miss -->
       <div v-else-if="searchQuery" class="flex flex-col items-center justify-center py-16 space-y-3">
-        <p class="text-[13px] text-label">No workflows match your search.</p>
+        <p class="type-body">No workflows match your search.</p>
       </div>
 
       <!-- Empty state: no workflows — show templates -->
@@ -135,7 +135,7 @@ async function createBlank() {
             </div>
           </div>
           <h3 class="text-[18px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">Chain your agents together</h3>
-          <p class="text-[13px] text-label max-w-md mx-auto">
+          <p class="type-body max-w-md mx-auto">
             Create workflows that pass work from one agent to the next. Start from a template or create your own.
           </p>
         </div>
@@ -151,21 +151,21 @@ async function createBlank() {
           >
             <div class="flex items-center gap-2.5 mb-2">
               <UIcon :name="template.icon" class="size-4 shrink-0 text-label" />
-              <span class="text-[13px] font-medium">{{ template.name }}</span>
+              <span class="type-strong">{{ template.name }}</span>
               <UIcon
                 v-if="creatingTemplate === template.id"
                 name="i-lucide-loader-2"
                 class="size-3.5 ml-auto animate-spin text-meta"
               />
             </div>
-            <p class="text-[12px] text-label leading-relaxed line-clamp-2">
+            <p class="type-detail leading-relaxed line-clamp-2">
               {{ template.description }}
             </p>
             <div class="flex items-center gap-1 mt-2">
               <span
                 v-for="(step, idx) in template.steps"
                 :key="idx"
-                class="text-[10px] font-mono text-meta"
+                class="type-mono-meta"
               >
                 {{ step.label }}<span v-if="idx < template.steps.length - 1" class="mx-1" style="color: var(--text-disabled);">-></span>
               </span>

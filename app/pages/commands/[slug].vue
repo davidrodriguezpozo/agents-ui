@@ -239,10 +239,10 @@ useUnsavedChanges(isDirty)
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">
           <h3 class="text-section-label">Instructions</h3>
           <div class="flex items-center gap-3">
-            <span class="font-mono text-[10px] text-meta">
+            <span class="type-mono-meta">
               {{ lineCount }} lines
             </span>
-            <span class="font-mono text-[10px] text-meta">
+            <span class="type-mono-meta">
               {{ charCount.toLocaleString() }} chars
             </span>
           </div>

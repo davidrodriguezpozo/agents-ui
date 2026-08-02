@@ -84,7 +84,7 @@ function nextLabel(schedule: Schedule) {
     </PageHeader>
 
     <div class="px-6 py-4 space-y-6 max-w-4xl">
-      <p class="text-[13px] text-label leading-relaxed">
+      <p class="type-body leading-relaxed">
         Things Claude runs for you on a schedule, so the result is waiting when you get in.
         They run while this app is open.
       </p>
@@ -106,7 +106,7 @@ function nextLabel(schedule: Schedule) {
 
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="text-[13px] font-medium truncate text-body">{{ schedule.title }}</span>
+              <span class="type-strong truncate text-body">{{ schedule.title }}</span>
               <span
                 v-if="schedule.origin === 'team'"
                 class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0"
@@ -115,7 +115,7 @@ function nextLabel(schedule: Schedule) {
                 {{ schedule.pluginName || 'team' }}
               </span>
             </div>
-            <div class="flex items-center gap-2 mt-0.5 font-mono text-[10px] text-meta">
+            <div class="flex items-center gap-2 mt-0.5 type-mono-meta">
               <span v-if="schedule.invocation" style="color: var(--accent);">{{ schedule.invocation }}</span>
               <span>{{ schedule.description }}</span>
               <span>·</span>
@@ -171,13 +171,15 @@ function nextLabel(schedule: Schedule) {
         </div>
       </div>
 
-      <div v-else-if="!loading" class="rounded-lg p-8 text-center space-y-3 bg-card">
-        <UIcon name="i-lucide-alarm-clock" class="size-8 mx-auto text-meta" />
-        <p class="text-[13px] text-label">
-          Nothing scheduled yet. Pick something you do every morning.
-        </p>
-        <UButton label="Create your first ritual" size="sm" @click="createNew" />
-      </div>
+      <EmptyState
+        v-else-if="!loading"
+        icon="i-lucide-alarm-clock"
+        title="No rituals yet"
+        description="Pick something you do every morning and let it run on its own, so the result is waiting when you get in."
+        action-label="Create your first ritual"
+        action-icon="i-lucide-plus"
+        @action="createNew"
+      />
 
       <!-- Suggested by whoever maintains your team's plugins -->
       <div v-if="unadopted.length" class="space-y-2">
@@ -191,7 +193,7 @@ function nextLabel(schedule: Schedule) {
           <UIcon name="i-lucide-sparkles" class="size-4 shrink-0" style="color: rgb(139, 92, 246);" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="text-[13px] font-medium truncate text-body">{{ ritual.title }}</span>
+              <span class="type-strong truncate text-body">{{ ritual.title }}</span>
               <span
                 class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0"
                 style="background: rgba(139, 92, 246, 0.12); color: rgb(139, 92, 246);"
@@ -199,7 +201,7 @@ function nextLabel(schedule: Schedule) {
                 {{ ritual.pluginName }}
               </span>
             </div>
-            <div class="flex items-center gap-2 mt-0.5 font-mono text-[10px] text-meta">
+            <div class="flex items-center gap-2 mt-0.5 type-mono-meta">
               <span style="color: var(--accent);">{{ ritual.command }}</span>
               <span>{{ ritual.recurrenceLabel }}</span>
             </div>

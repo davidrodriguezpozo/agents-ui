@@ -446,7 +446,7 @@ async function onRemove(owner: string, repo: string) {
                     />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="text-[13px] font-medium truncate">
+                    <div class="type-strong truncate">
                       {{ template.frontmatter.name }}
                     </div>
                     <span
@@ -460,7 +460,7 @@ async function onRemove(owner: string, repo: string) {
                     </span>
                   </div>
                 </div>
-                <p class="text-[12px] text-label leading-relaxed">
+                <p class="type-detail leading-relaxed">
                   {{ template.frontmatter.description }}
                 </p>
                 <button
@@ -508,7 +508,7 @@ async function onRemove(owner: string, repo: string) {
           "
           class="text-center py-12"
         >
-          <p class="text-[13px] text-label">No templates match your search.</p>
+          <p class="type-body">No templates match your search.</p>
         </div>
 
         <!-- Action templates -->
@@ -538,12 +538,12 @@ async function onRemove(owner: string, repo: string) {
                     />
                   </div>
                   <div class="flex-1 min-w-0">
-                    <div class="text-[13px] font-medium truncate">
+                    <div class="type-strong truncate">
                       /{{ template.frontmatter.name }}
                     </div>
                   </div>
                 </div>
-                <p class="text-[12px] text-label leading-relaxed">
+                <p class="type-detail leading-relaxed">
                   {{ template.frontmatter.description }}
                 </p>
                 <button
@@ -635,7 +635,7 @@ async function onRemove(owner: string, repo: string) {
               />
             </svg>
           </div>
-          <p class="text-[13px] text-label">
+          <p class="type-body">
             No GitHub imports yet. Use the button above to import skills from a
             repository.
           </p>
@@ -680,7 +680,7 @@ async function onRemove(owner: string, repo: string) {
                       <UIcon name="i-lucide-puzzle" class="size-4" style="color: var(--accent);" />
                     </div>
                     <div class="flex-1 min-w-0">
-                      <div class="text-[13px] font-medium truncate">{{ plugin.name }}</div>
+                      <div class="type-strong truncate">{{ plugin.name }}</div>
                       <span class="text-[10px] px-1.5 py-px rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
                         v{{ plugin.version }}
                       </span>
@@ -696,12 +696,12 @@ async function onRemove(owner: string, repo: string) {
                       </span>
                     </label>
                   </div>
-                  <p class="text-[12px] text-label leading-relaxed">{{ plugin.description }}</p>
+                  <p class="type-detail leading-relaxed">{{ plugin.description }}</p>
                   <div class="flex items-center gap-3">
-                    <span v-if="plugin.skills.length" class="font-mono text-[10px] text-meta">
+                    <span v-if="plugin.skills.length" class="type-mono-meta">
                       {{ plugin.skills.length }} skill{{ plugin.skills.length === 1 ? '' : 's' }}
                     </span>
-                    <span class="font-mono text-[10px] text-meta">{{ formatDate(plugin.installedAt) }}</span>
+                    <span class="type-mono-meta">{{ formatDate(plugin.installedAt) }}</span>
                   </div>
                 </div>
                 <div class="px-4 py-3 flex items-center justify-between" style="border-top: 1px solid var(--border-subtle);">
@@ -730,7 +730,7 @@ async function onRemove(owner: string, repo: string) {
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-store" class="size-3.5 text-meta" />
               <span class="font-mono text-[12px] font-medium text-body">{{ marketplace }}</span>
-              <span class="font-mono text-[11px] text-meta">{{ group.length }}</span>
+              <span class="font-mono type-meta">{{ group.length }}</span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div
@@ -747,15 +747,15 @@ async function onRemove(owner: string, repo: string) {
                       <UIcon name="i-lucide-puzzle" class="size-4 text-label" />
                     </div>
                     <div class="flex-1 min-w-0">
-                      <div class="text-[13px] font-medium truncate">{{ plugin.name }}</div>
+                      <div class="type-strong truncate">{{ plugin.name }}</div>
                     </div>
                   </div>
-                  <p class="text-[12px] text-label leading-relaxed">{{ plugin.description || 'No description' }}</p>
+                  <p class="type-detail leading-relaxed">{{ plugin.description || 'No description' }}</p>
                   <div class="flex items-center gap-3">
-                    <span v-if="plugin.skillCount" class="font-mono text-[10px] text-meta">
+                    <span v-if="plugin.skillCount" class="type-mono-meta">
                       {{ plugin.skillCount }} skill{{ plugin.skillCount === 1 ? '' : 's' }}
                     </span>
-                    <span v-if="plugin.commandCount" class="font-mono text-[10px] text-meta">
+                    <span v-if="plugin.commandCount" class="type-mono-meta">
                       {{ plugin.commandCount }} cmd{{ plugin.commandCount === 1 ? '' : 's' }}
                     </span>
                   </div>

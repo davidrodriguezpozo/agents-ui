@@ -145,7 +145,7 @@ async function useTemplate(templateId: string) {
             >
               <UIcon name="i-lucide-cpu" class="size-3.5" :style="{ color: getAgentColor(agent.frontmatter.color) }" />
             </div>
-            <span class="text-[13px] font-medium truncate flex-1">
+            <span class="type-strong truncate flex-1">
               {{ agent.frontmatter.name }}
             </span>
             <span
@@ -186,14 +186,17 @@ async function useTemplate(templateId: string) {
       </div>
 
       <!-- Empty state: search miss -->
-      <div v-else-if="searchQuery" class="flex flex-col items-center justify-center py-16 space-y-3">
-        <p class="text-[13px] text-label">No agents match your search.</p>
-      </div>
+      <EmptyState
+        v-else-if="searchQuery"
+        icon="i-lucide-search-x"
+        title="No agents match your search"
+        description="Try a shorter search, or switch the filter above."
+      />
 
       <!-- Empty state: no agents — show templates -->
       <div v-else class="space-y-5">
         <div class="text-center py-4">
-          <p class="text-[13px] text-label">No agents yet. Start from a template or create your own.</p>
+          <p class="type-body">No agents yet. Start from a template or create your own.</p>
         </div>
 
         <ExampleBlock title="What does a good agent look like?" class="max-w-md mx-auto mb-6">
@@ -216,14 +219,14 @@ async function useTemplate(templateId: string) {
           >
             <div class="flex items-center gap-2.5 mb-2">
               <UIcon :name="template.icon" class="size-4 shrink-0 text-label" />
-              <span class="text-[13px] font-medium">{{ template.frontmatter.name }}</span>
+              <span class="type-strong">{{ template.frontmatter.name }}</span>
               <UIcon
                 v-if="creatingTemplate === template.id"
                 name="i-lucide-loader-2"
                 class="size-3.5 ml-auto animate-spin text-meta"
               />
             </div>
-            <p class="text-[12px] text-label leading-relaxed line-clamp-2">
+            <p class="type-detail leading-relaxed line-clamp-2">
               {{ template.frontmatter.description }}
             </p>
           </button>

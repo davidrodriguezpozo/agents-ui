@@ -55,7 +55,7 @@ function duration(ms?: number) {
     </PageHeader>
 
     <div class="px-6 py-4 space-y-6 max-w-4xl">
-      <p class="text-[13px] text-label leading-relaxed">
+      <p class="type-body leading-relaxed">
         Everything Claude has run for you. Runs keep going if you close the tab — come back any time.
       </p>
 
@@ -74,7 +74,7 @@ function duration(ms?: number) {
             style="border: 1px solid var(--accent-glow); background: var(--accent-muted);"
           >
             <UIcon name="i-lucide-loader-2" class="size-3.5 shrink-0 animate-spin" style="color: var(--accent);" />
-            <span class="text-[13px] font-medium truncate flex-1 text-body">{{ run.title }}</span>
+            <span class="type-strong truncate flex-1 text-body">{{ run.title }}</span>
             <span class="font-mono text-[10px] shrink-0 text-meta">{{ relative(run.createdAt) }}</span>
           </NuxtLink>
         </div>
@@ -95,7 +95,7 @@ function duration(ms?: number) {
             </span>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
-                <span class="text-[13px] font-medium truncate text-body">{{ run.title }}</span>
+                <span class="type-strong truncate text-body">{{ run.title }}</span>
                 <span v-if="run.invocation" class="font-mono text-[10px] shrink-0" style="color: var(--accent);">
                   {{ run.invocation }}
                 </span>
@@ -107,7 +107,7 @@ function duration(ms?: number) {
               <p v-else-if="run.preview" class="text-[11px] truncate text-label mt-0.5">{{ run.preview }}</p>
               <p v-else-if="run.error" class="text-[11px] truncate mt-0.5" style="color: var(--error);">{{ run.error }}</p>
             </div>
-            <div class="flex items-center gap-2.5 shrink-0 font-mono text-[10px] text-meta">
+            <div class="flex items-center gap-2.5 shrink-0 type-mono-meta">
               <span v-if="duration(run.durationMs)">{{ duration(run.durationMs) }}</span>
               <span>{{ relative(run.createdAt) }}</span>
               <UIcon
@@ -119,11 +119,14 @@ function duration(ms?: number) {
         </div>
       </template>
 
-      <div v-else class="flex flex-col items-center justify-center py-16 space-y-3">
-        <UIcon name="i-lucide-activity" class="size-8 text-meta" />
-        <p class="text-[13px] text-label">Nothing has run yet.</p>
-        <UButton label="See what you can do" size="sm" variant="soft" to="/" />
-      </div>
+      <EmptyState
+        v-else
+        icon="i-lucide-activity"
+        title="Nothing has run yet"
+        description="When Claude does something for you — a command you run, or a daily ritual firing on its own — it shows up here with the result."
+        action-label="See what you can do"
+        action-to="/"
+      />
     </div>
   </div>
 </template>

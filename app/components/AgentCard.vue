@@ -30,7 +30,7 @@ defineProps<{
         <UIcon name="i-lucide-cpu" class="size-4" :style="{ color: getAgentColor(agent.frontmatter.color) }" />
       </div>
       <div class="flex-1 min-w-0">
-        <div class="text-[13px] font-medium truncate" style="color: var(--text-primary);">
+        <div class="type-strong truncate" style="color: var(--text-primary);">
           {{ agent.frontmatter.name }}
         </div>
         <div class="text-[11px] mt-0.5 line-clamp-2" style="color: var(--text-tertiary);">

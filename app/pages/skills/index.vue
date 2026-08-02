@@ -114,7 +114,7 @@ const filteredSkills = computed(() => {
           <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0" style="color: var(--accent);" />
 
           <!-- Name -->
-          <span class="text-[13px] font-medium w-44 shrink-0 truncate">
+          <span class="type-strong w-44 shrink-0 truncate">
             {{ skill.frontmatter.name }}
           </span>
 
@@ -163,13 +163,16 @@ const filteredSkills = computed(() => {
       </div>
 
       <!-- Empty state: search miss -->
-      <div v-else-if="searchQuery" class="flex flex-col items-center justify-center py-16">
-        <p class="text-[13px] text-label">No skills match your search.</p>
-      </div>
+      <EmptyState
+        v-else-if="searchQuery"
+        icon="i-lucide-search-x"
+        title="No skills match your search"
+        description="Try a shorter search, or switch the filter above."
+      />
 
       <!-- Empty state: no skills -->
       <div v-else class="flex flex-col items-center justify-center py-12 space-y-5">
-        <div class="rounded-md p-4 bg-card max-w-sm w-full text-[12px] text-label leading-relaxed space-y-1">
+        <div class="rounded-md p-4 bg-card max-w-sm w-full type-detail leading-relaxed space-y-1">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-cpu" class="size-3.5" style="color: var(--accent);" />
             <span>code-reviewer</span>
@@ -186,7 +189,7 @@ const filteredSkills = computed(() => {
             <span class="text-meta">skill</span>
           </div>
         </div>
-        <p class="text-[13px] text-label">Skills teach agents specific capabilities. Link a skill to an agent to extend what it can do.</p>
+        <p class="type-body">Skills teach agents specific capabilities. Link a skill to an agent to extend what it can do.</p>
         <div class="flex items-center gap-2">
           <UButton label="Create a skill" size="sm" @click="showCreateModal = true" />
           <UButton label="Import from GitHub" size="sm" variant="outline" to="/explore?tab=imported" />

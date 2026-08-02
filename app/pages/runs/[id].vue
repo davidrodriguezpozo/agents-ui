@@ -248,7 +248,7 @@ function formatCost(usd?: number) {
             style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);"
           >
             <h3 class="text-section-label">Result</h3>
-            <div class="flex items-center gap-3 font-mono text-[10px] text-meta">
+            <div class="flex items-center gap-3 type-mono-meta">
               <span v-if="run.stats">{{ run.stats.numTurns }} turns</span>
               <span v-if="formatCost(run.stats?.costUsd)">{{ formatCost(run.stats?.costUsd) }}</span>
             </div>
@@ -261,7 +261,7 @@ function formatCost(usd?: number) {
         </div>
 
         <div v-else-if="!isActive" class="rounded-lg p-6 text-center bg-card">
-          <p class="text-[13px] text-label">This run produced no output.</p>
+          <p class="type-body">This run produced no output.</p>
         </div>
 
         <!-- What it did -->

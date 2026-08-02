@@ -80,7 +80,7 @@ function formatDate(iso: string) {
           <!-- Marketplace header -->
           <div class="flex items-center gap-2 py-2 px-2 -mx-2">
             <UIcon name="i-lucide-store" class="size-3.5 text-meta" />
-            <span class="font-mono text-[13px] font-medium text-body">{{ marketplace }}</span>
+            <span class="font-mono type-strong text-body">{{ marketplace }}</span>
             <span class="font-mono text-[12px] text-meta">{{ group.length }}</span>
           </div>
 
@@ -109,7 +109,7 @@ function formatDate(iso: string) {
                 class="flex items-center gap-3 flex-1 min-w-0 focus-ring rounded"
               >
                 <!-- Name -->
-                <span class="text-[13px] font-medium w-44 shrink-0 truncate">
+                <span class="type-strong w-44 shrink-0 truncate">
                   {{ plugin.name }}
                 </span>
 
@@ -129,12 +129,12 @@ function formatDate(iso: string) {
                 <div class="flex items-center gap-3 shrink-0">
                   <span
                     v-if="plugin.skills.length"
-                    class="font-mono text-[10px] text-meta"
+                    class="type-mono-meta"
                     :title="plugin.skills.join(', ')"
                   >
                     {{ plugin.skills.length }} skill{{ plugin.skills.length === 1 ? '' : 's' }}
                   </span>
-                  <span class="font-mono text-[10px] text-meta">
+                  <span class="type-mono-meta">
                     {{ formatDate(plugin.installedAt) }}
                   </span>
                   <UIcon
@@ -150,16 +150,16 @@ function formatDate(iso: string) {
 
       <!-- Empty state: search miss -->
       <div v-else-if="searchQuery" class="flex flex-col items-center justify-center py-16">
-        <p class="text-[13px] text-label">No plugins match your search.</p>
+        <p class="type-body">No plugins match your search.</p>
       </div>
 
       <!-- Empty state: no plugins -->
       <div v-else class="flex flex-col items-center justify-center py-12 space-y-5">
-        <div class="rounded-md p-4 bg-card max-w-sm w-full font-mono text-[12px] text-label leading-relaxed">
+        <div class="rounded-md p-4 bg-card max-w-sm w-full font-mono type-detail leading-relaxed">
           <span class="text-meta"># Install a plugin via Claude Code CLI</span><br>
           <span style="color: var(--accent);">claude</span> plugin add &lt;plugin-name&gt;
         </div>
-        <p class="text-[13px] text-label">Plugins are installed via the Claude Code CLI and managed here.</p>
+        <p class="type-body">Plugins are installed via the Claude Code CLI and managed here.</p>
       </div>
     </div>
   </div>

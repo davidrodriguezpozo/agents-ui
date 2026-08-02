@@ -28,8 +28,8 @@ function formatDate(iso: string) {
       <span class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle">
         {{ source.sourceType }}
       </span>
-      <span class="text-[11px] text-meta truncate flex-1">{{ source.sourceUrl }}</span>
-      <span class="font-mono text-[10px] text-meta shrink-0">{{ formatDate(source.lastUpdated) }}</span>
+      <span class="type-meta truncate flex-1">{{ source.sourceUrl }}</span>
+      <span class="type-mono-meta shrink-0">{{ formatDate(source.lastUpdated) }}</span>
     </div>
     <div class="flex items-center gap-2 ml-3">
       <UButton
