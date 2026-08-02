@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 const emit = defineEmits<{ complete: [] }>()
 
 const { claudeDir, exists: claudeDirExists, load: reloadConfig } = useClaudeDir()
@@ -41,7 +42,7 @@ async function createDirectory() {
     await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills()])
     step.value = 'first-agent'
   } catch (e: any) {
-    toast.add({ title: 'Failed to create directory', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to create directory', description: errorMessage(e), color: 'error' })
     step.value = 'setup'
   }
 }

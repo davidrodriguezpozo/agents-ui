@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import { DAY_LABELS, PERMISSION_CHOICES, WEEKDAYS, type Schedule, type SchedulePermission } from '~/composables/useSchedules'
 
 /** Create or edit a daily ritual. Time and days, not cron. */
@@ -56,7 +57,7 @@ async function onSave() {
     toast.add({ title: isEdit.value ? 'Ritual updated' : `"${saved.title}" scheduled`, color: 'success' })
     emit('saved', saved)
   } catch (e: any) {
-    toast.add({ title: 'Could not save', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Could not save', description: errorMessage(e), color: 'error' })
   } finally {
     saving.value = false
   }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import { workflowTemplates } from '~/utils/workflowTemplates'
 import { agentTemplates } from '~/utils/templates'
 
@@ -41,7 +42,7 @@ async function useWorkflowTemplate(templateId: string) {
     const workflow = await create({ name: template.name, description: template.description, steps })
     router.push(`/workflows/${workflow.slug}`)
   } catch (e: any) {
-    toast.add({ title: 'Failed to create', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to create', description: errorMessage(e), color: 'error' })
   } finally {
     creatingTemplate.value = null
   }
@@ -61,7 +62,7 @@ async function createBlank() {
     newDescription.value = ''
     router.push(`/workflows/${workflow.slug}`)
   } catch (e: any) {
-    toast.add({ title: 'Failed to create', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to create', description: errorMessage(e), color: 'error' })
   } finally {
     creating.value = false
   }

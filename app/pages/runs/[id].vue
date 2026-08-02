@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import { renderMarkdown } from '~/utils/markdown'
 import type { PermissionRequest } from '~/types'
 
@@ -84,7 +85,7 @@ async function rerunWithApproval() {
     })
     router.push(`/runs/${newId}`)
   } catch (e: any) {
-    toast.add({ title: 'Could not start', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Could not start', description: errorMessage(e), color: 'error' })
   } finally {
     rerunning.value = false
   }

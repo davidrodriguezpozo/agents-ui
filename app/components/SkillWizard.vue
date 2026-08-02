@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Skill } from '~/types'
 
 /**
@@ -72,7 +73,7 @@ async function draftWithClaude() {
   } catch (e: any) {
     toast.add({
       title: 'Could not draft it',
-      description: e.data?.message || e.message,
+      description: errorMessage(e),
       color: 'error',
     })
   } finally {
@@ -95,7 +96,7 @@ async function save() {
   } catch (e: any) {
     toast.add({
       title: 'Could not save',
-      description: e.data?.message || e.message,
+      description: errorMessage(e),
       color: 'error',
     })
   } finally {

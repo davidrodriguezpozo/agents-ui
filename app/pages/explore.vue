@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import { agentTemplates } from "~/utils/templates";
 import { commandTemplates } from "~/utils/commandTemplates";
 import { getAgentColor } from "~/utils/colors";
@@ -84,7 +85,7 @@ async function onInstallPlugin(marketplace: string, plugin: string) {
   } catch (e: any) {
     toast.add({
       title: "Install failed",
-      description: e.data?.data?.message || e.data?.message || e.message,
+      description: errorMessage(e),
       color: "error",
     });
   } finally {
@@ -101,7 +102,7 @@ async function onUninstallPlugin(pluginName: string) {
   } catch (e: any) {
     toast.add({
       title: "Uninstall failed",
-      description: e.data?.data?.message || e.data?.message || e.message,
+      description: errorMessage(e),
       color: "error",
     });
   } finally {
@@ -117,7 +118,7 @@ async function onUpdateMarketplace(name: string) {
   } catch (e: any) {
     toast.add({
       title: "Update failed",
-      description: e.data?.data?.message || e.data?.message || e.message,
+      description: errorMessage(e),
       color: "error",
     });
   }
@@ -131,7 +132,7 @@ async function onRemoveMarketplace(name: string) {
   } catch (e: any) {
     toast.add({
       title: "Remove failed",
-      description: e.data?.data?.message || e.data?.message || e.message,
+      description: errorMessage(e),
       color: "error",
     });
   }
@@ -218,7 +219,7 @@ async function useAgentTemplate(templateId: string) {
   } catch (e: any) {
     toast.add({
       title: "Failed to create",
-      description: e.data?.message || e.message,
+      description: errorMessage(e),
       color: "error",
     });
   } finally {
@@ -244,7 +245,7 @@ async function useCommandTemplate(templateId: string) {
   } catch (e: any) {
     toast.add({
       title: "Failed to create",
-      description: e.data?.message || e.message,
+      description: errorMessage(e),
       color: "error",
     });
   } finally {

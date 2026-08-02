@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Command, CommandFrontmatter } from '~/types'
 
 const emit = defineEmits<{
@@ -63,7 +64,7 @@ async function save() {
     toast.add({ title: 'Command created', color: 'success' })
     emit('saved', command)
   } catch (e: any) {
-    toast.add({ title: 'Failed to create', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to create', description: errorMessage(e), color: 'error' })
   } finally {
     saving.value = false
   }

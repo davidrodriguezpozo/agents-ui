@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import { getAgentColor, modelColors } from '~/utils/colors'
 import { agentTemplates } from '~/utils/templates'
 
@@ -60,7 +61,7 @@ async function useTemplate(templateId: string) {
     toast.add({ title: `${template.frontmatter.name} created`, color: 'success' })
     router.push(`/agents/${agent.slug}`)
   } catch (e: any) {
-    toast.add({ title: 'Failed to create', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to create', description: errorMessage(e), color: 'error' })
   } finally {
     creatingTemplate.value = null
   }

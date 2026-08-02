@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Skill, SkillFrontmatter } from '~/types'
 
 const route = useRoute()
@@ -65,7 +66,7 @@ async function save() {
     toast.add({ title: 'Saved', color: 'success' })
     if (updated.slug !== slug) router.replace(`/skills/${updated.slug}`)
   } catch (e: any) {
-    toast.add({ title: 'Failed to save', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to save', description: errorMessage(e), color: 'error' })
   } finally {
     saving.value = false
   }
@@ -94,7 +95,7 @@ async function editCopy() {
     toast.add({ title: 'Copy created', color: 'success' })
     router.push(`/skills/${copy.slug}`)
   } catch (e: any) {
-    toast.add({ title: 'Failed to create copy', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to create copy', description: errorMessage(e), color: 'error' })
   }
 }
 

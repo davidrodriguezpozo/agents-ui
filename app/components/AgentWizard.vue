@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Agent, AgentFrontmatter, AgentModel, AgentMemory } from '~/types'
 
 const emit = defineEmits<{
@@ -54,7 +55,7 @@ async function finish() {
     toast.add({ title: `${frontmatter.value.name} created`, color: 'success' })
     emit('saved', agent)
   } catch (e: any) {
-    toast.add({ title: 'Failed to create agent', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to create agent', description: errorMessage(e), color: 'error' })
   } finally {
     saving.value = false
   }

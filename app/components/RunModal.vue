@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Command } from '~/types'
 
 const props = defineProps<{ command: Command | null }>()
@@ -35,7 +36,7 @@ async function run() {
     emit('close')
     router.push(`/runs/${id}`)
   } catch (e: any) {
-    toast.add({ title: 'Could not start', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Could not start', description: errorMessage(e), color: 'error' })
   } finally {
     starting.value = false
   }

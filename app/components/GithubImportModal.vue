@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { ScanResult } from '~/types'
 
 const emit = defineEmits<{
@@ -22,7 +23,7 @@ async function doScan() {
     selected.value = new Set(scanResult.value.skills.map(s => s.slug))
     step.value = 'preview'
   } catch (e: any) {
-    error.value = e.data?.data?.message || e.data?.message || e.message || 'Failed to scan repository'
+    error.value = errorMessage(e, 'Failed to scan repository')
   }
 }
 
@@ -60,7 +61,7 @@ async function doImport() {
     toast.add({ title: `Imported ${selected.value.size} skills from ${scanResult.value.owner}/${scanResult.value.repo}`, color: 'success' })
     emit('imported')
   } catch (e: any) {
-    error.value = e.data?.data?.message || e.data?.message || e.message || 'Import failed'
+    error.value = errorMessage(e, 'Import failed')
     step.value = 'preview'
   } finally {
     importing.value = false

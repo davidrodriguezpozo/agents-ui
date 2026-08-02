@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 const route = useRoute()
 const { claudeDir, exists: claudeDirExists, load: loadConfig } = useClaudeDir()
 const { fetchAll: fetchAgents, agents } = useAgents()
@@ -112,7 +113,7 @@ async function createProjectConfig() {
     toast.add({ title: 'Project config created', description: result.claudeDir, color: 'success' })
     await refreshAll()
   } catch (e: any) {
-    toast.add({ title: 'Could not create project config', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Could not create project config', description: errorMessage(e), color: 'error' })
   } finally {
     initializingProject.value = false
   }

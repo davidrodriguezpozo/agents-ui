@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 const props = defineProps<{
   type: 'agents' | 'skills'
 }>()
@@ -39,7 +40,7 @@ async function handleFile(file: File) {
     toast.add({ title: `${props.type === 'agents' ? 'Agent' : 'Skill'} imported`, color: 'success' })
     emit('imported', result)
   } catch (e: any) {
-    toast.add({ title: 'Import failed', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Import failed', description: errorMessage(e), color: 'error' })
   } finally {
     importing.value = false
     if (fileInput.value) fileInput.value.value = ''

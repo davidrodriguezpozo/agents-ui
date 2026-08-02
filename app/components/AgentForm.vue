@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Agent, AgentFrontmatter } from "~/types";
 
 const props = defineProps<{
@@ -67,7 +68,7 @@ async function save() {
   } catch (e: any) {
     toast.add({
       title: `Failed to ${props.mode} agent`,
-      description: e.data?.message || e.message,
+      description: errorMessage(e),
       color: "error",
     });
   } finally {

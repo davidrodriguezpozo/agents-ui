@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import { VueFlow } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -125,7 +126,7 @@ async function save() {
     })
     toast.add({ title: 'Workflow saved', color: 'success' })
   } catch (e: any) {
-    toast.add({ title: 'Failed to save', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to save', description: errorMessage(e), color: 'error' })
   } finally {
     saving.value = false
   }
@@ -138,7 +139,7 @@ async function deleteWorkflow() {
     await remove(slug)
     router.push('/workflows')
   } catch (e: any) {
-    toast.add({ title: 'Failed to delete', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Failed to delete', description: errorMessage(e), color: 'error' })
   }
 }
 

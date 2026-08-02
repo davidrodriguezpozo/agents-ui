@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Skill, SkillFrontmatter } from '~/types'
 
 const props = defineProps<{
@@ -66,7 +67,7 @@ async function save() {
     toast.add({ title: isEdit ? 'Skill updated' : 'Skill created', color: 'success' })
     emit('saved', skill)
   } catch (e: any) {
-    toast.add({ title: `Failed to ${props.mode} skill`, description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: `Failed to ${props.mode} skill`, description: errorMessage(e), color: 'error' })
   } finally {
     saving.value = false
   }

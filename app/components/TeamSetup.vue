@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 /**
  * First run for someone joining a team: point the app at the team's marketplace
  * repo, install the plugins that apply to them, and get out of the way.
@@ -44,7 +45,7 @@ async function onAdd() {
   } catch (e: any) {
     toast.add({
       title: 'Could not connect',
-      description: e.data?.data?.message || e.data?.message || e.message,
+      description: errorMessage(e),
       color: 'error',
     })
   } finally {
@@ -61,7 +62,7 @@ async function onInstall(marketplace: string, plugin: string) {
   } catch (e: any) {
     toast.add({
       title: 'Install failed',
-      description: e.data?.data?.message || e.data?.message || e.message,
+      description: errorMessage(e),
       color: 'error',
     })
   } finally {

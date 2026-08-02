@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Schedule, SuggestedRitual } from '~/composables/useSchedules'
 
 const { schedules, suggested, loading, fetchAll, remove, setEnabled, adopt } = useSchedules()
@@ -43,7 +44,7 @@ async function onAdopt(ritual: SuggestedRitual) {
     await adopt(ritual)
     toast.add({ title: `"${ritual.title}" added`, color: 'success' })
   } catch (e: any) {
-    toast.add({ title: 'Could not add', description: e.data?.message || e.message, color: 'error' })
+    toast.add({ title: 'Could not add', description: errorMessage(e), color: 'error' })
   } finally {
     adopting.value = null
   }

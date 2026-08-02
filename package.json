@@ -11,7 +11,9 @@
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.76",
@@ -25,6 +27,7 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.95",
-    "typescript": "^5.7"
+    "typescript": "^5.7",
+    "vitest": "^4.1.10"
   }
 }

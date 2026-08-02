@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 const emit = defineEmits<{
   added: []
 }>()
@@ -20,7 +21,7 @@ async function doAdd() {
     url.value = ''
     emit('added')
   } catch (e: any) {
-    error.value = e.data?.data?.message || e.data?.message || e.message || 'Failed to add marketplace'
+    error.value = errorMessage(e, 'Failed to add marketplace')
   } finally {
     adding.value = false
   }
