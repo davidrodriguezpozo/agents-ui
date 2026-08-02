@@ -19,7 +19,7 @@ function formatDate(iso: string) {
 
 <template>
   <div
-    class="flex items-center justify-between py-2 px-3 rounded-lg"
+    class="flex items-center justify-between py-2 px-3 rounded-md"
     style="background: var(--input-bg);"
   >
     <div class="flex items-center gap-3 flex-1 min-w-0">

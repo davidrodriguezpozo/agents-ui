@@ -126,7 +126,7 @@ function handleQuickAction(prompt: string) {
         <div v-if="isStreaming" class="absolute top-0 right-1/4 w-40 h-20 pointer-events-none chat-glow-pulse" style="background: radial-gradient(ellipse, var(--accent-glow) 0%, transparent 70%);" />
         <div class="flex items-center gap-3 relative">
           <div class="relative">
-            <div class="size-9 rounded-xl flex items-center justify-center transition-all duration-300" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', border: isStreaming ? '1px solid rgba(229, 169, 62, 0.2)' : '1px solid var(--border-subtle)', boxShadow: isStreaming ? '0 0 20px var(--accent-glow)' : 'none' }">
+            <div class="size-9 rounded-lg flex items-center justify-center transition-all duration-300" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', border: isStreaming ? '1px solid var(--accent-glow)' : '1px solid var(--border-subtle)', boxShadow: isStreaming ? '0 0 20px var(--accent-glow)' : 'none' }">
               <UIcon name="i-lucide-zap" class="size-4 transition-colors duration-300" :style="{ color: isStreaming ? 'var(--accent)' : 'var(--text-tertiary)' }" />
             </div>
             <div class="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 transition-colors duration-300" :style="{ background: isStreaming ? 'var(--accent)' : 'var(--success)', borderColor: 'var(--surface-base)', boxShadow: isStreaming ? '0 0 8px var(--accent-glow)' : '0 0 6px rgba(5, 150, 105, 0.3)' }" :class="{ 'chat-dot-pulse': isStreaming }" />
@@ -138,10 +138,10 @@ function handleQuickAction(prompt: string) {
             </div>
             <span class="text-[10px] font-mono" style="color: var(--text-disabled);">{{ activeAgent ? activeAgent.name : 'Agent Manager' }}</span>
           </div>
-          <button v-if="messages.length" class="p-1.5 rounded-lg transition-all hover-bg" style="color: var(--text-disabled);" title="New conversation" @click="() => { clearChat(); clearAgent() }">
+          <button v-if="messages.length" class="p-1.5 rounded-md transition-all hover-bg" style="color: var(--text-disabled);" title="New conversation" @click="() => { clearChat(); clearAgent() }">
             <UIcon name="i-lucide-rotate-ccw" class="size-3.5" />
           </button>
-          <button class="p-1.5 rounded-lg transition-all hover-bg" style="color: var(--text-tertiary);" @click="emit('update:open', false)">
+          <button class="p-1.5 rounded-md transition-all hover-bg" style="color: var(--text-tertiary);" @click="emit('update:open', false)">
             <UIcon name="i-lucide-panel-right-close" class="size-4" />
           </button>
         </div>
@@ -164,7 +164,7 @@ function handleQuickAction(prompt: string) {
         <div v-if="!messages.length" class="flex flex-col items-center justify-center h-full gap-6">
           <FeatureCallout feature-key="chat" message="You can ask Claude anything — create agents, get help, or manage your workspace." action="Try asking 'Help me create an agent for writing emails'." />
           <div class="relative">
-            <div class="size-16 rounded-2xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--accent-muted) 0%, transparent 100%); border: 1px solid rgba(229, 169, 62, 0.08);">
+            <div class="size-16 rounded-xl flex items-center justify-center" style="background: linear-gradient(135deg, var(--accent-muted) 0%, transparent 100%); border: 1px solid var(--accent-muted);">
               <UIcon name="i-lucide-zap" class="size-7" style="color: var(--accent); opacity: 0.8;" />
             </div>
           </div>
@@ -185,7 +185,7 @@ function handleQuickAction(prompt: string) {
           />
         </template>
 
-        <div v-if="error" class="flex items-start gap-2.5 rounded-xl px-3.5 py-2.5 text-[12px]" style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12); color: var(--error);">
+        <div v-if="error" class="flex items-start gap-2.5 rounded-lg px-3.5 py-2.5 text-[12px]" style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12); color: var(--error);">
           <UIcon name="i-lucide-alert-circle" class="size-3.5 shrink-0 mt-0.5" />
           <span>{{ error }}</span>
         </div>

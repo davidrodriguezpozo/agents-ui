@@ -131,7 +131,7 @@ function formatCost(usd?: number) {
     </PageHeader>
 
     <div class="px-6 py-5 space-y-5 max-w-4xl">
-      <div v-if="loadError" class="rounded-xl px-4 py-3 text-[12px]" style="background: rgba(248,113,113,0.06); color: var(--error);">
+      <div v-if="loadError" class="rounded-lg px-4 py-3 text-[12px]" style="background: rgba(248,113,113,0.06); color: var(--error);">
         {{ loadError }}
       </div>
 
@@ -150,8 +150,8 @@ function formatCost(usd?: number) {
         <!-- This is the point of the whole thing: it kept going without you -->
         <div
           v-if="isActive && !prompts.length"
-          class="rounded-xl px-4 py-3 flex items-center gap-3"
-          style="background: var(--accent-muted); border: 1px solid rgba(229, 169, 62, 0.2);"
+          class="rounded-lg px-4 py-3 flex items-center gap-3"
+          style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
         >
           <UIcon name="i-lucide-loader-2" class="size-4 animate-spin shrink-0" style="color: var(--accent);" />
           <span class="text-[12px] text-body">
@@ -163,8 +163,8 @@ function formatCost(usd?: number) {
              saying so matters more than presenting it as finished. -->
         <div
           v-if="meta?.needsAttention"
-          class="rounded-xl px-4 py-3 flex items-start gap-3"
-          style="background: rgba(229, 169, 62, 0.08); border: 1px solid rgba(229, 169, 62, 0.24);"
+          class="rounded-lg px-4 py-3 flex items-start gap-3"
+          style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
         >
           <UIcon name="i-lucide-shield-alert" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
           <div class="flex-1 min-w-0 space-y-1">
@@ -188,12 +188,12 @@ function formatCost(usd?: number) {
           </div>
         </div>
 
-        <div v-if="run.error" class="rounded-xl px-4 py-3 text-[12px]" style="background: rgba(248,113,113,0.06); color: var(--error);">
+        <div v-if="run.error" class="rounded-lg px-4 py-3 text-[12px]" style="background: rgba(248,113,113,0.06); color: var(--error);">
           {{ run.error }}
         </div>
 
         <!-- Result -->
-        <div v-if="run.output" class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
+        <div v-if="run.output" class="rounded-lg overflow-hidden" style="border: 1px solid var(--border-subtle);">
           <div
             class="px-4 py-2.5 flex items-center justify-between"
             style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);"
@@ -211,7 +211,7 @@ function formatCost(usd?: number) {
           />
         </div>
 
-        <div v-else-if="!isActive" class="rounded-xl p-6 text-center bg-card">
+        <div v-else-if="!isActive" class="rounded-lg p-6 text-center bg-card">
           <p class="text-[13px] text-label">This run produced no output.</p>
         </div>
 
@@ -221,7 +221,7 @@ function formatCost(usd?: number) {
           <div
             v-for="call in run.toolCalls"
             :key="call.id"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-lg text-[11px] font-mono"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-mono"
             style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
           >
             <UIcon

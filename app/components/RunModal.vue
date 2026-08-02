@@ -57,10 +57,10 @@ async function run() {
 
     <!-- Where it will run -->
     <div
-      class="rounded-lg px-3 py-2.5 flex items-start gap-2.5"
+      class="rounded-md px-3 py-2.5 flex items-start gap-2.5"
       :style="{
-        background: workingDir ? 'var(--surface-raised)' : 'rgba(229, 169, 62, 0.06)',
-        border: '1px solid ' + (workingDir ? 'var(--border-subtle)' : 'rgba(229, 169, 62, 0.16)'),
+        background: workingDir ? 'var(--surface-raised)' : 'var(--accent-muted)',
+        border: '1px solid ' + (workingDir ? 'var(--border-subtle)' : 'var(--accent-muted)'),
       }"
     >
       <UIcon name="i-lucide-folder" class="size-3.5 shrink-0 mt-0.5" style="color: var(--accent);" />

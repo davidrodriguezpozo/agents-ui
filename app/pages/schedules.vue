@@ -88,7 +88,7 @@ function nextLabel(schedule: Schedule) {
         <div
           v-for="schedule in schedules"
           :key="schedule.id"
-          class="flex items-center gap-3 px-4 py-3 rounded-xl"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg"
           style="border: 1px solid var(--border-subtle);"
           :style="{ opacity: schedule.enabled ? 1 : 0.6 }"
         >
@@ -139,7 +139,7 @@ function nextLabel(schedule: Schedule) {
         </div>
       </div>
 
-      <div v-else-if="!loading" class="rounded-xl p-8 text-center space-y-3 bg-card">
+      <div v-else-if="!loading" class="rounded-lg p-8 text-center space-y-3 bg-card">
         <UIcon name="i-lucide-alarm-clock" class="size-8 mx-auto text-meta" />
         <p class="text-[13px] text-label">
           Nothing scheduled yet. Pick something you do every morning.
@@ -153,7 +153,7 @@ function nextLabel(schedule: Schedule) {
         <div
           v-for="ritual in unadopted"
           :key="ritual.command"
-          class="flex items-center gap-3 px-4 py-3 rounded-xl"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg"
           style="border: 1px dashed var(--border-subtle);"
         >
           <UIcon name="i-lucide-sparkles" class="size-4 shrink-0" style="color: rgb(139, 92, 246);" />

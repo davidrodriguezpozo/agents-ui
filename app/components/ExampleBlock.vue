@@ -8,7 +8,7 @@ const open = ref(false)
 
 <template>
   <div
-    class="rounded-lg overflow-hidden"
+    class="rounded-md overflow-hidden"
     style="border-left: 3px solid var(--accent); background: var(--surface-raised);"
   >
     <button

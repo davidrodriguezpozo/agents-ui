@@ -66,11 +66,11 @@ function formatDate(iso: string) {
 </script>
 
 <template>
-  <div class="rounded-xl overflow-hidden bg-card">
+  <div class="rounded-lg overflow-hidden bg-card">
     <div class="p-4 space-y-3">
       <div class="flex items-center gap-2.5">
         <div
-          class="size-8 rounded-lg flex items-center justify-center shrink-0"
+          class="size-8 rounded-md flex items-center justify-center shrink-0"
           style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
         >
           <svg class="size-4 text-label" viewBox="0 0 16 16" fill="currentColor">
@@ -102,11 +102,11 @@ function formatDate(iso: string) {
           <span class="text-[12px] text-label">Loading skills...</span>
         </div>
         <template v-else>
-          <div class="max-h-48 overflow-y-auto space-y-0.5 rounded-lg p-1" style="background: var(--surface-base);">
+          <div class="max-h-48 overflow-y-auto space-y-0.5 rounded-md p-1" style="background: var(--surface-base);">
             <label
               v-for="skill in availableSkills"
               :key="skill.slug"
-              class="flex items-start gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer hover-row"
+              class="flex items-start gap-2.5 px-2.5 py-2 rounded-md cursor-pointer hover-row"
             >
               <input
                 type="checkbox"

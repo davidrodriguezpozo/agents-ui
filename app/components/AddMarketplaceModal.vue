@@ -48,7 +48,7 @@ async function doAdd() {
 
     <div
       v-if="error"
-      class="rounded-lg px-3 py-2 text-[12px]"
+      class="rounded-md px-3 py-2 text-[12px]"
       style="background: rgba(248, 113, 113, 0.06); color: var(--error); border: 1px solid rgba(248, 113, 113, 0.12);"
     >
       {{ error }}

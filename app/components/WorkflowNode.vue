@@ -32,7 +32,7 @@ const modelLabel = computed(() => {
 
 <template>
   <div
-    class="workflow-node relative rounded-xl overflow-hidden group"
+    class="workflow-node relative rounded-lg overflow-hidden group"
     style="width: 160px; height: 80px; background: var(--surface-raised); border: 1px solid var(--border-subtle);"
     :class="{
       'workflow-node--running': data.status === 'running',

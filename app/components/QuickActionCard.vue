@@ -15,14 +15,14 @@ defineEmits<{
   <NuxtLink
     v-if="to"
     :to="to"
-    class="flex items-center gap-4 px-5 py-5 rounded-xl transition-all duration-150 focus-ring cursor-pointer group"
+    class="flex items-center gap-4 px-5 py-5 rounded-lg transition-all duration-150 focus-ring cursor-pointer group"
     style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
-    @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; ($event.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(229, 169, 62, 0.06)'"
+    @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; ($event.currentTarget as HTMLElement).style.boxShadow = '0 0 20px var(--accent-muted)'"
     @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'; ($event.currentTarget as HTMLElement).style.boxShadow = 'none'"
   >
     <div
-      class="size-10 rounded-xl flex items-center justify-center shrink-0"
-      style="background: linear-gradient(135deg, rgba(229, 169, 62, 0.12) 0%, rgba(229, 169, 62, 0.04) 100%); border: 1px solid rgba(229, 169, 62, 0.1);"
+      class="size-10 rounded-lg flex items-center justify-center shrink-0"
+      style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
     >
       <UIcon :name="icon" class="size-5" style="color: var(--accent);" />
     </div>
@@ -38,15 +38,15 @@ defineEmits<{
   </NuxtLink>
   <button
     v-else
-    class="flex items-center gap-4 px-5 py-5 rounded-xl transition-all duration-150 focus-ring cursor-pointer group w-full"
+    class="flex items-center gap-4 px-5 py-5 rounded-lg transition-all duration-150 focus-ring cursor-pointer group w-full"
     style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
-    @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; ($event.currentTarget as HTMLElement).style.boxShadow = '0 0 20px rgba(229, 169, 62, 0.06)'"
+    @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--accent)'; ($event.currentTarget as HTMLElement).style.boxShadow = '0 0 20px var(--accent-muted)'"
     @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'; ($event.currentTarget as HTMLElement).style.boxShadow = 'none'"
     @click="$emit('click')"
   >
     <div
-      class="size-10 rounded-xl flex items-center justify-center shrink-0"
-      style="background: linear-gradient(135deg, rgba(229, 169, 62, 0.12) 0%, rgba(229, 169, 62, 0.04) 100%); border: 1px solid rgba(229, 169, 62, 0.1);"
+      class="size-10 rounded-lg flex items-center justify-center shrink-0"
+      style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
     >
       <UIcon :name="icon" class="size-5" style="color: var(--accent);" />
     </div>

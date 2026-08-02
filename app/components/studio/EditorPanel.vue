@@ -88,13 +88,13 @@ function isToolEnabled(tool: string): boolean {
       <div class="space-y-1">
         <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Model</label>
         <div class="flex gap-2">
-          <button v-for="opt in modelOptions" :key="opt.value" class="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all" :style="{ background: frontmatter.model === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.model === opt.value ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'), color: frontmatter.model === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('model', opt.value)">{{ opt.label }}</button>
+          <button v-for="opt in modelOptions" :key="opt.value" class="px-3 py-1.5 rounded-md text-[11px] font-medium transition-all" :style="{ background: frontmatter.model === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.model === opt.value ? 'var(--accent-glow)' : 'var(--border-subtle)'), color: frontmatter.model === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('model', opt.value)">{{ opt.label }}</button>
         </div>
       </div>
       <div class="space-y-1">
         <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Memory</label>
         <div class="flex gap-2">
-          <button v-for="opt in memoryOptions" :key="opt.value" class="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all" :style="{ background: frontmatter.memory === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.memory === opt.value ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'), color: frontmatter.memory === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('memory', opt.value)">{{ opt.label }}</button>
+          <button v-for="opt in memoryOptions" :key="opt.value" class="px-3 py-1.5 rounded-md text-[11px] font-medium transition-all" :style="{ background: frontmatter.memory === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.memory === opt.value ? 'var(--accent-glow)' : 'var(--border-subtle)'), color: frontmatter.memory === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('memory', opt.value)">{{ opt.label }}</button>
         </div>
       </div>
       <div class="space-y-1">
@@ -117,7 +117,7 @@ function isToolEnabled(tool: string): boolean {
             :style="{
               background: isToolEnabled(tool) ? 'var(--accent-muted)' : 'var(--surface-raised)',
               color: isToolEnabled(tool) ? 'var(--accent)' : 'var(--text-disabled)',
-              border: '1px solid ' + (isToolEnabled(tool) ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'),
+              border: '1px solid ' + (isToolEnabled(tool) ? 'var(--accent-glow)' : 'var(--border-subtle)'),
             }"
             @click="toggleTool(tool)"
           >
@@ -128,7 +128,7 @@ function isToolEnabled(tool: string): boolean {
 
       <div class="space-y-1">
         <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Color</label>
-        <input type="color" :value="frontmatter.color || '#e5a93e'" class="w-8 h-8 rounded-lg cursor-pointer border" style="border-color: var(--border-subtle);" @input="updateFrontmatter('color', ($event.target as HTMLInputElement).value)" />
+        <input type="color" :value="frontmatter.color || '#e5a93e'" class="w-8 h-8 rounded-md cursor-pointer border" style="border-color: var(--border-subtle);" @input="updateFrontmatter('color', ($event.target as HTMLInputElement).value)" />
       </div>
     </div>
 
@@ -136,7 +136,7 @@ function isToolEnabled(tool: string): boolean {
       <div v-if="loadingSkills" class="text-[11px] font-mono py-4 text-center" style="color: var(--text-disabled);">Loading skills...</div>
       <div v-else-if="!skills.length" class="text-[12px] py-4 text-center" style="color: var(--text-tertiary);">No skills attached to this agent yet.</div>
       <div v-else class="space-y-2">
-        <div v-for="skill in skills" :key="skill.slug" class="flex items-center gap-2 px-3 py-2 rounded-lg" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
+        <div v-for="skill in skills" :key="skill.slug" class="flex items-center gap-2 px-3 py-2 rounded-md" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
           <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0" style="color: var(--accent);" />
           <div class="flex-1 min-w-0">
             <div class="text-[12px] font-medium truncate" style="color: var(--text-primary);">{{ skill.frontmatter.name }}</div>

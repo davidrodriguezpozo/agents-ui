@@ -78,11 +78,11 @@ const summary = computed(() => {
           <button
             v-for="mode in PERMISSION_MODES"
             :key="mode.value"
-            class="px-2 py-1 rounded-lg text-[11px] font-medium transition-all"
+            class="px-2 py-1 rounded-md text-[11px] font-medium transition-all"
             :title="mode.hint"
             :style="{
               background: runConfig.permissionMode === mode.value ? 'var(--accent-muted)' : 'var(--surface-raised)',
-              border: '1px solid ' + (runConfig.permissionMode === mode.value ? 'rgba(229, 169, 62, 0.25)' : 'var(--border-subtle)'),
+              border: '1px solid ' + (runConfig.permissionMode === mode.value ? 'var(--accent-glow)' : 'var(--border-subtle)'),
               color: runConfig.permissionMode === mode.value ? 'var(--accent)' : 'var(--text-secondary)',
             }"
             @click="runConfig = { ...runConfig, permissionMode: mode.value }"
@@ -117,7 +117,7 @@ const summary = computed(() => {
             :style="{
               background: isToolEnabled(tool) ? 'var(--accent-muted)' : 'var(--surface-raised)',
               color: isToolEnabled(tool) ? 'var(--accent)' : 'var(--text-disabled)',
-              border: '1px solid ' + (isToolEnabled(tool) ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'),
+              border: '1px solid ' + (isToolEnabled(tool) ? 'var(--accent-glow)' : 'var(--border-subtle)'),
             }"
             @click="toggleTool(tool)"
           >

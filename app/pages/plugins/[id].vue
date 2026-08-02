@@ -199,7 +199,7 @@ if (import.meta.client) {
 
     <div v-else-if="plugin" class="px-6 py-5 space-y-6">
       <!-- Plugin info card -->
-      <div class="rounded-xl overflow-hidden" style="border: 1px solid var(--border-subtle);">
+      <div class="rounded-lg overflow-hidden" style="border: 1px solid var(--border-subtle);">
         <div class="relative px-5 pt-6 pb-5" style="background: var(--surface-raised);">
           <div
             class="absolute inset-x-0 top-0 h-[3px]"
@@ -208,7 +208,7 @@ if (import.meta.client) {
 
           <div class="flex items-start gap-4">
             <div
-              class="size-11 rounded-xl flex items-center justify-center shrink-0"
+              class="size-11 rounded-lg flex items-center justify-center shrink-0"
               style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
             >
               <UIcon name="i-lucide-puzzle" class="size-5" style="color: var(--accent);" />
@@ -312,7 +312,7 @@ if (import.meta.client) {
               <div
                 v-for="(hook, i) in plugin.hooks"
                 :key="`${hook.event}-${i}`"
-                class="rounded-xl px-4 py-3 space-y-2"
+                class="rounded-lg px-4 py-3 space-y-2"
                 style="border: 1px solid var(--border-subtle);"
               >
                 <div class="flex items-center gap-2">
@@ -327,7 +327,7 @@ if (import.meta.client) {
                 <pre
                   v-for="cmd in hook.commands"
                   :key="cmd"
-                  class="font-mono text-[11px] px-3 py-2 rounded-lg overflow-x-auto text-body"
+                  class="font-mono text-[11px] px-3 py-2 rounded-md overflow-x-auto text-body"
                   style="background: var(--surface-raised);"
                 >{{ cmd }}</pre>
               </div>
@@ -344,7 +344,7 @@ if (import.meta.client) {
               <div
                 v-for="server in plugin.mcpServers"
                 :key="server.name"
-                class="rounded-xl px-4 py-3 flex items-center gap-3"
+                class="rounded-lg px-4 py-3 flex items-center gap-3"
                 style="border: 1px solid var(--border-subtle);"
               >
                 <UIcon name="i-lucide-plug" class="size-4 shrink-0" style="color: var(--accent);" />
@@ -368,7 +368,7 @@ if (import.meta.client) {
               <div
                 v-for="skill in plugin.skillDetails"
                 :key="skill.slug"
-                class="rounded-xl overflow-hidden"
+                class="rounded-lg overflow-hidden"
                 style="border: 1px solid var(--border-subtle);"
               >
                 <button

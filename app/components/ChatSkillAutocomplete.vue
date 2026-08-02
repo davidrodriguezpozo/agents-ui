@@ -117,7 +117,7 @@ defineExpose({ moveUp, moveDown, selectCurrent })
 <template>
   <div
     v-if="visible && (filtered.length > 0 || loading)"
-    class="absolute bottom-full left-0 right-0 mb-2 rounded-xl overflow-hidden"
+    class="absolute bottom-full left-0 right-0 mb-2 rounded-lg overflow-hidden"
     style="
       background: var(--surface-raised);
       border: 1px solid var(--border-subtle);

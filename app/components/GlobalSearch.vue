@@ -108,7 +108,7 @@ if (import.meta.client) {
 <template>
   <UModal v-model:open="open">
     <template #content>
-      <div style="min-height: 120px; max-height: 420px;" class="bg-overlay rounded-xl overflow-hidden flex flex-col">
+      <div style="min-height: 120px; max-height: 420px;" class="bg-overlay rounded-lg overflow-hidden flex flex-col">
         <!-- Search input -->
         <div class="flex items-center gap-3 px-4 py-3" style="border-bottom: 1px solid var(--border-subtle);">
           <UIcon name="i-lucide-search" class="size-4 shrink-0 text-meta" />

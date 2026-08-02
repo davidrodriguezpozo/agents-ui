@@ -81,7 +81,7 @@ const costLabel = computed(() => {
       <!-- What the run actually used -->
       <div
         v-if="effectiveConfig"
-        class="rounded-lg px-3 py-2 space-y-1 text-[10px] font-mono"
+        class="rounded-md px-3 py-2 space-y-1 text-[10px] font-mono"
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-disabled);"
       >
         <div class="flex gap-2">
@@ -116,7 +116,7 @@ const costLabel = computed(() => {
       <div
         v-for="invocation in invocations"
         :key="invocation.id"
-        class="rounded-lg overflow-hidden"
+        class="rounded-md overflow-hidden"
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
       >
         <button
@@ -148,7 +148,7 @@ const costLabel = computed(() => {
       <!-- Run totals -->
       <div
         v-if="lastRun"
-        class="rounded-lg px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono"
+        class="rounded-md px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono"
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-disabled);"
       >
         <span>{{ lastRun.numTurns }} turns</span>

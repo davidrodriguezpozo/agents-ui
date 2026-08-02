@@ -248,7 +248,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- General -->
       <div
-        class="rounded-xl p-5 space-y-4 bg-card"
+        class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-title">General</h3>
 
@@ -277,7 +277,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- Status Line -->
       <div
-        class="rounded-xl p-5 space-y-4 bg-card"
+        class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-title">Status Line</h3>
         <p class="text-[12px] text-meta">
@@ -305,7 +305,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- Plugins -->
       <div
-        class="rounded-xl p-5 space-y-4 bg-card"
+        class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-label flex items-center gap-2">
           Extensions
@@ -318,7 +318,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <div
             v-for="plugin in plugins"
             :key="plugin.name"
-            class="flex items-center justify-between py-2 px-3 rounded-lg"
+            class="flex items-center justify-between py-2 px-3 rounded-md"
             style="background: var(--input-bg);"
           >
             <span class="font-mono text-[12px] text-body">{{ plugin.name }}</span>
@@ -346,7 +346,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- GitHub Imports -->
-      <div class="rounded-xl p-5 space-y-4 bg-card">
+      <div class="rounded-lg p-5 space-y-4 bg-card">
         <div class="flex items-center justify-between">
           <h3 class="text-section-title">GitHub Imports</h3>
           <UButton
@@ -370,7 +370,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <div
             v-for="entry in githubImports"
             :key="`${entry.owner}/${entry.repo}`"
-            class="flex items-center justify-between py-2 px-3 rounded-lg"
+            class="flex items-center justify-between py-2 px-3 rounded-md"
             style="background: var(--input-bg);"
           >
             <div class="flex-1 min-w-0">
@@ -406,7 +406,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- Hooks -->
       <div
-        class="rounded-xl p-5 space-y-4 bg-card"
+        class="rounded-lg p-5 space-y-4 bg-card"
       >
         <div class="flex items-center justify-between">
           <h3 class="text-section-title">Automations</h3>
@@ -431,7 +431,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               <div
                 v-for="(cmd, idx) in hook.commands"
                 :key="idx"
-                class="flex items-center justify-between py-1.5 px-3 rounded-lg group"
+                class="flex items-center justify-between py-1.5 px-3 rounded-md group"
                 style="background: var(--input-bg);"
               >
                 <div class="flex-1 min-w-0">
@@ -463,7 +463,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
     <!-- Raw JSON editor -->
     <div v-else class="px-6 py-4">
       <div
-        class="rounded-xl overflow-hidden"
+        class="rounded-lg overflow-hidden"
         style="border: 1px solid var(--border-subtle);"
       >
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">

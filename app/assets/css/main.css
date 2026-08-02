@@ -2,9 +2,20 @@
 @import "@nuxt/ui";
 
 @theme static {
-  --font-display: "Clash Display", "Geist Sans", system-ui, sans-serif;
+  --font-display: "Geist Sans", "Geist", system-ui, sans-serif;
   --font-sans: "Geist Sans", "Geist", system-ui, sans-serif;
   --font-mono: "Geist Mono", "SF Mono", ui-monospace, monospace;
+}
+
+/* Nuxt UI reads --ui-* for its own components; keep them on our accent so a
+   UButton and a hand-rolled button are never different colours. */
+:root {
+  --ui-primary: #5b5bd6;
+  --ui-radius: 6px;
+}
+
+.dark {
+  --ui-primary: #7b7bea;
 }
 
 /* ============================================
@@ -14,65 +25,65 @@
 :root {
   /* ---- Light mode (default) ---- */
 
-  /* Surfaces */
-  --surface-base: #f5f6f8;
+  /* Surfaces — near-white, separated by hairlines rather than fills */
+  --surface-base: #fafafa;
   --surface-raised: #ffffff;
   --surface-overlay: #ffffff;
-  --surface-hover: #edeef2;
-  --surface-inset: #ecedf1;
+  --surface-hover: #f4f4f5;
+  --surface-inset: #f4f4f5;
 
-  /* Borders */
-  --border-subtle: rgba(0, 0, 0, 0.06);
-  --border-default: rgba(0, 0, 0, 0.1);
-  --border-emphasis: rgba(0, 0, 0, 0.18);
+  /* Borders — crisp and visible; the primary way structure is expressed */
+  --border-subtle: #ececec;
+  --border-default: #e0e0e0;
+  --border-emphasis: #c9c9c9;
 
-  /* Text */
-  --text-primary: #111118;
-  --text-secondary: #53535f;
-  --text-tertiary: #82828e;
-  --text-disabled: #ababb5;
+  /* Text — high contrast at the top of the scale, quiet below it */
+  --text-primary: #0a0a0a;
+  --text-secondary: #525252;
+  --text-tertiary: #737373;
+  --text-disabled: #a3a3a3;
 
-  /* Accent — warm amber */
-  --accent: #b45309;
-  --accent-hover: #d97706;
-  --accent-glow: rgba(180, 83, 9, 0.12);
-  --accent-muted: rgba(180, 83, 9, 0.08);
-  --accent-gradient: linear-gradient(135deg, #b45309 0%, #92400e 100%);
+  /* Accent — used for selection and state, never decoration */
+  --accent: #5b5bd6;
+  --accent-hover: #6e6ee0;
+  --accent-glow: rgba(91, 91, 214, 0.10);
+  --accent-muted: rgba(91, 91, 214, 0.07);
+  --accent-gradient: linear-gradient(135deg, #5b5bd6 0%, #4a4ac4 100%);
 
-  /* Secondary accent — indigo */
-  --accent-secondary: #6366f1;
-  --accent-secondary-muted: rgba(99, 102, 241, 0.08);
+  /* Secondary accent */
+  --accent-secondary: #0a0a0a;
+  --accent-secondary-muted: rgba(10, 10, 10, 0.05);
 
-  /* Radius system */
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 16px;
+  /* Radius — tight. Large radii read as consumer software. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
 
   /* Model tiers */
-  --model-opus: #7c3aed;
-  --model-sonnet: #2563eb;
-  --model-haiku: #d97706;
+  --model-opus: #7c5cd6;
+  --model-sonnet: #3b6fd4;
+  --model-haiku: #0e8a6a;
 
   /* Semantic */
-  --success: #059669;
-  --warning: #d97706;
-  --error: #dc2626;
+  --success: #16a34a;
+  --warning: #b45309;
+  --error: #e5484d;
 
   /* Mode-dependent helpers */
-  --input-bg: rgba(0, 0, 0, 0.025);
-  --input-bg-hover: rgba(0, 0, 0, 0.04);
-  --input-bg-focus: rgba(0, 0, 0, 0.02);
-  --badge-subtle-bg: rgba(0, 0, 0, 0.05);
-  --pill-shadow: rgba(0, 0, 0, 0.08);
-  --card-shadow: rgba(0, 0, 0, 0.06);
-  --swatch-ring: rgba(0, 0, 0, 0.3);
-  --scrollbar-thumb: rgba(0, 0, 0, 0.08);
-  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.15);
-  --skeleton-from: rgba(0, 0, 0, 0.03);
-  --skeleton-to: rgba(0, 0, 0, 0.06);
-  --graph-node-bg: rgba(255, 255, 255, 0.94);
-  --graph-tooltip-bg: rgba(255, 255, 255, 0.95);
-  --sidebar-bg: linear-gradient(180deg, #edeef2 0%, #f5f6f8 100%);
+  --input-bg: #ffffff;
+  --input-bg-hover: #ffffff;
+  --input-bg-focus: #ffffff;
+  --badge-subtle-bg: #f4f4f5;
+  --pill-shadow: rgba(0, 0, 0, 0.06);
+  --card-shadow: rgba(0, 0, 0, 0.04);
+  --swatch-ring: rgba(0, 0, 0, 0.2);
+  --scrollbar-thumb: rgba(0, 0, 0, 0.12);
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.22);
+  --skeleton-from: #f4f4f5;
+  --skeleton-to: #ececec;
+  --graph-node-bg: #ffffff;
+  --graph-tooltip-bg: #ffffff;
+  --sidebar-bg: #fafafa;
 
   /* Editor (recessed, dark even in light mode) */
   --editor-bg: #1e1e2e;
@@ -89,59 +100,59 @@
   /* ---- Dark mode ---- */
 
   /* Surfaces — deeper with warm tinting */
-  --surface-base: #09090b;
-  --surface-raised: #131316;
+  --surface-base: #0a0a0a;
+  --surface-raised: #111111;
   --surface-overlay: #1a1a1f;
-  --surface-hover: #222228;
-  --surface-inset: #0e0e11;
+  --surface-hover: #1a1a1a;
+  --surface-inset: #0a0a0a;
 
   /* Borders */
-  --border-subtle: rgba(255, 255, 255, 0.05);
-  --border-default: rgba(255, 255, 255, 0.09);
-  --border-emphasis: rgba(255, 255, 255, 0.16);
+  --border-subtle: #232323;
+  --border-default: #2e2e2e;
+  --border-emphasis: #3d3d3d;
 
   /* Text */
-  --text-primary: #f0f0f5;
-  --text-secondary: #9d9daa;
-  --text-tertiary: #6b6b78;
-  --text-disabled: #4a4a55;
+  --text-primary: #ededed;
+  --text-secondary: #a1a1a1;
+  --text-tertiary: #737373;
+  --text-disabled: #525252;
 
   /* Accent */
-  --accent: #e5a93e;
-  --accent-hover: #f0be5c;
-  --accent-glow: rgba(229, 169, 62, 0.15);
-  --accent-muted: rgba(229, 169, 62, 0.08);
-  --accent-gradient: linear-gradient(135deg, #e5a93e 0%, #d4845a 100%);
+  --accent: #7b7bea;
+  --accent-hover: #8f8ff0;
+  --accent-glow: rgba(123, 123, 234, 0.12);
+  --accent-muted: rgba(123, 123, 234, 0.10);
+  --accent-gradient: linear-gradient(135deg, #7b7bea 0%, #6a6ad8 100%);
 
   /* Secondary accent */
-  --accent-secondary: #818cf8;
-  --accent-secondary-muted: rgba(129, 140, 248, 0.08);
+  --accent-secondary: #ededed;
+  --accent-secondary-muted: rgba(237, 237, 237, 0.07);
 
   /* Model tiers */
-  --model-opus: #c084fc;
+  --model-opus: #a78bfa;
   --model-sonnet: #60a5fa;
-  --model-haiku: #fbbf24;
+  --model-haiku: #34d399;
 
   /* Semantic */
-  --success: #34d399;
-  --warning: #fbbf24;
-  --error: #f87171;
+  --success: #3fb950;
+  --warning: #d29922;
+  --error: #f85149;
 
   /* Mode-dependent helpers */
-  --input-bg: rgba(255, 255, 255, 0.03);
-  --input-bg-hover: rgba(255, 255, 255, 0.05);
-  --input-bg-focus: rgba(255, 255, 255, 0.035);
-  --badge-subtle-bg: rgba(255, 255, 255, 0.06);
-  --pill-shadow: rgba(0, 0, 0, 0.5);
-  --card-shadow: rgba(0, 0, 0, 0.25);
-  --swatch-ring: rgba(255, 255, 255, 0.5);
-  --scrollbar-thumb: rgba(255, 255, 255, 0.06);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.12);
-  --skeleton-from: rgba(255, 255, 255, 0.03);
-  --skeleton-to: rgba(255, 255, 255, 0.06);
-  --graph-node-bg: rgba(19, 19, 22, 0.94);
-  --graph-tooltip-bg: rgba(9, 9, 11, 0.95);
-  --sidebar-bg: linear-gradient(180deg, #0c0c10 0%, #09090b 100%);
+  --input-bg: #121212;
+  --input-bg-hover: #161616;
+  --input-bg-focus: #121212;
+  --badge-subtle-bg: #1c1c1c;
+  --pill-shadow: rgba(0, 0, 0, 0.6);
+  --card-shadow: rgba(0, 0, 0, 0.4);
+  --swatch-ring: rgba(255, 255, 255, 0.4);
+  --scrollbar-thumb: rgba(255, 255, 255, 0.12);
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.22);
+  --skeleton-from: #161616;
+  --skeleton-to: #1f1f1f;
+  --graph-node-bg: #111111;
+  --graph-tooltip-bg: #0a0a0a;
+  --sidebar-bg: #0a0a0a;
 
   /* Editor */
   --editor-bg: #0c0c10;

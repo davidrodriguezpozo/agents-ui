@@ -13,7 +13,7 @@ const emit = defineEmits<{
     <button
       v-for="action in actions"
       :key="action.label"
-      class="chat-quick-action flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all duration-150"
+      class="chat-quick-action flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
       @click="emit('select', action.prompt)"
     >
       <UIcon :name="action.icon" class="size-3.5 shrink-0" style="color: var(--text-disabled);" />

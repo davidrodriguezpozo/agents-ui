@@ -76,7 +76,7 @@ const filteredSkills = computed(() => {
           <button
             v-for="filter in sourceFilters"
             :key="filter.key"
-            class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all focus-ring"
+            class="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all focus-ring"
             :style="{
               background: sourceFilter === filter.key ? 'var(--accent-muted)' : 'transparent',
               color: sourceFilter === filter.key ? 'var(--accent)' : 'var(--text-tertiary)',
@@ -91,7 +91,7 @@ const filteredSkills = computed(() => {
 
       <div
         v-if="error"
-        class="rounded-xl px-4 py-3 mb-4 flex items-start gap-3"
+        class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
         style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
       >
         <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
@@ -108,7 +108,7 @@ const filteredSkills = computed(() => {
           v-for="skill in filteredSkills"
           :key="skill.slug"
           :to="`/skills/${skill.slug}`"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-lg group focus-ring hover-row"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-md group focus-ring hover-row"
         >
           <!-- Icon -->
           <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0" style="color: var(--accent);" />
@@ -169,7 +169,7 @@ const filteredSkills = computed(() => {
 
       <!-- Empty state: no skills -->
       <div v-else class="flex flex-col items-center justify-center py-12 space-y-5">
-        <div class="rounded-lg p-4 bg-card max-w-sm w-full text-[12px] text-label leading-relaxed space-y-1">
+        <div class="rounded-md p-4 bg-card max-w-sm w-full text-[12px] text-label leading-relaxed space-y-1">
           <div class="flex items-center gap-2">
             <UIcon name="i-lucide-cpu" class="size-3.5" style="color: var(--accent);" />
             <span>code-reviewer</span>

@@ -192,19 +192,8 @@ const statItems = computed(() => [
           v-for="item in statItems"
           :key="item.to"
           :to="item.to"
-          class="relative rounded-xl p-5 focus-ring hover-stat overflow-hidden group bg-card"
+          class="relative rounded-lg p-5 focus-ring hover-stat overflow-hidden group bg-card"
         >
-          <!-- Subtle accent gradient on hover -->
-          <div
-            class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-            style="
-              background: radial-gradient(
-                ellipse at top left,
-                var(--accent-muted) 0%,
-                transparent 60%
-              );
-            "
-          />
           <div class="relative">
             <div class="flex items-center gap-2 mb-3">
               <UIcon
@@ -223,7 +212,7 @@ const statItems = computed(() => [
       <!-- Model breakdown (visual bar) -->
       <div
         v-if="agents.length > 0"
-        class="rounded-xl px-5 py-4 bg-card"
+        class="rounded-lg px-5 py-4 bg-card"
       >
         <div class="flex items-center justify-between mb-3">
           <span class="text-section-title">Model Distribution</span>
@@ -275,7 +264,7 @@ const statItems = computed(() => [
       >
         <!-- Agents list (takes 2 cols) -->
         <div
-          class="md:col-span-2 rounded-xl overflow-hidden"
+          class="md:col-span-2 rounded-lg overflow-hidden"
           style="border: 1px solid var(--border-subtle)"
         >
           <div
@@ -311,7 +300,7 @@ const statItems = computed(() => [
               class="flex items-center gap-3 px-4 py-3 hover-bg group"
             >
               <div
-                class="size-8 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
+                class="size-8 rounded-md flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
                 :style="{
                   background: getAgentColor(agent.frontmatter.color) + '18',
                   border:
@@ -358,7 +347,7 @@ const statItems = computed(() => [
         <div class="space-y-4">
           <!-- Commands -->
           <div
-            class="rounded-xl overflow-hidden"
+            class="rounded-lg overflow-hidden"
             style="border: 1px solid var(--border-subtle)"
           >
             <div
@@ -412,14 +401,14 @@ const statItems = computed(() => [
           <div class="space-y-2">
             <NuxtLink
               to="/graph"
-              class="block rounded-xl p-4 focus-ring hover-card bg-card group"
+              class="block rounded-lg p-4 focus-ring hover-card bg-card group"
             >
               <div class="flex items-center gap-3">
                 <div
-                  class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                  class="size-8 rounded-md flex items-center justify-center shrink-0"
                   style="
                     background: var(--accent-muted);
-                    border: 1px solid rgba(229, 169, 62, 0.12);
+                    border: 1px solid var(--accent-muted);
                   "
                 >
                   <UIcon
@@ -443,11 +432,11 @@ const statItems = computed(() => [
 
             <NuxtLink
               to="/workflows"
-              class="block rounded-xl p-4 focus-ring hover-card bg-card group"
+              class="block rounded-lg p-4 focus-ring hover-card bg-card group"
             >
               <div class="flex items-center gap-3">
                 <div
-                  class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                  class="size-8 rounded-md flex items-center justify-center shrink-0"
                   style="
                     background: var(--accent-secondary-muted);
                     border: 1px solid rgba(99, 102, 241, 0.12);
@@ -472,14 +461,14 @@ const statItems = computed(() => [
 
             <NuxtLink
               to="/explore"
-              class="block rounded-xl p-4 focus-ring hover-card bg-card group"
+              class="block rounded-lg p-4 focus-ring hover-card bg-card group"
             >
               <div class="flex items-center gap-3">
                 <div
-                  class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                  class="size-8 rounded-md flex items-center justify-center shrink-0"
                   style="
                     background: var(--accent-muted);
-                    border: 1px solid rgba(229, 169, 62, 0.12);
+                    border: 1px solid var(--accent-muted);
                   "
                 >
                   <UIcon
@@ -511,7 +500,7 @@ const statItems = computed(() => [
       <!-- Suggestions -->
       <div
         v-if="suggestions.length && hasContent"
-        class="rounded-xl overflow-hidden"
+        class="rounded-lg overflow-hidden"
         style="border: 1px solid var(--border-subtle)"
       >
         <div
@@ -577,7 +566,7 @@ const statItems = computed(() => [
           />
           Advanced: Configuration folder
         </summary>
-        <div class="rounded-xl p-4 mt-2 bg-card">
+        <div class="rounded-lg p-4 mt-2 bg-card">
           <p class="text-[12px] mb-3 text-label">
             This is where Claude Code stores your agents, commands, and
             settings. The default is ~/.claude.

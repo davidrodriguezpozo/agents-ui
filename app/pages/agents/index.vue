@@ -96,7 +96,7 @@ async function useTemplate(templateId: string) {
           <button
             v-for="filter in sourceFilters"
             :key="filter.key"
-            class="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all focus-ring"
+            class="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all focus-ring"
             :style="{
               background: sourceFilter === filter.key ? 'var(--accent-muted)' : 'transparent',
               color: sourceFilter === filter.key ? 'var(--accent)' : 'var(--text-tertiary)',
@@ -112,7 +112,7 @@ async function useTemplate(templateId: string) {
       <!-- Error state -->
       <div
         v-if="error"
-        class="rounded-xl px-4 py-3 mb-4 flex items-start gap-3"
+        class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
         style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
       >
         <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
@@ -129,7 +129,7 @@ async function useTemplate(templateId: string) {
           v-for="(agent, idx) in filteredAgents"
           :key="`${agent.source}-${agent.scope}-${agent.slug}`"
           :to="`/agents/${agent.slug}`"
-          class="stagger-item rounded-xl p-4 focus-ring hover-card relative overflow-hidden group bg-card"
+          class="stagger-item rounded-lg p-4 focus-ring hover-card relative overflow-hidden group bg-card"
         >
           <!-- Color accent bar — thicker -->
           <div
@@ -137,16 +137,10 @@ async function useTemplate(templateId: string) {
             :style="{ background: getAgentColor(agent.frontmatter.color) }"
           />
 
-          <!-- Hover glow in agent color -->
-          <div
-            class="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"
-            :style="{ background: 'radial-gradient(ellipse at top, ' + getAgentColor(agent.frontmatter.color) + '08 0%, transparent 60%)' }"
-          />
-
           <!-- Header: icon + name + model -->
           <div class="flex items-center gap-3 mb-2 relative">
             <div
-              class="size-8 rounded-lg flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
+              class="size-8 rounded-md flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
               :style="{ background: getAgentColor(agent.frontmatter.color) + '18', border: '1px solid ' + getAgentColor(agent.frontmatter.color) + '25' }"
             >
               <UIcon name="i-lucide-cpu" class="size-3.5" :style="{ color: getAgentColor(agent.frontmatter.color) }" />
@@ -204,7 +198,7 @@ async function useTemplate(templateId: string) {
 
         <ExampleBlock title="What does a good agent look like?" class="max-w-md mx-auto mb-6">
           <div class="space-y-2 text-[11px]" style="color: var(--text-secondary);">
-            <div class="rounded-lg p-3" style="background: var(--surface-base); border: 1px solid var(--border-subtle);">
+            <div class="rounded-md p-3" style="background: var(--surface-base); border: 1px solid var(--border-subtle);">
               <p><strong style="color: var(--text-primary);">code-reviewer</strong> <span class="text-[10px]" style="color: var(--text-disabled);">← This name is short and descriptive</span></p>
               <p class="mt-1">"Reviews pull requests for bugs, style, and security." <span class="text-[10px]" style="color: var(--text-disabled);">← Explains what it does in one sentence</span></p>
               <p class="mt-1 text-[10px]" style="color: var(--text-tertiary);">"Check for bugs, flag security issues, suggest improvements..." <span style="color: var(--text-disabled);">← Instructions are specific</span></p>
@@ -216,7 +210,7 @@ async function useTemplate(templateId: string) {
           <button
             v-for="template in agentTemplates"
             :key="template.id"
-            class="rounded-lg p-4 text-left hover-card focus-ring relative overflow-hidden group bg-card"
+            class="rounded-md p-4 text-left hover-card focus-ring relative overflow-hidden group bg-card"
             :disabled="creatingTemplate !== null"
             @click="useTemplate(template.id)"
           >

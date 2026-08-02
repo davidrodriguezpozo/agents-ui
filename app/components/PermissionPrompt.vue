@@ -41,8 +41,8 @@ const detail = computed(() => {
 
 <template>
   <div
-    class="rounded-xl overflow-hidden"
-    style="background: var(--surface-raised); border: 1px solid rgba(229, 169, 62, 0.35);"
+    class="rounded-lg overflow-hidden"
+    style="background: var(--surface-raised); border: 1px solid var(--accent-glow);"
   >
     <div class="px-3.5 pt-3 pb-2.5 flex items-start gap-2.5">
       <UIcon
@@ -55,7 +55,7 @@ const detail = computed(() => {
           {{ headline }}
         </p>
         <pre
-          class="text-[11px] whitespace-pre-wrap break-words max-h-32 overflow-y-auto rounded-lg px-2.5 py-2 m-0"
+          class="text-[11px] whitespace-pre-wrap break-words max-h-32 overflow-y-auto rounded-md px-2.5 py-2 m-0"
           style="font-family: var(--font-mono); background: var(--badge-subtle-bg); color: var(--text-secondary);"
         >{{ detail }}</pre>
         <p

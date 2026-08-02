@@ -89,10 +89,10 @@ function formatCost(usd: number): string {
       <button
         v-for="session in sessions"
         :key="session.id"
-        class="w-full text-left px-3 py-2 rounded-lg transition-all group"
+        class="w-full text-left px-3 py-2 rounded-md transition-all group"
         :style="{
           background: session.id === conversationId ? 'var(--accent-muted)' : 'var(--surface-raised)',
-          border: '1px solid ' + (session.id === conversationId ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'),
+          border: '1px solid ' + (session.id === conversationId ? 'var(--accent-glow)' : 'var(--border-subtle)'),
         }"
         @click="openSession(session)"
       >

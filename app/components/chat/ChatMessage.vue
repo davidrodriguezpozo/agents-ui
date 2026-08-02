@@ -14,8 +14,8 @@ defineProps<{
   <!-- User message -->
   <div v-if="message.role === 'user'" class="flex justify-end chat-msg-enter">
     <div
-      class="max-w-[80%] rounded-2xl rounded-br-md px-4 py-2.5 text-[13px] leading-relaxed"
-      style="background: var(--accent-muted); border: 1px solid rgba(229, 169, 62, 0.1); color: var(--text-primary); font-family: var(--font-sans);"
+      class="max-w-[80%] rounded-xl rounded-br-md px-4 py-2.5 text-[13px] leading-relaxed"
+      style="background: var(--accent-muted); border: 1px solid var(--accent-muted); color: var(--text-primary); font-family: var(--font-sans);"
     >
       {{ message.content }}
     </div>
@@ -25,10 +25,10 @@ defineProps<{
   <div v-else class="flex gap-3 chat-msg-enter">
     <div class="shrink-0 pt-0.5">
       <div
-        class="size-6 rounded-lg flex items-center justify-center transition-all duration-300"
+        class="size-6 rounded-md flex items-center justify-center transition-all duration-300"
         :style="{
           background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)',
-          border: isStreaming ? '1px solid rgba(229, 169, 62, 0.15)' : '1px solid var(--border-subtle)',
+          border: isStreaming ? '1px solid var(--accent-muted)' : '1px solid var(--border-subtle)',
         }"
       >
         <UIcon

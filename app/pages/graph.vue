@@ -452,7 +452,7 @@ function onNodeClick(_: any, node: any) {
       <Transition name="page">
         <div
           v-if="showLegend"
-          class="absolute bottom-4 left-4 z-10 rounded-lg p-3 text-[11px] space-y-2"
+          class="absolute bottom-4 left-4 z-10 rounded-md p-3 text-[11px] space-y-2"
           style="background: color-mix(in srgb, var(--surface-base) 92%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--border-default);"
         >
           <div class="font-mono font-semibold mb-2" style="color: var(--text-secondary);">Legend</div>

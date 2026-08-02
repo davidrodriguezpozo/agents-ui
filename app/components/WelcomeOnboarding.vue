@@ -44,7 +44,7 @@ async function useTemplate(templateId: string) {
 
     <!-- Concepts -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div class="rounded-lg p-4 bg-card">
+      <div class="rounded-md p-4 bg-card">
         <div class="flex items-center gap-2 mb-2">
           <UIcon name="i-lucide-cpu" class="size-4" style="color: var(--accent);" />
           <span class="text-[13px] font-medium">Agents</span>
@@ -53,7 +53,7 @@ async function useTemplate(templateId: string) {
           Specialized AI assistants. Each agent has its own personality, instructions, and model. Think of them as different team members.
         </p>
       </div>
-      <div class="rounded-lg p-4 bg-card">
+      <div class="rounded-md p-4 bg-card">
         <div class="flex items-center gap-2 mb-2">
           <UIcon name="i-lucide-terminal" class="size-4" style="color: var(--accent);" />
           <span class="text-[13px] font-medium">Commands</span>
@@ -62,7 +62,7 @@ async function useTemplate(templateId: string) {
           Reusable workflows triggered with a slash (e.g., /deploy). Like shortcuts for things you do repeatedly.
         </p>
       </div>
-      <div class="rounded-lg p-4 bg-card">
+      <div class="rounded-md p-4 bg-card">
         <div class="flex items-center gap-2 mb-2">
           <UIcon name="i-lucide-sparkles" class="size-4" style="color: var(--accent);" />
           <span class="text-[13px] font-medium">Skills</span>
@@ -80,7 +80,7 @@ async function useTemplate(templateId: string) {
         <button
           v-for="template in agentTemplates"
           :key="template.id"
-          class="rounded-lg p-4 text-left hover-card focus-ring relative overflow-hidden group bg-card"
+          class="rounded-md p-4 text-left hover-card focus-ring relative overflow-hidden group bg-card"
           :disabled="creating !== null"
           @click="useTemplate(template.id)"
         >

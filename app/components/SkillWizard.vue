@@ -213,10 +213,10 @@ function back() {
               { value: 'project' as const, label: 'This project', hint: 'Shared with anyone in this folder' },
             ]"
             :key="option.value"
-            class="flex-1 px-3 py-2 rounded-lg text-left transition-all"
+            class="flex-1 px-3 py-2 rounded-md text-left transition-all"
             :style="{
               background: createScope === option.value ? 'var(--accent-muted)' : 'var(--surface-raised)',
-              border: '1px solid ' + (createScope === option.value ? 'rgba(229, 169, 62, 0.25)' : 'var(--border-subtle)'),
+              border: '1px solid ' + (createScope === option.value ? 'var(--accent-glow)' : 'var(--border-subtle)'),
             }"
             @click="createScope = option.value"
           >

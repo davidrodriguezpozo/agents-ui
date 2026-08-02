@@ -93,7 +93,7 @@ const nextStepLabel = computed(() => {
 
 <template>
   <div
-    class="rounded-xl overflow-hidden"
+    class="rounded-lg overflow-hidden"
     style="border: 1px solid var(--border-subtle); background: var(--surface-raised);"
   >
     <div class="px-4 py-2.5 flex items-center gap-2" style="border-bottom: 1px solid var(--border-subtle);">
@@ -152,7 +152,7 @@ const nextStepLabel = computed(() => {
               Input
             </summary>
             <div
-              class="mt-1 rounded-lg p-2.5 text-[11px] font-mono leading-relaxed max-h-32 overflow-y-auto"
+              class="mt-1 rounded-md p-2.5 text-[11px] font-mono leading-relaxed max-h-32 overflow-y-auto"
               style="background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-secondary);"
             >
               <pre class="whitespace-pre-wrap">{{ exec.input }}</pre>
@@ -163,7 +163,7 @@ const nextStepLabel = computed(() => {
           <div v-if="exec.output">
             <div class="text-[10px] font-mono text-meta mb-1">Output</div>
             <div
-              class="rounded-lg p-2.5 text-[12px] leading-relaxed max-h-64 overflow-y-auto prose-sm"
+              class="rounded-md p-2.5 text-[12px] leading-relaxed max-h-64 overflow-y-auto prose-sm"
               style="background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-secondary);"
               v-html="renderMarkdown(exec.output)"
             />
@@ -172,7 +172,7 @@ const nextStepLabel = computed(() => {
           <!-- Error -->
           <div
             v-if="exec.error"
-            class="rounded-lg p-2.5 text-[11px]"
+            class="rounded-md p-2.5 text-[11px]"
             style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12); color: var(--error);"
           >
             {{ exec.error }}
@@ -185,7 +185,7 @@ const nextStepLabel = computed(() => {
     <div
       v-if="isPaused"
       class="px-4 py-3 space-y-3"
-      style="border-top: 1px solid var(--border-subtle); background: rgba(229, 169, 62, 0.04);"
+      style="border-top: 1px solid var(--border-subtle); background: var(--accent-muted);"
     >
       <!-- Default: action buttons -->
       <div v-if="!editMode && !respondMode">

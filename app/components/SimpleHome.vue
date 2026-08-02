@@ -76,10 +76,10 @@ function openRun(cmd: Command) {
 
       <!-- Working folder -->
       <div
-        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        class="rounded-lg px-4 py-3 flex items-center gap-3"
         :style="workingDir
           ? 'background: var(--surface-raised); border: 1px solid var(--border-subtle);'
-          : 'background: rgba(229, 169, 62, 0.06); border: 1px solid rgba(229, 169, 62, 0.16);'"
+          : 'background: var(--accent-muted); border: 1px solid var(--accent-muted);'"
       >
         <UIcon name="i-lucide-folder" class="size-4 shrink-0" style="color: var(--accent);" />
         <div class="flex-1 min-w-0">
@@ -108,7 +108,7 @@ function openRun(cmd: Command) {
             <button
               v-for="cmd in group.commands"
               :key="cmd.slug"
-              class="text-left rounded-xl p-3.5 focus-ring hover-card bg-card group"
+              class="text-left rounded-lg p-3.5 focus-ring hover-card bg-card group"
               @click="openRun(cmd)"
             >
               <div class="flex items-center gap-2 mb-1">
@@ -139,7 +139,7 @@ function openRun(cmd: Command) {
         <p class="text-[13px] text-label">Nothing matches "{{ search }}".</p>
       </div>
 
-      <div v-else class="rounded-xl p-6 text-center space-y-3 bg-card">
+      <div v-else class="rounded-lg p-6 text-center space-y-3 bg-card">
         <UIcon name="i-lucide-package-open" class="size-7 mx-auto text-meta" />
         <p class="text-[13px] text-label">
           Your team's tools don't include any ready-made actions yet.
@@ -160,7 +160,7 @@ function openRun(cmd: Command) {
           <button
             v-for="skill in mySkills"
             :key="skill.slug"
-            class="text-left rounded-xl p-3.5 focus-ring hover-card bg-card"
+            class="text-left rounded-lg p-3.5 focus-ring hover-card bg-card"
             @click="prefillSkill(skill.frontmatter.name)"
           >
             <div class="flex items-center gap-2 mb-1">
@@ -173,7 +173,7 @@ function openRun(cmd: Command) {
           </button>
         </div>
 
-        <div v-else class="rounded-xl p-5 text-center space-y-3 bg-card">
+        <div v-else class="rounded-lg p-5 text-center space-y-3 bg-card">
           <p class="text-[13px] text-label">
             You haven't taught Claude anything of your own yet.
           </p>

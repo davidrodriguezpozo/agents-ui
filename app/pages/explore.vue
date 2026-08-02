@@ -325,7 +325,7 @@ async function onRemove(owner: string, repo: string) {
     <div class="px-6 py-4 space-y-5">
       <!-- Tab switcher -->
       <div
-        class="flex items-center gap-1 p-0.5 rounded-lg w-fit"
+        class="flex items-center gap-1 p-0.5 rounded-md w-fit"
         style="background: var(--badge-subtle-bg)"
       >
         <button
@@ -422,12 +422,12 @@ async function onRemove(owner: string, repo: string) {
             <div
               v-for="template in templates"
               :key="template.id"
-              class="rounded-xl overflow-hidden bg-card group flex flex-col"
+              class="rounded-lg overflow-hidden bg-card group flex flex-col"
             >
               <div class="p-4 space-y-3 flex-1">
                 <div class="flex items-center gap-2.5">
                   <div
-                    class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                    class="size-8 rounded-md flex items-center justify-center shrink-0"
                     :style="{
                       background:
                         getAgentColor(template.frontmatter.color) + '15',
@@ -477,7 +477,7 @@ async function onRemove(owner: string, repo: string) {
                 </button>
                 <div
                   v-if="previewId === template.id"
-                  class="rounded-lg p-3 text-[12px] font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
+                  class="rounded-md p-3 text-[12px] font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
                   style="
                     background: var(--surface-base);
                     border: 1px solid var(--border-subtle);
@@ -521,12 +521,12 @@ async function onRemove(owner: string, repo: string) {
             <div
               v-for="template in filteredCommandTemplates"
               :key="template.id"
-              class="rounded-xl overflow-hidden bg-card group"
+              class="rounded-lg overflow-hidden bg-card group"
             >
               <div class="p-4 space-y-3">
                 <div class="flex items-center gap-2.5">
                   <div
-                    class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                    class="size-8 rounded-md flex items-center justify-center shrink-0"
                     style="
                       background: var(--badge-subtle-bg);
                       border: 1px solid var(--border-subtle);
@@ -560,7 +560,7 @@ async function onRemove(owner: string, repo: string) {
                 </button>
                 <div
                   v-if="previewId === template.id"
-                  class="rounded-lg p-3 text-[12px] font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
+                  class="rounded-md p-3 text-[12px] font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
                   style="
                     background: var(--surface-base);
                     border: 1px solid var(--border-subtle);
@@ -650,7 +650,7 @@ async function onRemove(owner: string, repo: string) {
 
         <div
           v-if="pluginsError"
-          class="rounded-xl px-4 py-3 flex items-start gap-3"
+          class="rounded-lg px-4 py-3 flex items-start gap-3"
           style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
         >
           <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error)" />
@@ -669,12 +669,12 @@ async function onRemove(owner: string, repo: string) {
               <div
                 v-for="plugin in group"
                 :key="plugin.id"
-                class="rounded-xl overflow-hidden bg-card group flex flex-col"
+                class="rounded-lg overflow-hidden bg-card group flex flex-col"
               >
                 <div class="p-4 space-y-3 flex-1">
                   <div class="flex items-center gap-2.5">
                     <div
-                      class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                      class="size-8 rounded-md flex items-center justify-center shrink-0"
                       style="background: var(--accent-muted); border: 1px solid rgba(45, 212, 191, 0.15);"
                     >
                       <UIcon name="i-lucide-puzzle" class="size-4" style="color: var(--accent);" />
@@ -736,12 +736,12 @@ async function onRemove(owner: string, repo: string) {
               <div
                 v-for="plugin in group"
                 :key="plugin.name"
-                class="rounded-xl overflow-hidden bg-card group flex flex-col"
+                class="rounded-lg overflow-hidden bg-card group flex flex-col"
               >
                 <div class="p-4 space-y-3 flex-1">
                   <div class="flex items-center gap-2.5">
                     <div
-                      class="size-8 rounded-lg flex items-center justify-center shrink-0"
+                      class="size-8 rounded-md flex items-center justify-center shrink-0"
                       style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
                     >
                       <UIcon name="i-lucide-puzzle" class="size-4 text-label" />

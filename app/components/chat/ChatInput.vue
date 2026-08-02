@@ -43,11 +43,11 @@ defineExpose({ focus, resetHeight });
 <template>
   <div class="shrink-0 px-5 pb-5 pt-2">
     <div
-      class="relative rounded-2xl transition-all duration-200"
+      class="relative rounded-xl transition-all duration-200"
       :style="{
         background: 'var(--surface-raised)',
         border: isStreaming
-          ? '1px solid rgba(229, 169, 62, 0.15)'
+          ? '1px solid var(--accent-muted)'
           : '1px solid var(--border-subtle)',
         boxShadow: isStreaming
           ? '0 0 20px var(--accent-glow), 0 2px 8px var(--card-shadow)'
@@ -97,7 +97,7 @@ defineExpose({ focus, resetHeight });
         <div class="flex items-center gap-1.5">
           <button
             v-if="isStreaming"
-            class="p-1.5 rounded-lg transition-all"
+            class="p-1.5 rounded-md transition-all"
             style="background: var(--error); color: white"
             title="Stop"
             @click="emit('stop')"
@@ -109,7 +109,7 @@ defineExpose({ focus, resetHeight });
           </button>
           <button
             v-else
-            class="p-1.5 rounded-lg transition-all duration-200"
+            class="p-1.5 rounded-md transition-all duration-200"
             :style="{
               background: modelValue.trim()
                 ? 'var(--accent)'

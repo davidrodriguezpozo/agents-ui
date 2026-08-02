@@ -32,8 +32,8 @@ function finish() {
       <div v-if="step === 'welcome'" class="space-y-6 text-center">
         <div class="flex justify-center">
           <div
-            class="size-16 rounded-2xl flex items-center justify-center"
-            style="background: linear-gradient(135deg, rgba(229, 169, 62, 0.15) 0%, rgba(229, 169, 62, 0.05) 100%); border: 1px solid rgba(229, 169, 62, 0.12);"
+            class="size-16 rounded-xl flex items-center justify-center"
+            style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
           >
             <UIcon name="i-lucide-bot" class="size-7" style="color: var(--accent);" />
           </div>
@@ -49,7 +49,7 @@ function finish() {
         </div>
 
         <div
-          class="rounded-xl p-4 text-left space-y-3 mx-auto max-w-sm"
+          class="rounded-lg p-4 text-left space-y-3 mx-auto max-w-sm"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
         >
           <div class="flex items-center gap-3">
@@ -91,7 +91,7 @@ function finish() {
       <div v-else class="space-y-6 text-center">
         <div class="flex justify-center">
           <div
-            class="size-16 rounded-2xl flex items-center justify-center"
+            class="size-16 rounded-xl flex items-center justify-center"
             style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.15);"
           >
             <UIcon name="i-lucide-check" class="size-7" style="color: var(--success, #22c55e);" />

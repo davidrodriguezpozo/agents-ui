@@ -21,7 +21,7 @@ defineExpose({ installing })
 
 <template>
   <div
-    class="flex items-center gap-3 px-3 py-2.5 rounded-lg group hover-row"
+    class="flex items-center gap-3 px-3 py-2.5 rounded-md group hover-row"
   >
     <div class="flex items-center gap-3 flex-1 min-w-0">
       <UIcon name="i-lucide-puzzle" class="size-3.5 shrink-0 text-meta" />

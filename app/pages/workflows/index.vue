@@ -97,7 +97,7 @@ async function createBlank() {
       <!-- Error state -->
       <div
         v-if="error"
-        class="rounded-xl px-4 py-3 mb-4 flex items-start gap-3"
+        class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
         style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
       >
         <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
@@ -128,8 +128,8 @@ async function createBlank() {
         <div class="text-center py-8 space-y-2">
           <div class="flex justify-center">
             <div
-              class="size-12 rounded-xl flex items-center justify-center"
-              style="background: var(--accent-muted); border: 1px solid rgba(229, 169, 62, 0.15);"
+              class="size-12 rounded-lg flex items-center justify-center"
+              style="background: var(--accent-muted); border: 1px solid var(--accent-muted);"
             >
               <UIcon name="i-lucide-git-branch" class="size-6" style="color: var(--accent);" />
             </div>
@@ -145,7 +145,7 @@ async function createBlank() {
           <button
             v-for="template in workflowTemplates"
             :key="template.id"
-            class="rounded-lg p-4 text-left hover-card focus-ring relative overflow-hidden group bg-card"
+            class="rounded-md p-4 text-left hover-card focus-ring relative overflow-hidden group bg-card"
             :disabled="creatingTemplate !== null"
             @click="useWorkflowTemplate(template.id)"
           >

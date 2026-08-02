@@ -100,7 +100,7 @@ function reset() {
 
       <div
         v-if="error"
-        class="rounded-lg px-3 py-2 text-[12px]"
+        class="rounded-md px-3 py-2 text-[12px]"
         style="background: rgba(248, 113, 113, 0.06); color: var(--error); border: 1px solid rgba(248, 113, 113, 0.12);"
       >
         {{ error }}
@@ -130,11 +130,11 @@ function reset() {
         </button>
       </div>
 
-      <div class="max-h-80 overflow-y-auto space-y-1 rounded-lg p-1" style="background: var(--surface-base);">
+      <div class="max-h-80 overflow-y-auto space-y-1 rounded-md p-1" style="background: var(--surface-base);">
         <label
           v-for="skill in scanResult.skills"
           :key="skill.slug"
-          class="flex items-start gap-3 px-3 py-2.5 rounded-lg cursor-pointer hover-row"
+          class="flex items-start gap-3 px-3 py-2.5 rounded-md cursor-pointer hover-row"
         >
           <input
             type="checkbox"
@@ -166,7 +166,7 @@ function reset() {
 
       <div
         v-if="error"
-        class="rounded-lg px-3 py-2 text-[12px]"
+        class="rounded-md px-3 py-2 text-[12px]"
         style="background: rgba(248, 113, 113, 0.06); color: var(--error); border: 1px solid rgba(248, 113, 113, 0.12);"
       >
         {{ error }}

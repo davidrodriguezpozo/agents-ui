@@ -47,7 +47,7 @@ function retry() {
     <div class="max-w-md w-full space-y-6 text-center">
       <div class="flex justify-center">
         <div
-          class="size-14 rounded-2xl flex items-center justify-center"
+          class="size-14 rounded-xl flex items-center justify-center"
           style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
         >
           <UIcon
@@ -92,7 +92,7 @@ function retry() {
           Technical detail
         </summary>
         <pre
-          class="mt-2 font-mono text-[10px] p-3 rounded-lg overflow-x-auto whitespace-pre-wrap"
+          class="mt-2 font-mono text-[10px] p-3 rounded-md overflow-x-auto whitespace-pre-wrap"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-tertiary);"
         >{{ detail }}</pre>
       </details>

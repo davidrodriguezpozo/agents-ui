@@ -176,7 +176,7 @@ const allCompleted = computed(() =>
       class="h-14 flex items-center gap-3 px-4 shrink-0 sticky top-0 z-10"
       style="border-bottom: 1px solid var(--border-subtle); background: var(--surface-base);"
     >
-      <NuxtLink to="/workflows" class="p-1.5 rounded-lg hover-bg focus-ring">
+      <NuxtLink to="/workflows" class="p-1.5 rounded-md hover-bg focus-ring">
         <UIcon name="i-lucide-arrow-left" class="size-4 text-meta" />
       </NuxtLink>
 
@@ -270,7 +270,7 @@ const allCompleted = computed(() =>
             v-for="agent in filteredAgents"
             :key="agent.slug"
             draggable="true"
-            class="flex items-center gap-2 px-2.5 py-2 rounded-lg cursor-grab active:cursor-grabbing hover-bg transition-colors"
+            class="flex items-center gap-2 px-2.5 py-2 rounded-md cursor-grab active:cursor-grabbing hover-bg transition-colors"
             @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('agentSlug', agent.slug) }"
           >
             <div
@@ -375,7 +375,7 @@ const allCompleted = computed(() =>
             <button
               v-for="agent in filteredAgents"
               :key="agent.slug"
-              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover-bg text-left"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover-bg text-left"
               @click="addAgent(agent.slug)"
             >
               <div

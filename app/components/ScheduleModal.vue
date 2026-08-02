@@ -97,11 +97,11 @@ async function onSave() {
         <button
           v-for="(label, day) in DAY_LABELS"
           :key="day"
-          class="flex-1 px-1 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+          class="flex-1 px-1 py-1.5 rounded-md text-[11px] font-medium transition-all"
           :style="{
             background: days.includes(day) ? 'var(--accent-muted)' : 'var(--surface-raised)',
             color: days.includes(day) ? 'var(--accent)' : 'var(--text-disabled)',
-            border: '1px solid ' + (days.includes(day) ? 'rgba(229, 169, 62, 0.25)' : 'var(--border-subtle)'),
+            border: '1px solid ' + (days.includes(day) ? 'var(--accent-glow)' : 'var(--border-subtle)'),
           }"
           @click="toggleDay(day)"
         >
@@ -113,7 +113,7 @@ async function onSave() {
 
     <!-- Where it will run, pinned now because the scheduler can't ask later -->
     <div
-      class="rounded-lg px-3 py-2.5 flex items-start gap-2.5"
+      class="rounded-md px-3 py-2.5 flex items-start gap-2.5"
       style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
     >
       <UIcon name="i-lucide-folder" class="size-3.5 shrink-0 mt-0.5" style="color: var(--accent);" />
@@ -132,10 +132,10 @@ async function onSave() {
         <button
           v-for="choice in PERMISSION_CHOICES"
           :key="choice.value"
-          class="w-full flex items-start gap-2.5 px-3 py-2 rounded-lg text-left transition-all"
+          class="w-full flex items-start gap-2.5 px-3 py-2 rounded-md text-left transition-all"
           :style="{
             background: permission === choice.value ? 'var(--accent-muted)' : 'var(--surface-raised)',
-            border: '1px solid ' + (permission === choice.value ? 'rgba(229, 169, 62, 0.25)' : 'var(--border-subtle)'),
+            border: '1px solid ' + (permission === choice.value ? 'var(--accent-glow)' : 'var(--border-subtle)'),
           }"
           @click="permission = choice.value"
         >

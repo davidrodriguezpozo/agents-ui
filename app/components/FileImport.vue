@@ -50,7 +50,7 @@ async function handleFile(file: File) {
 
 <template>
   <div
-    class="rounded-xl p-6 text-center transition-all duration-150 cursor-pointer"
+    class="rounded-lg p-6 text-center transition-all duration-150 cursor-pointer"
     :style="{
       background: dragOver ? 'var(--accent-muted)' : 'var(--surface-raised)',
       border: dragOver ? '2px dashed var(--accent)' : '2px dashed var(--border-subtle)',

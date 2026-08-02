@@ -174,7 +174,7 @@ useUnsavedChanges(isDirty)
       <!-- Read-only notice for plugin-provided commands -->
       <div
         v-if="readOnly"
-        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        class="rounded-lg px-4 py-3 flex items-center gap-3"
         style="background: rgba(139, 92, 246, 0.06); border: 1px solid rgba(139, 92, 246, 0.14);"
       >
         <UIcon name="i-lucide-puzzle" class="size-4 shrink-0" style="color: rgb(139, 92, 246);" />
@@ -188,7 +188,7 @@ useUnsavedChanges(isDirty)
       <!-- Draft recovery banner -->
       <div
         v-if="hasDraft && !readOnly"
-        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        class="rounded-lg px-4 py-3 flex items-center gap-3"
         style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.12);"
       >
         <UIcon name="i-lucide-archive-restore" class="size-4 shrink-0" style="color: var(--info, #3b82f6);" />
@@ -201,7 +201,7 @@ useUnsavedChanges(isDirty)
 
       <!-- Configuration -->
       <div
-        class="rounded-xl p-5 space-y-4 bg-card"
+        class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-label">Configuration</h3>
 
@@ -233,7 +233,7 @@ useUnsavedChanges(isDirty)
 
       <!-- Command Body Editor -->
       <div
-        class="rounded-xl overflow-hidden"
+        class="rounded-lg overflow-hidden"
         style="border: 1px solid var(--border-subtle);"
       >
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">

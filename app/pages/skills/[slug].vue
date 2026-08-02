@@ -188,7 +188,7 @@ const agentOptions = computed(() =>
       <!-- Draft recovery banner -->
       <div
         v-if="hasDraft"
-        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        class="rounded-lg px-4 py-3 flex items-center gap-3"
         style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.12);"
       >
         <UIcon name="i-lucide-archive-restore" class="size-4 shrink-0" style="color: var(--info, #3b82f6);" />
@@ -202,7 +202,7 @@ const agentOptions = computed(() =>
       <!-- Read-only banner for imported skills -->
       <div
         v-if="isImported"
-        class="rounded-xl px-4 py-3 flex items-center gap-3"
+        class="rounded-lg px-4 py-3 flex items-center gap-3"
         style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
       >
         <svg class="size-4 shrink-0 text-label" viewBox="0 0 16 16" fill="currentColor">
@@ -216,7 +216,7 @@ const agentOptions = computed(() =>
 
       <!-- Configuration -->
       <div
-        class="rounded-xl overflow-hidden"
+        class="rounded-lg overflow-hidden"
         style="border: 1px solid var(--border-subtle);"
       >
         <!-- Skill identity banner -->
@@ -230,7 +230,7 @@ const agentOptions = computed(() =>
           <!-- Identity row -->
           <div class="flex items-start gap-4">
             <div
-              class="size-11 rounded-xl flex items-center justify-center shrink-0"
+              class="size-11 rounded-lg flex items-center justify-center shrink-0"
               style="background: var(--accent-muted); border: 1px solid rgba(45, 212, 191, 0.15);"
             >
               <UIcon name="i-lucide-sparkles" class="size-5" style="color: var(--accent);" />
@@ -296,7 +296,7 @@ const agentOptions = computed(() =>
 
       <!-- Skill Prompt Editor -->
       <div
-        class="rounded-xl overflow-hidden"
+        class="rounded-lg overflow-hidden"
         style="border: 1px solid var(--border-subtle);"
       >
         <div class="flex items-center justify-between px-4 py-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">

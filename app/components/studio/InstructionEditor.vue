@@ -64,7 +64,7 @@ function dismissSuggestion() {
   <div class="flex flex-col h-full">
     <div class="flex items-center justify-between px-4 py-2 border-b" style="border-color: var(--border-subtle);">
       <div class="flex items-center gap-2">
-        <div class="flex rounded-lg overflow-hidden" style="border: 1px solid var(--border-subtle);">
+        <div class="flex rounded-md overflow-hidden" style="border: 1px solid var(--border-subtle);">
           <button
             v-for="m in (['edit', 'preview'] as const)"
             :key="m"
@@ -81,10 +81,10 @@ function dismissSuggestion() {
         <span class="text-[11px] font-mono" style="color: var(--text-disabled);">{{ wordCount }} words</span>
       </div>
       <button
-        class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all"
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
         :style="{
           background: isImproving ? 'var(--accent-muted)' : 'var(--surface-raised)',
-          border: '1px solid ' + (isImproving ? 'rgba(229, 169, 62, 0.2)' : 'var(--border-subtle)'),
+          border: '1px solid ' + (isImproving ? 'var(--accent-glow)' : 'var(--border-subtle)'),
           color: isImproving ? 'var(--accent)' : 'var(--text-secondary)',
         }"
         :disabled="isImproving"
@@ -97,8 +97,8 @@ function dismissSuggestion() {
 
     <div
       v-if="suggestion"
-      class="mx-4 mt-3 rounded-xl p-3 space-y-2"
-      style="background: var(--accent-muted); border: 1px solid rgba(229, 169, 62, 0.15);"
+      class="mx-4 mt-3 rounded-lg p-3 space-y-2"
+      style="background: var(--accent-muted); border: 1px solid var(--accent-muted);"
     >
       <div class="flex items-center gap-2">
         <UIcon name="i-lucide-sparkles" class="size-3.5" style="color: var(--accent);" />
@@ -106,12 +106,12 @@ function dismissSuggestion() {
       </div>
       <pre class="text-[12px] leading-relaxed whitespace-pre-wrap max-h-[150px] overflow-y-auto" style="color: var(--text-secondary); font-family: var(--font-mono);">{{ suggestion }}</pre>
       <div class="flex gap-2">
-        <button class="px-3 py-1 rounded-lg text-[11px] font-medium transition-all" style="background: var(--accent); color: white;" @click="acceptSuggestion">Accept</button>
-        <button class="px-3 py-1 rounded-lg text-[11px] font-medium transition-all hover-bg" style="color: var(--text-tertiary);" @click="dismissSuggestion">Dismiss</button>
+        <button class="px-3 py-1 rounded-md text-[11px] font-medium transition-all" style="background: var(--accent); color: white;" @click="acceptSuggestion">Accept</button>
+        <button class="px-3 py-1 rounded-md text-[11px] font-medium transition-all hover-bg" style="color: var(--text-tertiary);" @click="dismissSuggestion">Dismiss</button>
       </div>
     </div>
 
-    <div v-if="improveError" class="mx-4 mt-2 text-[11px] rounded-lg px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">{{ improveError }}</div>
+    <div v-if="improveError" class="mx-4 mt-2 text-[11px] rounded-md px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">{{ improveError }}</div>
 
     <!-- Edit mode -->
     <textarea

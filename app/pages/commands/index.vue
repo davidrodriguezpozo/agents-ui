@@ -60,7 +60,7 @@ const filteredGroups = computed(() => {
 
       <div
         v-if="error"
-        class="rounded-xl px-4 py-3 mb-4 flex items-start gap-3"
+        class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
         style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
       >
         <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
@@ -76,7 +76,7 @@ const filteredGroups = computed(() => {
           <!-- Group header -->
           <div class="flex items-center gap-2">
             <button
-              class="flex items-center gap-2 flex-1 text-left py-2.5 px-3 -mx-2 rounded-lg hover-bg focus-ring text-body"
+              class="flex items-center gap-2 flex-1 text-left py-2.5 px-3 -mx-2 rounded-md hover-bg focus-ring text-body"
               @click="toggleGroup(group.key)"
             >
               <UIcon
@@ -107,7 +107,7 @@ const filteredGroups = computed(() => {
               v-for="cmd in group.commands"
               :key="cmd.slug"
               :to="`/commands/${cmd.slug}`"
-              class="flex items-center gap-3 px-3 py-2 rounded-lg group focus-ring hover-row"
+              class="flex items-center gap-3 px-3 py-2 rounded-md group focus-ring hover-row"
             >
               <span class="font-mono text-[10px] font-medium shrink-0 text-meta">&gt;_</span>
 
@@ -151,7 +151,7 @@ const filteredGroups = computed(() => {
 
       <!-- Empty state: no commands -->
       <div v-else class="flex flex-col items-center justify-center py-12 space-y-5">
-        <div class="rounded-lg p-4 bg-card max-w-sm w-full font-mono text-[12px] text-label leading-relaxed">
+        <div class="rounded-md p-4 bg-card max-w-sm w-full font-mono text-[12px] text-label leading-relaxed">
           <span class="text-meta"># Example: a deploy command</span><br>
           <span style="color: var(--accent);">/deploy</span> staging --skip-tests<br>
           <span class="text-meta"># Claude follows your command's instructions</span>

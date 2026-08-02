@@ -1,8 +1,8 @@
 <template>
-  <div class="rounded-xl p-4 bg-card relative overflow-hidden">
+  <div class="rounded-lg p-4 bg-card relative overflow-hidden">
     <div class="absolute inset-x-0 top-0 h-[4px] skeleton-shine" />
     <div class="flex items-start gap-3 mb-3">
-      <div class="size-8 rounded-lg skeleton-shine shrink-0" />
+      <div class="size-8 rounded-md skeleton-shine shrink-0" />
       <div class="flex-1 space-y-2 pt-0.5">
         <div class="h-3.5 w-32 rounded skeleton-shine" />
         <div class="h-2.5 w-full rounded skeleton-shine" />

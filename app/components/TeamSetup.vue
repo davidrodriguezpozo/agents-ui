@@ -76,8 +76,8 @@ async function onInstall(marketplace: string, plugin: string) {
     <div class="text-center space-y-2">
       <div class="flex justify-center">
         <div
-          class="size-14 rounded-2xl flex items-center justify-center"
-          style="background: linear-gradient(135deg, rgba(229, 169, 62, 0.15) 0%, rgba(229, 169, 62, 0.05) 100%); border: 1px solid rgba(229, 169, 62, 0.12);"
+          class="size-14 rounded-xl flex items-center justify-center"
+          style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
         >
           <UIcon name="i-lucide-users" class="size-6" style="color: var(--accent);" />
         </div>
@@ -94,7 +94,7 @@ async function onInstall(marketplace: string, plugin: string) {
     <!-- Blockers worth naming before someone hits them -->
     <div
       v-if="health && !health.git"
-      class="rounded-xl px-4 py-3 flex items-start gap-3"
+      class="rounded-lg px-4 py-3 flex items-start gap-3"
       style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.14);"
     >
       <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
@@ -105,7 +105,7 @@ async function onInstall(marketplace: string, plugin: string) {
     </div>
 
     <!-- Step 1 -->
-    <div class="rounded-xl p-5 space-y-3 bg-card">
+    <div class="rounded-lg p-5 space-y-3 bg-card">
       <div class="flex items-center gap-2">
         <span
           class="size-5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0"
@@ -155,7 +155,7 @@ async function onInstall(marketplace: string, plugin: string) {
     </div>
 
     <!-- Step 2 -->
-    <div v-if="hasSource" class="rounded-xl p-5 space-y-3 bg-card">
+    <div v-if="hasSource" class="rounded-lg p-5 space-y-3 bg-card">
       <div class="flex items-center gap-2">
         <span
           class="size-5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0"
@@ -176,7 +176,7 @@ async function onInstall(marketplace: string, plugin: string) {
         <div
           v-for="plugin in uninstalled"
           :key="`${plugin.marketplace}/${plugin.name}`"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-md"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
         >
           <UIcon name="i-lucide-puzzle" class="size-4 shrink-0" style="color: var(--accent);" />

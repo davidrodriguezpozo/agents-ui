@@ -56,7 +56,7 @@ const filtered = computed(() => {
     <div
       v-for="item in filtered"
       :key="item.key"
-      class="rounded-xl overflow-hidden"
+      class="rounded-lg overflow-hidden"
       style="border: 1px solid var(--border-subtle);"
     >
       <button

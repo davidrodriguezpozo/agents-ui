@@ -22,15 +22,15 @@ function timeAgo(iso: string): string {
 <template>
   <NuxtLink
     :to="`/workflows/${workflow.slug}`"
-    class="block rounded-xl p-4 transition-all duration-150 focus-ring group"
+    class="block rounded-lg p-4 transition-all duration-150 focus-ring group"
     style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
     @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'"
     @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'"
   >
     <div class="flex items-start gap-3">
       <div
-        class="size-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5"
-        style="background: var(--accent-muted); border: 1px solid rgba(229, 169, 62, 0.15);"
+        class="size-8 rounded-md flex items-center justify-center shrink-0 mt-0.5"
+        style="background: var(--accent-muted); border: 1px solid var(--accent-muted);"
       >
         <UIcon name="i-lucide-git-branch" class="size-4" style="color: var(--accent);" />
       </div>

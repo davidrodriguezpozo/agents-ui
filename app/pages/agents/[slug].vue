@@ -128,7 +128,7 @@ useUnsavedChanges(isDirty)
         <h1 class="text-[16px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
           {{ frontmatter.name || 'Agent' }}
         </h1>
-        <span v-if="isDirty" class="text-[9px] font-mono px-1.5 py-px rounded-full" style="background: rgba(229, 169, 62, 0.1); color: var(--accent);">Unsaved</span>
+        <span v-if="isDirty" class="text-[9px] font-mono px-1.5 py-px rounded-full" style="background: var(--accent-muted); color: var(--accent);">Unsaved</span>
         <SourceBadge
           :scope="provenance.scope"
           :source="provenance.source"
@@ -140,14 +140,14 @@ useUnsavedChanges(isDirty)
         <NuxtLink
           v-if="readOnly && provenance.pluginId"
           :to="`/plugins/${encodeURIComponent(provenance.pluginId)}?tab=agents`"
-          class="px-3 py-1.5 rounded-lg text-[12px] font-medium"
+          class="px-3 py-1.5 rounded-md text-[12px] font-medium"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-secondary);"
         >
           View in plugin
         </NuxtLink>
         <template v-else>
           <button
-            class="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all"
+            class="px-3 py-1.5 rounded-md text-[12px] font-medium transition-all"
             :style="{
               background: isDirty ? 'var(--accent)' : 'var(--surface-raised)',
               color: isDirty ? 'white' : 'var(--text-disabled)',
@@ -158,7 +158,7 @@ useUnsavedChanges(isDirty)
           >
             {{ saving ? 'Saving...' : 'Save' }}
           </button>
-          <button class="p-1.5 rounded-lg hover-bg transition-all" style="color: var(--text-disabled);" title="Delete agent" @click="showDeleteConfirm = true">
+          <button class="p-1.5 rounded-md hover-bg transition-all" style="color: var(--text-disabled);" title="Delete agent" @click="showDeleteConfirm = true">
             <UIcon name="i-lucide-trash-2" class="size-4" />
           </button>
         </template>
@@ -196,12 +196,12 @@ useUnsavedChanges(isDirty)
     <!-- Delete confirmation -->
     <Teleport to="body">
       <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center" style="background: rgba(0,0,0,0.4);">
-        <div class="rounded-2xl p-6 max-w-sm w-full mx-4 space-y-4" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
+        <div class="rounded-xl p-6 max-w-sm w-full mx-4 space-y-4" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
           <h3 class="text-[15px] font-semibold" style="color: var(--text-primary);">Delete {{ frontmatter.name }}?</h3>
           <p class="text-[13px]" style="color: var(--text-secondary);">This will permanently delete this agent and cannot be undone.</p>
           <div class="flex gap-2 justify-end">
-            <button class="px-3 py-1.5 rounded-lg text-[12px] font-medium hover-bg" style="color: var(--text-tertiary);" @click="showDeleteConfirm = false">Cancel</button>
-            <button class="px-3 py-1.5 rounded-lg text-[12px] font-medium" style="background: var(--error); color: white;" @click="handleDelete">Delete</button>
+            <button class="px-3 py-1.5 rounded-md text-[12px] font-medium hover-bg" style="color: var(--text-tertiary);" @click="showDeleteConfirm = false">Cancel</button>
+            <button class="px-3 py-1.5 rounded-md text-[12px] font-medium" style="background: var(--error); color: white;" @click="handleDelete">Delete</button>
           </div>
         </div>
       </div>

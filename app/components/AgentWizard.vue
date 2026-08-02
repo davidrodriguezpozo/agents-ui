@@ -139,10 +139,10 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
             v-for="opt in modelOptions"
             :key="opt.label"
             type="button"
-            class="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
+            class="w-full flex items-start gap-3 px-3 py-2.5 rounded-md text-left transition-all duration-150"
             :style="{
               background: frontmatter.model === opt.value ? 'var(--accent-muted)' : 'transparent',
-              border: frontmatter.model === opt.value ? '1px solid rgba(229, 169, 62, 0.15)' : '1px solid var(--border-subtle)',
+              border: frontmatter.model === opt.value ? '1px solid var(--accent-muted)' : '1px solid var(--border-subtle)',
             }"
             @click="frontmatter.model = opt.value"
           >
@@ -181,10 +181,10 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
             v-for="opt in memoryOptions"
             :key="opt.label"
             type="button"
-            class="w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
+            class="w-full flex items-start gap-3 px-3 py-2.5 rounded-md text-left transition-all duration-150"
             :style="{
               background: frontmatter.memory === opt.value ? 'var(--accent-muted)' : 'transparent',
-              border: frontmatter.memory === opt.value ? '1px solid rgba(229, 169, 62, 0.15)' : '1px solid var(--border-subtle)',
+              border: frontmatter.memory === opt.value ? '1px solid var(--accent-muted)' : '1px solid var(--border-subtle)',
             }"
             @click="frontmatter.memory = opt.value"
           >

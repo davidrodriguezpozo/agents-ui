@@ -64,7 +64,7 @@ function formatDate(iso: string) {
 
       <div
         v-if="error"
-        class="rounded-xl px-4 py-3 mb-4 flex items-start gap-3"
+        class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
         style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
       >
         <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
@@ -89,7 +89,7 @@ function formatDate(iso: string) {
             <div
               v-for="plugin in group"
               :key="plugin.id"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-lg group hover-row"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-md group hover-row"
             >
               <!-- Toggle -->
               <label class="field-toggle shrink-0" @click.stop>
@@ -155,7 +155,7 @@ function formatDate(iso: string) {
 
       <!-- Empty state: no plugins -->
       <div v-else class="flex flex-col items-center justify-center py-12 space-y-5">
-        <div class="rounded-lg p-4 bg-card max-w-sm w-full font-mono text-[12px] text-label leading-relaxed">
+        <div class="rounded-md p-4 bg-card max-w-sm w-full font-mono text-[12px] text-label leading-relaxed">
           <span class="text-meta"># Install a plugin via Claude Code CLI</span><br>
           <span style="color: var(--accent);">claude</span> plugin add &lt;plugin-name&gt;
         </div>

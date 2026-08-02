@@ -194,7 +194,7 @@ function badgeFor(to: string) {
     <div class="flex h-screen overflow-hidden" style="background: var(--surface-base);">
       <!-- Mobile hamburger (md:hidden) -->
       <button
-        class="fixed top-4 left-4 z-30 md:hidden p-2 rounded-lg cursor-pointer press-scale"
+        class="fixed top-4 left-4 z-30 md:hidden p-2 rounded-md cursor-pointer press-scale"
         style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle); color: var(--text-secondary);"
         @click="sidebarOpen = true"
       >
@@ -217,19 +217,14 @@ function badgeFor(to: string) {
         :class="{ 'translate-x-0': sidebarOpen }"
         style="background: var(--sidebar-bg); border-right: 1px solid var(--border-subtle);"
       >
-        <!-- Ambient glow at top — stronger -->
-        <div
-          class="absolute top-0 left-1/2 -translate-x-1/2 w-40 h-32 pointer-events-none"
-          style="background: radial-gradient(ellipse, rgba(229, 169, 62, 0.1) 0%, transparent 70%);"
-        />
 
         <!-- Brand -->
         <div class="h-[56px] flex items-center gap-2.5 px-4 relative">
           <div
-            class="size-7 rounded-lg flex items-center justify-center relative"
-            style="background: linear-gradient(135deg, rgba(229, 169, 62, 0.18) 0%, rgba(229, 169, 62, 0.06) 100%); border: 1px solid rgba(229, 169, 62, 0.15);"
+            class="size-7 rounded-md flex items-center justify-center relative"
+            style="background: var(--accent); border: 1px solid var(--accent);"
           >
-            <UIcon name="i-lucide-bot" class="size-3.5" style="color: var(--accent);" />
+            <UIcon name="i-lucide-bot" class="size-3.5" style="color: #ffffff;" />
           </div>
           <div class="flex flex-col">
             <span class="text-[12px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
@@ -247,7 +242,7 @@ function badgeFor(to: string) {
             v-for="link in navLinks"
             :key="link.to"
             :to="link.to"
-            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[13px] transition-all duration-150 relative focus-ring"
+            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-all duration-150 relative focus-ring"
             :class="{ 'nav-item--active': isActive(link.to) }"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
@@ -259,7 +254,7 @@ function badgeFor(to: string) {
             <div
               v-if="isActive(link.to)"
               class="absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-4 rounded-r-full"
-              style="background: var(--accent); box-shadow: 0 0 10px var(--accent-glow);"
+              style="background: var(--accent);"
             />
             <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
             <span class="flex-1" style="font-family: var(--font-sans);">{{ link.label }}</span>
@@ -279,7 +274,7 @@ function badgeFor(to: string) {
             v-for="link in navSecondary"
             :key="link.to"
             :to="link.to"
-            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-lg text-[13px] transition-all duration-150 relative focus-ring"
+            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-all duration-150 relative focus-ring"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
               fontWeight: isActive(link.to) ? '500' : '400',
@@ -289,7 +284,7 @@ function badgeFor(to: string) {
             <div
               v-if="isActive(link.to)"
               class="absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-4 rounded-r-full"
-              style="background: var(--accent); box-shadow: 0 0 10px var(--accent-glow);"
+              style="background: var(--accent);"
             />
             <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
             <span style="font-family: var(--font-sans);">{{ link.label }}</span>
@@ -299,7 +294,7 @@ function badgeFor(to: string) {
         <!-- Search shortcut -->
         <div class="px-2.5 pb-2.5">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer press-scale"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer press-scale"
             style="color: var(--text-disabled); background: var(--input-bg); border: 1px solid var(--border-subtle);"
             @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-tertiary)'"
             @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-disabled)'"
@@ -314,7 +309,7 @@ function badgeFor(to: string) {
         <!-- Chat with Claude -->
         <div class="px-2.5 pb-1">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer press-scale"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer press-scale"
             :style="{
               color: chatOpen ? 'var(--accent)' : 'var(--text-tertiary)',
               background: chatOpen ? 'var(--accent-muted)' : 'transparent',
@@ -326,7 +321,7 @@ function badgeFor(to: string) {
               <div
                 v-if="chatOpen"
                 class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full"
-                style="background: var(--accent); box-shadow: 0 0 8px var(--accent-glow);"
+                style="background: var(--accent);"
               />
             </div>
             <span class="text-[12px] flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
@@ -337,7 +332,7 @@ function badgeFor(to: string) {
         <!-- Simple / advanced -->
         <div class="px-2.5 pb-1">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring press-scale"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
             style="color: var(--text-tertiary);"
             :title="isSimple ? 'Show agents, commands, workflows and the graph' : 'Hide the advanced authoring tools'"
             @click="toggleMode"
@@ -352,7 +347,7 @@ function badgeFor(to: string) {
         <!-- Theme toggle -->
         <div class="px-2.5 pb-1">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring press-scale"
+            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
             style="color: var(--text-tertiary);"
             @click="toggleTheme"
           >
@@ -367,7 +362,7 @@ function badgeFor(to: string) {
         <div class="px-2.5 pb-2.5" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
           <UPopover v-model:open="showWorkingDirPopover" :ui="{ width: 'w-[280px]' }">
             <button
-              class="w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-150 focus-ring cursor-pointer text-left press-scale"
+              class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer text-left press-scale"
               style="color: var(--text-disabled); border: 1px solid var(--border-subtle);"
               @click="openWorkingDirPopover"
             >
@@ -400,7 +395,7 @@ function badgeFor(to: string) {
                   <!-- Directory suggestions -->
                   <div
                     v-if="dirSuggestions.length"
-                    class="mt-1 rounded-lg overflow-hidden max-h-[200px] overflow-y-auto"
+                    class="mt-1 rounded-md overflow-hidden max-h-[200px] overflow-y-auto"
                     style="border: 1px solid var(--border-subtle); background: var(--surface-raised);"
                   >
                     <button
@@ -447,7 +442,7 @@ function badgeFor(to: string) {
           </UPopover>
           <!-- Where new items get written -->
           <div v-if="workingDir" class="mt-2 space-y-1.5">
-            <div v-if="canUseProjectScope" class="flex items-center gap-1 p-0.5 rounded-lg" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
+            <div v-if="canUseProjectScope" class="flex items-center gap-1 p-0.5 rounded-md" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
               <button
                 v-for="option in [{ value: 'user' as const, label: 'Personal' }, { value: 'project' as const, label: 'Project' }]"
                 :key="option.value"
@@ -465,7 +460,7 @@ function badgeFor(to: string) {
 
             <button
               v-else-if="!projectClaudeExists"
-              class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[10px] transition-all hover-bg"
+              class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[10px] transition-all hover-bg"
               style="color: var(--text-disabled); border: 1px dashed var(--border-subtle);"
               :disabled="initializingProject"
               @click="createProjectConfig"

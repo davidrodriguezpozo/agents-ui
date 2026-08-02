@@ -69,7 +69,7 @@ async function handleSend() {
     <div class="shrink-0 px-4 py-2.5 flex items-center justify-between border-b" style="border-color: var(--border-subtle);">
       <div class="flex items-center gap-2">
         <span class="text-[12px] font-medium" style="color: var(--text-primary);">Test</span>
-        <span v-if="isDraft" class="text-[9px] font-mono px-1.5 py-px rounded-full" style="background: rgba(229, 169, 62, 0.1); color: var(--accent);">Draft</span>
+        <span v-if="isDraft" class="text-[9px] font-mono px-1.5 py-px rounded-full" style="background: var(--accent-muted); color: var(--accent);">Draft</span>
         <span class="text-[9px] font-mono tracking-widest uppercase px-1.5 py-px rounded-full transition-all" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', color: isStreaming ? 'var(--accent)' : 'var(--text-disabled)' }">{{ statusText }}</span>
       </div>
       <button v-if="messages.length" class="p-1 rounded-md hover-bg transition-all" style="color: var(--text-disabled);" title="New conversation" @click="clearChat">
@@ -90,7 +90,7 @@ async function handleSend() {
         <ChatMessage :message="(msg as ChatMessage)" :is-streaming="isLastAssistantStreaming(idx)" :activity="activity" :status-text="statusText" />
       </template>
 
-      <div v-if="error" class="text-[11px] rounded-lg px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">{{ error }}</div>
+      <div v-if="error" class="text-[11px] rounded-md px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">{{ error }}</div>
     </div>
 
     <!-- Blocked on you: the agent cannot move until these are answered -->

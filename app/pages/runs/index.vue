@@ -70,8 +70,8 @@ function duration(ms?: number) {
             v-for="run in active"
             :key="run.id"
             :to="`/runs/${run.id}`"
-            class="flex items-center gap-3 px-3 py-2.5 rounded-xl group focus-ring hover-row"
-            style="border: 1px solid rgba(229, 169, 62, 0.2); background: var(--accent-muted);"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-lg group focus-ring hover-row"
+            style="border: 1px solid var(--accent-glow); background: var(--accent-muted);"
           >
             <UIcon name="i-lucide-loader-2" class="size-3.5 shrink-0 animate-spin" style="color: var(--accent);" />
             <span class="text-[13px] font-medium truncate flex-1 text-body">{{ run.title }}</span>
@@ -85,7 +85,7 @@ function duration(ms?: number) {
             v-for="run in finished"
             :key="run.id"
             :to="`/runs/${run.id}`"
-            class="flex items-start gap-3 px-3 py-2.5 rounded-lg group focus-ring hover-row"
+            class="flex items-start gap-3 px-3 py-2.5 rounded-md group focus-ring hover-row"
           >
             <span
               class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0 mt-0.5"
