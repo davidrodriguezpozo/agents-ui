@@ -16,6 +16,8 @@ export interface Schedule {
   projectDir?: string
   recurrence: Recurrence
   permission: SchedulePermission
+  /** Permanent permission rules, e.g. `Bash(gh:*)`. */
+  allowRules?: string[]
   enabled: boolean
   origin: 'user' | 'team'
   pluginName?: string
@@ -93,7 +95,28 @@ export function useSchedules() {
     return saved
   }
 
-  return { schedules, suggested, loading, fetchAll, save, remove, setEnabled, adopt }
+  /** Grant a ritual the rules a run turned out to need. */
+  async function allowRules(id: string, add: string[]) {
+    const saved = await $fetch<Schedule>(`/api/schedules/${encodeURIComponent(id)}/allow`, {
+      method: 'POST',
+      body: { add },
+    })
+    const idx = schedules.value.findIndex(s => s.id === saved.id)
+    if (idx >= 0) schedules.value[idx] = saved
+    return saved
+  }
+
+  async function revokeRule(id: string, rule: string) {
+    const saved = await $fetch<Schedule>(`/api/schedules/${encodeURIComponent(id)}/allow`, {
+      method: 'POST',
+      body: { remove: rule },
+    })
+    const idx = schedules.value.findIndex(s => s.id === saved.id)
+    if (idx >= 0) schedules.value[idx] = saved
+    return saved
+  }
+
+  return { schedules, suggested, loading, fetchAll, save, remove, setEnabled, adopt, allowRules, revokeRule }
 }
 
 export const PERMISSION_CHOICES: {

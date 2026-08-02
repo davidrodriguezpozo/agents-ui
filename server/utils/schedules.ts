@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
+import { mergeRules } from './permissionRules'
 
 /**
  * Deliberately not cron. "Every weekday at 08:00" is the shape a daily ritual
@@ -31,6 +32,11 @@ export interface Schedule {
   projectDir?: string
   recurrence: Recurrence
   permission: SchedulePermission
+  /**
+   * Rules this ritual has been granted permanently, e.g. `Bash(gh:*)`.
+   * Narrower and safer than raising `permission` to 'full'.
+   */
+  allowRules?: string[]
   enabled: boolean
   /** `team` rituals came from an installed plugin; `user` ones were made here. */
   origin: 'user' | 'team'
@@ -61,6 +67,7 @@ export async function readSchedules(): Promise<Schedule[]> {
     return (parsed.schedules ?? []).map(schedule => ({
       ...schedule,
       permission: schedule.permission ?? 'edits',
+      allowRules: schedule.allowRules ?? [],
     }))
   } catch {
     return []
@@ -144,6 +151,7 @@ export async function upsertSchedule(input: Partial<Schedule> & { input: string;
     projectDir: input.projectDir ?? existing?.projectDir,
     recurrence,
     permission: input.permission ?? existing?.permission ?? 'edits',
+    allowRules: mergeRules(input.allowRules ?? existing?.allowRules ?? []),
     enabled: input.enabled ?? existing?.enabled ?? true,
     origin: input.origin ?? existing?.origin ?? 'user',
     pluginName: input.pluginName ?? existing?.pluginName,

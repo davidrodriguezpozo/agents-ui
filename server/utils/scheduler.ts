@@ -86,6 +86,7 @@ async function fire(schedule: Schedule): Promise<void> {
       // The trust level was chosen when the ritual was created, so a run at 8am
       // doesn't have to ask a question nobody is there to answer.
       permissionMode: permissionModeFor(schedule.permission),
+      allowRules: schedule.allowRules,
     })
 
     const run = createRun({
@@ -95,6 +96,7 @@ async function fire(schedule: Schedule): Promise<void> {
       invocation: schedule.invocation,
       agentSlug: schedule.agentSlug,
       projectDir: options.cwd,
+      scheduleId: schedule.id,
     })
 
     // Advance the schedule before the run finishes, so a long run can't cause

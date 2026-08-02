@@ -355,6 +355,11 @@ export interface PermissionRequest {
   blockedPath?: string
   /** Whether "allow for the rest of this run" is on offer. */
   canRemember: boolean
+  /**
+   * Permission rules the CLI proposed for this request, e.g. `Bash(gh:*)`.
+   * These are what a ritual can permanently allow.
+   */
+  suggestedRules: string[]
   createdAt: number
 }
 

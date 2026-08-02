@@ -2,6 +2,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { emit, getActive, persist, setStatus, type Run } from './runStore'
 import { toQueryOptions, type ResolvedRunOptions } from './runOptions'
 import { answerPermission, createPermissionBroker } from './permissionBroker'
+import { mergeRules } from './permissionRules'
 
 function previewToolResult(content: unknown): string {
   const text = typeof content === 'string'
@@ -33,6 +34,12 @@ export async function executeRun(
     ownerId: run.id,
     onRequest: (request) => {
       emit(run.id, { type: 'permission_request', request })
+
+      // Recorded whether or not anyone is watching: this is what lets a ritual
+      // later be granted exactly the permissions it turned out to need.
+      if (request.suggestedRules?.length) {
+        entry.run.suggestedRules = mergeRules(entry.run.suggestedRules ?? [], request.suggestedRules)
+      }
 
       // Nobody is at the keyboard for a scheduled run. Waiting out the ten
       // minute timeout would stall the ritual and then deny anyway, so refuse

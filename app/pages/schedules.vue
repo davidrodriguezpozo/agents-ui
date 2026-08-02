@@ -2,7 +2,8 @@
 import { errorMessage } from '~/utils/errors'
 import type { Schedule, SuggestedRitual } from '~/composables/useSchedules'
 
-const { schedules, suggested, loading, fetchAll, remove, setEnabled, adopt } = useSchedules()
+const { schedules, suggested, loading, fetchAll, remove, setEnabled, adopt, revokeRule } = useSchedules()
+const { describeRule } = usePermissionRuleLabels()
 const toast = useToast()
 
 const editing = ref<Schedule | null>(null)
@@ -47,6 +48,15 @@ async function onAdopt(ritual: SuggestedRitual) {
     toast.add({ title: 'Could not add', description: errorMessage(e), color: 'error' })
   } finally {
     adopting.value = null
+  }
+}
+
+async function onRevoke(schedule: Schedule, rule: string) {
+  try {
+    await revokeRule(schedule.id, rule)
+    toast.add({ title: 'Permission removed', color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: 'Could not remove it', description: errorMessage(e), color: 'error' })
   }
 }
 
@@ -110,6 +120,28 @@ function nextLabel(schedule: Schedule) {
               <span>{{ schedule.description }}</span>
               <span>·</span>
               <span>{{ nextLabel(schedule) }}</span>
+            </div>
+
+            <!-- What this ritual has been allowed to do without asking -->
+            <div v-if="schedule.allowRules?.length" class="flex items-center gap-1.5 flex-wrap mt-1.5">
+              <span
+                v-for="rule in schedule.allowRules"
+                :key="rule"
+                class="inline-flex items-center gap-1 text-[10px] px-1.5 py-px rounded-md group/rule"
+                style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+                :title="rule"
+              >
+                <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0" style="color: var(--success);" />
+                {{ describeRule(rule) }}
+                <button
+                  class="opacity-0 group-hover/rule:opacity-100 transition-opacity"
+                  style="color: var(--text-disabled);"
+                  title="Remove this permission"
+                  @click.stop="onRevoke(schedule, rule)"
+                >
+                  <UIcon name="i-lucide-x" class="size-2.5" />
+                </button>
+              </span>
             </div>
           </div>
 

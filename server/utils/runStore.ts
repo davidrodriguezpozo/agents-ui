@@ -38,6 +38,10 @@ export interface Run {
   needsAttention?: boolean
   /** Tools refused because the run was unattended — the result is incomplete. */
   deniedTools?: string[]
+  /** Rules that would have let this run through, gathered from its prompts. */
+  suggestedRules?: string[]
+  /** Set when a ritual started this run, so its allowlist can be updated. */
+  scheduleId?: string
   events: RunEvent[]
 }
 
@@ -193,6 +197,8 @@ export interface RunSummary {
   error?: string
   needsAttention?: boolean
   deniedTools?: string[]
+  suggestedRules?: string[]
+  scheduleId?: string
 }
 
 function summarize(run: Run): RunSummary {
@@ -212,6 +218,8 @@ function summarize(run: Run): RunSummary {
     error: run.error,
     needsAttention: run.needsAttention,
     deniedTools: run.deniedTools,
+    suggestedRules: run.suggestedRules,
+    scheduleId: run.scheduleId,
   }
 }
 

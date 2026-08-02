@@ -5,6 +5,7 @@ import { getProjectDir, getScopeRoots, scopeRootsFor } from './scope'
 import { resolveAgentInRoots, toSdkModel, type ResolvedAgent } from './resolveAgent'
 import { readInstalledPlugins } from './pluginScan'
 import { resolveEnabledPluginsInRoots } from './pluginState'
+import { toSettingsPermissions } from './permissionRules'
 import type { PermissionMode } from '~/types'
 
 export const DEFAULT_MAX_TURNS = 40
@@ -19,6 +20,8 @@ export interface RunRequest {
   maxTurns?: number
   loadProjectSettings?: boolean
   model?: string
+  /** Permanent permission rules, e.g. `Bash(gh:*)`. */
+  allowRules?: string[]
 }
 
 export interface ResolvedRunOptions {
@@ -32,6 +35,7 @@ export interface ResolvedRunOptions {
   plugins: { type: 'local'; path: string }[]
   systemAppend: string
   agent: ResolvedAgent | null
+  allowRules: string[]
 }
 
 export function managerPrompt(claudeDir: string): string {
@@ -118,6 +122,7 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     plugins,
     systemAppend,
     agent,
+    allowRules: body.allowRules ?? [],
   }
 }
 
@@ -132,6 +137,9 @@ export function toQueryOptions(options: ResolvedRunOptions, resumeSessionId?: st
     maxTurns: options.maxTurns,
     ...(options.model ? { model: options.model } : {}),
     ...(options.plugins.length ? { plugins: options.plugins } : {}),
+    // Rules the ritual has been granted permanently, so it stops asking for
+    // things its owner already approved.
+    ...(toSettingsPermissions(options.allowRules) ? { settings: toSettingsPermissions(options.allowRules) } : {}),
     ...(options.loadSettings
       ? { settingSources: ['user', 'project', 'local'] as ('user' | 'project' | 'local')[] }
       : {}),

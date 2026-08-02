@@ -7,6 +7,9 @@ const route = useRoute()
 const id = route.params.id as string
 
 const { live, attach, cancelRun, startRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
+const { allowRules: grantRules } = useSchedules()
+const granting = ref(false)
+const granted = ref(false)
 const router = useRouter()
 const rerunning = ref(false)
 const prompts = promptsFor(id)
@@ -21,6 +24,8 @@ const meta = ref<{
   input?: string
   needsAttention?: boolean
   deniedTools?: string[]
+  suggestedRules?: string[]
+  scheduleId?: string
 } | null>(null)
 let controller: AbortController | null = null
 
@@ -88,6 +93,24 @@ async function rerunWithApproval() {
     toast.add({ title: 'Could not start', description: errorMessage(e), color: 'error' })
   } finally {
     rerunning.value = false
+  }
+}
+
+/**
+ * Grant the ritual exactly what this run asked for. Narrower than raising the
+ * ritual's trust level, and it means tomorrow's run just works.
+ */
+async function alwaysAllow() {
+  if (!meta.value?.scheduleId || !meta.value.suggestedRules?.length) return
+  granting.value = true
+  try {
+    await grantRules(meta.value.scheduleId, meta.value.suggestedRules)
+    granted.value = true
+    toast.add({ title: 'Allowed from now on', color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: 'Could not update the ritual', description: errorMessage(e), color: 'error' })
+  } finally {
+    granting.value = false
   }
 }
 
@@ -172,15 +195,41 @@ function formatCost(usd?: number) {
             <p class="text-[11px] leading-relaxed text-label">
               It ran on a schedule, and
               <strong>{{ (meta.deniedTools || []).join(', ') || 'a tool' }}</strong>
-              needed permission that nobody was there to give. Run it again yourself, or
-              raise what the ritual is allowed to do.
+              needed permission that nobody was there to give.
+            </p>
+            <p v-if="granted" class="text-[11px] leading-relaxed" style="color: var(--success);">
+              Allowed from now on. The next run will not stop for this.
+            </p>
+            <p
+              v-else-if="meta.scheduleId && meta.suggestedRules?.length"
+              class="text-[11px] leading-relaxed text-label"
+            >
+              You can allow just what it needed —
+              <span class="font-mono" style="color: var(--text-primary);">
+                {{ meta.suggestedRules.join(', ') }}
+              </span>
+              — rather than giving it full access.
+            </p>
+            <p v-else class="text-[11px] leading-relaxed text-label">
+              Run it again yourself, or raise what the ritual is allowed to do.
             </p>
           </div>
           <div class="flex flex-col gap-1.5 shrink-0">
             <UButton
+              v-if="meta.scheduleId && meta.suggestedRules?.length && !granted"
+              label="Always allow"
+              icon="i-lucide-shield-check"
+              size="xs"
+              :loading="granting"
+              :title="meta.suggestedRules.join(', ')"
+              @click="alwaysAllow"
+            />
+            <UButton
               label="Run it now"
               icon="i-lucide-play"
               size="xs"
+              :variant="meta.scheduleId && meta.suggestedRules?.length && !granted ? 'soft' : 'solid'"
+              :color="meta.scheduleId && meta.suggestedRules?.length && !granted ? 'neutral' : 'primary'"
               :loading="rerunning"
               @click="rerunWithApproval"
             />

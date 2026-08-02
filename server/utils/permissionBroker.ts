@@ -1,4 +1,5 @@
 import type { CanUseTool, PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
+import { rulesFromSuggestions } from './permissionRules'
 
 /**
  * A tool call the agent cannot make until someone says yes.
@@ -77,6 +78,7 @@ export function createPermissionBroker(options: {
       decisionReason: ctx.decisionReason,
       blockedPath: ctx.blockedPath,
       canRemember: Boolean(ctx.suggestions?.length),
+      suggestedRules: rulesFromSuggestions(ctx.suggestions),
       createdAt: Date.now(),
     }
 

@@ -18,6 +18,8 @@ export interface RunSummary {
   error?: string
   needsAttention?: boolean
   deniedTools?: string[]
+  suggestedRules?: string[]
+  scheduleId?: string
 }
 
 export interface RunToolCall {
