@@ -18,6 +18,7 @@ const sending = ref(false)
 const activeRunId = ref<string | null>(null)
 const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
 const showDiff = ref(false)
+const showPatch = ref(false)
 const showClose = ref(false)
 const closing = ref(false)
 let controller: AbortController | null = null
@@ -52,6 +53,8 @@ function watchRun(runId: string) {
 async function refreshDiff() {
   try {
     diff.value = await fetchDiff(id)
+    // If there is work to review and nothing to read, the diff is the point.
+    if (diff.value.files.length && !session.value?.turns.length) showDiff.value = true
   } catch {
     diff.value = null
   }
@@ -190,6 +193,35 @@ const totalChanges = computed(() => {
               <span class="type-mono-meta" style="color: var(--success);">+{{ file.added }}</span>
               <span class="type-mono-meta" style="color: var(--error);">−{{ file.removed }}</span>
             </div>
+          </div>
+
+          <div v-if="diff.patch" style="border-top: 1px solid var(--border-subtle);">
+            <button
+              class="w-full flex items-center gap-2 px-4 py-2 text-left hover-bg transition-all"
+              @click="showPatch = !showPatch"
+            >
+              <UIcon
+                :name="showPatch ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                class="size-3"
+                style="color: var(--text-disabled);"
+              />
+              <span class="type-meta">{{ showPatch ? 'Hide' : 'Show' }} the actual changes</span>
+            </button>
+            <pre
+              v-if="showPatch"
+              class="px-4 py-3 overflow-x-auto font-mono text-[11px] leading-[1.6] diff-patch"
+              style="background: var(--surface-inset); border-top: 1px solid var(--border-subtle);"
+            ><span
+              v-for="(line, i) in diff.patch.split('\n')"
+              :key="i"
+              class="block"
+              :style="{
+                color: line.startsWith('+') && !line.startsWith('+++') ? 'var(--success)'
+                  : line.startsWith('-') && !line.startsWith('---') ? 'var(--error)'
+                  : line.startsWith('@@') ? 'var(--accent)'
+                  : 'var(--text-tertiary)',
+              }"
+            >{{ line || ' ' }}</span></pre>
           </div>
         </div>
 

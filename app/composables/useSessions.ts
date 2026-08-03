@@ -7,6 +7,8 @@ export interface WorktreeState {
   ahead: number
 }
 
+export type SessionActivity = 'idle' | 'working' | 'awaiting-permission' | 'failed' | 'missing'
+
 export interface Session {
   id: string
   title: string
@@ -22,6 +24,13 @@ export interface Session {
   updatedAt: number
   worktreeRemovedAt?: number
   worktree: WorktreeState
+  /** What the session is doing right now — see the sessions index endpoint. */
+  activity: SessionActivity
+  pendingPermissions: number
+  lastRunId: string | null
+  turnCount: number
+  /** False when the session belongs to a repo other than the selected folder. */
+  inCurrentProject: boolean
 }
 
 export interface SessionTurn {
@@ -108,9 +117,30 @@ export function useSessions() {
   }
 
   const active = computed(() => sessions.value.filter(s => s.status !== 'archived'))
-  const runningCount = computed(() => sessions.value.filter(s => s.status === 'running').length)
+  const workingCount = computed(() => sessions.value.filter(s => s.activity === 'working').length)
+  const needsYouCount = computed(() =>
+    sessions.value.filter(s => s.activity === 'awaiting-permission').length
+  )
 
-  return { sessions, active, runningCount, loading, fetchAll, create, fetchOne, send, fetchDiff, close }
+  /** Sessions in other repositories, so they are not silently invisible. */
+  const elsewhere = computed(() => sessions.value.filter(s => !s.inCurrentProject))
+  const here = computed(() => sessions.value.filter(s => s.inCurrentProject))
+
+  return {
+    sessions,
+    active,
+    here,
+    elsewhere,
+    workingCount,
+    needsYouCount,
+    loading,
+    fetchAll,
+    create,
+    fetchOne,
+    send,
+    fetchDiff,
+    close,
+  }
 }
 
 /** Worktrees as git reports them, including ones with no session behind them. */

@@ -278,12 +278,15 @@ export async function worktreeDiff(worktreePath: string, baseRef: string): Promi
     return { path, added: lines, removed: 0, staged: false }
   }))
 
-  // Cap the patch: a large refactor would otherwise push megabytes at the browser.
-  const patch = await git(
-    worktreePath,
-    ['diff', `${baseRef}...HEAD`, '--', '.'],
-    60_000,
-  ).catch(() => '')
+  // Both halves, or the patch contradicts the file list: a file shown as
+  // "uncommitted" would be missing from the diff body entirely.
+  const committedPatch = await git(worktreePath, ['diff', `${baseRef}...HEAD`], 60_000).catch(() => '')
+  const workingPatch = await git(worktreePath, ['diff', 'HEAD'], 60_000).catch(() => '')
+
+  const patch = [
+    committedPatch,
+    workingPatch && `${committedPatch ? '\n' : ''}--- Uncommitted ---\n${workingPatch}`,
+  ].filter(Boolean).join('\n')
 
   const untrackedNote = untracked.length
     ? `\n\nNew files not yet committed:\n${untracked.map(f => `  ${f.path}`).join('\n')}`

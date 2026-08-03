@@ -9,12 +9,17 @@ import { errorMessage } from '~/utils/errors'
  * session behind them, which is what a crash or a hand-made worktree leaves.
  */
 const { data, orphans, fetchAll, prune } = useWorktrees()
+const { workingDir } = useWorkingDir()
 const toast = useToast()
 
 const open = ref(false)
 const pruning = ref(false)
 
 onMounted(fetchAll)
+
+// Worktrees are per-repository, so this has to follow the selected folder —
+// otherwise picking a project leaves the panel showing nothing.
+watch(workingDir, () => fetchAll())
 
 async function onPrune() {
   pruning.value = true
