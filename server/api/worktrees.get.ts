@@ -1,3 +1,4 @@
+import { homedir } from 'node:os'
 import { getProjectDir } from '../utils/scope'
 import { readSessions } from '../utils/sessions'
 import { inspectForRecovery } from '../utils/sessionRecovery'
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
   const repoDir = (getQuery(event).repoDir as string) || getProjectDir(event)
 
   if (!repoDir || !(await isGitRepo(repoDir))) {
-    return { repoDir: repoDir ?? null, isRepo: false, worktrees: [], root: null }
+    return { repoDir: repoDir ?? null, isRepo: false, worktrees: [], root: null, home: homedir() }
   }
 
   const [worktrees, sessions] = await Promise.all([listWorktrees(repoDir), readSessions()])
@@ -64,6 +65,8 @@ export default defineEventHandler(async (event) => {
     repoDir,
     isRepo: true,
     root: worktreeRootFor(repoDir),
+    // So the UI can shorten paths to `~/…` without guessing where home is.
+    home: homedir(),
     worktrees: entries,
   }
 })

@@ -17,6 +17,9 @@ const { workingDir } = useWorkingDir()
 const router = useRouter()
 const toast = useToast()
 
+/** Mirrors the server's WORKTREE_DIR, for the note about test runners. */
+const WORKTREE_DIR = '.worktrees'
+
 const open = ref(false)
 const pruning = ref(false)
 const restoring = ref<string | null>(null)
@@ -78,7 +81,7 @@ async function onPrune() {
 }
 
 function shortPath(path: string): string {
-  const home = data.value.root?.split('/.claude/')[0]
+  const home = data.value.home
   return home && path.startsWith(home) ? `~${path.slice(home.length)}` : path
 }
 </script>
@@ -116,7 +119,11 @@ function shortPath(path: string): string {
     <div v-if="open" class="px-4 pb-4 space-y-3" style="border-top: 1px solid var(--border-subtle);">
       <p class="type-meta pt-3 leading-relaxed">
         Each session gets its own checkout of this repository so several can run at once.
-        They live outside the repo, at <span class="font-mono">{{ shortPath(data.root || '') }}</span>.
+        They sit in <span class="font-mono">{{ shortPath(data.root || '') }}</span>, hidden from
+        git so they never show up in <span class="font-mono">git status</span> or a commit.
+        Test runners can still find them — exclude
+        <span class="font-mono">{{ WORKTREE_DIR }}</span> in your config if a suite starts
+        running more than once.
       </p>
 
       <div class="space-y-1">

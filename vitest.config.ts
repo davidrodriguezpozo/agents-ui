@@ -16,6 +16,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['test/**/*.test.ts'],
+    // Sessions keep a full checkout of this repo in .worktrees/, so without
+    // this the suite is discovered once per open session and runs several
+    // times over. Anyone using sessions on a repo with tests needs the same
+    // line in their own config.
+    exclude: ['**/node_modules/**', '**/.worktrees/**'],
     globals: true,
   },
 })

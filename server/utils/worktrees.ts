@@ -1,9 +1,8 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile, realpath } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { appendFile, mkdir, readFile, realpath } from 'node:fs/promises'
+import { dirname, isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
-import { getClaudeDir } from './claudeDir'
 
 const exec = promisify(execFile)
 
@@ -11,12 +10,23 @@ const exec = promisify(execFile)
  * Git worktrees, one per session, so several agents can work the same
  * repository at once without overwriting each other.
  *
- * Worktrees live outside the repository, under the app's own directory. Putting
- * them inside would mean a stray `git add .` could commit another session's
- * work, and they would show up in editors and search. The cost is that they are
- * easy to forget about, which is why `listWorktrees` reads git's own record
- * rather than ours — the UI shows what actually exists on disk.
+ * They live in a hidden directory inside the repository, which puts a session's
+ * work next to the project it belongs to rather than somewhere a person would
+ * never think to look. Registering the directory in `.git/info/exclude` covers
+ * the obvious hazards: git stops reporting it, `git add .` will not stage it as
+ * an embedded repository, and `git clean -fdx` already refuses to delete a
+ * nested repository.
+ *
+ * What it does not cover is tooling that ignores gitignore rules. `tsc` skips
+ * dot-directories, but a test runner like vitest will discover each session's
+ * copy of the suite unless its config excludes this directory.
+ *
+ * `listWorktrees` reads git's own record rather than ours, so the UI shows what
+ * actually exists on disk rather than what we believe we created.
  */
+
+/** Dot-prefixed so that glob-based tools skip it by default. */
+export const WORKTREE_DIR = '.worktrees'
 
 export interface WorktreeRecord {
   path: string
@@ -49,9 +59,35 @@ export function branchNameFor(title: string, id: string): string {
   return slug ? `agents-ui/${slug}-${id}` : `agents-ui/session-${id}`
 }
 
-/** Kept out of the repository on purpose — see the note above. */
+/** Inside the repository, so a session's work sits next to the project it belongs to. */
 export function worktreeRootFor(repoDir: string): string {
-  return join(getClaudeDir(), 'agents-ui', 'worktrees', basename(repoDir) || 'repo')
+  return join(repoDir, WORKTREE_DIR)
+}
+
+/**
+ * Hide the worktree directory from git without touching a tracked file.
+ *
+ * `.git/info/exclude` is per-clone and never committed, so this cannot show up
+ * in someone's diff or conflict with a shared `.gitignore`. It does more than
+ * quieten `git status`: with the entry present, `git add .` no longer stages
+ * the nested worktree as an embedded repository, which is the one way in-repo
+ * worktrees could otherwise damage a commit.
+ */
+export async function excludeWorktreeDir(repoDir: string): Promise<void> {
+  const gitDir = await git(repoDir, ['rev-parse', '--git-common-dir']).catch(() => '')
+  if (!gitDir) return
+
+  const path = join(isAbsolute(gitDir) ? gitDir : join(repoDir, gitDir), 'info', 'exclude')
+  const existing = await readFile(path, 'utf-8').catch(() => '')
+  if (existing.split('\n').some(line => line.trim() === `${WORKTREE_DIR}/`)) return
+
+  await mkdir(dirname(path), { recursive: true })
+  const prefix = existing && !existing.endsWith('\n') ? '\n' : ''
+  await appendFile(
+    path,
+    `${prefix}\n# Session workspaces created by agents-ui\n${WORKTREE_DIR}/\n`,
+    'utf-8',
+  )
 }
 
 export function worktreePathFor(repoDir: string, sessionId: string): string {
@@ -157,6 +193,9 @@ export async function createWorktree(options: {
   baseRef: string
 }): Promise<{ path: string; branch: string; baseSha: string }> {
   const { repoDir, path, branch, baseRef } = options
+
+  // Before the directory exists, so git never sees it as untracked content.
+  await excludeWorktreeDir(repoDir)
 
   if (existsSync(path)) {
     throw createError({

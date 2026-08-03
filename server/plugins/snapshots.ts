@@ -1,4 +1,5 @@
 import { createSnapshot } from '../utils/snapshots'
+import { migrateWorktrees } from '../utils/worktreeMigration'
 
 /**
  * Keep a recent copy of the state that cannot be rebuilt from anywhere else.
@@ -23,7 +24,19 @@ export default defineNitroPlugin((nitro) => {
     }
   }
 
-  setTimeout(() => void take('startup'), 3_000)
+  setTimeout(async () => {
+    // Snapshot before moving anything, so the record of where each worktree
+    // used to be survives a migration that goes wrong.
+    await take('startup')
+
+    try {
+      const { moved, failed } = await migrateWorktrees()
+      if (moved.length) console.log(`[worktrees] moved ${moved.length} into their repositories`)
+      for (const f of failed) console.error(`[worktrees] could not move ${f.id}: ${f.reason}`)
+    } catch (e) {
+      console.error('[worktrees] migration skipped:', (e as Error).message)
+    }
+  }, 3_000)
   timer = setInterval(() => void take('auto'), INTERVAL_MS)
 
   nitro.hooks.hook('close', () => { if (timer) clearInterval(timer) })

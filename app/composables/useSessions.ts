@@ -185,9 +185,9 @@ export function useSessions() {
 
 /** Worktrees as git reports them, including ones with no session behind them. */
 export function useWorktrees() {
-  const data = useState<{ repoDir: string | null; isRepo: boolean; root: string | null; worktrees: WorktreeEntry[] }>(
+  const data = useState<{ repoDir: string | null; isRepo: boolean; root: string | null; home: string | null; worktrees: WorktreeEntry[] }>(
     'worktrees',
-    () => ({ repoDir: null, isRepo: false, root: null, worktrees: [] }),
+    () => ({ repoDir: null, isRepo: false, root: null, home: null, worktrees: [] }),
   )
 
   async function fetchAll() {
