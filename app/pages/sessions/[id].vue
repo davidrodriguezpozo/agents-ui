@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
 import { renderMarkdown } from '~/utils/markdown'
-import type { DiffFile, Session, SessionTurn } from '~/composables/useSessions'
+import type { DiffFile, MergePreview, Session, SessionTurn } from '~/composables/useSessions'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
 
-const { fetchOne, send, fetchDiff, close } = useSessions()
+const { fetchOne, send, fetchDiff, previewMerge, merge, close } = useSessions()
 const { live, attach, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const toast = useToast()
 
@@ -21,6 +21,10 @@ const showDiff = ref(false)
 const showPatch = ref(false)
 const showClose = ref(false)
 const closing = ref(false)
+const showMerge = ref(false)
+const mergePreview = ref<MergePreview | null>(null)
+const merging = ref(false)
+const commitFirst = ref(true)
 let controller: AbortController | null = null
 
 const liveRun = computed(() => (activeRunId.value ? live.value[activeRunId.value] : null))
@@ -84,6 +88,36 @@ async function onSend() {
   }
 }
 
+async function openMerge() {
+  showMerge.value = true
+  mergePreview.value = null
+  try {
+    mergePreview.value = await previewMerge(id)
+  } catch (e) {
+    toast.add({ title: 'Could not check the merge', description: errorMessage(e), color: 'error' })
+    showMerge.value = false
+  }
+}
+
+async function onMerge() {
+  merging.value = true
+  try {
+    const result = await merge(id, { commitFirst: commitFirst.value })
+    toast.add({
+      title: `Merged into ${mergePreview.value?.targetBranch}`,
+      description: `${result.commitsBrought} commit${result.commitsBrought === 1 ? '' : 's'} brought across.`,
+      color: 'success',
+    })
+    showMerge.value = false
+    await load()
+    await refreshDiff()
+  } catch (e) {
+    toast.add({ title: 'Could not merge', description: errorMessage(e), color: 'error' })
+  } finally {
+    merging.value = false
+  }
+}
+
 async function onClose(opts: { force?: boolean; keepBranch?: boolean }) {
   closing.value = true
   try {
@@ -132,6 +166,13 @@ const totalChanges = computed(() => {
           variant="soft"
           color="neutral"
           @click="showDiff = !showDiff"
+        />
+        <UButton
+          v-if="session?.worktree.changedFiles"
+          label="Merge"
+          icon="i-lucide-git-merge"
+          size="sm"
+          @click="openMerge"
         />
         <UButton
           label="Close session"
@@ -293,6 +334,77 @@ const totalChanges = computed(() => {
         <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-meta" />
       </div>
     </div>
+
+    <!-- Merging writes to the real checkout, so show exactly what will happen -->
+    <UModal v-model:open="showMerge">
+      <template #content>
+        <div class="p-6 space-y-4 bg-overlay">
+          <h3 class="text-page-title">Merge this session</h3>
+
+          <div v-if="!mergePreview" class="flex items-center gap-2 type-detail">
+            <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+            Checking whether it merges cleanly…
+          </div>
+
+          <template v-else>
+            <p class="type-body">
+              Brings <strong>{{ mergePreview.commits }}</strong>
+              commit{{ mergePreview.commits === 1 ? '' : 's' }} from
+              <span class="font-mono type-detail" style="color: var(--accent);">{{ session?.branch }}</span>
+              into <span class="font-mono type-detail">{{ mergePreview.targetBranch }}</span>.
+            </p>
+
+            <div
+              v-if="mergePreview.blockedReason"
+              class="rounded-md px-3 py-2.5 type-detail"
+              style="background: rgba(248,113,113,0.06); color: var(--error);"
+            >
+              {{ mergePreview.blockedReason }}
+            </div>
+
+            <div v-if="mergePreview.conflicts.length" class="space-y-1">
+              <div class="text-section-label">Conflicting files</div>
+              <div
+                v-for="path in mergePreview.conflicts"
+                :key="path"
+                class="font-mono type-detail px-2 py-1 rounded"
+                style="background: var(--surface-raised);"
+              >
+                {{ path }}
+              </div>
+            </div>
+
+            <!-- Uncommitted work is invisible to a merge unless swept up first -->
+            <label
+              v-if="mergePreview.uncommittedFiles.length"
+              class="flex items-start gap-2.5 rounded-md px-3 py-2.5 cursor-pointer"
+              style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+            >
+              <input v-model="commitFirst" type="checkbox" class="size-3.5 mt-0.5 shrink-0" />
+              <span class="type-detail">
+                Commit the {{ mergePreview.uncommittedFiles.length }} uncommitted
+                file{{ mergePreview.uncommittedFiles.length === 1 ? '' : 's' }} first
+                <span class="block type-meta">
+                  Without this they stay behind in the workspace and are not merged.
+                </span>
+              </span>
+            </label>
+
+            <div class="flex justify-end gap-2 pt-1">
+              <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="showMerge = false" />
+              <UButton
+                label="Merge"
+                icon="i-lucide-git-merge"
+                size="sm"
+                :loading="merging"
+                :disabled="!mergePreview.canMerge"
+                @click="onMerge"
+              />
+            </div>
+          </template>
+        </div>
+      </template>
+    </UModal>
 
     <!-- Closing is where work gets lost, so spell out what happens -->
     <UModal v-model:open="showClose">

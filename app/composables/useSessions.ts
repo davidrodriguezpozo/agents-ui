@@ -55,6 +55,17 @@ export interface WorktreeEntry {
   orphaned: boolean
 }
 
+export interface MergePreview {
+  canMerge: boolean
+  blockedReason?: string
+  targetBranch: string
+  currentBranch: string
+  repoClean: boolean
+  commits: number
+  uncommittedFiles: string[]
+  conflicts: string[]
+}
+
 export interface DiffFile {
   path: string
   added: number
@@ -103,6 +114,19 @@ export function useSessions() {
     return $fetch<{ files: DiffFile[]; patch: string }>(`/api/sessions/${encodeURIComponent(id)}/diff`)
   }
 
+  async function previewMerge(id: string) {
+    return $fetch<MergePreview>(`/api/sessions/${encodeURIComponent(id)}/merge`)
+  }
+
+  async function merge(id: string, opts: { message?: string; commitFirst?: boolean } = {}) {
+    const result = await $fetch<{ merged: boolean; commitsBrought: number; committedBeforeMerge: number }>(
+      `/api/sessions/${encodeURIComponent(id)}/merge`,
+      { method: 'POST', body: opts },
+    )
+    await fetchAll()
+    return result
+  }
+
   async function close(id: string, opts: { force?: boolean; keepBranch?: boolean } = {}) {
     const query = new URLSearchParams()
     if (opts.force) query.set('force', '1')
@@ -139,6 +163,8 @@ export function useSessions() {
     fetchOne,
     send,
     fetchDiff,
+    previewMerge,
+    merge,
     close,
   }
 }
