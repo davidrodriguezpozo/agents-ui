@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import type { RunStats } from '~/types'
@@ -158,13 +158,27 @@ function schedulePersist(id: string): void {
   }, 500)
 }
 
+let tmpCounter = 0
+
+/**
+ * A streaming run rewrites its file every half second, so an interrupted write
+ * is a realistic way to lose one. Write-then-rename keeps the last complete
+ * version instead of leaving a truncated file that `readRun` would reject.
+ *
+ * Unlike sessions and rituals, each run is its own file — so damage here costs
+ * one run's history rather than all of them, and no lock is needed because only
+ * this process writes a given run.
+ */
 export async function persist(id: string): Promise<void> {
   const entry = active.get(id)
   if (!entry) return
 
   try {
     await mkdir(runsDir(), { recursive: true })
-    await writeFile(runPath(id), JSON.stringify(entry.run, null, 2), 'utf-8')
+    const path = runPath(id)
+    const tmp = `${path}.${process.pid}.${tmpCounter++}.tmp`
+    await writeFile(tmp, JSON.stringify(entry.run, null, 2), 'utf-8')
+    await rename(tmp, path)
   } catch (e) {
     console.error('[runStore] failed to persist run', id, e)
   }

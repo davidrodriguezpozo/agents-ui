@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs'
-import { copyFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
+import { defineJsonStore } from './jsonStore'
 
 /**
  * A session is a conversation with its own isolated copy of a repository.
@@ -36,83 +35,28 @@ export interface Session {
   recoveredAt?: number
 }
 
-interface SessionFile {
-  version: number
-  sessions: Session[]
-}
-
-function sessionsPath(): string {
-  return join(getClaudeDir(), 'agents-ui', 'sessions.json')
-}
+/**
+ * Parallel sessions save at the same time by design, so this is exactly the
+ * case the store's lock exists for.
+ */
+export const sessionStore = defineJsonStore<Session[]>({
+  label: 'sessions',
+  path: () => join(getClaudeDir(), 'agents-ui', 'sessions.json'),
+  empty: () => [],
+  decode: parsed => parsed?.sessions ?? [],
+  encode: sessions => ({ version: 1, sessions }),
+})
 
 export function newSessionId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }
 
-/**
- * Every session lives in one shared file, and mutating it is read-modify-write.
- * Parallel sessions save at the same time by design, so without a lock two
- * saves interleave and the slower one writes back a snapshot taken before the
- * other's change — silently dropping it. Serialising costs nothing at this
- * scale and removes the whole class of lost update.
- */
-let queue: Promise<unknown> = Promise.resolve()
-
-function exclusive<T>(fn: () => Promise<T>): Promise<T> {
-  const run = queue.then(fn, fn)
-  queue = run.then(() => {}, () => {})
-  return run
-}
-
-export class SessionStoreError extends Error {
-  constructor(message: string) {
-    super(message)
-    this.name = 'SessionStoreError'
-  }
-}
-
-function parseSessions(raw: string): Session[] {
-  const parsed = JSON.parse(raw) as SessionFile
-  return parsed.sessions ?? []
-}
-
-/**
- * A missing file means no sessions yet. A file we cannot parse means something
- * damaged it — and that must not be reported as "no sessions", because an empty
- * list makes every real worktree look orphaned and invites the user to delete
- * work that was never lost. Fall back to the backup, then fail loudly.
- */
 export async function readSessions(): Promise<Session[]> {
-  const path = sessionsPath()
-  if (!existsSync(path)) return []
-
-  try {
-    return parseSessions(await readFile(path, 'utf-8'))
-  } catch (primary) {
-    try {
-      return parseSessions(await readFile(`${path}.bak`, 'utf-8'))
-    } catch {
-      throw new SessionStoreError(
-        `The session index at ${path} is unreadable (${(primary as Error).message}). `
-        + 'Your worktrees and branches are untouched — sessions can be restored from them.',
-      )
-    }
-  }
+  return sessionStore.read()
 }
 
 export async function writeSessions(sessions: Session[]): Promise<void> {
-  const path = sessionsPath()
-  await mkdir(dirname(path), { recursive: true })
-
-  // Keep the last good copy before replacing it.
-  if (existsSync(path)) await copyFile(path, `${path}.bak`).catch(() => {})
-
-  // Write-then-rename: rename is atomic, so a crash or a full disk mid-write
-  // leaves the previous index intact instead of a truncated file that would
-  // lose every session at once.
-  const tmp = `${path}.${process.pid}.tmp`
-  await writeFile(tmp, JSON.stringify({ version: 1, sessions }, null, 2), 'utf-8')
-  await rename(tmp, path)
+  return sessionStore.write(sessions)
 }
 
 export async function findSession(id: string): Promise<Session | null> {
@@ -120,39 +64,33 @@ export async function findSession(id: string): Promise<Session | null> {
 }
 
 export async function saveSession(session: Session): Promise<Session> {
-  return exclusive(async () => {
-    const sessions = await readSessions()
+  return sessionStore.update((sessions) => {
+    const next = { ...session, updatedAt: Date.now() }
     const index = sessions.findIndex(s => s.id === session.id)
 
-    const next = { ...session, updatedAt: Date.now() }
     if (index >= 0) sessions[index] = next
     else sessions.push(next)
 
-    await writeSessions(sessions)
     return next
   })
 }
 
 export async function patchSession(id: string, patch: Partial<Session>): Promise<Session | null> {
-  // Re-read inside the lock: the caller's copy may already be stale.
-  return exclusive(async () => {
-    const sessions = await readSessions()
+  return sessionStore.update((sessions) => {
     const index = sessions.findIndex(s => s.id === id)
     if (index < 0) return null
 
     const next = { ...sessions[index]!, ...patch, id, updatedAt: Date.now() }
     sessions[index] = next
-    await writeSessions(sessions)
     return next
   })
 }
 
 export async function deleteSession(id: string): Promise<boolean> {
-  return exclusive(async () => {
-    const sessions = await readSessions()
-    const next = sessions.filter(s => s.id !== id)
-    if (next.length === sessions.length) return false
-    await writeSessions(next)
+  return sessionStore.update((sessions) => {
+    const index = sessions.findIndex(s => s.id === id)
+    if (index < 0) return false
+    sessions.splice(index, 1)
     return true
   })
 }

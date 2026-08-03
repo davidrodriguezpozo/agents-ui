@@ -1,7 +1,6 @@
-import { existsSync } from 'node:fs'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
+import { defineJsonStore } from './jsonStore'
 import { mergeRules } from './permissionRules'
 
 /**
@@ -48,36 +47,33 @@ export interface Schedule {
   nextRunAt?: number
 }
 
-interface ScheduleFile {
-  version: number
-  schedules: Schedule[]
-}
-
-function schedulesPath(): string {
-  return join(getClaudeDir(), 'agents-ui', 'schedules.json')
-}
+/**
+ * Rituals are the one thing here that cannot be reconstructed from anywhere
+ * else — a worktree can rebuild a session, but nothing remembers that someone
+ * wanted a briefing at 08:00 on weekdays. Losing this file loses real work,
+ * which is why it must never be treated as empty just because it failed to
+ * parse: the next save would make that permanent.
+ */
+export const scheduleStore = defineJsonStore<Schedule[]>({
+  label: 'daily rituals',
+  path: () => join(getClaudeDir(), 'agents-ui', 'schedules.json'),
+  empty: () => [],
+  // Rituals written before trust levels existed have no `permission`. Default
+  // on read so both the scheduler and the UI see a complete record.
+  decode: parsed => (parsed?.schedules ?? []).map((schedule: Schedule) => ({
+    ...schedule,
+    permission: schedule.permission ?? 'edits',
+    allowRules: schedule.allowRules ?? [],
+  })),
+  encode: schedules => ({ version: 1, schedules }),
+})
 
 export async function readSchedules(): Promise<Schedule[]> {
-  const path = schedulesPath()
-  if (!existsSync(path)) return []
-  try {
-    const parsed = JSON.parse(await readFile(path, 'utf-8')) as ScheduleFile
-    // Rituals written before trust levels existed have no `permission`. Default
-    // on read so both the scheduler and the UI see a complete record.
-    return (parsed.schedules ?? []).map(schedule => ({
-      ...schedule,
-      permission: schedule.permission ?? 'edits',
-      allowRules: schedule.allowRules ?? [],
-    }))
-  } catch {
-    return []
-  }
+  return scheduleStore.read()
 }
 
 export async function writeSchedules(schedules: Schedule[]): Promise<void> {
-  const path = schedulesPath()
-  await mkdir(join(path, '..'), { recursive: true })
-  await writeFile(path, JSON.stringify({ version: 1, schedules }, null, 2), 'utf-8')
+  return scheduleStore.write(schedules)
 }
 
 export function newScheduleId(): string {
@@ -136,53 +132,61 @@ export function permissionModeFor(permission: SchedulePermission): 'plan' | 'acc
 }
 
 export async function upsertSchedule(input: Partial<Schedule> & { input: string; title: string }): Promise<Schedule> {
-  const schedules = await readSchedules()
   const recurrence = normalizeRecurrence(input.recurrence)
 
-  const existingIndex = input.id ? schedules.findIndex(s => s.id === input.id) : -1
-  const existing = existingIndex >= 0 ? schedules[existingIndex] : undefined
+  return scheduleStore.update((schedules) => {
+    const existingIndex = input.id ? schedules.findIndex(s => s.id === input.id) : -1
+    const existing = existingIndex >= 0 ? schedules[existingIndex] : undefined
 
-  const schedule: Schedule = {
-    id: input.id || newScheduleId(),
-    title: input.title,
-    input: input.input,
-    invocation: input.invocation ?? existing?.invocation,
-    agentSlug: input.agentSlug ?? existing?.agentSlug,
-    projectDir: input.projectDir ?? existing?.projectDir,
-    recurrence,
-    permission: input.permission ?? existing?.permission ?? 'edits',
-    allowRules: mergeRules(input.allowRules ?? existing?.allowRules ?? []),
-    enabled: input.enabled ?? existing?.enabled ?? true,
-    origin: input.origin ?? existing?.origin ?? 'user',
-    pluginName: input.pluginName ?? existing?.pluginName,
-    createdAt: existing?.createdAt ?? Date.now(),
-    lastRunAt: existing?.lastRunAt,
-    lastRunId: existing?.lastRunId,
-    nextRunAt: computeNextRun(recurrence),
-  }
+    const schedule: Schedule = {
+      id: input.id || newScheduleId(),
+      title: input.title,
+      input: input.input,
+      invocation: input.invocation ?? existing?.invocation,
+      agentSlug: input.agentSlug ?? existing?.agentSlug,
+      projectDir: input.projectDir ?? existing?.projectDir,
+      recurrence,
+      permission: input.permission ?? existing?.permission ?? 'edits',
+      allowRules: mergeRules(input.allowRules ?? existing?.allowRules ?? []),
+      enabled: input.enabled ?? existing?.enabled ?? true,
+      origin: input.origin ?? existing?.origin ?? 'user',
+      pluginName: input.pluginName ?? existing?.pluginName,
+      createdAt: existing?.createdAt ?? Date.now(),
+      // Preserve run history: an edit must not make a ritual look like it has
+      // never fired, or the scheduler will treat it as brand new.
+      lastRunAt: existing?.lastRunAt,
+      lastRunId: existing?.lastRunId,
+      nextRunAt: computeNextRun(recurrence),
+    }
 
-  if (existingIndex >= 0) schedules[existingIndex] = schedule
-  else schedules.push(schedule)
+    if (existingIndex >= 0) schedules[existingIndex] = schedule
+    else schedules.push(schedule)
 
-  await writeSchedules(schedules)
-  return schedule
+    return schedule
+  })
 }
 
 export async function deleteSchedule(id: string): Promise<boolean> {
-  const schedules = await readSchedules()
-  const next = schedules.filter(s => s.id !== id)
-  if (next.length === schedules.length) return false
-  await writeSchedules(next)
-  return true
+  return scheduleStore.update((schedules) => {
+    const index = schedules.findIndex(s => s.id === id)
+    if (index < 0) return false
+    schedules.splice(index, 1)
+    return true
+  })
 }
 
+/**
+ * Advance a ritual past the run it just started. This races the scheduler's own
+ * tick and any edit the user makes, so it has to re-read under the lock — an
+ * overwrite here would leave `nextRunAt` in the past and fire the ritual twice.
+ */
 export async function markRan(id: string, runId: string): Promise<void> {
-  const schedules = await readSchedules()
-  const schedule = schedules.find(s => s.id === id)
-  if (!schedule) return
+  await scheduleStore.update((schedules) => {
+    const schedule = schedules.find(s => s.id === id)
+    if (!schedule) return
 
-  schedule.lastRunAt = Date.now()
-  schedule.lastRunId = runId
-  schedule.nextRunAt = computeNextRun(schedule.recurrence)
-  await writeSchedules(schedules)
+    schedule.lastRunAt = Date.now()
+    schedule.lastRunId = runId
+    schedule.nextRunAt = computeNextRun(schedule.recurrence)
+  })
 }

@@ -2,7 +2,7 @@
 import { errorMessage } from '~/utils/errors'
 import type { Schedule, SuggestedRitual } from '~/composables/useSchedules'
 
-const { schedules, suggested, loading, fetchAll, remove, setEnabled, adopt, revokeRule } = useSchedules()
+const { schedules, suggested, loading, loadError, fetchAll, remove, setEnabled, adopt, revokeRule } = useSchedules()
 const { describeRule } = usePermissionRuleLabels()
 const toast = useToast()
 
@@ -89,7 +89,25 @@ function nextLabel(schedule: Schedule) {
         They run while this app is open.
       </p>
 
-      <div v-if="loading && !schedules.length" class="space-y-1">
+      <!-- Never render "no rituals" when the truth is "could not read them" -->
+      <div
+        v-if="loadError"
+        class="rounded-md px-4 py-3 flex items-start gap-3"
+        style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
+      >
+        <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
+        <div class="space-y-1.5">
+          <div class="type-strong">Your rituals could not be loaded</div>
+          <div class="type-detail" style="color: var(--text-secondary);">{{ loadError }}</div>
+          <p class="type-meta">
+            They have not been deleted. Nothing will be overwritten until this is resolved —
+            restore a backup from Settings to get them back.
+          </p>
+          <UButton label="Open Settings" icon="i-lucide-settings" size="xs" variant="soft" to="/settings" />
+        </div>
+      </div>
+
+      <div v-else-if="loading && !schedules.length" class="space-y-1">
         <SkeletonRow v-for="i in 3" :key="i" />
       </div>
 
@@ -172,7 +190,7 @@ function nextLabel(schedule: Schedule) {
       </div>
 
       <EmptyState
-        v-else-if="!loading"
+        v-else-if="!loading && !loadError"
         icon="i-lucide-alarm-clock"
         title="No rituals yet"
         description="Pick something you do every morning and let it run on its own, so the result is waiting when you get in."

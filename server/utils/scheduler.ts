@@ -1,4 +1,4 @@
-import { computeNextRun, markRan, permissionModeFor, readSchedules, writeSchedules, type Schedule } from './schedules'
+import { computeNextRun, markRan, permissionModeFor, scheduleStore, type Schedule } from './schedules'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun } from './runStore'
 import { executeRun } from './runner'
@@ -31,54 +31,52 @@ export function stopScheduler(): void {
 }
 
 export async function tick(now = Date.now()): Promise<void> {
-  let schedules: Schedule[]
+  let due: Schedule[]
+
   try {
-    schedules = await readSchedules()
+    // Decide and record inside one locked read-modify-write. Doing this as a
+    // read, then a loop, then a bulk write would overwrite whatever `markRan`
+    // committed in between — leaving `nextRunAt` in the past and firing the
+    // ritual a second time on the next tick.
+    due = await scheduleStore.update((schedules) => {
+      const firing: Schedule[] = []
+
+      for (const schedule of schedules) {
+        if (!schedule.enabled) continue
+        if (inFlight.has(schedule.id)) continue
+
+        // First sight of this schedule, or a corrupted record.
+        if (!schedule.nextRunAt) {
+          schedule.nextRunAt = computeNextRun(schedule.recurrence, new Date(now))
+          continue
+        }
+
+        if (schedule.nextRunAt > now) continue
+
+        if (now - schedule.nextRunAt > CATCH_UP_WINDOW_MS) {
+          // Too stale to be useful — skip to the next occurrence without running.
+          schedule.nextRunAt = computeNextRun(schedule.recurrence, new Date(now))
+          continue
+        }
+
+        // Claim it here, so a second tick cannot pick it up while the run is
+        // still being started.
+        inFlight.add(schedule.id)
+        firing.push({ ...schedule })
+      }
+
+      return firing
+    })
   } catch (e) {
     console.error('[scheduler] could not read schedules', e)
     return
   }
 
-  if (!schedules.length) return
-
-  let mutated = false
-
-  for (const schedule of schedules) {
-    if (!schedule.enabled) continue
-    if (inFlight.has(schedule.id)) continue
-
-    // First sight of this schedule, or a corrupted record.
-    if (!schedule.nextRunAt) {
-      schedule.nextRunAt = computeNextRun(schedule.recurrence, new Date(now))
-      mutated = true
-      continue
-    }
-
-    if (schedule.nextRunAt > now) continue
-
-    const lateBy = now - schedule.nextRunAt
-    if (lateBy > CATCH_UP_WINDOW_MS) {
-      // Too stale to be useful — skip to the next occurrence without running.
-      schedule.nextRunAt = computeNextRun(schedule.recurrence, new Date(now))
-      mutated = true
-      continue
-    }
-
-    void fire(schedule)
-  }
-
-  if (mutated) {
-    try {
-      await writeSchedules(schedules)
-    } catch (e) {
-      console.error('[scheduler] could not persist schedule times', e)
-    }
-  }
+  for (const schedule of due) void fire(schedule)
 }
 
+/** Already claimed in `inFlight` by the tick that selected it. */
 async function fire(schedule: Schedule): Promise<void> {
-  inFlight.add(schedule.id)
-
   try {
     const options = await resolveRunOptionsFor({
       projectDir: schedule.projectDir,

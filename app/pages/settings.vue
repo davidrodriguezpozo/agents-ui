@@ -246,6 +246,8 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
     <!-- Structured view -->
     <div v-else-if="viewMode === 'structured'" class="px-6 py-4 space-y-6">
 
+      <BackupPanel />
+
       <!-- General -->
       <div
         class="rounded-lg p-5 space-y-4 bg-card"

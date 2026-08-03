@@ -1,3 +1,5 @@
+import { errorMessage } from '~/utils/errors'
+
 export interface Recurrence {
   hour: number
   minute: number
@@ -44,6 +46,12 @@ export function useSchedules() {
   const schedules = useState<Schedule[]>('schedules', () => [])
   const suggested = useState<SuggestedRitual[]>('suggested-rituals', () => [])
   const loading = useState('schedulesLoading', () => false)
+  /**
+   * Kept rather than swallowed. If the rituals cannot be read, an empty list
+   * renders as "you have no rituals" — the same lie the storage layer refuses
+   * to tell, and the one that gets someone to recreate work they still have.
+   */
+  const loadError = useState<string | null>('schedulesError', () => null)
 
   async function fetchAll() {
     loading.value = true
@@ -54,8 +62,10 @@ export function useSchedules() {
       ])
       schedules.value = mine
       suggested.value = theirs
+      loadError.value = null
     } catch (e) {
       console.error('[useSchedules] fetchAll:', e)
+      loadError.value = errorMessage(e)
     } finally {
       loading.value = false
     }
@@ -116,7 +126,7 @@ export function useSchedules() {
     return saved
   }
 
-  return { schedules, suggested, loading, fetchAll, save, remove, setEnabled, adopt, allowRules, revokeRule }
+  return { schedules, suggested, loading, loadError, fetchAll, save, remove, setEnabled, adopt, allowRules, revokeRule }
 }
 
 export const PERMISSION_CHOICES: {
