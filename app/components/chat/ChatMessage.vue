@@ -78,7 +78,7 @@ defineProps<{
       <!-- Rendered content -->
       <div
         v-if="message.content"
-        class="chat-prose text-[13px] leading-[1.7] break-words"
+        class="markdown text-[13px] break-words"
         :class="{ 'is-streaming': isStreaming }"
         style="color: var(--text-primary); font-family: var(--font-sans);"
         v-html="renderMarkdown(message.content)"
@@ -107,22 +107,6 @@ defineProps<{
 }
 @keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 
-.chat-prose :deep(p) { margin: 0.4em 0; }
-.chat-prose :deep(p:first-child) { margin-top: 0; }
-.chat-prose :deep(p:last-child) { margin-bottom: 0; }
-.chat-prose :deep(code) { font-family: var(--font-mono); font-size: 0.9em; background: var(--badge-subtle-bg); padding: 0.15em 0.4em; border-radius: 4px; }
-.chat-prose :deep(pre) { background: var(--surface-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm, 8px); padding: 0.75em 1em; overflow-x: auto; margin: 0.6em 0; }
-.chat-prose :deep(pre code) { background: none; padding: 0; font-size: 0.85em; }
-.chat-prose :deep(ul), .chat-prose :deep(ol) { padding-left: 1.5em; margin: 0.4em 0; }
-.chat-prose :deep(li) { margin: 0.2em 0; }
-.chat-prose :deep(strong) { color: var(--text-primary); font-weight: 600; }
-.chat-prose :deep(a) { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.chat-prose :deep(blockquote) { border-left: 2px solid var(--border-subtle); padding-left: 0.75em; margin: 0.4em 0; color: var(--text-secondary); }
-.chat-prose :deep(hr) { border: none; border-top: 1px solid var(--border-subtle); margin: 0.8em 0; }
-.chat-prose :deep(table) { width: 100%; border-collapse: collapse; font-size: 0.9em; margin: 0.6em 0; }
-.chat-prose :deep(th), .chat-prose :deep(td) { border: 1px solid var(--border-subtle); padding: 0.35em 0.6em; text-align: left; }
-.chat-prose :deep(th) { background: var(--surface-raised); font-weight: 600; font-size: 0.9em; }
-.chat-prose :deep(tr:nth-child(even)) { background: var(--surface-raised); }
 
 @keyframes chatMsgEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 .chat-msg-enter { animation: chatMsgEnter 0.25s ease both; }

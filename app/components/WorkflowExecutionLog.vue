@@ -163,7 +163,7 @@ const nextStepLabel = computed(() => {
           <div v-if="exec.output">
             <div class="type-mono-meta mb-1">Output</div>
             <div
-              class="rounded-md p-2.5 text-[12px] leading-relaxed max-h-64 overflow-y-auto prose-sm"
+              class="rounded-md p-2.5 text-[12px] max-h-64 overflow-y-auto markdown"
               style="background: var(--surface-base); border: 1px solid var(--border-subtle); color: var(--text-secondary);"
               v-html="renderMarkdown(exec.output)"
             />

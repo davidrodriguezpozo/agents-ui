@@ -1474,3 +1474,174 @@ details summary::-webkit-details-marker {
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================
+   Rendered markdown
+   ============================================
+
+   One stylesheet for every place an agent's output is shown — sessions, runs,
+   chat, plugin bodies, workflow logs. These used to be four near-identical
+   copies, and all four had the same hole: Tailwind's preflight resets
+   `list-style` and collapses every heading to inherited size and weight, so
+   bullets disappeared and an h3 was indistinguishable from a paragraph.
+   Restoring that is most of what this file does.
+
+   Sizes are relative (em) so the same markup reads correctly whether it is set
+   at 13px in a chat bubble or 15px in a session transcript. */
+
+.markdown {
+  /* Long agent output is mostly prose; give it room to breathe. */
+  line-height: 1.65;
+}
+
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+
+.markdown p { margin: 0.7em 0; }
+
+/* Headings — the hierarchy preflight removes. Kept restrained: these sit
+   inside a message, not on a page of their own, so the job is separation
+   rather than grandeur. */
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.3;
+  letter-spacing: -0.011em;
+  /* Asymmetric margins bind a heading to what follows it. */
+  margin: 1.6em 0 0.6em;
+}
+
+/* The body text here is small (13px in a transcript), so the steps have to be
+   wide enough to survive that. At 1.02em an h3 measured 13.26px against a 13px
+   paragraph — a difference nobody can see, which is how a section heading ends
+   up reading as another paragraph. */
+.markdown h1 { font-size: 1.38em; letter-spacing: -0.018em; }
+.markdown h2 { font-size: 1.22em; letter-spacing: -0.014em; }
+.markdown h3 { font-size: 1.08em; }
+.markdown h4 { font-size: 1em; }
+.markdown h5,
+.markdown h6 {
+  font-size: 0.92em;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Lists. `list-style` is the reset that made bullets vanish entirely. */
+.markdown ul,
+.markdown ol {
+  margin: 0.7em 0;
+  padding-left: 1.4em;
+}
+
+.markdown ul { list-style: disc outside; }
+.markdown ol { list-style: decimal outside; }
+.markdown ul ul { list-style: circle outside; }
+.markdown ul ul ul { list-style: square outside; }
+
+.markdown li { margin: 0.3em 0; }
+.markdown li > p { margin: 0.3em 0; }
+
+/* Nested lists sit tighter than the block they hang from. */
+.markdown li > ul,
+.markdown li > ol { margin: 0.3em 0; }
+
+/* The marker is structure, not content — it should not compete with the text. */
+.markdown li::marker { color: var(--text-disabled); }
+.markdown ol > li::marker { font-variant-numeric: tabular-nums; font-size: 0.95em; }
+
+.markdown code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  background: var(--badge-subtle-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  /* An identifier broken across lines is unreadable; let it scroll instead. */
+  white-space: break-spaces;
+}
+
+.markdown pre {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 0.8em 1em;
+  overflow-x: auto;
+  margin: 0.8em 0;
+  line-height: 1.55;
+}
+
+.markdown pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.85em;
+  white-space: pre;
+}
+
+.markdown strong { font-weight: 600; color: var(--text-primary); }
+.markdown em { font-style: italic; }
+
+.markdown a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.markdown blockquote {
+  border-left: 2px solid var(--border-default);
+  padding-left: 0.9em;
+  margin: 0.8em 0;
+  color: var(--text-secondary);
+}
+
+.markdown blockquote > :first-child { margin-top: 0; }
+.markdown blockquote > :last-child { margin-bottom: 0; }
+
+/* A section break, not a page break. */
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 1.6em 0;
+}
+
+.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.94em;
+  margin: 0.8em 0;
+  /* Wide tables scroll rather than forcing the whole message wider. */
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border-subtle);
+  padding: 0.4em 0.7em;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown th {
+  background: var(--surface-raised);
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.markdown img { max-width: 100%; height: auto; border-radius: 6px; }
+
+.markdown input[type="checkbox"] {
+  margin-right: 0.4em;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+/* GFM task lists carry their own markers. */
+.markdown li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.2em; }

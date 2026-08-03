@@ -290,7 +290,7 @@ const totalChanges = computed(() => {
             </div>
             <div
               v-if="turn.output"
-              class="session-prose type-body"
+              class="markdown type-body"
               v-html="renderMarkdown(turn.id === activeRunId && liveRun?.output ? liveRun.output : turn.output)"
             />
             <div v-else-if="turn.status === 'running'" class="flex items-center gap-2 type-meta">
@@ -448,24 +448,3 @@ const totalChanges = computed(() => {
   </div>
 </template>
 
-<style scoped>
-.session-prose :deep(p) { margin: 0.5em 0; }
-.session-prose :deep(p:first-child) { margin-top: 0; }
-.session-prose :deep(code) {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  background: var(--badge-subtle-bg);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-}
-.session-prose :deep(pre) {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 0.75em 1em;
-  overflow-x: auto;
-  margin: 0.6em 0;
-}
-.session-prose :deep(pre code) { background: none; padding: 0; font-size: 0.85em; }
-.session-prose :deep(ul), .session-prose :deep(ol) { padding-left: 1.5em; margin: 0.4em 0; }
-</style>

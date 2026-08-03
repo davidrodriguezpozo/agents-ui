@@ -254,7 +254,7 @@ function formatCost(usd?: number) {
             </div>
           </div>
           <div
-            class="px-5 py-4 run-prose text-[13px] leading-[1.7] overflow-x-auto"
+            class="px-5 py-4 markdown text-[13px] overflow-x-auto"
             style="color: var(--text-primary); font-family: var(--font-sans);"
             v-html="renderMarkdown(run.output)"
           />
@@ -299,35 +299,3 @@ function formatCost(usd?: number) {
   </div>
 </template>
 
-<style scoped>
-.run-prose :deep(p) { margin: 0.5em 0; }
-.run-prose :deep(p:first-child) { margin-top: 0; }
-.run-prose :deep(h1), .run-prose :deep(h2), .run-prose :deep(h3) {
-  font-weight: 600;
-  margin: 1em 0 0.4em;
-  font-family: var(--font-display);
-}
-.run-prose :deep(code) {
-  font-family: var(--font-mono);
-  font-size: 0.9em;
-  background: var(--badge-subtle-bg);
-  padding: 0.15em 0.4em;
-  border-radius: 4px;
-}
-.run-prose :deep(pre) {
-  background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 0.75em 1em;
-  overflow-x: auto;
-  margin: 0.6em 0;
-}
-.run-prose :deep(pre code) { background: none; padding: 0; font-size: 0.85em; }
-.run-prose :deep(ul), .run-prose :deep(ol) { padding-left: 1.5em; margin: 0.4em 0; }
-.run-prose :deep(table) { border-collapse: collapse; margin: 0.6em 0; }
-.run-prose :deep(th), .run-prose :deep(td) {
-  border: 1px solid var(--border-subtle);
-  padding: 0.35em 0.6em;
-  text-align: left;
-}
-</style>
