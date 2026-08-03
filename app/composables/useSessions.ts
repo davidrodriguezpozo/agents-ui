@@ -44,6 +44,19 @@ export interface SessionTurn {
   error?: string
 }
 
+/** What a worktree with no session could be restored into, and what it holds. */
+export interface WorktreeRecovery {
+  id: string
+  title: string
+  branch: string
+  worktreePath: string
+  sdkSessionId?: string
+  turnCount: number
+  exists: boolean
+  /** Commits that exist nowhere else — what deleting it would cost. */
+  unmergedCommits: number
+}
+
 export interface WorktreeEntry {
   path: string
   branch: string | null
@@ -53,6 +66,7 @@ export interface WorktreeEntry {
   sessionId: string | null
   sessionTitle: string | null
   orphaned: boolean
+  recovery: WorktreeRecovery | null
 }
 
 export interface MergePreview {
@@ -193,7 +207,19 @@ export function useWorktrees() {
     return result
   }
 
+  async function recover(opts: { paths?: string[] } = {}) {
+    const result = await $fetch<{ recovered: Session[]; skipped: { path: string; reason: string }[] }>(
+      '/api/worktrees/recover',
+      { method: 'POST', body: opts },
+    )
+    await fetchAll()
+    return result
+  }
+
   const orphans = computed(() => data.value.worktrees.filter(w => w.orphaned))
 
-  return { data, orphans, fetchAll, prune }
+  /** Orphans whose directory is still there, so there is something to restore. */
+  const restorable = computed(() => orphans.value.filter(w => w.recovery?.exists))
+
+  return { data, orphans, restorable, fetchAll, prune, recover }
 }

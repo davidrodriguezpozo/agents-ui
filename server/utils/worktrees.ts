@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 import { getClaudeDir } from './claudeDir'
@@ -103,6 +103,34 @@ export async function isGitRepo(dir: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+/**
+ * Compare paths by their resolved form. Git reports worktree paths with
+ * symlinks already resolved, so comparing them to a path we composed ourselves
+ * fails on any machine where part of the path is a symlink — and a session that
+ * fails to match its worktree is reported as abandoned when it is running fine.
+ */
+export async function canonicalPath(path: string): Promise<string> {
+  try {
+    return await realpath(path)
+  } catch {
+    // Not on disk (a pruned worktree, say) — the raw path is the best we have.
+    return path
+  }
+}
+
+/** The commit a branch actually diverged from, rather than an assumed base. */
+export async function mergeBase(repoDir: string, a: string, b: string): Promise<string> {
+  return git(repoDir, ['merge-base', a, b]).catch(() => '')
+}
+
+/** Commits on `branch` that exist nowhere else — what deleting it would destroy. */
+export async function unmergedCommits(repoDir: string, branch: string): Promise<number> {
+  const base = await mergeBase(repoDir, 'HEAD', branch)
+  if (!base) return 0
+  const count = await git(repoDir, ['rev-list', '--count', `${base}..${branch}`]).catch(() => '0')
+  return Number(count) || 0
 }
 
 export async function currentBranch(repoDir: string): Promise<string> {

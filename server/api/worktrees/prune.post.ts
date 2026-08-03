@@ -1,13 +1,24 @@
 import { getProjectDir } from '../../utils/scope'
 import { readSessions } from '../../utils/sessions'
-import { deleteBranch, isGitRepo, listWorktrees, pruneWorktrees, removeWorktree } from '../../utils/worktrees'
+import {
+  canonicalPath,
+  deleteBranch,
+  isGitRepo,
+  listWorktrees,
+  pruneWorktrees,
+  removeWorktree,
+  unmergedCommits,
+} from '../../utils/worktrees'
 
 /**
  * Clean up worktrees this app made that no longer have a session behind them.
  *
- * Only touches paths git reports and branches under `agents-ui/`, so a
- * worktree someone made by hand is never removed. Uncommitted work still
- * blocks removal unless explicitly forced.
+ * Only touches paths git reports and branches under `agents-ui/`, so a worktree
+ * someone made by hand is never removed. Two things block removal unless
+ * explicitly forced: uncommitted changes in the directory, and commits on the
+ * branch that exist nowhere else. The second matters most — the branch is
+ * deleted with `-D`, so without the check a single "clean up" click could
+ * discard finished work whose only fault was losing its session record.
  */
 export default defineEventHandler(async (event) => {
   const body = await readBody<{ repoDir?: string; paths?: string[]; force?: boolean }>(event)
@@ -18,11 +29,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const [worktrees, sessions] = await Promise.all([listWorktrees(repoDir), readSessions()])
-  const claimed = new Set(sessions.map(s => s.worktreePath))
+  const claimed = new Set(await Promise.all(sessions.map(s => canonicalPath(s.worktreePath))))
+  const canonicalRepoDir = await canonicalPath(repoDir)
 
-  const candidates = worktrees.filter(w =>
-    w.path !== repoDir
-    && !claimed.has(w.path)
+  const resolved = await Promise.all(
+    worktrees.map(async w => ({ ...w, canonical: await canonicalPath(w.path) })),
+  )
+
+  const candidates = resolved.filter(w =>
+    w.canonical !== canonicalRepoDir
+    && !claimed.has(w.canonical)
     && Boolean(w.branch?.startsWith('agents-ui/'))
     && (!body?.paths?.length || body.paths.includes(w.path))
   )
@@ -31,6 +47,17 @@ export default defineEventHandler(async (event) => {
   const failed: { path: string; reason: string }[] = []
 
   for (const worktree of candidates) {
+    const commits = worktree.branch ? await unmergedCommits(repoDir, worktree.branch) : 0
+
+    if (commits && !body?.force) {
+      failed.push({
+        path: worktree.path,
+        reason: `It has ${commits} commit${commits === 1 ? '' : 's'} that ${commits === 1 ? 'exists' : 'exist'} nowhere else. `
+          + 'Restore it as a session to keep that work, or remove it anyway.',
+      })
+      continue
+    }
+
     try {
       await removeWorktree(repoDir, worktree.path, { force: body?.force })
       if (worktree.branch) await deleteBranch(repoDir, worktree.branch)
