@@ -112,7 +112,7 @@ const totalChanges = computed(() => {
 
 <template>
   <div>
-    <PageHeader :title="session?.title || 'Session'">
+    <PageHeader width="wide" :title="session?.title || 'Session'">
       <template #leading>
         <NuxtLink to="/sessions" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to sessions">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
@@ -143,7 +143,7 @@ const totalChanges = computed(() => {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-5 space-y-5 max-w-4xl">
+    <div class="page-container page-container--wide py-5 space-y-5">
       <div v-if="loadError" class="rounded-md px-4 py-3 type-detail" style="background: rgba(248,113,113,0.06); color: var(--error);">
         {{ loadError }}
       </div>

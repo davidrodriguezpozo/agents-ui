@@ -63,7 +63,7 @@ function openRun(cmd: Command) {
     <!-- Nothing connected yet -->
     <TeamSetup v-if="isNewcomer || showSetup" @done="showSetup = false" />
 
-    <div v-else class="space-y-7 max-w-5xl">
+    <div v-else class="page-container page-container--wide space-y-7 !px-0">
       <!-- Header -->
       <div class="space-y-1.5">
         <h1 class="text-page-title" style="font-family: var(--font-display);">

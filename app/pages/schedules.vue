@@ -74,7 +74,7 @@ function nextLabel(schedule: Schedule) {
 
 <template>
   <div>
-    <PageHeader title="Daily rituals">
+    <PageHeader width="narrow" title="Daily rituals">
       <template #trailing>
         <span v-if="schedules.length" class="font-mono text-[12px] text-meta">{{ schedules.length }}</span>
       </template>
@@ -83,7 +83,7 @@ function nextLabel(schedule: Schedule) {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4 space-y-6 max-w-4xl">
+    <div class="page-container page-container--narrow py-4 space-y-6">
       <p class="type-body leading-relaxed">
         Things Claude runs for you on a schedule, so the result is waiting when you get in.
         They run while this app is open.

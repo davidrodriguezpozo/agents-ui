@@ -62,7 +62,7 @@ const ordered = computed(() => {
 
 <template>
   <div>
-    <PageHeader title="Sessions">
+    <PageHeader width="narrow" title="Sessions">
       <template #trailing>
         <span v-if="sessions.length" class="type-mono-meta">{{ sessions.length }}</span>
         <SessionStatus
@@ -73,7 +73,7 @@ const ordered = computed(() => {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4 space-y-5 max-w-4xl">
+    <div class="page-container page-container--narrow py-4 space-y-5">
       <p class="type-body">
         Each session works on its own copy of your project, so several can run at the same time
         without overwriting each other. Nothing touches your files until you merge it.

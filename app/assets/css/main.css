@@ -916,6 +916,26 @@ body {
 }
 
 /* ============================================
+   Page Container
+
+   Content was clamped to a max width but left-aligned, so on a wide screen
+   everything crowded the left edge against a large empty gutter. Centring the
+   column is what makes a wide window feel deliberate rather than unfinished.
+   ============================================ */
+
+.page-container {
+  width: 100%;
+  margin-inline: auto;
+  padding-inline: 24px;
+}
+
+/* Reading-width, for pages that are mostly prose and lists. */
+.page-container--narrow { max-width: 900px; }
+
+/* Wider, for pages showing a diff or side-by-side detail. */
+.page-container--wide { max-width: 1200px; }
+
+/* ============================================
    Semantic Surfaces
    ============================================ */
 

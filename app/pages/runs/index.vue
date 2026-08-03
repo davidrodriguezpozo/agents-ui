@@ -46,7 +46,7 @@ function duration(ms?: number) {
 
 <template>
   <div>
-    <PageHeader title="Activity">
+    <PageHeader width="narrow" title="Activity">
       <template #trailing>
         <span v-if="active.length" class="text-[11px] font-mono" style="color: var(--accent);">
           {{ active.length }} running
@@ -54,7 +54,7 @@ function duration(ms?: number) {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4 space-y-6 max-w-4xl">
+    <div class="page-container page-container--narrow py-4 space-y-6">
       <p class="type-body leading-relaxed">
         Everything Claude has run for you. Runs keep going if you close the tab — come back any time.
       </p>

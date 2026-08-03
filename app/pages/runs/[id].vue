@@ -122,7 +122,7 @@ function formatCost(usd?: number) {
 
 <template>
   <div>
-    <PageHeader :title="meta?.title || 'Run'">
+    <PageHeader width="wide" :title="meta?.title || 'Run'">
       <template #leading>
         <NuxtLink to="/runs" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to activity">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
@@ -153,7 +153,7 @@ function formatCost(usd?: number) {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-5 space-y-5 max-w-4xl">
+    <div class="page-container page-container--wide py-5 space-y-5">
       <div v-if="loadError" class="rounded-lg px-4 py-3 text-[12px]" style="background: rgba(248,113,113,0.06); color: var(--error);">
         {{ loadError }}
       </div>
