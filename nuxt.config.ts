@@ -35,7 +35,22 @@ export default defineNuxtConfig({
         { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.min.css' },
       ],
     },
-    pageTransition: { name: 'page', mode: 'out-in' },
+    /**
+     * No page transition, deliberately.
+     *
+     * Vue's <Transition> swaps `page-enter-from` for `page-enter-to` inside
+     * requestAnimationFrame. rAF does not run while the document is hidden — a
+     * backgrounded tab, an occluded or minimised window — so that swap never
+     * happens and the page stays at its enter-from state of `opacity: 0`. The
+     * page has mounted and rendered perfectly; it is simply invisible, which
+     * reads as the app being broken. `mode: 'out-in'` made it worse: a leave
+     * transition stuck the same way stops the next page mounting at all.
+     *
+     * Gating whether content can be seen on an animation completing is not a
+     * trade worth making for 220ms of fade — and instant navigation is what
+     * Linear and Vercel actually do.
+     */
+    pageTransition: false,
   },
 
   components: [
