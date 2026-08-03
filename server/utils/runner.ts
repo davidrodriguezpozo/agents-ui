@@ -21,7 +21,7 @@ function previewToolResult(content: unknown): string {
 export async function executeRun(
   run: Run,
   options: ResolvedRunOptions,
-  opts: { unattended?: boolean } = {},
+  opts: { unattended?: boolean; resumeSessionId?: string } = {},
 ): Promise<void> {
   const entry = getActive(run.id)
   if (!entry) return
@@ -64,7 +64,9 @@ export async function executeRun(
     for await (const message of query({
       prompt: run.input,
       options: {
-        ...toQueryOptions(options),
+        // Resuming is what makes a session a conversation rather than a series
+        // of unrelated runs.
+        ...toQueryOptions(options, opts.resumeSessionId),
         canUseTool: broker.canUseTool,
         abortController: entry.abort,
       },

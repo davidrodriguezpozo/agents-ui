@@ -141,12 +141,14 @@ onMounted(async () => {
 const navLinks = computed(() => isSimple.value
   ? [
       { label: 'Home', icon: 'i-lucide-house', to: '/' },
+      { label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
       { label: 'My skills', icon: 'i-lucide-sparkles', to: '/skills' },
     ]
   : [
       { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
+      { label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
       { label: 'Agents', icon: 'i-lucide-cpu', to: '/agents' },

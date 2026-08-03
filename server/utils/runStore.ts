@@ -42,6 +42,8 @@ export interface Run {
   suggestedRules?: string[]
   /** Set when a ritual started this run, so its allowlist can be updated. */
   scheduleId?: string
+  /** Set when the run is a turn in a session, which owns a worktree. */
+  sessionId?: string
   events: RunEvent[]
 }
 
@@ -199,6 +201,7 @@ export interface RunSummary {
   deniedTools?: string[]
   suggestedRules?: string[]
   scheduleId?: string
+  sessionId?: string
 }
 
 function summarize(run: Run): RunSummary {
@@ -220,6 +223,7 @@ function summarize(run: Run): RunSummary {
     deniedTools: run.deniedTools,
     suggestedRules: run.suggestedRules,
     scheduleId: run.scheduleId,
+    sessionId: run.sessionId,
   }
 }
 
