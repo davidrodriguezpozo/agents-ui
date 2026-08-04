@@ -2,6 +2,7 @@
 import { errorMessage } from '~/utils/errors'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
+import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
 import type { DiffFile, MergePreview, Session, SessionTurn } from '~/composables/useSessions'
 
 const route = useRoute()
@@ -233,6 +234,72 @@ function toggleSteps(id: string) {
   expandedTurns.value = next
 }
 
+/**
+ * Reviewing.
+ *
+ * Comments are gathered rather than sent one at a time: each turn is a whole
+ * agent run, and three remarks about one change are a single piece of
+ * feedback. Sending them separately invites three uncoordinated rewrites.
+ */
+const patchLines = computed<PatchLine[]>(() => parsePatch(diff.value?.patch ?? ''))
+const comments = ref<ReviewComment[]>([])
+const commentingOn = ref<number | null>(null)
+const commentDraft = ref('')
+
+function lineColour(line: PatchLine) {
+  if (line.kind === 'add') return 'var(--success)'
+  if (line.kind === 'remove') return 'var(--error)'
+  if (line.kind === 'hunk') return 'var(--accent)'
+  return 'var(--text-tertiary)'
+}
+
+function startComment(line: PatchLine) {
+  commentingOn.value = patchLines.value.indexOf(line)
+  commentDraft.value = ''
+}
+
+function cancelComment() {
+  commentingOn.value = null
+  commentDraft.value = ''
+}
+
+function addComment(line: PatchLine) {
+  const body = commentDraft.value.trim()
+  if (!body || !line.file) return
+
+  comments.value = [...comments.value, {
+    file: line.file,
+    line: line.line ?? 0,
+    // The line travels with the note, so it survives the file moving under it.
+    snippet: line.text,
+    body,
+  }]
+  cancelComment()
+}
+
+function dropComment(index: number) {
+  comments.value = comments.value.filter((_, i) => i !== index)
+}
+
+/** Hand the whole review over as one turn. */
+async function sendReview() {
+  if (!comments.value.length || isBusy.value) return
+
+  const message = formatReview(comments.value)
+  sending.value = true
+  try {
+    const runId = await send(id, message)
+    comments.value = []
+    showPatch.value = false
+    await load()
+    watchRun(runId)
+  } catch (e) {
+    toast.add({ title: 'Could not send the review', description: errorMessage(e), color: 'error' })
+  } finally {
+    sending.value = false
+  }
+}
+
 const totalChanges = computed(() => {
   if (!diff.value) return { added: 0, removed: 0 }
   return diff.value.files.reduce(
@@ -369,21 +436,48 @@ const totalChanges = computed(() => {
               />
               <span class="type-meta">{{ showPatch ? 'Hide' : 'Show' }} the actual changes</span>
             </button>
-            <pre
+            <div
               v-if="showPatch"
               class="px-4 py-3 overflow-x-auto font-mono text-[11px] leading-[1.6] diff-patch"
               style="background: var(--surface-inset); border-top: 1px solid var(--border-subtle);"
-            ><span
-              v-for="(line, i) in diff.patch.split('\n')"
-              :key="i"
-              class="block"
-              :style="{
-                color: line.startsWith('+') && !line.startsWith('+++') ? 'var(--success)'
-                  : line.startsWith('-') && !line.startsWith('---') ? 'var(--error)'
-                  : line.startsWith('@@') ? 'var(--accent)'
-                  : 'var(--text-tertiary)',
-              }"
-            >{{ line || ' ' }}</span></pre>
+            >
+              <template v-for="(line, i) in patchLines" :key="i">
+                <!-- Any line that belongs to a file can be pointed at -->
+                <div
+                  class="group/line flex items-start gap-2 -mx-1 px-1 rounded"
+                  :class="line.file ? 'hover-bg cursor-text' : ''"
+                  :style="{ color: lineColour(line) }"
+                  @click="line.file && startComment(line)"
+                >
+                  <UIcon
+                    v-if="line.file"
+                    name="i-lucide-message-square-plus"
+                    class="size-3 shrink-0 mt-0.5 opacity-0 group-hover/line:opacity-100 transition-opacity"
+                    style="color: var(--accent);"
+                  />
+                  <span v-else class="size-3 shrink-0" />
+                  <span class="whitespace-pre flex-1">{{ line.text || ' ' }}</span>
+                </div>
+
+                <!-- Where the note is written, in place, next to what it is about -->
+                <div v-if="commentingOn === i" class="my-1.5 ml-5 space-y-1.5">
+                  <textarea
+                    ref="commentBox"
+                    v-model="commentDraft"
+                    rows="2"
+                    class="field-textarea w-full"
+                    placeholder="What should change about this line?"
+                    @keydown.meta.enter="addComment(line)"
+                    @keydown.esc="cancelComment"
+                  />
+                  <div class="flex items-center gap-2">
+                    <UButton label="Add comment" size="xs" :disabled="!commentDraft.trim()" @click="addComment(line)" />
+                    <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="cancelComment" />
+                    <span class="type-meta">⌘↵ to add</span>
+                  </div>
+                </div>
+              </template>
+            </div>
           </div>
         </div>
 
@@ -491,6 +585,54 @@ const totalChanges = computed(() => {
           title="Nothing yet"
           description="Tell Claude what to do in this workspace. It can change files freely — they're isolated from your project until you decide to keep them."
         />
+
+        <!-- What you have written so far, and the one action that uses it -->
+        <div
+          v-if="comments.length"
+          class="rounded-md px-4 py-3 space-y-2"
+          style="background: var(--surface-raised); border: 1px solid var(--accent-glow);"
+        >
+          <div class="flex items-center justify-between gap-3">
+            <span class="type-strong text-body">
+              {{ comments.length }} comment{{ comments.length === 1 ? '' : 's' }} to send
+            </span>
+            <div class="flex items-center gap-2">
+              <UButton
+                label="Discard"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                @click="() => { comments = [] }"
+              />
+              <UButton
+                label="Send as the next turn"
+                icon="i-lucide-message-square-reply"
+                size="xs"
+                :loading="sending"
+                :disabled="isBusy"
+                @click="sendReview"
+              />
+            </div>
+          </div>
+          <div
+            v-for="(comment, index) in comments"
+            :key="index"
+            class="flex items-start gap-2 group/comment"
+          >
+            <span class="type-mono-meta shrink-0" style="color: var(--accent);">
+              {{ comment.file }}:{{ comment.line }}
+            </span>
+            <span class="type-detail flex-1 min-w-0">{{ comment.body }}</span>
+            <button
+              class="opacity-0 group-hover/comment:opacity-100 transition-opacity focus-ring rounded shrink-0"
+              style="color: var(--text-disabled);"
+              aria-label="Remove this comment"
+              @click="dropComment(index)"
+            >
+              <UIcon name="i-lucide-x" class="size-3" />
+            </button>
+          </div>
+        </div>
 
         <!-- Composer -->
         <div class="flex gap-2">
