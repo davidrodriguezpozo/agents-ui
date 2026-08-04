@@ -22,7 +22,7 @@
     "url": "https://github.com/davidrodriguezpozo/agents-ui/issues"
   },
   "bin": {
-    "agents-studio": "./bin/start.mjs"
+    "agents-studio": "bin/start.mjs"
   },
   "engines": {
     "node": ">=18"
