@@ -12,12 +12,12 @@ Thanks for your interest in contributing! Here's how to get started.
 
 2. Install dependencies:
    ```bash
-   bun install
+   make setup
    ```
 
 3. Start the dev server:
    ```bash
-   bun run dev
+   make dev
    ```
 
 4. Open `http://localhost:3000`
@@ -26,8 +26,8 @@ Thanks for your interest in contributing! Here's how to get started.
 
 1. Fork the repo and create a branch from `main`
 2. Make your changes
-3. Test locally with `bun run dev`
-4. Run type checking: `bun run typecheck`
+3. Test locally with `make dev`
+4. Run `make check` — tests and typecheck, both of which pass on `main`
 5. Submit a pull request
 
 ## What to Work On

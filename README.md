@@ -66,11 +66,22 @@ A ritual due at 08:00 only happens if something is running at 08:00, so a server
 started in a terminal yesterday is not enough.
 
 ```bash
-bun run build                     # the service runs the build, not the dev server
-node bin/start.mjs install        # starts at login, comes back after a crash
-node bin/start.mjs status         # is it installed, is it answering
-node bin/start.mjs uninstall      # stop doing that — nothing you own is touched
+make service          # build, then start at login and after a crash
+make service-status   # is it installed, is it answering
+make service-logs     # follow what it is saying
+make service-stop     # stop doing that — nothing you own is touched
 ```
+
+<details>
+<summary>Without make</summary>
+
+```bash
+bun run build                     # the service runs the build, not the dev server
+node bin/start.mjs install
+node bin/start.mjs status
+node bin/start.mjs uninstall
+```
+</details>
 
 Run these from the repository — this package is not published, so `npx agents-ui` only
 finds it from in here.
@@ -237,11 +248,15 @@ are there for when you'd rather pin it.
 ## Development
 
 ```bash
-bun run dev         # dev server
-bun run test        # vitest
-bun run typecheck   # nuxt typecheck
-bun run build       # production build into .output/
+make            # list every target
+make setup      # install dependencies
+make dev        # hot reload, on PORT (default 3000)
+make check      # tests and typecheck, which is what CI runs
 ```
+
+`make dev PORT=3001` if the background service already has 3000, and `PKG=npm` throughout
+if you would rather not use Bun. Every target is a plain command you could type yourself —
+the Makefile just remembers which ones need a build first.
 
 ### Demo data
 
@@ -251,9 +266,8 @@ accident. Sessions in it get real worktrees, which is why the file counts, commi
 and merge preview are real numbers rather than mock-ups.
 
 ```bash
-node scripts/demo-data.mjs seed      # build it (~/.claude-demo)
-CLAUDE_DIR=~/.claude-demo PORT=3200 node .output/server/index.mjs
-node scripts/demo-data.mjs revert    # remove it again
+make demo        # build it (~/.claude-demo) and serve it on 3200
+make demo-stop   # remove it again
 ```
 
 ### Tech stack
