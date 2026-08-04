@@ -273,6 +273,16 @@ async function collectRuns(): Promise<Run[]> {
  * The run log, newest first. Filtering happens before the limit, so a search
  * reaches everything on disk rather than only the most recent page of it.
  */
+/**
+ * Everything since a moment, uncapped.
+ *
+ * `listRuns` exists to fill a page and is limited accordingly; adding up what a
+ * month cost has to see the month, not the most recent fifty.
+ */
+export async function runsSince(sinceMs: number): Promise<RunSummary[]> {
+  return (await collectRuns()).filter(run => run.createdAt >= sinceMs).map(summarize)
+}
+
 export async function listRuns(options: RunFilter & { limit?: number } = {}): Promise<RunSummary[]> {
   const { limit = 50, ...filter } = options
 
