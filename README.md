@@ -92,8 +92,11 @@ would fail to bind and be restarted forever. Pick another port with `make servic
 PORT=3001`; it is written into the service definition, so `make service-status` keeps
 reporting on the right one afterwards.
 
-`make service` rebuilds first, and a rebuild empties `.output` for about a minute. An
-already-installed service is down for that minute and is restarted at the end.
+Installing is a **deploy**: the build is copied to `~/.claude/agents-ui/installed-build/`
+and the service runs the copy. `bun run build` empties `.output` and rewrites it over about
+a minute, so a service running from there would die on the next chunk it loaded — working
+on the code would take down the thing running your rituals. Run `make service` again to
+deploy what you have just built.
 
 This registers a launchd agent on macOS or a systemd user unit on Linux, and captures the
 `PATH` of the shell you install from — a service otherwise gets a bare one with no `claude`

@@ -2,7 +2,7 @@
 
 import { fileURLToPath } from 'node:url'
 import { resolve, dirname, join } from 'node:path'
-import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync, rmSync, readFileSync, cpSync, statSync } from 'node:fs'
 import { execFileSync, execSync } from 'node:child_process'
 import { createServer } from 'node:net'
 import { homedir } from 'node:os'
@@ -26,6 +26,18 @@ const port = Number(process.env.PORT) || 3000
 const host = process.env.HOST || '0.0.0.0'
 const claudeDir = process.env.CLAUDE_DIR || join(homedir(), '.claude')
 const logPath = join(claudeDir, 'agents-ui', 'logs', 'service.log')
+
+/**
+ * The service runs from its own copy of the build, not from `.output`.
+ *
+ * `.output` belongs to whoever is developing: `bun run build` empties it and
+ * rewrites it over about a minute, and a server running out of it dies on the
+ * next chunk it tries to load. Installing is therefore a deploy — the build is
+ * copied here and the service is pointed at the copy, so working on the code
+ * cannot take down the thing running your rituals.
+ */
+const installedBuild = join(claudeDir, 'agents-ui', 'installed-build')
+const installedServer = join(installedBuild, 'server', 'index.mjs')
 
 const supervisor = supervisorFor()
 const definitionPath = supervisor === 'launchd' ? plistPath() : systemdUnitPath()
@@ -154,10 +166,15 @@ async function install() {
     path: process.env.PATH,
   })
 
+  // Take the copy only once the port is known to be free, so a refusal leaves
+  // the previously deployed build exactly as it was.
+  rmSync(installedBuild, { recursive: true, force: true })
+  cpSync(resolve(root, '.output'), installedBuild, { recursive: true })
+
   const definition = {
     nodePath: process.execPath,
-    serverPath: outputServer,
-    workingDir: root,
+    serverPath: installedServer,
+    workingDir: installedBuild,
     logPath,
     environment,
   }
@@ -199,6 +216,7 @@ async function install() {
 
   console.log(`Installed and running on http://localhost:${port}`)
   console.log(`  definition  ${definitionPath}`)
+  console.log(`  running     its own copy of the build, so rebuilding cannot disturb it`)
   console.log(`  logs        ${logPath}`)
   if (supervisor === 'systemd') {
     console.log('  note        systemctl --user services stop at logout unless you run:')
@@ -214,10 +232,12 @@ function uninstall() {
     quiet('launchctl', ['bootout', `gui/${process.getuid()}/${LABEL}`])
     quiet('launchctl', ['unload', '-w', definitionPath])
     if (existsSync(definitionPath)) rmSync(definitionPath)
+    rmSync(installedBuild, { recursive: true, force: true })
     console.log(`Removed ${LABEL}. Your sessions, rituals and history are untouched.`)
   } else if (supervisor === 'systemd') {
     quiet('systemctl', ['--user', 'disable', '--now', UNIT_NAME])
     if (existsSync(definitionPath)) rmSync(definitionPath)
+    rmSync(installedBuild, { recursive: true, force: true })
     quiet('systemctl', ['--user', 'daemon-reload'])
     console.log(`Removed ${UNIT_NAME}. Your sessions, rituals and history are untouched.`)
   } else {
@@ -242,7 +262,14 @@ async function status() {
 
   const up = await answering(installedPort)
 
+  // Which build it is actually serving, which is not necessarily the one you
+  // last compiled.
+  const deployed = existsSync(installedServer)
+    ? new Date(statSync(installedServer).mtimeMs).toLocaleString()
+    : null
+
   console.log(`service    ${registered ? 'installed' : 'not installed'}`)
+  if (deployed) console.log(`build      deployed ${deployed}`)
   console.log(`responding ${up ? `yes — http://localhost:${installedPort}` : `no on port ${installedPort}`}`)
   console.log(`logs       ${existsSync(logPath) ? logPath : '(none yet)'}`)
 
