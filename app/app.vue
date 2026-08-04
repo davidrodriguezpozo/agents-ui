@@ -143,6 +143,7 @@ if (import.meta.client) {
 }
 
 const { attention, watchContinuously, stopWatching } = useAttention()
+const { build, isStale, load: loadBuildStatus } = useBuildStatus()
 
 // The tab title is the only part of this app visible from another window, so
 // it carries the count of things that are stuck.
@@ -158,6 +159,7 @@ onMounted(async () => {
   await refreshAll()
   initialized.value = true
   watchContinuously()
+  await loadBuildStatus()
 })
 
 onUnmounted(stopWatching)
@@ -433,6 +435,22 @@ function badgeFor(to: string) {
 
         <!-- Footer: working directory -->
         <div class="px-2.5 pb-2.5" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
+          <!-- Only ever shown when the running build is behind what you have -->
+          <div
+            v-if="isStale"
+            class="mb-2 px-3 py-2 rounded-md flex items-start gap-2"
+            style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
+            :title="build?.subject ? `Deployed: ${build.subject}` : undefined"
+          >
+            <UIcon name="i-lucide-package" class="size-3.5 shrink-0 mt-px" style="color: var(--accent);" />
+            <div class="min-w-0">
+              <div class="text-[11px]" style="color: var(--text-secondary); font-family: var(--font-sans);">
+                {{ build?.summary }}
+              </div>
+              <div class="text-[10px] font-mono" style="color: var(--text-disabled);">make service</div>
+            </div>
+          </div>
+
           <UPopover v-model:open="showWorkingDirPopover" :ui="{ content: 'w-[280px]' }">
             <button
               class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer text-left press-scale"

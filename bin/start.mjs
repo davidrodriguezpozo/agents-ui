@@ -62,6 +62,34 @@ function quiet(command, args) {
   return run(command, args).ok
 }
 
+/**
+ * What this build was cut from, left beside it for the running server to read.
+ *
+ * A deployed build is a snapshot, so it can fall behind the repository without
+ * anything on screen changing. Recording the commit is what lets the app say
+ * so rather than leaving you to wonder why a fix you just made is not there.
+ */
+function writeBuildInfo(target) {
+  const read = (args) => {
+    try {
+      return execFileSync('git', args, { cwd: root, stdio: 'pipe' }).toString().trim()
+    } catch {
+      return ''
+    }
+  }
+
+  const sha = read(['rev-parse', 'HEAD'])
+  if (!sha) return
+
+  writeFileSync(join(target, 'build-info.json'), `${JSON.stringify({
+    sha,
+    subject: read(['log', '-1', '--format=%s']),
+    committedAt: Number(read(['log', '-1', '--format=%ct'])) * 1000 || null,
+    deployedAt: Date.now(),
+    repoDir: root,
+  }, null, 2)}\n`, 'utf-8')
+}
+
 /** Whoever already has the port, in a form worth putting on screen. */
 function portHolder(target) {
   try {
@@ -170,6 +198,7 @@ async function install() {
   // the previously deployed build exactly as it was.
   rmSync(installedBuild, { recursive: true, force: true })
   cpSync(resolve(root, '.output'), installedBuild, { recursive: true })
+  writeBuildInfo(installedBuild)
 
   const definition = {
     nodePath: process.execPath,
