@@ -31,6 +31,27 @@ export interface Schedule {
   description: string
 }
 
+export type RitualOutcome = 'ok' | 'blocked' | 'failed' | 'stopped' | 'running'
+
+export interface RitualRun {
+  id: string
+  at: number
+  outcome: RitualOutcome
+  durationMs?: number
+  costUsd?: number
+  deniedTools?: string[]
+  suggestedRules?: string[]
+  error?: string
+  preview: string
+}
+
+export interface RitualHistory {
+  runs: RitualRun[]
+  /** Most recent runs in a row that came to nothing. */
+  failingStreak: number
+  lastOkAt?: number
+}
+
 export interface SuggestedRitual {
   command: string
   title: string
@@ -52,16 +73,22 @@ export function useSchedules() {
    * to tell, and the one that gets someone to recreate work they still have.
    */
   const loadError = useState<string | null>('schedulesError', () => null)
+  /** What each ritual has been doing, keyed by ritual id. */
+  const histories = useState<Record<string, RitualHistory>>('ritual-histories', () => ({}))
 
   async function fetchAll() {
     loading.value = true
     try {
-      const [mine, theirs] = await Promise.all([
+      const [mine, theirs, history] = await Promise.all([
         $fetch<Schedule[]>('/api/schedules'),
         $fetch<SuggestedRitual[]>('/api/schedules/suggested').catch(() => []),
+        // History is context, not the rituals themselves — losing it must not
+        // take the page down with it.
+        $fetch<Record<string, RitualHistory>>('/api/schedules/history').catch(() => ({})),
       ])
       schedules.value = mine
       suggested.value = theirs
+      histories.value = history
       loadError.value = null
     } catch (e) {
       console.error('[useSchedules] fetchAll:', e)
@@ -126,7 +153,25 @@ export function useSchedules() {
     return saved
   }
 
-  return { schedules, suggested, loading, loadError, fetchAll, save, remove, setEnabled, adopt, allowRules, revokeRule }
+  function historyFor(id: string): RitualHistory {
+    return histories.value[id] ?? { runs: [], failingStreak: 0 }
+  }
+
+  return {
+    schedules,
+    suggested,
+    loading,
+    loadError,
+    histories,
+    historyFor,
+    fetchAll,
+    save,
+    remove,
+    setEnabled,
+    adopt,
+    allowRules,
+    revokeRule,
+  }
 }
 
 export const PERMISSION_CHOICES: {

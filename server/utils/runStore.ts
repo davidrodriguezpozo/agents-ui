@@ -241,7 +241,8 @@ function summarize(run: Run): RunSummary {
   }
 }
 
-export async function listRuns(limit = 50): Promise<RunSummary[]> {
+/** Every run this machine has a record of, newest first. */
+async function collectRuns(): Promise<Run[]> {
   const byId = new Map<string, Run>()
 
   // Anything in flight is newer than what's on disk, so seed from memory first.
@@ -261,10 +262,30 @@ export async function listRuns(limit = 50): Promise<RunSummary[]> {
     }
   }
 
-  return [...byId.values()]
-    .sort((a, b) => b.createdAt - a.createdAt)
-    .slice(0, limit)
-    .map(summarize)
+  return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function listRuns(limit = 50): Promise<RunSummary[]> {
+  return (await collectRuns()).slice(0, limit).map(summarize)
+}
+
+/**
+ * The runs each ritual has produced, newest first.
+ *
+ * Grouped in one pass rather than one request per ritual: a ritual's history is
+ * wanted for every row at once, and the whole set has to be read either way.
+ * Capped per ritual so a year of a daily briefing doesn't come back in full.
+ */
+export async function listRunsBySchedule(perSchedule = 10): Promise<Record<string, RunSummary[]>> {
+  const grouped: Record<string, RunSummary[]> = {}
+
+  for (const run of await collectRuns()) {
+    if (!run.scheduleId) continue
+    const bucket = grouped[run.scheduleId] ??= []
+    if (bucket.length < perSchedule) bucket.push(summarize(run))
+  }
+
+  return grouped
 }
 
 /**

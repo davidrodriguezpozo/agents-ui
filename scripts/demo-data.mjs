@@ -709,6 +709,14 @@ const RITUALS = [
     origin: 'user',
     enabled: true,
     lastRunAgo: 26 * HOUR,
+    // A ritual that has been quietly working for weeks — the boring case, and
+    // the one the failing ones have to look different from.
+    history: [
+      { ago: 2 * DAY, status: 'completed', output: 'Nothing overnight. CI green, no new issues.', costUsd: 0.0198, durationMs: 11_900 },
+      { ago: 3 * DAY, status: 'completed', output: 'One PR waiting on you (#418). CI green.', costUsd: 0.0215, durationMs: 13_400 },
+      { ago: 4 * DAY, status: 'completed', output: 'Two issues opened overnight, neither urgent.', costUsd: 0.0207, durationMs: 12_600 },
+      { ago: 5 * DAY, status: 'completed', output: 'Quiet night. Nothing needs you.', costUsd: 0.0189, durationMs: 10_800 },
+    ],
     run: {
       status: 'completed',
       output: `## Overnight
@@ -744,6 +752,24 @@ Nothing is on fire. #423 has a second reporter, which is usually the point at wh
     origin: 'user',
     enabled: true,
     lastRunAgo: 25 * HOUR,
+    // The failure this whole feature exists for: it has been stopped by the
+    // same missing permission every morning since Tuesday, and every one of
+    // those runs finished "completed" with the work not done.
+    history: [
+      {
+        ago: 2 * DAY, status: 'completed', needsAttention: true,
+        deniedTools: ['Bash(gh issue edit:*)'], suggestedRules: ['Bash(gh issue edit:*)'],
+        output: 'Sorted three issues but could not label any of them — `gh issue edit` is not allowed.',
+        costUsd: 0.0391, durationMs: 24_100,
+      },
+      {
+        ago: 3 * DAY, status: 'completed', needsAttention: true,
+        deniedTools: ['Bash(gh issue edit:*)'], suggestedRules: ['Bash(gh issue edit:*)'],
+        output: 'Same again: read the new issues, blocked on labelling them.',
+        costUsd: 0.0402, durationMs: 25_500,
+      },
+      { ago: 4 * DAY, status: 'completed', output: 'Labelled six issues and closed two duplicates.', costUsd: 0.0455, durationMs: 28_900 },
+    ],
     run: {
       status: 'completed',
       needsAttention: true,
@@ -774,6 +800,10 @@ I could not apply any of it. Labelling needs \`gh issue edit\`, which this ritua
     pluginName: 'pgtools',
     enabled: true,
     lastRunAgo: 3 * DAY,
+    history: [
+      { ago: 10 * DAY, status: 'completed', output: 'One migration pending, safe to run.', costUsd: 0.0298, durationMs: 21_700 },
+      { ago: 17 * DAY, status: 'completed', output: 'Nothing pending.', costUsd: 0.0102, durationMs: 8_400 },
+    ],
     run: {
       status: 'completed',
       output: `Two migrations pending on \`main\`.
@@ -807,6 +837,14 @@ Neither is safe during business hours as written.`,
     origin: 'user',
     enabled: false,
     lastRunAgo: 8 * DAY,
+    // Paused after it started failing, which is why the streak stops there.
+    history: [
+      {
+        ago: 9 * DAY, status: 'failed', costUsd: 0.0019, durationMs: 30_200,
+        error: 'Could not reach the GitHub API: request timed out after 30s',
+      },
+      { ago: 10 * DAY, status: 'completed', output: 'Four PRs merged, two opened. Nothing left open past a day.', costUsd: 0.0244, durationMs: 15_100 },
+    ],
     run: {
       status: 'failed',
       error: 'Could not reach the GitHub API: request timed out after 30s',
@@ -1157,6 +1195,17 @@ async function seed() {
       invocation: ritual.invocation, scheduleId: id, projectDir: REPO,
       createdAt: NOW - ritual.lastRunAgo, ...ritual.run,
     }))
+
+    // Earlier mornings. A ritual is judged on its run of results rather than
+    // its last one, so the history has to be there to be judged.
+    for (const [past, spec] of (ritual.history ?? []).entries()) {
+      const { ago, ...rest } = spec
+      runs.push(buildRun({
+        id: `${runId}h${past}`, kind: 'command', title: ritual.title, input: ritual.input,
+        invocation: ritual.invocation, scheduleId: id, projectDir: REPO,
+        createdAt: NOW - ago, ...rest,
+      }))
+    }
 
     const { hour, minute, days } = ritual.recurrence
     const next = new Date(NOW)
