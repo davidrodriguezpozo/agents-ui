@@ -2,7 +2,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { appleScriptString, summarize } from '../server/utils/notify'
+import { appleScriptString, bannerText } from '../server/utils/notify'
 
 /**
  * Notifications are the half of running-as-a-service that reaches you. Two
@@ -53,18 +53,18 @@ describe('text going into AppleScript', () => {
 describe('what the banner says', () => {
   it('strips the markdown a run writes, which reads as noise in a banner', () => {
     // Punctuation the writer meant, like the dash, stays.
-    expect(summarize('## Overnight\n\n**CI** — green')).toBe('Overnight CI — green')
+    expect(bannerText('## Overnight\n\n**CI** — green')).toBe('Overnight CI — green')
   })
 
   it('trims to something a banner can show', () => {
     const long = 'word '.repeat(80)
 
-    expect(summarize(long).length).toBeLessThanOrEqual(120)
-    expect(summarize(long).endsWith('…')).toBe(true)
+    expect(bannerText(long).length).toBeLessThanOrEqual(120)
+    expect(bannerText(long).endsWith('…')).toBe(true)
   })
 
   it('leaves a short line alone', () => {
-    expect(summarize('Nothing needs you.')).toBe('Nothing needs you.')
+    expect(bannerText('Nothing needs you.')).toBe('Nothing needs you.')
   })
 })
 

@@ -29,8 +29,14 @@ export function appleScriptString(value: string): string {
     .replace(/[\r\n]+/g, ' ')
 }
 
-/** Long output makes an unreadable banner, so say the first useful thing. */
-export function summarize(text: string, limit = 120): string {
+/**
+ * Long output makes an unreadable banner, so say the first useful thing.
+ *
+ * Named for the banner rather than called `summarize`: server utils are
+ * auto-imported into one namespace, and a generic name here quietly shadows
+ * the conversation summariser in `history.ts`.
+ */
+export function bannerText(text: string, limit = 120): string {
   const flat = text.replace(/[\s#*`>_-]+/g, ' ').trim()
   if (flat.length <= limit) return flat
   return `${flat.slice(0, limit - 1).trimEnd()}…`
@@ -61,7 +67,7 @@ export async function notify(kind: NotifyKind, title: string, body: string): Pro
     const { notifications } = await readPreferences()
     if (!notifications.enabled || !notifications[kind]) return
 
-    send(title, summarize(body))
+    send(title, bannerText(body))
   } catch {
     // Deliberately swallowed.
   }
