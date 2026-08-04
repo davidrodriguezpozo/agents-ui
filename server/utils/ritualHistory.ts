@@ -34,12 +34,19 @@ export interface RitualHistory {
   lastOkAt?: number
 }
 
+/** Everything needed to judge a run, so a live run can be judged too. */
+export interface RunOutcomeFields {
+  status: string
+  needsAttention?: boolean
+  deniedTools?: string[]
+}
+
 /**
  * A completed run is not automatically a successful one: an unattended run that
  * was refused a tool it needed finishes "completed" with half the work missing.
  * That is the failure mode rituals actually have, so it gets its own outcome.
  */
-export function outcomeOf(run: RunSummary): RitualOutcome {
+export function outcomeOf(run: RunOutcomeFields): RitualOutcome {
   if (run.status === 'running' || run.status === 'queued') return 'running'
   if (run.status === 'cancelled') return 'stopped'
   if (run.status === 'failed') return 'failed'

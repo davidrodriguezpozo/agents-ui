@@ -16,6 +16,39 @@ const rawJson = ref('')
 const saving = ref(false)
 const viewMode = ref<'structured' | 'raw'>('structured')
 
+type NotificationKey = 'enabled' | 'needsYou' | 'failed' | 'finished'
+
+const NOTIFICATION_OPTIONS: { key: NotificationKey; label: string; hint: string }[] = [
+  { key: 'enabled', label: 'Notify me', hint: 'Off means nothing is ever sent, whatever is set below.' },
+  { key: 'needsYou', label: 'Something is blocked on me', hint: 'A run stopped waiting for a permission it does not have.' },
+  { key: 'failed', label: 'Something failed', hint: 'A ritual or a session turn ended badly.' },
+  { key: 'finished', label: 'Something finished', hint: 'Only for work that ran long enough that you looked away.' },
+]
+
+const notifications = ref<Record<NotificationKey, boolean>>({
+  enabled: true, needsYou: true, failed: true, finished: true,
+})
+
+onMounted(async () => {
+  try {
+    const prefs = await $fetch<{ notifications: Record<NotificationKey, boolean> }>('/api/preferences')
+    notifications.value = prefs.notifications
+  } catch {
+    // Leaving the defaults on screen is better than an error about a toggle.
+  }
+})
+
+async function setNotification(key: NotificationKey, value: boolean) {
+  const previous = notifications.value[key]
+  notifications.value[key] = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { notifications: { [key]: value } } })
+  } catch {
+    notifications.value[key] = previous
+    toast.add({ title: 'Could not save that', color: 'error' })
+  }
+}
+
 onMounted(async () => {
   await load()
   syncRawJson()
@@ -302,6 +335,47 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
         <div class="flex justify-end">
           <UButton label="Save Status Line" size="sm" variant="soft" :loading="saving" @click="saveStatusLine" />
+        </div>
+      </div>
+
+      <!-- Notifications -->
+      <div class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-label flex items-center gap-2">
+          Notifications
+          <HelpTip
+            title="Being told things"
+            body="Notifications come from your desktop rather than the browser, so they still arrive when this is closed — which is the point if you run it in the background."
+          />
+        </h3>
+        <p class="type-body">
+          Work carries on whether or not you are watching. These are how it reaches you when
+          it stops being able to carry on.
+        </p>
+
+        <div class="space-y-2">
+          <label
+            v-for="option in NOTIFICATION_OPTIONS"
+            :key="option.key"
+            class="flex items-start justify-between gap-4 py-2 px-3 rounded-md cursor-pointer"
+            style="background: var(--input-bg);"
+            :style="{ opacity: option.key === 'enabled' || notifications.enabled ? 1 : 0.5 }"
+          >
+            <span>
+              <span class="type-strong text-body block">{{ option.label }}</span>
+              <span class="type-meta">{{ option.hint }}</span>
+            </span>
+            <span class="field-toggle shrink-0 mt-0.5">
+              <input
+                type="checkbox"
+                :checked="notifications[option.key]"
+                :disabled="option.key !== 'enabled' && !notifications.enabled"
+                @change="setNotification(option.key, ($event.target as HTMLInputElement).checked)"
+              />
+              <span class="field-toggle__track">
+                <span class="field-toggle__thumb" />
+              </span>
+            </span>
+          </label>
         </div>
       </div>
 

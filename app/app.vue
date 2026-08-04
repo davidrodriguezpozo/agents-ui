@@ -142,10 +142,25 @@ if (import.meta.client) {
   onUnmounted(() => document.removeEventListener('keydown', chatHandler))
 }
 
+const { attention, watchContinuously, stopWatching } = useAttention()
+
+// The tab title is the only part of this app visible from another window, so
+// it carries the count of things that are stuck.
+useHead({
+  title: computed(() =>
+    attention.value.needsYou > 0
+      ? `(${attention.value.needsYou}) Claude Code Agent Manager`
+      : 'Claude Code Agent Manager',
+  ),
+})
+
 onMounted(async () => {
   await refreshAll()
   initialized.value = true
+  watchContinuously()
 })
+
+onUnmounted(stopWatching)
 
 // Simple mode leads with what someone can do and what they own; the authoring
 // surface (agents, commands, workflows, graph) is advanced-only.
@@ -185,6 +200,42 @@ const navSecondary = computed(() => isSimple.value
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
   return route.path.startsWith(to)
+}
+
+/**
+ * The badge that means "look at this", as distinct from the one that counts
+ * what you have. Blocked work is red because it is stuck; a turn in flight is
+ * the accent colour because it is fine, just not finished.
+ */
+function attentionFor(to: string) {
+  const { blocked, working, failingRituals } = attention.value
+
+  if (to === '/sessions') {
+    if (blocked) {
+      return {
+        count: blocked,
+        title: `${blocked} waiting for you to approve something`,
+        style: { background: 'rgba(248,113,113,0.14)', color: 'var(--error)' },
+      }
+    }
+    if (working) {
+      return {
+        count: working,
+        title: `${working} working right now`,
+        style: { background: 'var(--accent-muted)', color: 'var(--accent)' },
+      }
+    }
+  }
+
+  if (to === '/schedules' && failingRituals) {
+    return {
+      count: failingRituals,
+      title: `${failingRituals} rituals whose last runs came to nothing`,
+      style: { background: 'rgba(248,113,113,0.14)', color: 'var(--error)' },
+    }
+  }
+
+  return null
 }
 
 function badgeFor(to: string) {
@@ -271,8 +322,17 @@ function badgeFor(to: string) {
             />
             <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
             <span class="flex-1" style="font-family: var(--font-sans);">{{ link.label }}</span>
+            <!-- Something blocked outranks how many of a thing you own -->
             <span
-              v-if="badgeFor(link.to)"
+              v-if="attentionFor(link.to)"
+              class="font-mono text-[10px] tabular-nums px-1.5 rounded-full"
+              :style="attentionFor(link.to)!.style"
+              :title="attentionFor(link.to)!.title"
+            >
+              {{ attentionFor(link.to)!.count }}
+            </span>
+            <span
+              v-else-if="badgeFor(link.to)"
               class="font-mono text-[10px] tabular-nums transition-colors duration-150"
               :style="{ color: isActive(link.to) ? 'var(--accent)' : 'var(--text-disabled)' }"
             >

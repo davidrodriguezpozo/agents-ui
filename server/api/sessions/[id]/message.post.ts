@@ -1,8 +1,30 @@
 import { existsSync } from 'node:fs'
 import { findSession, patchSession } from '../../../utils/sessions'
 import { resolveRunOptionsFor } from '../../../utils/runOptions'
-import { createRun, getActive, readRun } from '../../../utils/runStore'
+import { createRun, getActive, readRun, type Run } from '../../../utils/runStore'
 import { executeRun } from '../../../utils/runner'
+import { notify } from '../../../utils/notify'
+
+/**
+ * A turn short enough that you never looked away does not warrant a banner —
+ * you watched it happen. Past about half a minute you have gone to do
+ * something else, which is the moment being told is worth anything.
+ */
+const WORTH_INTERRUPTING_MS = 30_000
+
+async function announceTurn(title: string, run: Run | null, elapsedMs: number): Promise<void> {
+  if (!run) return
+
+  if (run.status === 'failed') {
+    await notify('failed', `${title} failed`, run.error || 'The turn ended early.')
+    return
+  }
+
+  // A stopped turn was stopped by you, a moment ago, on purpose.
+  if (run.status === 'cancelled' || elapsedMs < WORTH_INTERRUPTING_MS) return
+
+  await notify('finished', title, run.output || 'Finished with nothing to report.')
+}
 
 /**
  * Send a turn to a session.
@@ -76,6 +98,8 @@ export default defineEventHandler(async (event) => {
     runIds: [...session.runIds, run.id],
   })
 
+  const startedAt = Date.now()
+
   void executeRun(run, options, { resumeSessionId: session.sdkSessionId })
     .finally(async () => {
       // The SDK hands back its own id on the first turn; keep it so the next
@@ -85,6 +109,8 @@ export default defineEventHandler(async (event) => {
         status: 'idle',
         sdkSessionId: finished?.sdkSessionId ?? session.sdkSessionId,
       })
+
+      await announceTurn(session.title, finished, Date.now() - startedAt)
     })
 
   return { runId: run.id, sessionId: session.id }

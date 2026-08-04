@@ -1,7 +1,9 @@
 import { computeNextRun, markRan, permissionModeFor, scheduleStore, type Schedule } from './schedules'
 import { resolveRunOptionsFor } from './runOptions'
-import { createRun } from './runStore'
+import { createRun, type Run } from './runStore'
 import { executeRun } from './runner'
+import { notify } from './notify'
+import { outcomeOf } from './ritualHistory'
 
 const TICK_MS = 30_000
 
@@ -75,6 +77,27 @@ export async function tick(now = Date.now()): Promise<void> {
   for (const schedule of due) void fire(schedule)
 }
 
+/**
+ * Say how it went.
+ *
+ * A ritual runs precisely when nobody is watching, so this is the only moment
+ * it can report for itself. "Blocked" is called out separately from "failed"
+ * because it looks like success everywhere else — the run completed, it just
+ * did not do the job.
+ */
+async function announce(title: string, run: Run): Promise<void> {
+  const outcome = outcomeOf(run)
+
+  if (outcome === 'failed') {
+    await notify('failed', `${title} failed`, run.error || 'The run ended early.')
+  } else if (outcome === 'blocked') {
+    const tools = (run.deniedTools ?? []).join(', ') || 'a tool'
+    await notify('needsYou', `${title} was blocked`, `It needed ${tools} and stopped. Nothing was applied.`)
+  } else if (outcome === 'ok') {
+    await notify('finished', title, run.output || 'Finished with nothing to report.')
+  }
+}
+
 /** Already claimed in `inFlight` by the tick that selected it. */
 async function fire(schedule: Schedule): Promise<void> {
   try {
@@ -103,6 +126,7 @@ async function fire(schedule: Schedule): Promise<void> {
 
     console.log(`[scheduler] running "${schedule.title}" as ${run.id}`)
     await executeRun(run, options, { unattended: true })
+    await announce(schedule.title, run)
   } catch (e) {
     console.error(`[scheduler] "${schedule.title}" failed to start`, e)
   } finally {

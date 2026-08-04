@@ -60,6 +60,21 @@ of the sidebar — that's the repository sessions will branch from.
 > Claude Code installed and signed in on this machine. Sessions, rituals and workflows
 > run through the Claude Agent SDK and use that login; there is no separate key to set up.
 
+### Leave it running
+
+A ritual due at 08:00 only happens if something is running at 08:00, so a server you
+started in a terminal yesterday is not enough.
+
+```bash
+npx agents-ui install      # starts at login, comes back after a crash
+npx agents-ui status       # is it installed, is it answering
+npx agents-ui uninstall    # stop doing that — nothing you own is touched
+```
+
+This registers a launchd agent on macOS or a systemd user unit on Linux, and captures the
+`PATH` of the shell you install from — a service otherwise gets a bare one with no `claude`
+in it, and every run would fail at 08:00 with nobody watching.
+
 ---
 
 ## Sessions
@@ -127,6 +142,16 @@ so, and says when it last worked.
 A finished run is not automatically a successful one. A ritual refused a tool it needed
 completes with half the job undone, so that counts against it. A run you stopped by hand
 does not.
+
+### Being told
+
+Work that carries on without you is only useful if it can reach you when it stops being
+able to carry on. A blocked permission, a failure, or a turn that ran long enough that you
+looked away each raise a **desktop** notification — not a browser one, because the browser
+is usually shut, which is the case this exists for. Each kind can be turned off in Settings.
+
+Meanwhile the sidebar counts what is stuck rather than what you own, and the tab title
+carries that count too, so it's readable from another window.
 
 ---
 

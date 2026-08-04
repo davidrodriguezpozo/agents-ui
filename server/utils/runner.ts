@@ -3,6 +3,7 @@ import { emit, getActive, persist, setStatus, type Run } from './runStore'
 import { toQueryOptions, type ResolvedRunOptions } from './runOptions'
 import { answerPermission, createPermissionBroker } from './permissionBroker'
 import { mergeRules } from './permissionRules'
+import { notify } from './notify'
 
 function previewToolResult(content: unknown): string {
   const text = typeof content === 'string'
@@ -51,7 +52,13 @@ export async function executeRun(
           behavior: 'deny',
           message: `"${request.toolName}" needs your approval, and this ran on a schedule with nobody watching. Run it yourself to approve.`,
         })
+        return
       }
+
+      // Attended, but "attended" only means someone could answer — they are
+      // probably in another window. A prompt nobody sees stalls until it times
+      // out, so this is exactly what a notification is for.
+      void notify('needsYou', `${run.title} needs you`, `Waiting for approval to use ${request.toolName}.`)
     },
     onSettled: (request, decision) => emit(run.id, {
       type: 'permission_resolved',

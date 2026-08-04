@@ -120,7 +120,7 @@ function nextLabel(schedule: Schedule) {
     <div class="page-container page-container--narrow py-4 space-y-6">
       <p class="type-body leading-relaxed">
         Things Claude runs for you on a schedule, so the result is waiting when you get in.
-        They run while this app is open.
+        They run while this is running — install it as a service and that means always.
       </p>
 
       <!-- Never render "no rituals" when the truth is "could not read them" -->
