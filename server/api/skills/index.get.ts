@@ -26,7 +26,7 @@ export default defineEventHandler(async (event) => {
 
       skills.push({
         slug: dir.name,
-        frontmatter: { name: dir.name, ...frontmatter },
+        frontmatter: { ...frontmatter, name: frontmatter.name ?? dir.name },
         body,
         filePath: skillPath,
         source: 'local',
@@ -82,7 +82,7 @@ export default defineEventHandler(async (event) => {
                 if (entry.selectedSkills.length === 0 || entry.selectedSkills.includes(item.name)) {
                   skills.push({
                     slug: item.name,
-                    frontmatter: { name: item.name, ...frontmatter },
+                    frontmatter: { ...frontmatter, name: frontmatter.name ?? item.name },
                     body,
                     filePath: skillPath,
                     source: 'github',

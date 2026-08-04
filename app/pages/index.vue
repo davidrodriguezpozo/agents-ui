@@ -116,7 +116,7 @@ const modelBreakdown = computed(() => {
   for (const a of agents.value) {
     const m = a.frontmatter.model;
     if (m && counts[m] !== undefined) counts[m]++;
-    else counts.unset++;
+    else counts.unset = (counts.unset ?? 0) + 1;
   }
   return counts;
 });
@@ -333,8 +333,8 @@ const statItems = computed(() => [
                 "
                 class="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-full shrink-0"
                 :class="[
-                  modelColors[agent.frontmatter.model].bg,
-                  modelColors[agent.frontmatter.model].text,
+                  modelColors[agent.frontmatter.model]?.bg,
+                  modelColors[agent.frontmatter.model]?.text,
                 ]"
               >
                 {{ agent.frontmatter.model }}

@@ -70,8 +70,8 @@ const filteredAvailablePlugins = computed(() => {
 const availableGroupedByMarketplace = computed(() => {
   const groups: Record<string, typeof availablePlugins.value> = {};
   for (const plugin of filteredAvailablePlugins.value) {
-    if (!groups[plugin.marketplace]) groups[plugin.marketplace] = [];
-    groups[plugin.marketplace].push(plugin);
+    const bucket = (groups[plugin.marketplace] ??= []);
+    bucket.push(plugin);
   }
   return groups;
 });
@@ -317,7 +317,7 @@ async function onRemove(owner: string, repo: string) {
           icon="i-lucide-github"
           size="sm"
           variant="soft"
-          @click="showImportModal = true"
+          @click="() => { showImportModal = true }"
         />
       </template>
     </PageHeader>
@@ -806,7 +806,7 @@ async function onRemove(owner: string, repo: string) {
               icon="i-lucide-plus"
               size="xs"
               variant="soft"
-              @click="showAddMarketplaceModal = true"
+              @click="() => { showAddMarketplaceModal = true }"
             />
           </div>
         </details>

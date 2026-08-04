@@ -19,6 +19,7 @@ function run(patch: Partial<RunSummary> = {}): RunSummary {
     status: 'completed',
     createdAt: 1_000 - seq,
     preview: '',
+    source: 'ritual',
     ...patch,
   }
 }

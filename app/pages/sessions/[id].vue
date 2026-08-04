@@ -185,7 +185,7 @@ const totalChanges = computed(() => {
           size="sm"
           variant="soft"
           color="neutral"
-          @click="showDiff = !showDiff"
+          @click="() => { showDiff = !showDiff }"
         />
         <UButton
           v-if="session?.worktree.changedFiles"
@@ -199,7 +199,7 @@ const totalChanges = computed(() => {
           size="sm"
           variant="ghost"
           color="neutral"
-          @click="showClose = true"
+          @click="() => { showClose = true }"
         />
       </template>
     </PageHeader>
@@ -429,7 +429,7 @@ const totalChanges = computed(() => {
             </label>
 
             <div class="flex justify-end gap-2 pt-1">
-              <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="showMerge = false" />
+              <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { showMerge = false }" />
               <UButton
                 label="Merge"
                 icon="i-lucide-git-merge"
@@ -478,7 +478,7 @@ const totalChanges = computed(() => {
               :loading="closing"
               @click="onClose({ force: true })"
             />
-            <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="showClose = false" />
+            <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { showClose = false }" />
           </div>
         </div>
       </template>

@@ -25,10 +25,13 @@ const explanation = computed(() => {
 
 /** Genuine detail for whoever ends up debugging, not shown by default. */
 const detail = computed(() => {
+  // The error Nuxt hands the page carries the failing URL; NuxtError's type
+  // does not admit to it.
+  const error = props.error as (NuxtError & { url?: string }) | undefined
   const parts = [
-    props.error?.statusCode ? `Status ${props.error.statusCode}` : null,
-    props.error?.message,
-    props.error?.url,
+    error?.statusCode ? `Status ${error.statusCode}` : null,
+    error?.message,
+    error?.url,
   ].filter(Boolean)
   return parts.join('\n')
 })

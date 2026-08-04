@@ -101,6 +101,17 @@ async function refreshAll() {
   await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), fetchWorkflows()])
 }
 
+/**
+ * First-run setup creates the directory everything else reads from, so the
+ * sidebar's counts are all stale by the time the wizard closes. In the template
+ * this could not be typechecked — `Promise` is not one of the globals a Vue
+ * expression is allowed to see.
+ */
+async function onSetupComplete() {
+  await loadConfig()
+  await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills()])
+}
+
 // Switching projects changes what every list contains, so reload on change.
 watch(workingDir, () => {
   if (initialized.value) refreshAll()
@@ -362,7 +373,7 @@ function badgeFor(to: string) {
 
         <!-- Footer: working directory -->
         <div class="px-2.5 pb-2.5" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
-          <UPopover v-model:open="showWorkingDirPopover" :ui="{ width: 'w-[280px]' }">
+          <UPopover v-model:open="showWorkingDirPopover" :ui="{ content: 'w-[280px]' }">
             <button
               class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer text-left press-scale"
               style="color: var(--text-disabled); border: 1px solid var(--border-subtle);"
@@ -487,7 +498,7 @@ function badgeFor(to: string) {
         <!-- Setup wizard when directory doesn't exist -->
         <SetupWizard
           v-if="initialized && !claudeDirExists"
-          @complete="async () => { await loadConfig(); await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills()]) }"
+          @complete="onSetupComplete"
         />
 
         <NuxtPage v-else-if="initialized" />

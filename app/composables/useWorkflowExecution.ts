@@ -11,12 +11,24 @@ export function useWorkflowExecution() {
   let _projectDir: string | undefined
   let _lastOutput = ''
 
+  /**
+   * Update a step in place. Indexing cannot prove the step is there, and if it
+   * is not there is nothing to update — spreading `undefined` would otherwise
+   * invent a half-built step with no id.
+   */
+  function patchStep(index: number, patch: Partial<StepExecution>) {
+    const current = steps.value[index]
+    if (!current) return
+    steps.value[index] = { ...current, ...patch }
+  }
+
   async function executeStep(stepIndex: number, input: string) {
     if (!_workflow) return
     const step = _workflow.steps[stepIndex]
+    if (!step) return
 
     currentStepIndex.value = stepIndex
-    steps.value[stepIndex] = { ...steps.value[stepIndex], status: 'running', input, startedAt: Date.now() }
+    patchStep(stepIndex, { status: 'running', input, startedAt: Date.now() })
     isRunning.value = true
     isPaused.value = false
 
@@ -53,10 +65,10 @@ export function useWorkflowExecution() {
             const data = JSON.parse(line.slice(6))
             if (data.type === 'text_delta') {
               resultText += data.text
-              steps.value[stepIndex] = { ...steps.value[stepIndex], output: resultText }
+              patchStep(stepIndex, { output: resultText })
             } else if (data.type === 'result') {
               resultText = data.text
-              steps.value[stepIndex] = { ...steps.value[stepIndex], output: resultText }
+              patchStep(stepIndex, { output: resultText })
             } else if (data.type === 'error') {
               throw new Error(data.message)
             }
@@ -67,7 +79,7 @@ export function useWorkflowExecution() {
         }
       }
 
-      steps.value[stepIndex] = { ...steps.value[stepIndex], status: 'completed', output: resultText, completedAt: Date.now() }
+      patchStep(stepIndex, { status: 'completed', output: resultText, completedAt: Date.now() })
       _lastOutput = resultText
       isRunning.value = false
 
@@ -80,12 +92,12 @@ export function useWorkflowExecution() {
       }
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        steps.value[stepIndex] = { ...steps.value[stepIndex], status: 'failed', error: 'Cancelled', completedAt: Date.now() }
+        patchStep(stepIndex, { status: 'failed', error: 'Cancelled', completedAt: Date.now() })
       } else {
-        steps.value[stepIndex] = { ...steps.value[stepIndex], status: 'failed', error: err instanceof Error ? err.message : 'Unknown error', completedAt: Date.now() }
+        patchStep(stepIndex, { status: 'failed', error: err instanceof Error ? err.message : 'Unknown error', completedAt: Date.now() })
       }
       for (let j = stepIndex + 1; j < _workflow.steps.length; j++) {
-        steps.value[j] = { ...steps.value[j], status: 'skipped' }
+        patchStep(j, { status: 'skipped' })
       }
       isRunning.value = false
       isPaused.value = false
@@ -135,7 +147,7 @@ export function useWorkflowExecution() {
     const idx = currentStepIndex.value
     // Combine the agent's output + user reply as the new input for the SAME step
     const combinedInput = `Previous agent output:\n${_lastOutput}\n\nUser response:\n${reply}`
-    steps.value[idx] = { ...steps.value[idx], status: 'pending', output: '', error: undefined, completedAt: undefined }
+    patchStep(idx, { status: 'pending', output: '', error: undefined, completedAt: undefined })
     await executeStep(idx, combinedInput)
   }
 
@@ -146,7 +158,7 @@ export function useWorkflowExecution() {
     if (_workflow) {
       for (let j = currentStepIndex.value + 1; j < _workflow.steps.length; j++) {
         if (steps.value[j]?.status === 'pending') {
-          steps.value[j] = { ...steps.value[j], status: 'skipped' }
+          patchStep(j, { status: 'skipped' })
         }
       }
     }

@@ -477,7 +477,7 @@ if (import.meta.client) {
             Uninstall <strong>{{ plugin?.name }}</strong>? The plugin will be removed but its files will remain on your computer.
           </p>
           <div class="flex justify-end gap-2">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showUninstallConfirm = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showUninstallConfirm = false }" />
             <UButton label="Uninstall" color="error" size="sm" :loading="uninstalling" @click="onUninstall" />
           </div>
         </div>

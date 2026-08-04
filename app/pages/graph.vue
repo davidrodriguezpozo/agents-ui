@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { VueFlow, useVueFlow } from '@vue-flow/core'
+import type { NodeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import '@vue-flow/core/dist/style.css'
@@ -210,7 +211,7 @@ const highlightedEdgeIds = computed(() => {
   return set
 })
 
-function onNodeMouseEnter(_: MouseEvent, node: any) {
+function onNodeMouseEnter({ node }: NodeMouseEvent) {
   if (node.id.startsWith('header-')) return
   hoveredNodeId.value = node.id
   applyHighlightClasses()
@@ -292,9 +293,10 @@ function hideTooltip() {
 }
 
 // Combined handlers
-function handleNodeMouseEnter(event: MouseEvent, node: any) {
-  onNodeMouseEnter(event, node)
-  if (node.data?.description) showTooltip(event, node.data.description)
+function handleNodeMouseEnter(payload: NodeMouseEvent) {
+  onNodeMouseEnter(payload)
+  const { event, node } = payload
+  if (node.data?.description) showTooltip(event as MouseEvent, node.data.description)
 }
 
 function handleNodeMouseLeave() {
@@ -302,7 +304,7 @@ function handleNodeMouseLeave() {
   hideTooltip()
 }
 
-function onNodeClick(_: any, node: any) {
+function onNodeClick({ node }: NodeMouseEvent) {
   if (node.type === 'agent') router.push(`/agents/${node.data.slug}`)
   else if (node.type === 'command') router.push(`/commands/${node.data.slug}`)
   else if (node.type === 'skill') router.push(`/skills/${node.data.slug}`)

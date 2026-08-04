@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@iconify-json/lucide": "^1.2.95",
+    "@types/node": "^26.1.2",
     "typescript": "^5.7",
     "vitest": "^4.1.10"
   }

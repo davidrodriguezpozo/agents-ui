@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
-import { VueFlow } from '@vue-flow/core'
+import { MarkerType, VueFlow } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
 import '@vue-flow/core/dist/style.css'
@@ -65,14 +65,19 @@ const nodes = computed(() =>
 
 // Compute edges (sequential: step[i] -> step[i+1])
 const edges = computed(() =>
-  workflowSteps.value.slice(0, -1).map((step, i) => ({
-    id: `e-${step.id}-${workflowSteps.value[i + 1].id}`,
-    source: step.id,
-    target: workflowSteps.value[i + 1].id,
-    animated: true,
-    style: { strokeDasharray: '5 5', stroke: 'var(--accent)' },
-    markerEnd: { type: 'arrowclosed', color: 'var(--accent)' },
-  }))
+  workflowSteps.value.flatMap((step, i) => {
+    const next = workflowSteps.value[i + 1]
+    if (!next) return []
+
+    return [{
+      id: `e-${step.id}-${next.id}`,
+      source: step.id,
+      target: next.id,
+      animated: true,
+      style: { strokeDasharray: '5 5', stroke: 'var(--accent)' },
+      markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--accent)' },
+    }]
+  })
 )
 
 // Drag-and-drop from palette
@@ -110,7 +115,12 @@ function moveStep(stepId: string, direction: -1 | 1) {
   const newIdx = idx + direction
   if (newIdx < 0 || newIdx >= workflowSteps.value.length) return
   const copy = [...workflowSteps.value]
-  ;[copy[idx], copy[newIdx]] = [copy[newIdx], copy[idx]]
+  const moving = copy[idx]
+  const displaced = copy[newIdx]
+  if (!moving || !displaced) return
+
+  copy[idx] = displaced
+  copy[newIdx] = moving
   workflowSteps.value = copy
 }
 
@@ -206,7 +216,7 @@ const allCompleted = computed(() =>
         icon="i-lucide-plus"
         size="xs"
         variant="soft"
-        @click="showMobileAgentPicker = true"
+        @click="() => { showMobileAgentPicker = true }"
       />
 
       <UButton
@@ -224,7 +234,7 @@ const allCompleted = computed(() =>
         icon="i-lucide-play"
         size="sm"
         :disabled="!canRun"
-        @click="showRunModal = true"
+        @click="() => { showRunModal = true }"
       />
       <UButton label="Save" icon="i-lucide-save" size="sm" variant="soft" :loading="saving" @click="save" />
       <UButton icon="i-lucide-trash-2" size="sm" variant="ghost" color="error" @click="deleteWorkflow" />
@@ -388,7 +398,7 @@ const allCompleted = computed(() =>
             </button>
           </div>
           <div class="flex justify-end">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showMobileAgentPicker = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showMobileAgentPicker = false }" />
           </div>
         </div>
       </template>

@@ -199,7 +199,7 @@ const visible = computed(() =>
               color="neutral"
               class="shrink-0"
               :disabled="busy"
-              @click="confirming = snapshot.name"
+              @click="() => { confirming = snapshot.name }"
             />
           </div>
 
@@ -213,7 +213,7 @@ const visible = computed(() =>
             </p>
             <div class="flex items-center gap-2">
               <UButton label="Restore this backup" size="xs" :loading="busy" @click="onRestore(snapshot.name)" />
-              <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="confirming = null" />
+              <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="() => { confirming = null }" />
             </div>
           </div>
         </div>

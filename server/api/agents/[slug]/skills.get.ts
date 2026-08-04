@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
       if (frontmatter.agent === agentSlug) {
         results.push({
           slug: entry.name,
-          frontmatter: { name: entry.name, ...frontmatter },
+          frontmatter: { ...frontmatter, name: frontmatter.name ?? entry.name },
           body,
           filePath: skillPath,
           source: 'standalone',

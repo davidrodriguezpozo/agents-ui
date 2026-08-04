@@ -76,7 +76,7 @@ async function createBlank() {
         <span class="text-[12px] text-meta">{{ workflows.length }}</span>
       </template>
       <template #right>
-        <UButton label="New Workflow" icon="i-lucide-plus" size="sm" @click="showCreateModal = true" />
+        <UButton label="New Workflow" icon="i-lucide-plus" size="sm" @click="() => { showCreateModal = true }" />
       </template>
     </PageHeader>
 
@@ -174,7 +174,7 @@ async function createBlank() {
         </div>
 
         <div class="text-center">
-          <UButton label="Or create from scratch" variant="ghost" size="sm" @click="showCreateModal = true" />
+          <UButton label="Or create from scratch" variant="ghost" size="sm" @click="() => { showCreateModal = true }" />
         </div>
       </div>
     </div>
@@ -203,7 +203,7 @@ async function createBlank() {
               />
             </div>
             <div class="flex justify-end gap-2 pt-2">
-              <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showCreateModal = false" />
+              <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showCreateModal = false }" />
               <UButton type="submit" label="Create" size="sm" :loading="creating" :disabled="!newName.trim()" />
             </div>
           </form>

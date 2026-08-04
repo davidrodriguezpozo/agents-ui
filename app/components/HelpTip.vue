@@ -9,7 +9,7 @@ const showExample = ref(false)
 </script>
 
 <template>
-  <UPopover :ui="{ width: 'max-w-[280px]' }">
+  <UPopover :ui="{ content: 'max-w-[280px]' }">
     <button
       class="inline-flex items-center justify-center size-[18px] rounded-full shrink-0 cursor-pointer"
       style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle); color: var(--text-disabled);"

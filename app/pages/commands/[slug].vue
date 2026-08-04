@@ -31,7 +31,9 @@ watch([frontmatter, body], () => {
 function restoreDraft() {
   const draft = loadDraft()
   if (draft) {
-    frontmatter.value = draft.frontmatter as CommandFrontmatter
+    // A draft is whatever was in localStorage, so nothing about its shape is
+    // guaranteed — the double step is the honest way to say that.
+    frontmatter.value = draft.frontmatter as unknown as CommandFrontmatter
     body.value = draft.body
     clearDraft()
     toast.add({ title: 'Draft restored', color: 'success' })
@@ -148,7 +150,7 @@ useUnsavedChanges(isDirty)
           icon="i-lucide-play"
           size="sm"
           variant="soft"
-          @click="showRun = true"
+          @click="() => { showRun = true }"
         />
         <NuxtLink
           v-if="readOnly && command?.pluginId"
@@ -289,7 +291,7 @@ useUnsavedChanges(isDirty)
             Permanently delete <strong>/{{ command?.frontmatter.name }}</strong>? This action cannot be undone.
           </p>
           <div class="flex justify-end gap-2">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showDeleteConfirm = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showDeleteConfirm = false }" />
             <UButton label="Delete" color="error" size="sm" @click="deleteCommand" />
           </div>
         </div>

@@ -29,12 +29,11 @@ export function useVersionHistory(key: string) {
       body,
     }
     // Don't save if identical to last version
-    if (versions.value.length > 0) {
-      const last = versions.value[0]
-      if (JSON.stringify(last.frontmatter) === JSON.stringify(snapshot.frontmatter)
-        && last.body === snapshot.body) {
-        return
-      }
+    const last = versions.value[0]
+    if (last
+      && JSON.stringify(last.frontmatter) === JSON.stringify(snapshot.frontmatter)
+      && last.body === snapshot.body) {
+      return
     }
     versions.value.unshift(snapshot)
     if (versions.value.length > MAX_VERSIONS) {

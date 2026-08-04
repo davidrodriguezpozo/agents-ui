@@ -98,7 +98,7 @@ async function run() {
           color="neutral"
           size="sm"
           title="Run this on a schedule instead"
-          @click="showSchedule = true"
+          @click="() => { showSchedule = true }"
         />
         <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="emit('close')" />
         <UButton label="Run" icon="i-lucide-play" size="sm" :loading="starting" @click="run" />

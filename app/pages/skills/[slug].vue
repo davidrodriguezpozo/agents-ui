@@ -345,7 +345,7 @@ const agentOptions = computed(() =>
             Permanently delete <strong>{{ skill?.frontmatter.name }}</strong>? This action cannot be undone.
           </p>
           <div class="flex justify-end gap-2">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showDeleteConfirm = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showDeleteConfirm = false }" />
             <UButton label="Delete" color="error" size="sm" @click="deleteSkill" />
           </div>
         </div>

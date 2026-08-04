@@ -1,3 +1,9 @@
 {
-  "extends": "./.nuxt/tsconfig.json"
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    // Nuxt's generated config is for the browser bundle and declares no ambient
+    // types, but `nuxt typecheck` runs over the whole repository — server
+    // routes, utils, tests and the config files all live on Node.
+    "types": ["node"]
+  }
 }

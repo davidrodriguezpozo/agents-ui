@@ -85,9 +85,11 @@ function onKeydown(e: KeyboardEvent) {
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
     selectedIndex.value = Math.max(selectedIndex.value - 1, 0)
-  } else if (e.key === 'Enter' && results.value[selectedIndex.value]) {
+  } else if (e.key === 'Enter') {
+    const selected = results.value[selectedIndex.value]
+    if (!selected) return
     e.preventDefault()
-    navigate(results.value[selectedIndex.value].to)
+    navigate(selected.to)
   }
 }
 
@@ -156,7 +158,7 @@ if (import.meta.client) {
             <span
               v-if="result.model && modelColors[result.model]"
               class="text-[10px] font-mono font-medium px-1 py-px rounded-full shrink-0"
-              :class="[modelColors[result.model].bg, modelColors[result.model].text]"
+              :class="[modelColors[result.model]?.bg, modelColors[result.model]?.text]"
             >
               {{ result.model }}
             </span>

@@ -412,7 +412,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       >
         <div class="flex items-center justify-between">
           <h3 class="text-section-title">Automations</h3>
-          <UButton label="Add Automation" icon="i-lucide-plus" size="xs" variant="soft" @click="showAddHookModal = true" />
+          <UButton label="Add Automation" icon="i-lucide-plus" size="xs" variant="soft" @click="() => { showAddHookModal = true }" />
         </div>
         <p class="text-[12px] text-meta">
           Run shell commands automatically when certain events happen in Claude Code.
@@ -518,7 +518,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           </div>
 
           <div class="flex justify-end gap-2 pt-2">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showAddHookModal = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showAddHookModal = false }" />
             <UButton
               label="Add"
               size="sm"

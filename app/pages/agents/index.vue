@@ -75,8 +75,8 @@ async function useTemplate(templateId: string) {
         <span class="text-[12px] text-meta">{{ agents.length }}</span>
       </template>
       <template #right>
-        <UButton label="Import" icon="i-lucide-upload" size="sm" variant="soft" @click="showImportModal = true" />
-        <UButton label="New Agent" icon="i-lucide-plus" size="sm" @click="showCreateModal = true" />
+        <UButton label="Import" icon="i-lucide-upload" size="sm" variant="soft" @click="() => { showImportModal = true }" />
+        <UButton label="New Agent" icon="i-lucide-plus" size="sm" @click="() => { showCreateModal = true }" />
       </template>
     </PageHeader>
 
@@ -151,7 +151,7 @@ async function useTemplate(templateId: string) {
             <span
               v-if="agent.frontmatter.model && modelColors[agent.frontmatter.model]"
               class="text-[10px] font-mono font-medium px-1.5 py-px rounded-full shrink-0"
-              :class="[modelColors[agent.frontmatter.model].bg, modelColors[agent.frontmatter.model].text]"
+              :class="[modelColors[agent.frontmatter.model]?.bg, modelColors[agent.frontmatter.model]?.text]"
             >
               {{ agent.frontmatter.model }}
             </span>
@@ -233,7 +233,7 @@ async function useTemplate(templateId: string) {
         </div>
 
         <div class="text-center">
-          <UButton label="Or create from scratch" variant="ghost" size="sm" @click="showCreateModal = true" />
+          <UButton label="Or create from scratch" variant="ghost" size="sm" @click="() => { showCreateModal = true }" />
         </div>
       </div>
     </div>
@@ -256,7 +256,7 @@ async function useTemplate(templateId: string) {
             @imported="(a) => { showImportModal = false; fetchAgents(); router.push(`/agents/${a.slug}`) }"
           />
           <div class="flex justify-end">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showImportModal = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showImportModal = false }" />
           </div>
         </div>
       </template>

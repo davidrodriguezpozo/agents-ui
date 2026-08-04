@@ -50,12 +50,12 @@ const filteredSkills = computed(() => {
         <span class="font-mono text-[12px] text-meta">{{ skills.length }}</span>
       </template>
       <template #right>
-        <UButton label="Import" icon="i-lucide-upload" size="sm" variant="soft" @click="showImportModal = true" />
+        <UButton label="Import" icon="i-lucide-upload" size="sm" variant="soft" @click="() => { showImportModal = true }" />
         <UButton
           :label="isSimple ? 'Teach Claude something' : 'New Skill'"
           icon="i-lucide-plus"
           size="sm"
-          @click="showCreateModal = true"
+          @click="() => { showCreateModal = true }"
         />
       </template>
     </PageHeader>
@@ -191,7 +191,7 @@ const filteredSkills = computed(() => {
         </div>
         <p class="type-body">Skills teach agents specific capabilities. Link a skill to an agent to extend what it can do.</p>
         <div class="flex items-center gap-2">
-          <UButton label="Create a skill" size="sm" @click="showCreateModal = true" />
+          <UButton label="Create a skill" size="sm" @click="() => { showCreateModal = true }" />
           <UButton label="Import from GitHub" size="sm" variant="outline" to="/explore?tab=imported" />
         </div>
       </div>
@@ -223,7 +223,7 @@ const filteredSkills = computed(() => {
             @imported="(s) => { showImportModal = false; fetchSkills(); router.push(`/skills/${s.slug}`) }"
           />
           <div class="flex justify-end">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="showImportModal = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showImportModal = false }" />
           </div>
         </div>
       </template>

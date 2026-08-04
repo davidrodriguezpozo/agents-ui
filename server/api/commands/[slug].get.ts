@@ -25,7 +25,7 @@ export default defineEventHandler(async (event) => {
     slug,
     filename,
     directory,
-    frontmatter: { name: slug, ...frontmatter },
+    frontmatter: { ...frontmatter, name: frontmatter.name ?? slug },
     body,
     filePath,
     scope: root.scope,

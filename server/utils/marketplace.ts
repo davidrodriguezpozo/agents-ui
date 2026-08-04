@@ -153,7 +153,7 @@ export async function getInstalledPluginNames(): Promise<Set<string>> {
     const names = new Set<string>()
     for (const id of Object.keys(data.plugins || {})) {
       const [name] = id.split('@')
-      names.add(name)
+      if (name) names.add(name)
     }
     return names
   } catch {

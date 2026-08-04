@@ -37,7 +37,7 @@ export default defineEventHandler(async (event) => {
   return {
     slug,
     filename: `${slug}.md`,
-    frontmatter: { name: slug, ...frontmatter, tools: normalizeTools(frontmatter.tools) },
+    frontmatter: { ...frontmatter, name: frontmatter.name ?? slug, tools: normalizeTools(frontmatter.tools) },
     body,
     hasMemory: existsSync(join(root.dir, 'agent-memory', slug)),
     filePath,

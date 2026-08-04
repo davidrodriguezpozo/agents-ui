@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
 
   return {
     slug,
-    frontmatter: { name: slug, ...frontmatter },
+    frontmatter: { ...frontmatter, name: frontmatter.name ?? slug },
     body,
     filePath: found.skillPath,
     source: found.source,

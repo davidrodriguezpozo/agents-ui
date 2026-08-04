@@ -53,7 +53,7 @@ const emit = defineEmits<{ action: []; secondary: [] }>()
         :icon="actionIcon"
         :to="actionTo"
         size="sm"
-        @click="!actionTo && emit('action')"
+        @click="() => { if (!actionTo) emit('action') }"
       />
       <UButton
         v-if="secondaryLabel"
@@ -62,7 +62,7 @@ const emit = defineEmits<{ action: []; secondary: [] }>()
         size="sm"
         variant="ghost"
         color="neutral"
-        @click="!secondaryTo && emit('secondary')"
+        @click="() => { if (!secondaryTo) emit('secondary') }"
       />
     </div>
   </div>

@@ -30,7 +30,7 @@ async function readAgentsIn(root: ScopeRoot): Promise<Agent[]> {
     return {
       slug,
       filename,
-      frontmatter: { name: slug, ...frontmatter, tools: normalizeTools(frontmatter.tools) },
+      frontmatter: { ...frontmatter, name: frontmatter.name ?? slug, tools: normalizeTools(frontmatter.tools) },
       body,
       hasMemory: existsSync(join(root.dir, 'agent-memory', slug)),
       filePath,
@@ -110,7 +110,7 @@ async function scanCommandDir(dir: string, relDir: string, root: ScopeRoot): Pro
       slug,
       filename: entry.name,
       directory: relDir,
-      frontmatter: { name: slug, ...frontmatter },
+      frontmatter: { ...frontmatter, name: frontmatter.name ?? slug },
       body,
       filePath: fullPath,
       scope: root.scope,

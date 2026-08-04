@@ -25,9 +25,8 @@ const replyText = ref('')
 
 // Auto-expand the current/paused step
 watch(() => props.currentStepIndex, (idx) => {
-  if (idx >= 0 && idx < props.workflowSteps.length) {
-    expandedStep.value = props.workflowSteps[idx].id
-  }
+  const step = props.workflowSteps[idx]
+  if (step) expandedStep.value = step.id
 })
 
 // Reset modes when pause state changes
@@ -85,9 +84,8 @@ const statusConfig: Record<string, { color: string; icon: string; label: string 
 
 const nextStepLabel = computed(() => {
   if (!props.isPaused) return ''
-  const nextIdx = props.currentStepIndex + 1
-  if (nextIdx >= props.workflowSteps.length) return ''
-  return props.workflowSteps[nextIdx].label
+  const next = props.workflowSteps[props.currentStepIndex + 1]
+  return next?.label ?? ''
 })
 </script>
 
@@ -204,14 +202,14 @@ const nextStepLabel = computed(() => {
             icon="i-lucide-pencil"
             size="sm"
             variant="soft"
-            @click="editMode = true"
+            @click="() => { editMode = true }"
           />
           <UButton
             label="Reply to agent"
             icon="i-lucide-message-circle"
             size="sm"
             variant="soft"
-            @click="respondMode = true"
+            @click="() => { respondMode = true }"
           />
           <UButton
             label="Stop"
@@ -236,7 +234,7 @@ const nextStepLabel = computed(() => {
         />
         <div class="flex items-center gap-2">
           <UButton label="Continue with edited text" size="sm" :disabled="!editText.trim()" @click="onContinueEdited" />
-          <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="editMode = false" />
+          <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { editMode = false }" />
         </div>
       </div>
 
@@ -253,7 +251,7 @@ const nextStepLabel = computed(() => {
         />
         <div class="flex items-center gap-2">
           <UButton label="Send reply" icon="i-lucide-send" size="sm" :disabled="!replyText.trim()" @click="onRespond" />
-          <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="respondMode = false" />
+          <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { respondMode = false }" />
         </div>
       </div>
     </div>

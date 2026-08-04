@@ -20,6 +20,11 @@ export interface PermissionRequest {
   blockedPath?: string
   /** True when answering "allow for this session" is meaningful. */
   canRemember: boolean
+  /**
+   * Rules the CLI proposed for this request, e.g. `Bash(gh:*)`. These are what
+   * a ritual can be granted permanently, so they outlive the prompt itself.
+   */
+  suggestedRules: string[]
   createdAt: number
 }
 

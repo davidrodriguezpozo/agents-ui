@@ -121,7 +121,7 @@ function formatDate(iso: string) {
             </label>
           </div>
           <div class="flex justify-end gap-2">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="xs" @click="editing = false" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="xs" @click="() => { editing = false }" />
             <UButton
               :label="`Save (${selected.size})`"
               size="xs"
