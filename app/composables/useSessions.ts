@@ -27,6 +27,8 @@ export interface Session {
   adoptedAt?: number
   /** How much it may do without asking. Absent means `edits`. */
   trust?: TrustLevel
+  /** Set once this session's branch has a pull request open. */
+  prUrl?: string
   worktree: WorktreeState
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity
@@ -96,6 +98,20 @@ export interface WorktreeEntry {
   sessionTitle: string | null
   orphaned: boolean
   recovery: WorktreeRecovery | null
+}
+
+export interface PullRequestPreview {
+  canOpen: boolean
+  blockedReason?: string
+  baseBranch: string
+  branch: string
+  commits: { sha: string; subject: string }[]
+  uncommittedFiles: string[]
+  files: string[]
+  remote: string | null
+  existingUrl?: string
+  suggestedTitle: string
+  suggestedBody: string
 }
 
 export interface MergePreview {
@@ -173,6 +189,25 @@ export function useSessions() {
     return $fetch<{ files: DiffFile[]; patch: string }>(`/api/sessions/${encodeURIComponent(id)}/diff`)
   }
 
+  async function previewPullRequest(id: string) {
+    return $fetch<PullRequestPreview>(`/api/sessions/${encodeURIComponent(id)}/pr`)
+  }
+
+  /** Pushes the branch and opens the request — visible to everyone else. */
+  async function openPullRequest(id: string, opts: {
+    title: string
+    body: string
+    commitFirst?: boolean
+    draft?: boolean
+  }) {
+    const result = await $fetch<{ url: string; committed: boolean }>(
+      `/api/sessions/${encodeURIComponent(id)}/pr`,
+      { method: 'POST', body: opts },
+    )
+    await fetchAll()
+    return result
+  }
+
   async function previewMerge(id: string) {
     return $fetch<MergePreview>(`/api/sessions/${encodeURIComponent(id)}/merge`)
   }
@@ -223,6 +258,8 @@ export function useSessions() {
     send,
     fetchTranscript,
     setTrust,
+    previewPullRequest,
+    openPullRequest,
     fetchDiff,
     previewMerge,
     merge,

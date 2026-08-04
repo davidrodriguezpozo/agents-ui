@@ -4,13 +4,18 @@ import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
 import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
-import type { DiffFile, MergePreview, Session, SessionTurn, TranscriptMessage } from '~/composables/useSessions'
+import type {
+  DiffFile, MergePreview, PullRequestPreview, Session, SessionTurn, TranscriptMessage,
+} from '~/composables/useSessions'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
 
-const { fetchOne, send, fetchTranscript, setTrust, fetchDiff, previewMerge, merge, close } = useSessions()
+const {
+  fetchOne, send, fetchTranscript, setTrust, fetchDiff,
+  previewPullRequest, openPullRequest, previewMerge, merge, close,
+} = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
 const { describeRule } = usePermissionRuleLabels()
@@ -34,6 +39,13 @@ const showMerge = ref(false)
 const mergePreview = ref<MergePreview | null>(null)
 const merging = ref(false)
 const commitFirst = ref(true)
+const showPr = ref(false)
+const prPreview = ref<PullRequestPreview | null>(null)
+const prTitle = ref('')
+const prBody = ref('')
+const prCommitFirst = ref(true)
+const prDraft = ref(false)
+const opening = ref(false)
 let controller: AbortController | null = null
 
 const liveRun = computed(() => (activeRunId.value ? live.value[activeRunId.value] : null))
@@ -159,6 +171,51 @@ async function onRemember(requestId: string, rule: string) {
   }
 
   await answerPermission(requestId, { behavior: 'allow', scope: 'session' })
+}
+
+/**
+ * Opening a pull request pushes the branch, which is the first moment this
+ * work leaves your machine — so the preview is fetched and shown before
+ * anything is sent, and the title and body are yours to change.
+ */
+async function openPrDialog() {
+  showPr.value = true
+  prPreview.value = null
+  try {
+    const preview = await previewPullRequest(id)
+    prPreview.value = preview
+    prTitle.value = preview.suggestedTitle
+    prBody.value = preview.suggestedBody
+    prCommitFirst.value = preview.uncommittedFiles.length > 0
+  } catch (e) {
+    toast.add({ title: 'Could not check', description: errorMessage(e), color: 'error' })
+    showPr.value = false
+  }
+}
+
+async function onOpenPr() {
+  if (!prTitle.value.trim()) return
+
+  opening.value = true
+  try {
+    const result = await openPullRequest(id, {
+      title: prTitle.value.trim(),
+      body: prBody.value,
+      commitFirst: prCommitFirst.value,
+      draft: prDraft.value,
+    })
+    toast.add({
+      title: prDraft.value ? 'Draft pull request opened' : 'Pull request opened',
+      description: result.url,
+      color: 'success',
+    })
+    showPr.value = false
+    await load()
+  } catch (e) {
+    toast.add({ title: 'Could not open it', description: errorMessage(e), color: 'error' })
+  } finally {
+    opening.value = false
+  }
 }
 
 async function openMerge() {
@@ -405,6 +462,25 @@ const totalChanges = computed(() => {
           variant="soft"
           color="neutral"
           @click="() => { showDiff = !showDiff }"
+        />
+        <UButton
+          v-if="session?.prUrl"
+          label="View pull request"
+          icon="i-lucide-git-pull-request"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          :to="session.prUrl"
+          target="_blank"
+        />
+        <UButton
+          v-else-if="session?.worktree.changedFiles || session?.worktree.ahead"
+          label="Pull request"
+          icon="i-lucide-git-pull-request"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          @click="openPrDialog"
         />
         <UButton
           v-if="session?.worktree.changedFiles"
@@ -830,6 +906,93 @@ const totalChanges = computed(() => {
         <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-meta" />
       </div>
     </div>
+
+    <!-- Pushing is the moment this leaves your machine, so spell it out -->
+    <UModal v-model:open="showPr">
+      <template #content>
+        <div class="p-6 space-y-4 bg-overlay">
+          <h3 class="text-page-title">Open a pull request</h3>
+
+          <div v-if="!prPreview" class="flex items-center gap-2 type-detail">
+            <UIcon name="i-lucide-loader-2" class="size-3.5 animate-spin" />
+            Checking the branch…
+          </div>
+
+          <template v-else>
+            <div
+              v-if="prPreview.existingUrl"
+              class="rounded-md px-3 py-2.5 type-detail space-y-1"
+              style="background: var(--accent-muted); color: var(--text-secondary);"
+            >
+              <div>This branch already has one open.</div>
+              <a :href="prPreview.existingUrl" target="_blank" class="font-mono" style="color: var(--accent);">
+                {{ prPreview.existingUrl }}
+              </a>
+            </div>
+
+            <div
+              v-if="prPreview.blockedReason"
+              class="rounded-md px-3 py-2.5 type-detail"
+              style="background: rgba(248,113,113,0.06); color: var(--error);"
+            >
+              {{ prPreview.blockedReason }}
+            </div>
+
+            <template v-else>
+              <p class="type-body">
+                Pushes <span class="font-mono type-detail" style="color: var(--accent);">{{ prPreview.branch }}</span>
+                to <span class="font-mono type-detail">{{ prPreview.remote }}</span> and opens a request into
+                <span class="font-mono type-detail">{{ prPreview.baseBranch }}</span> —
+                {{ prPreview.commits.length }} commit{{ prPreview.commits.length === 1 ? '' : 's' }}.
+                This is the point at which other people can see it.
+              </p>
+
+              <div class="space-y-1.5">
+                <label class="field-label">Title</label>
+                <input v-model="prTitle" class="field-input w-full" placeholder="What this changes" />
+              </div>
+
+              <div class="space-y-1.5">
+                <label class="field-label">Description</label>
+                <textarea v-model="prBody" rows="7" class="field-textarea w-full font-mono text-[11px]" />
+              </div>
+
+              <label
+                v-if="prPreview.uncommittedFiles.length"
+                class="flex items-start gap-2.5 rounded-md px-3 py-2.5 cursor-pointer"
+                style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+              >
+                <input v-model="prCommitFirst" type="checkbox" class="size-3.5 mt-0.5 shrink-0" />
+                <span class="type-detail">
+                  Commit the {{ prPreview.uncommittedFiles.length }} uncommitted
+                  file{{ prPreview.uncommittedFiles.length === 1 ? '' : 's' }} first
+                  <span class="block type-meta">
+                    Without this they stay on your machine and are not part of the request.
+                  </span>
+                </span>
+              </label>
+
+              <label class="flex items-center gap-2.5 cursor-pointer">
+                <input v-model="prDraft" type="checkbox" class="size-3.5 shrink-0" />
+                <span class="type-detail">Open it as a draft</span>
+              </label>
+            </template>
+
+            <div class="flex justify-end gap-2 pt-1">
+              <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { showPr = false }" />
+              <UButton
+                label="Push and open"
+                icon="i-lucide-git-pull-request"
+                size="sm"
+                :loading="opening"
+                :disabled="!prPreview.canOpen || !prTitle.trim()"
+                @click="onOpenPr"
+              />
+            </div>
+          </template>
+        </div>
+      </template>
+    </UModal>
 
     <!-- Merging writes to the real checkout, so show exactly what will happen -->
     <UModal v-model:open="showMerge">

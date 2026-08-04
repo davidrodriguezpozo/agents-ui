@@ -39,6 +39,8 @@ export interface Session {
    * which is what every session did before the setting existed.
    */
   trust?: TrustLevel
+  /** Set once this session's branch has a pull request open. */
+  prUrl?: string
   /**
    * Set when the session continues a conversation started in the terminal.
    * The work has moved to a fresh checkout, which the conversation does not
