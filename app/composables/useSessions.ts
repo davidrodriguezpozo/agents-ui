@@ -35,6 +35,12 @@ export interface Session {
   inCurrentProject: boolean
 }
 
+export interface TranscriptMessage {
+  role: 'user' | 'assistant'
+  text: string
+  at?: number
+}
+
 export interface TurnToolCall {
   id: string
   toolName: string
@@ -136,6 +142,14 @@ export function useSessions() {
     return result.runId
   }
 
+  /** The terminal conversation an adopted session continues. History only. */
+  async function fetchTranscript(id: string) {
+    const result = await $fetch<{ messages: TranscriptMessage[] }>(
+      `/api/sessions/${encodeURIComponent(id)}/transcript`,
+    )
+    return result.messages
+  }
+
   async function fetchDiff(id: string) {
     return $fetch<{ files: DiffFile[]; patch: string }>(`/api/sessions/${encodeURIComponent(id)}/diff`)
   }
@@ -188,6 +202,7 @@ export function useSessions() {
     create,
     fetchOne,
     send,
+    fetchTranscript,
     fetchDiff,
     previewMerge,
     merge,

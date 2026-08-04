@@ -67,3 +67,52 @@ describe('reading a transcript', () => {
     expect(summarizeTranscript('\n\n')).toEqual({ title: null, turnCount: 0 })
   })
 })
+
+describe('reading back a conversation', () => {
+  it('keeps what was said and drops what was not', async () => {
+    // Assembled here rather than mocked: the shapes are the ones a real
+    // transcript uses — a string for what a person typed, blocks for a reply.
+    const { mkdtemp, mkdir, writeFile } = await import('node:fs/promises')
+    const { tmpdir } = await import('node:os')
+    const { join } = await import('node:path')
+
+    const home = await mkdtemp(join(tmpdir(), 'agents-ui-tx-'))
+    process.env.CLAUDE_DIR = home
+
+    const { readTranscriptMessages } = await import('../server/utils/transcripts')
+    const { transcriptDirFor } = await import('../server/utils/sessionRecovery')
+
+    const cwd = '/repo/thing'
+    const dir = transcriptDirFor(cwd)
+    await mkdir(dir, { recursive: true })
+
+    await writeFile(join(dir, 'abc.jsonl'), [
+      JSON.stringify({ type: 'user', message: { content: 'Fix the rounding bug' }, timestamp: '2026-08-04T10:00:00Z' }),
+      JSON.stringify({ type: 'assistant', message: { content: [
+        { type: 'thinking', thinking: 'private reasoning nobody addressed' },
+        { type: 'text', text: 'Found it in pricing.ts' },
+      ] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', content: '40 lines' }] } }),
+      JSON.stringify({ type: 'assistant', isSidechain: true, message: { content: [{ type: 'text', text: 'subagent' }] } }),
+      JSON.stringify({ type: 'system', subtype: 'init' }),
+      '',
+    ].join('\n'), 'utf-8')
+
+    const messages = await readTranscriptMessages(cwd, 'abc')
+
+    expect(messages).toHaveLength(2)
+    expect(messages[0]).toMatchObject({ role: 'user', text: 'Fix the rounding bug' })
+    expect(messages[1]).toMatchObject({ role: 'assistant', text: 'Found it in pricing.ts' })
+    // Reading back private reasoning as though it were the reply would be wrong.
+    expect(JSON.stringify(messages)).not.toContain('private reasoning')
+
+    delete process.env.CLAUDE_DIR
+    await (await import('node:fs/promises')).rm(home, { recursive: true, force: true })
+  })
+
+  it('says nothing when there is no such transcript', async () => {
+    const { readTranscriptMessages } = await import('../server/utils/transcripts')
+
+    await expect(readTranscriptMessages('/nowhere', 'missing')).resolves.toEqual([])
+  })
+})

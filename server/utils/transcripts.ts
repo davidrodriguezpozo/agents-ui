@@ -65,6 +65,72 @@ export function summarizeTranscript(raw: string): { title: string | null; turnCo
   return { title, turnCount }
 }
 
+export interface TranscriptMessage {
+  role: 'user' | 'assistant'
+  text: string
+  at?: number
+}
+
+/** Enough of a long answer to read, without shipping an essay per message. */
+const MAX_MESSAGE = 4_000
+
+/**
+ * The conversation itself, for a session that adopted one.
+ *
+ * Without this an adopted session opens blank: its history is real and
+ * resumable, but it lives in Claude Code's transcript rather than in any run
+ * this app recorded, so there is nothing on screen to show for it.
+ *
+ * Thinking blocks are left out. They were not addressed to anyone, and reading
+ * back someone's private reasoning as though it were the reply is wrong.
+ */
+export async function readTranscriptMessages(
+  cwd: string,
+  sdkSessionId: string,
+  limit = 40,
+): Promise<TranscriptMessage[]> {
+  const file = join(transcriptDirFor(cwd), `${sdkSessionId}.jsonl`)
+  if (!existsSync(file)) return []
+
+  const raw = await readFile(file, 'utf-8').catch(() => '')
+  const messages: TranscriptMessage[] = []
+
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue
+
+    let entry: {
+      type?: string
+      isSidechain?: boolean
+      isMeta?: boolean
+      timestamp?: string
+      message?: { content?: unknown }
+    }
+    try {
+      entry = JSON.parse(line)
+    } catch {
+      continue
+    }
+
+    if (entry.isSidechain || entry.isMeta) continue
+    if (entry.type !== 'user' && entry.type !== 'assistant') continue
+
+    const text = textOf(entry.message?.content).trim()
+    // Tool results wear the user's role and carry no words of their own.
+    if (!text || (entry.type === 'user' && text.startsWith('<'))) continue
+
+    const at = entry.timestamp ? Date.parse(entry.timestamp) : undefined
+
+    messages.push({
+      role: entry.type,
+      text: text.length > MAX_MESSAGE ? `${text.slice(0, MAX_MESSAGE)}\n\n…` : text,
+      at: Number.isFinite(at) ? at : undefined,
+    })
+  }
+
+  // The end of a long conversation is the part you need to carry on from.
+  return messages.slice(-limit)
+}
+
 /**
  * Every terminal conversation held in a directory, newest first.
  *

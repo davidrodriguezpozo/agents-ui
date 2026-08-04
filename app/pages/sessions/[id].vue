@@ -3,13 +3,13 @@ import { errorMessage } from '~/utils/errors'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
-import type { DiffFile, MergePreview, Session, SessionTurn } from '~/composables/useSessions'
+import type { DiffFile, MergePreview, Session, SessionTurn, TranscriptMessage } from '~/composables/useSessions'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
 
-const { fetchOne, send, fetchDiff, previewMerge, merge, close } = useSessions()
+const { fetchOne, send, fetchTranscript, fetchDiff, previewMerge, merge, close } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
 const { describeRule } = usePermissionRuleLabels()
@@ -23,6 +23,8 @@ const stopping = ref(false)
 const activeRunId = ref<string | null>(null)
 const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
 const showDiff = ref(false)
+/** The terminal conversation this session continues, if it adopted one. */
+const inherited = ref<TranscriptMessage[]>([])
 const showPatch = ref(false)
 const showClose = ref(false)
 const closing = ref(false)
@@ -90,6 +92,12 @@ onMounted(async () => {
 
   if (session.value?.adoptedAt && !session.value.turns.length && !input.value) {
     input.value = suggestedOpener()
+  }
+
+  // Adopted sessions have history but no runs — it lives in Claude Code's
+  // transcript, and without this the page opens blank.
+  if (session.value?.adoptedAt) {
+    inherited.value = await fetchTranscript(id).catch(() => [])
   }
 })
 
@@ -493,6 +501,40 @@ const totalChanges = computed(() => {
           />
         </div>
 
+        <!-- What was said in the terminal, before this session existed -->
+        <div v-if="inherited.length" class="space-y-3">
+          <div class="flex items-center gap-2">
+            <UIcon name="i-lucide-terminal" class="size-3.5 shrink-0" style="color: var(--text-disabled);" />
+            <span class="text-section-label">From your terminal</span>
+            <span class="type-meta">
+              {{ inherited.length }} message{{ inherited.length === 1 ? '' : 's' }} — history, already said
+            </span>
+          </div>
+
+          <div class="space-y-3 pl-3" style="border-left: 2px solid var(--border-subtle);">
+            <div v-for="(message, index) in inherited" :key="index">
+              <div v-if="message.role === 'user'" class="flex justify-end">
+                <div
+                  class="rounded-md px-3.5 py-2 max-w-[80%] type-body"
+                  style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+                >
+                  {{ message.text }}
+                </div>
+              </div>
+              <div
+                v-else
+                class="markdown type-body"
+                style="color: var(--text-secondary);"
+                v-html="renderMarkdown(message.text)"
+              />
+            </div>
+          </div>
+
+          <div class="type-meta pl-3">
+            Anything from here on happens in this workspace.
+          </div>
+        </div>
+
         <!-- Conversation -->
         <div v-if="session.turns.length" class="space-y-4">
           <div v-for="turn in session.turns" :key="turn.id" class="space-y-2">
@@ -579,7 +621,7 @@ const totalChanges = computed(() => {
         </div>
 
         <EmptyState
-          v-else
+          v-else-if="!inherited.length"
           variant="inset"
           icon="i-lucide-message-square"
           title="Nothing yet"
