@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
+import { matchesFilter, sourceOf, type RunFilter, type RunSource } from './runFilter'
 import type { RunStats } from '~/types'
 
 export type RunKind = 'command' | 'chat' | 'agent'
@@ -216,6 +217,8 @@ export interface RunSummary {
   suggestedRules?: string[]
   scheduleId?: string
   sessionId?: string
+  /** What set it going — worked out once here rather than in every view. */
+  source: RunSource
 }
 
 function summarize(run: Run): RunSummary {
@@ -238,6 +241,7 @@ function summarize(run: Run): RunSummary {
     suggestedRules: run.suggestedRules,
     scheduleId: run.scheduleId,
     sessionId: run.sessionId,
+    source: sourceOf(run),
   }
 }
 
@@ -265,8 +269,17 @@ async function collectRuns(): Promise<Run[]> {
   return [...byId.values()].sort((a, b) => b.createdAt - a.createdAt)
 }
 
-export async function listRuns(limit = 50): Promise<RunSummary[]> {
-  return (await collectRuns()).slice(0, limit).map(summarize)
+/**
+ * The run log, newest first. Filtering happens before the limit, so a search
+ * reaches everything on disk rather than only the most recent page of it.
+ */
+export async function listRuns(options: RunFilter & { limit?: number } = {}): Promise<RunSummary[]> {
+  const { limit = 50, ...filter } = options
+
+  return (await collectRuns())
+    .filter(run => matchesFilter(run, filter))
+    .slice(0, limit)
+    .map(summarize)
 }
 
 /**

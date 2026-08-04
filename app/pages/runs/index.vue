@@ -1,17 +1,65 @@
 <script setup lang="ts">
+import { formatDuration, relativeTime } from '~/utils/time'
+import type { RunOutcomeFilter, RunSource, RunSummary } from '~/composables/useRuns'
+
 const { runs, loading, fetchRuns } = useRuns()
 
+const search = ref('')
+const source = ref<RunSource | null>(null)
+const outcome = ref<RunOutcomeFilter | null>(null)
+
+/** What started it, which is what people remember when they come looking. */
+const SOURCES: { value: RunSource; label: string; icon: string }[] = [
+  { value: 'ritual', label: 'rituals', icon: 'i-lucide-alarm-clock' },
+  { value: 'session', label: 'sessions', icon: 'i-lucide-git-branch' },
+  { value: 'agent', label: 'agents', icon: 'i-lucide-bot' },
+  { value: 'command', label: 'commands', icon: 'i-lucide-terminal' },
+]
+
+const OUTCOMES: { value: RunOutcomeFilter; label: string }[] = [
+  { value: 'running', label: 'running' },
+  { value: 'completed', label: 'worked' },
+  { value: 'attention', label: 'needed you' },
+  { value: 'failed', label: 'failed' },
+  { value: 'cancelled', label: 'stopped' },
+]
+
+const query = computed(() => ({
+  q: search.value.trim(),
+  source: source.value ?? undefined,
+  outcome: outcome.value ?? undefined,
+}))
+
+const isFiltered = computed(() => Boolean(query.value.q || query.value.source || query.value.outcome))
+
 let poll: ReturnType<typeof setInterval> | null = null
+let debounce: ReturnType<typeof setTimeout> | null = null
+
+// Typing shouldn't be a request per keystroke, but the filters have to reach
+// the server: the list is capped, so narrowing it here would search one page.
+watch(query, () => {
+  if (debounce) clearTimeout(debounce)
+  debounce = setTimeout(() => fetchRuns(query.value), 200)
+})
 
 onMounted(async () => {
-  await fetchRuns()
+  await fetchRuns(query.value)
   // Cheap refresh so in-flight runs tick over without a socket.
   poll = setInterval(() => {
-    if (runs.value.some(r => r.status === 'running' || r.status === 'queued')) fetchRuns()
+    if (runs.value.some(r => r.status === 'running' || r.status === 'queued')) fetchRuns(query.value)
   }, 4000)
 })
 
-onUnmounted(() => { if (poll) clearInterval(poll) })
+onUnmounted(() => {
+  if (poll) clearInterval(poll)
+  if (debounce) clearTimeout(debounce)
+})
+
+function clearFilters() {
+  search.value = ''
+  source.value = null
+  outcome.value = null
+}
 
 const active = computed(() => runs.value.filter(r => r.status === 'running' || r.status === 'queued'))
 const finished = computed(() => runs.value.filter(r => r.status !== 'running' && r.status !== 'queued'))
@@ -30,17 +78,19 @@ function statusStyle(status: string) {
   }
 }
 
-function relative(ts: number) {
-  const seconds = Math.floor((Date.now() - ts) / 1000)
-  if (seconds < 60) return 'just now'
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+/**
+ * A run refused a tool it needed still reports "completed". Labelling that
+ * green next to a line saying the work did not happen is the badge lying.
+ */
+function badge(run: RunSummary) {
+  if (run.needsAttention || run.deniedTools?.length) {
+    return { label: 'needed you', style: { background: 'var(--accent-muted)', color: 'var(--accent)' } }
+  }
+  return { label: run.status, style: statusStyle(run.status) }
 }
 
-function duration(ms?: number) {
-  if (!ms) return null
-  return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`
+function sourceIcon(value: RunSource) {
+  return SOURCES.find(s => s.value === value)?.icon ?? 'i-lucide-terminal'
 }
 </script>
 
@@ -59,6 +109,66 @@ function duration(ms?: number) {
         Everything Claude has run for you. Runs keep going if you close the tab — come back any time.
       </p>
 
+      <!-- Searching the whole log, not the page of it that happens to be loaded -->
+      <div class="space-y-2">
+        <input
+          v-model="search"
+          class="field-search w-full"
+          placeholder="Search what was run, and what it said…"
+        />
+        <div class="flex items-center gap-2 flex-wrap">
+          <div class="pill-picker">
+            <button
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': !source }"
+              @click="source = null"
+            >
+              everything
+            </button>
+            <button
+              v-for="option in SOURCES"
+              :key="option.value"
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': source === option.value }"
+              @click="source = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+
+          <div class="pill-picker">
+            <button
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': !outcome }"
+              @click="outcome = null"
+            >
+              any outcome
+            </button>
+            <button
+              v-for="option in OUTCOMES"
+              :key="option.value"
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': outcome === option.value }"
+              @click="outcome = option.value"
+            >
+              {{ option.label }}
+            </button>
+          </div>
+
+          <button
+            v-if="isFiltered"
+            class="type-meta px-2 py-1 rounded hover-bg focus-ring"
+            @click="clearFilters"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
+
       <div v-if="loading && !runs.length" class="space-y-1">
         <SkeletonRow v-for="i in 4" :key="i" />
       </div>
@@ -75,7 +185,7 @@ function duration(ms?: number) {
           >
             <UIcon name="i-lucide-loader-2" class="size-3.5 shrink-0 animate-spin" style="color: var(--accent);" />
             <span class="type-strong truncate flex-1 text-body">{{ run.title }}</span>
-            <span class="font-mono text-[10px] shrink-0 text-meta">{{ relative(run.createdAt) }}</span>
+            <span class="font-mono text-[10px] shrink-0 text-meta">{{ relativeTime(run.createdAt) }}</span>
           </NuxtLink>
         </div>
 
@@ -89,12 +199,14 @@ function duration(ms?: number) {
           >
             <span
               class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0 mt-0.5"
-              :style="statusStyle(run.status)"
+              :style="badge(run).style"
             >
-              {{ run.status }}
+              {{ badge(run).label }}
             </span>
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
+                <!-- What started it, so a ritual is never mistaken for something you ran -->
+                <UIcon :name="sourceIcon(run.source)" class="size-3 shrink-0" style="color: var(--text-disabled);" />
                 <span class="type-strong truncate text-body">{{ run.title }}</span>
                 <span v-if="run.invocation" class="font-mono text-[10px] shrink-0" style="color: var(--accent);">
                   {{ run.invocation }}
@@ -108,8 +220,8 @@ function duration(ms?: number) {
               <p v-else-if="run.error" class="text-[11px] truncate mt-0.5" style="color: var(--error);">{{ run.error }}</p>
             </div>
             <div class="flex items-center gap-2.5 shrink-0 type-mono-meta">
-              <span v-if="duration(run.durationMs)">{{ duration(run.durationMs) }}</span>
-              <span>{{ relative(run.createdAt) }}</span>
+              <span v-if="formatDuration(run.durationMs)">{{ formatDuration(run.durationMs) }}</span>
+              <span>{{ relativeTime(run.createdAt) }}</span>
               <UIcon
                 name="i-lucide-chevron-right"
                 class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -118,6 +230,17 @@ function duration(ms?: number) {
           </NuxtLink>
         </div>
       </template>
+
+      <!-- "Nothing matches" and "nothing has happened" are different answers -->
+      <EmptyState
+        v-else-if="isFiltered"
+        variant="inset"
+        icon="i-lucide-search-x"
+        title="Nothing matches"
+        description="No run fits these filters. Widen them, or clear them to see everything again."
+        action-label="Clear filters"
+        @action="clearFilters"
+      />
 
       <EmptyState
         v-else

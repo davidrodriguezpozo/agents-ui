@@ -2,6 +2,17 @@ import type { PermissionRequest, RunStats } from '~/types'
 
 export type RunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
 export type RunKind = 'command' | 'chat' | 'agent'
+/** What set a run going. */
+export type RunSource = 'ritual' | 'session' | 'agent' | 'command'
+/** `attention` is the one that isn't a status: finished, but refused a tool. */
+export type RunOutcomeFilter = 'running' | 'completed' | 'failed' | 'cancelled' | 'attention'
+
+export interface RunQuery {
+  limit?: number
+  q?: string
+  source?: RunSource
+  outcome?: RunOutcomeFilter
+}
 
 export interface RunSummary {
   id: string
@@ -20,6 +31,8 @@ export interface RunSummary {
   deniedTools?: string[]
   suggestedRules?: string[]
   scheduleId?: string
+  sessionId?: string
+  source: RunSource
 }
 
 export interface RunToolCall {
@@ -63,10 +76,16 @@ export function useRuns() {
   const live = useState<Record<string, LiveRun>>('live-runs', () => ({}))
   const permissions = usePermissionPrompts('runs')
 
-  async function fetchRuns(limit = 50) {
+  /**
+   * Filtering is the server's job: the log is capped at `limit`, so narrowing
+   * it here would only ever search the most recent page of a long history.
+   */
+  async function fetchRuns(query: RunQuery = {}) {
     loading.value = true
     try {
-      runs.value = await $fetch<RunSummary[]>('/api/runs', { query: { limit } })
+      runs.value = await $fetch<RunSummary[]>('/api/runs', {
+        query: { limit: query.limit ?? 50, q: query.q || undefined, source: query.source, outcome: query.outcome },
+      })
     } catch (e) {
       console.error('[useRuns] fetchRuns:', e)
     } finally {
