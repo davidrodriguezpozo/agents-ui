@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
+import type { TrustLevel } from './trust'
 
 /**
  * A session is a conversation with its own isolated copy of a repository.
@@ -33,6 +34,11 @@ export interface Session {
   worktreeRemovedAt?: number
   /** Set when this record was rebuilt from a worktree rather than created. */
   recoveredAt?: number
+  /**
+   * How much this session is trusted without asking. Absent means `edits`,
+   * which is what every session did before the setting existed.
+   */
+  trust?: TrustLevel
   /**
    * Set when the session continues a conversation started in the terminal.
    * The work has moved to a fresh checkout, which the conversation does not

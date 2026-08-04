@@ -5,6 +5,7 @@ import { createRun, getActive, readRun, type Run } from '../../../utils/runStore
 import { executeRun } from '../../../utils/runner'
 import { notify } from '../../../utils/notify'
 import { rulesForProject } from '../../../utils/projectRules'
+import { permissionModeFor } from '../../../utils/trust'
 
 /**
  * A turn short enough that you never looked away does not warrant a banner —
@@ -83,6 +84,8 @@ export default defineEventHandler(async (event) => {
   const options = await resolveRunOptionsFor({
     projectDir: session.worktreePath,
     agentSlug: session.agentSlug,
+    // How much this session was told it could do without stopping to ask.
+    permissionMode: permissionModeFor(session.trust),
     // What this project has already been trusted with. Without it every
     // session starts from scratch and asks again for approvals given a dozen
     // times before.

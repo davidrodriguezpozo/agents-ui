@@ -3,13 +3,14 @@ import { errorMessage } from '~/utils/errors'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
+import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type { DiffFile, MergePreview, Session, SessionTurn, TranscriptMessage } from '~/composables/useSessions'
 
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string
 
-const { fetchOne, send, fetchTranscript, fetchDiff, previewMerge, merge, close } = useSessions()
+const { fetchOne, send, fetchTranscript, setTrust, fetchDiff, previewMerge, merge, close } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
 const { describeRule } = usePermissionRuleLabels()
@@ -305,6 +306,29 @@ async function sendReview() {
     toast.add({ title: 'Could not send the review', description: errorMessage(e), color: 'error' })
   } finally {
     sending.value = false
+  }
+}
+
+/**
+ * How much this session may do without asking.
+ *
+ * Applied to the next turn, not the one running: the SDK is told once when a
+ * run starts, and changing the rules underneath a run in flight would be worse
+ * than waiting for it to finish.
+ */
+const trust = computed<TrustLevel>(() => session.value?.trust ?? 'edits')
+
+async function onTrust(level: TrustLevel) {
+  if (level === trust.value) return
+
+  const previous = session.value?.trust
+  if (session.value) session.value.trust = level
+
+  try {
+    await setTrust(id, level)
+  } catch (e) {
+    if (session.value) session.value.trust = previous
+    toast.add({ title: 'Could not change that', description: errorMessage(e), color: 'error' })
   }
 }
 
@@ -674,6 +698,34 @@ const totalChanges = computed(() => {
               <UIcon name="i-lucide-x" class="size-3" />
             </button>
           </div>
+        </div>
+
+        <!-- How much it may do on its own, next to the box that sets it going -->
+        <div class="flex items-center justify-between gap-3 flex-wrap">
+          <div class="pill-picker">
+            <button
+              v-for="choice in TRUST_CHOICES"
+              :key="choice.value"
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': trust === choice.value }"
+              :title="choice.hint"
+              @click="onTrust(choice.value)"
+            >
+              {{ choice.label }}
+            </button>
+          </div>
+          <span
+            v-if="trust === 'full'"
+            class="type-detail flex items-center gap-1.5"
+            style="color: var(--accent);"
+          >
+            <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
+            It will run commands without asking, in this workspace only.
+          </span>
+          <span v-else-if="trust === 'readonly'" class="type-meta">
+            It will propose changes rather than make them.
+          </span>
         </div>
 
         <!-- Composer -->

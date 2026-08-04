@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
 import { mergeRules } from './permissionRules'
+import { permissionModeFor, type TrustLevel } from './trust'
 
 /**
  * Deliberately not cron. "Every weekday at 08:00" is the shape a daily ritual
@@ -17,9 +18,10 @@ export interface Recurrence {
 
 /**
  * How much a ritual is trusted. Decided when it's created, because 8am with
- * nobody watching is the wrong moment to ask.
+ * nobody watching is the wrong moment to ask. Shared with sessions, which ask
+ * the same question about a turn you are watching.
  */
-export type SchedulePermission = 'readonly' | 'edits' | 'full'
+export type SchedulePermission = TrustLevel
 
 export interface Schedule {
   id: string
@@ -124,12 +126,7 @@ export function describeRecurrence(recurrence: Recurrence): string {
   return `${days.map(d => names[d]).join(', ')} at ${time}`
 }
 
-/** Map a ritual's trust level onto the SDK's permission mode. */
-export function permissionModeFor(permission: SchedulePermission): 'plan' | 'acceptEdits' | 'bypassPermissions' {
-  if (permission === 'readonly') return 'plan'
-  if (permission === 'full') return 'bypassPermissions'
-  return 'acceptEdits'
-}
+export { permissionModeFor }
 
 export async function upsertSchedule(input: Partial<Schedule> & { input: string; title: string }): Promise<Schedule> {
   const recurrence = normalizeRecurrence(input.recurrence)

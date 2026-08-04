@@ -25,6 +25,8 @@ export interface Session {
   worktreeRemovedAt?: number
   /** Set when this continues a conversation started in the terminal. */
   adoptedAt?: number
+  /** How much it may do without asking. Absent means `edits`. */
+  trust?: TrustLevel
   worktree: WorktreeState
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity
@@ -34,6 +36,15 @@ export interface Session {
   /** False when the session belongs to a repo other than the selected folder. */
   inCurrentProject: boolean
 }
+
+export type TrustLevel = 'readonly' | 'edits' | 'full'
+
+/** What each level means for a session you are watching, in its own words. */
+export const TRUST_CHOICES: { value: TrustLevel; label: string; hint: string }[] = [
+  { value: 'readonly', label: 'Plan only', hint: 'Reads and proposes. Changes nothing at all.' },
+  { value: 'edits', label: 'Edit files', hint: 'Writes files freely. Asks before anything riskier.' },
+  { value: 'full', label: 'Auto', hint: 'Runs commands too, and never stops to ask. Only in a workspace you are happy to throw away.' },
+]
 
 export interface TranscriptMessage {
   role: 'user' | 'assistant'
@@ -150,6 +161,14 @@ export function useSessions() {
     return result.messages
   }
 
+  /** Takes effect on the next turn — the SDK is told once, when a run starts. */
+  async function setTrust(id: string, trust: TrustLevel) {
+    return $fetch<Session>(`/api/sessions/${encodeURIComponent(id)}/trust`, {
+      method: 'POST',
+      body: { trust },
+    })
+  }
+
   async function fetchDiff(id: string) {
     return $fetch<{ files: DiffFile[]; patch: string }>(`/api/sessions/${encodeURIComponent(id)}/diff`)
   }
@@ -203,6 +222,7 @@ export function useSessions() {
     fetchOne,
     send,
     fetchTranscript,
+    setTrust,
     fetchDiff,
     previewMerge,
     merge,
