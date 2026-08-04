@@ -10,6 +10,8 @@ const id = route.params.id as string
 
 const { fetchOne, send, fetchDiff, previewMerge, merge, close } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
+const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
+const { describeRule } = usePermissionRuleLabels()
 const toast = useToast()
 
 const session = ref<(Session & { turns: SessionTurn[] }) | null>(null)
@@ -69,6 +71,7 @@ async function refreshDiff() {
 onMounted(async () => {
   await load()
   await refreshDiff()
+  await loadProjectRules()
 })
 
 onUnmounted(() => controller?.abort())
@@ -107,6 +110,24 @@ async function onStop() {
   } finally {
     stopping.value = false
   }
+}
+
+/**
+ * Grant the rule, then answer the prompt it came from. In that order: if
+ * saving fails, the prompt is still there to be answered by hand, whereas
+ * answering first would leave the agent moving on while the grant silently
+ * did not happen.
+ */
+async function onRemember(requestId: string, rule: string) {
+  try {
+    await allowRule(rule)
+    toast.add({ title: 'Allowed from now on', description: describeRule(rule) })
+  } catch (e) {
+    toast.add({ title: 'Could not remember that', description: errorMessage(e), color: 'error' })
+    return
+  }
+
+  await answerPermission(requestId, { behavior: 'allow', scope: 'session' })
 }
 
 async function openMerge() {
@@ -262,6 +283,29 @@ const totalChanges = computed(() => {
           <div v-if="!session.worktree.exists" class="type-meta pl-6" style="color: var(--error);">
             This workspace is missing from disk — it was removed outside the app.
           </div>
+
+          <!-- What it will not stop to ask about, and how to take that back -->
+          <div v-if="projectRules.length" class="flex items-center gap-1.5 flex-wrap pl-6 pt-0.5">
+            <span class="type-meta">Always allowed here</span>
+            <span
+              v-for="rule in projectRules"
+              :key="rule"
+              class="inline-flex items-center gap-1 text-[10px] px-1.5 py-px rounded-md group/rule"
+              style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+              :title="rule"
+            >
+              <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0" style="color: var(--success);" />
+              {{ describeRule(rule) }}
+              <button
+                class="opacity-0 group-hover/rule:opacity-100 transition-opacity focus-ring rounded"
+                style="color: var(--text-disabled);"
+                :aria-label="`Stop allowing ${rule}`"
+                @click="revokeRule(rule)"
+              >
+                <UIcon name="i-lucide-x" class="size-2.5" />
+              </button>
+            </span>
+          </div>
         </div>
 
         <!-- Changes -->
@@ -333,6 +377,7 @@ const totalChanges = computed(() => {
             :request="request"
             :busy="isAnsweringPermission(request.id)"
             @answer="answerPermission(request.id, $event)"
+            @remember="onRemember(request.id, $event)"
           />
         </div>
 

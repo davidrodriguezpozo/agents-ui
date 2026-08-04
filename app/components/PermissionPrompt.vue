@@ -6,7 +6,16 @@ const props = defineProps<{
   busy?: boolean
 }>()
 
-const emit = defineEmits<{ answer: [decision: PermissionAnswer] }>()
+const emit = defineEmits<{ answer: [decision: PermissionAnswer]; remember: [rule: string] }>()
+
+const { describeRule } = usePermissionRuleLabels()
+
+/**
+ * The narrow rule the CLI itself proposed — `Bash(pnpm test:*)` rather than
+ * "all commands". Offered only when there is one, because inventing a rule
+ * from the arguments is how a person ends up granting more than they meant.
+ */
+const rememberable = computed(() => props.request.suggestedRules?.[0] ?? null)
 
 const TOOL_VERBS: Record<string, string> = {
   Bash: 'run a command',
@@ -85,6 +94,18 @@ const detail = computed(() => {
         color="primary"
         :disabled="busy"
         @click="emit('answer', { behavior: 'allow', scope: 'session' })"
+      />
+      <!-- The only moment anyone knows whether this should keep being asked -->
+      <UButton
+        v-if="rememberable"
+        :label="`Always allow ${describeRule(rememberable)} here`"
+        size="xs"
+        variant="soft"
+        color="neutral"
+        icon="i-lucide-shield-check"
+        :disabled="busy"
+        :title="`Adds ${rememberable} to this project, for every session`"
+        @click="emit('remember', rememberable)"
       />
       <UButton
         label="Deny"
