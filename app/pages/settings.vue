@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
 import type { Settings } from '~/types'
 
 const { settings, loading, load, save } = useSettings()
@@ -12,9 +13,44 @@ const {
 } = useGithubImports()
 const toast = useToast()
 
+const {
+  state: checks,
+  saving: checksSaving,
+  load: loadChecks,
+  save: saveCheckCommand,
+  reset: resetCheckCommand,
+} = useProjectChecks()
+
 const rawJson = ref('')
 const saving = ref(false)
 const viewMode = ref<'structured' | 'raw'>('structured')
+
+/**
+ * Seeded with whatever currently applies — including a detected guess, so the
+ * box shows what will actually run rather than being blank while a command is
+ * quietly in force.
+ */
+const checkCommand = ref('')
+watch(checks, (next) => { checkCommand.value = next?.command ?? '' }, { immediate: true })
+
+async function saveChecks() {
+  try {
+    await saveCheckCommand(checkCommand.value)
+    toast.add({ title: 'Saved', description: 'Sessions in this project will run it from now on.', color: 'success' })
+  } catch (e) {
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
+  }
+}
+
+/** An empty command is remembered as an answer, so detection stops suggesting one. */
+async function turnOffChecks() {
+  await saveCheckCommand('')
+  checkCommand.value = ''
+}
+
+async function resetChecks() {
+  await resetCheckCommand()
+}
 
 type NotificationKey = 'enabled' | 'needsYou' | 'failed' | 'finished'
 
@@ -30,6 +66,8 @@ const notifications = ref<Record<NotificationKey, boolean>>({
 })
 
 onMounted(async () => {
+  void loadChecks()
+
   try {
     const prefs = await $fetch<{ notifications: Record<NotificationKey, boolean> }>('/api/preferences')
     notifications.value = prefs.notifications
@@ -308,6 +346,74 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             </label>
           </div>
         </div>
+      </div>
+
+      <!-- Checks -->
+      <div class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Checks for this project</h3>
+        <p class="text-[12px] text-meta">
+          The command that tells you whether this project works. It runs in a session's own
+          workspace after any turn that changed files, and a session whose checks fail will not
+          be merged without you saying so explicitly.
+        </p>
+
+        <div v-if="!checks?.dir" class="text-[12px] text-label">
+          Pick a project folder in the sidebar first — this is set per repository.
+        </div>
+
+        <template v-else>
+          <div class="field-group">
+            <label class="field-label">Command</label>
+            <div class="flex gap-2">
+              <input
+                v-model="checkCommand"
+                class="field-input flex-1 font-mono"
+                placeholder="make check"
+                spellcheck="false"
+                @keydown.enter="saveChecks"
+              />
+              <UButton
+                label="Save"
+                size="sm"
+                :loading="checksSaving"
+                :disabled="checkCommand === (checks.command ?? '')"
+                @click="saveChecks"
+              />
+            </div>
+            <p v-if="checks.source === 'detected' && checks.from" class="field-hint">
+              Nothing chosen yet, so this was inferred from {{ checks.from }}. Saving makes it the answer.
+            </p>
+            <p v-else-if="checks.configured === ''" class="field-hint">
+              Turned off — this project is treated as having nothing to run, and sessions here
+              merge on git's say-so alone.
+            </p>
+            <p v-else class="field-hint">
+              Run through a shell in the session's workspace, so <span class="font-mono">&amp;&amp;</span>
+              and pipes work. A non-zero exit means failed.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="checks.configured !== ''"
+              label="This project has no checks"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="checksSaving"
+              @click="turnOffChecks"
+            />
+            <UButton
+              v-if="checks.configured !== null"
+              label="Reset to what's detected"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="checksSaving"
+              @click="resetChecks"
+            />
+          </div>
+        </template>
       </div>
 
       <!-- Status Line -->

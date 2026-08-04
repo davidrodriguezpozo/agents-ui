@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { isStale, worktreeFingerprint, type SessionCheck } from './checks'
 import type { Session } from './sessions'
 
 const exec = promisify(execFile)
@@ -23,6 +24,38 @@ export interface MergePreview {
   /** Files changed but never committed — these will not come across. */
   uncommittedFiles: string[]
   conflicts: string[]
+  /** How the project's own checks last went here, if they ever have. */
+  check?: SessionCheck | null
+  /** The recorded verdict describes code that has since changed. */
+  checkStale?: boolean
+  /**
+   * The only thing in the way is the checks. Everything git cares about is
+   * fine, so this is a judgement rather than an impossibility — and a
+   * judgement is something you are allowed to overrule.
+   */
+  blockedByChecks?: boolean
+}
+
+/**
+ * Whether a verdict should stand in the way of a merge.
+ *
+ * Only a real failure does. A check that could not run says nothing about the
+ * code — a workspace missing its dependencies is not a bug — and blocking on
+ * it would train people to override by reflex, which is worse than not
+ * checking at all. Checks still running block too, briefly: merging a moment
+ * before the answer arrives is exactly the mistake this exists to prevent.
+ */
+export function checkBlocks(check: SessionCheck | null | undefined): boolean {
+  return check?.status === 'failing' || check?.status === 'running'
+}
+
+function describeCheckBlock(check: SessionCheck, stale: boolean): string {
+  if (check.status === 'running') {
+    return `\`${check.command}\` is still running in this session's workspace. Give it a moment — merging now would be merging without the answer.`
+  }
+  return stale
+    ? `\`${check.command}\` failed here, and the workspace has changed since. Run the checks again to see where it stands.`
+    : `\`${check.command}\` failed in this session's workspace.`
 }
 
 async function git(cwd: string, args: string[], timeout = 30_000) {
@@ -78,6 +111,9 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
     conflicts = parseMergeTreeConflicts(e.stdout ?? '')
   }
 
+  const check = session.check ?? null
+  const checkStale = isStale(session.check, await worktreeFingerprint(worktreePath))
+
   const preview: MergePreview = {
     canMerge: false,
     targetBranch: baseBranch,
@@ -86,6 +122,8 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
     commits,
     uncommittedFiles,
     conflicts,
+    check,
+    checkStale,
   }
 
   if (!commits) {
@@ -96,6 +134,12 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
     preview.blockedReason = `Your checkout is on ${currentBranch}, but this session branched from ${baseBranch}. Switch to ${baseBranch} first.`
   } else if (conflicts.length) {
     preview.blockedReason = `${conflicts.length} file${conflicts.length === 1 ? '' : 's'} would conflict. Resolve them in the session before merging.`
+  } else if (checkBlocks(check)) {
+    // Evaluated last on purpose: reaching here means git has no objection, so
+    // the checks are the only thing standing in the way — which is what makes
+    // overriding them safe to offer at all.
+    preview.blockedByChecks = true
+    preview.blockedReason = describeCheckBlock(check!, checkStale)
   } else {
     preview.canMerge = true
   }
@@ -107,6 +151,8 @@ export interface MergeResult {
   merged: boolean
   commitsBrought: number
   message?: string
+  /** This merge went ahead over a failing check. */
+  overrodeChecks?: boolean
 }
 
 /** Commit whatever the agent left uncommitted, so it is not silently dropped. */
@@ -119,16 +165,32 @@ export async function commitSessionWork(session: Session, message: string): Prom
   return status.split('\n').filter(Boolean).length
 }
 
-export async function mergeSession(session: Session, opts: { message?: string } = {}): Promise<MergeResult> {
+export async function mergeSession(
+  session: Session,
+  opts: { message?: string; override?: boolean } = {},
+): Promise<MergeResult> {
   const preview = await previewMerge(session)
-  if (!preview.canMerge) {
+
+  // Failing checks are the one blocker that can be overruled, and only when
+  // they are the only one — `previewMerge` sets `blockedByChecks` last, so it
+  // can never be true while git still objects to something.
+  const overruled = preview.blockedByChecks && opts.override
+
+  if (!preview.canMerge && !overruled) {
     throw createError({
       statusCode: 409,
       data: { error: 'merge_blocked', message: preview.blockedReason ?? 'This session cannot be merged.' },
     })
   }
 
-  const message = opts.message?.trim() || `Merge session: ${session.title}`
+  const base = opts.message?.trim() || `Merge session: ${session.title}`
+
+  // A decision to merge over a failing suite is worth keeping. Six months on,
+  // the question "was this known to be broken when it landed" has an answer in
+  // the history rather than only in whoever remembers clicking the button.
+  const message = overruled && preview.check
+    ? `${base}\n\nMerged with \`${preview.check.command}\` failing.`
+    : base
 
   try {
     // --no-ff keeps the session visible as a unit in history rather than
@@ -146,5 +208,5 @@ export async function mergeSession(session: Session, opts: { message?: string } 
     })
   }
 
-  return { merged: true, commitsBrought: preview.commits, message }
+  return { merged: true, commitsBrought: preview.commits, message, overrodeChecks: Boolean(overruled) }
 }

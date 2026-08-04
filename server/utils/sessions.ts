@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
+import type { SessionCheck } from './checks'
 import type { TrustLevel } from './trust'
 
 /**
@@ -41,6 +42,12 @@ export interface Session {
   trust?: TrustLevel
   /** Set once this session's branch has a pull request open. */
   prUrl?: string
+  /**
+   * How the project's own checks last went in this session's workspace.
+   * Absent means they have never run here — which is not the same as passing,
+   * and is shown as the difference it is.
+   */
+  check?: SessionCheck
   /**
    * Set when the session continues a conversation started in the terminal.
    * The work has moved to a fresh checkout, which the conversation does not

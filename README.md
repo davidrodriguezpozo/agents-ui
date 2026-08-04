@@ -149,7 +149,7 @@ lists every one git actually knows about, so none of them quietly accumulate.
 </tr>
 <tr>
 <td><b>What changed</b>, per file, next to the conversation that produced it.</td>
-<td><b>Merge</b> tells you what is about to be brought across and into which branch, before it touches your checkout.</td>
+<td><b>Merge</b> tells you what is about to be brought across and into which branch, and whether the project's own checks pass, before it touches your checkout.</td>
 </tr>
 </table>
 
@@ -157,6 +157,39 @@ The conversation itself is rendered properly — headings, lists, tables and cod
 the agent wrote them.
 
 ![A session's conversation](docs/screenshots/03-session-conversation.jpg)
+
+### Whether it works
+
+A diff tells you what changed. It does not tell you whether the result runs, and that is
+the question almost everyone is actually asking — certainly anyone reviewing six sessions
+at once, and anyone who does not read diffs for a living.
+
+So your project's own checks run in the session's workspace, after any turn that changed
+files. A turn that only answered a question doesn't trigger a test suite. The verdict goes
+on the session, so the list says **Checks pass** or **Checks failed** rather than the
+meaningless "changes ready", and a session that does not work sorts to the top with the
+ones that need you.
+
+**A failing session will not merge** until you say so. The merge dialog shows the failure
+and offers *Merge anyway* — because sometimes the base branch is already red, and a gate
+with no way through is a gate people route around. Taking it is recorded in the merge
+commit, so "was this known to be broken when it landed" has an answer later.
+
+Three distinctions it is careful about:
+
+- **Failing is not the same as not running.** A workspace missing its dependencies, or a
+  command that isn't on `PATH`, exits non-zero and means nothing about your code. Those
+  are reported as having no verdict, and they never block a merge.
+- **A verdict has a shelf life.** Edit the workspace after a run and the result is marked
+  as describing code that no longer exists, rather than quietly believed.
+- **Checks queue per repository.** Six sessions finishing together would otherwise build
+  the same project six times at once, which thrashes the machine and breaks any suite
+  that binds a port.
+
+The command is guessed from your repository — a `check` target in your `Makefile`, a
+`check` or `test` script in `package.json`, `Cargo.toml`, `go.mod`, `pytest` — and is set
+per project in Settings. Telling it your project has no checks is a real answer, and it
+stops asking.
 
 ---
 

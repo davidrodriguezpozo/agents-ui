@@ -2,6 +2,7 @@ import { findSession } from '../../../utils/sessions'
 import { worktreeStatus } from '../../../utils/worktrees'
 import { getActive, readRun, type RunSummary } from '../../../utils/runStore'
 import { toolCallsFromEvents } from '../../../utils/turnActivity'
+import { checkCommandFor, isStale, worktreeFingerprint } from '../../../utils/checks'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -33,5 +34,20 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return { ...session, worktree, turns }
+  // Only worked out for one session at a time. Fingerprinting hashes the full
+  // uncommitted diff, which is far too much to do for every row of a list that
+  // polls — and on the list it would rarely say anything, since a turn that
+  // changes files re-runs the checks itself.
+  const checkStale = session.check
+    ? isStale(session.check, await worktreeFingerprint(session.worktreePath))
+    : false
+
+  return {
+    ...session,
+    worktree,
+    turns,
+    checkStale,
+    /** Null when this project has no checks, which the page says rather than hides. */
+    checkCommand: (await checkCommandFor(session.repoDir))?.command ?? null,
+  }
 })

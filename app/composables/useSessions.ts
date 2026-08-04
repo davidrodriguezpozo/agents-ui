@@ -9,6 +9,19 @@ export interface WorktreeState {
 
 export type SessionActivity = 'idle' | 'working' | 'awaiting-permission' | 'failed' | 'missing'
 
+export type CheckStatus = 'passing' | 'failing' | 'errored' | 'running'
+
+/** How the project's own checks last went in a session's workspace. */
+export interface SessionCheck {
+  status: CheckStatus
+  command: string
+  fingerprint: string
+  exitCode: number | null
+  output: string
+  durationMs: number
+  at: number
+}
+
 export interface Session {
   id: string
   title: string
@@ -29,6 +42,8 @@ export interface Session {
   trust?: TrustLevel
   /** Set once this session's branch has a pull request open. */
   prUrl?: string
+  /** Absent means the checks have never run here — not that they passed. */
+  check?: SessionCheck
   worktree: WorktreeState
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity
@@ -123,6 +138,10 @@ export interface MergePreview {
   commits: number
   uncommittedFiles: string[]
   conflicts: string[]
+  check?: SessionCheck | null
+  checkStale?: boolean
+  /** Git has no objection; only the checks do. This one can be overruled. */
+  blockedByChecks?: boolean
 }
 
 export interface DiffFile {
@@ -170,7 +189,25 @@ export function useSessions() {
   }
 
   async function fetchOne(id: string) {
-    return $fetch<Session & { turns: SessionTurn[] }>(`/api/sessions/${encodeURIComponent(id)}`)
+    return $fetch<Session & {
+      turns: SessionTurn[]
+      checkStale: boolean
+      checkCommand: string | null
+    }>(`/api/sessions/${encodeURIComponent(id)}`)
+  }
+
+  /**
+   * Run the project's checks now. Turns that change files do this themselves,
+   * so this is for a verdict that has gone stale or one you want before
+   * deciding. Resolves with the answer, not with "started".
+   */
+  async function runCheck(id: string) {
+    const result = await $fetch<{ check: SessionCheck | null }>(
+      `/api/sessions/${encodeURIComponent(id)}/check`,
+      { method: 'POST' },
+    )
+    await fetchAll()
+    return result.check
   }
 
   /** Returns the run id, which the caller attaches to for live output. */
@@ -225,8 +262,17 @@ export function useSessions() {
     return $fetch<MergePreview>(`/api/sessions/${encodeURIComponent(id)}/merge`)
   }
 
-  async function merge(id: string, opts: { message?: string; commitFirst?: boolean } = {}) {
-    const result = await $fetch<{ merged: boolean; commitsBrought: number; committedBeforeMerge: number }>(
+  /** `override` proceeds over a failing check, and over nothing else. */
+  async function merge(
+    id: string,
+    opts: { message?: string; commitFirst?: boolean; override?: boolean } = {},
+  ) {
+    const result = await $fetch<{
+      merged: boolean
+      commitsBrought: number
+      committedBeforeMerge: number
+      overrodeChecks?: boolean
+    }>(
       `/api/sessions/${encodeURIComponent(id)}/merge`,
       { method: 'POST', body: opts },
     )
@@ -277,8 +323,57 @@ export function useSessions() {
     fetchDiff,
     previewMerge,
     merge,
+    runCheck,
     close,
   }
+}
+
+/** What a project runs to say whether it works, and what could be inferred. */
+export interface ProjectChecks {
+  dir: string | null
+  command: string | null
+  source: 'configured' | 'detected' | null
+  from?: string | null
+  /** Null when never chosen; empty string when deliberately turned off. */
+  configured: string | null
+  detected: { command: string; from: string } | null
+}
+
+export function useProjectChecks() {
+  const state = useState<ProjectChecks | null>('project-checks', () => null)
+  const saving = useState('project-checks-saving', () => false)
+
+  async function load() {
+    try {
+      state.value = await $fetch<ProjectChecks>('/api/project/checks')
+    } catch (e) {
+      console.error('[useProjectChecks] load:', e)
+    }
+  }
+
+  /** An empty command is a real answer: this project has nothing to run. */
+  async function save(command: string) {
+    saving.value = true
+    try {
+      await $fetch('/api/project/checks', { method: 'POST', body: { command } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  /** Forget the choice, so what the repository suggests applies again. */
+  async function reset() {
+    saving.value = true
+    try {
+      await $fetch('/api/project/checks', { method: 'POST', body: { reset: true } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return { state, saving, load, save, reset }
 }
 
 /** Worktrees as git reports them, including ones with no session behind them. */

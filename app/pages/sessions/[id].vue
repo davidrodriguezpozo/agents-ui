@@ -14,7 +14,7 @@ const id = route.params.id as string
 
 const {
   fetchOne, send, fetchTranscript, setTrust, fetchDiff,
-  previewPullRequest, openPullRequest, previewMerge, merge, close,
+  previewPullRequest, openPullRequest, previewMerge, merge, runCheck, close,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
@@ -22,7 +22,13 @@ const { describeRule } = usePermissionRuleLabels()
 const { commands, fetchAll: fetchCommands } = useCommands()
 const toast = useToast()
 
-const session = ref<(Session & { turns: SessionTurn[] }) | null>(null)
+const session = ref<(Session & {
+  turns: SessionTurn[]
+  checkStale: boolean
+  checkCommand: string | null
+}) | null>(null)
+const checking = ref(false)
+const showCheckOutput = ref(false)
 const loadError = ref<string | null>(null)
 const input = ref('')
 const sending = ref(false)
@@ -218,6 +224,113 @@ async function onOpenPr() {
   }
 }
 
+/**
+ * Run the checks now.
+ *
+ * Slow by nature — a real suite is minutes, and the button stays in its
+ * loading state throughout rather than pretending to be done. The merge
+ * preview is refreshed too when it is open, since the verdict it was showing
+ * is exactly what just changed.
+ */
+/**
+ * The checks, said in a sentence.
+ *
+ * Every state here has to read to someone who will not open the output: what
+ * the answer is, and what it is an answer about. "Errored" gets its own
+ * wording rather than borrowing failure's, because a suite that could not run
+ * says nothing at all about the code.
+ */
+interface CheckPanel {
+  title: string
+  detail: string
+  icon: string
+  color: string
+  frame: string
+  spin?: boolean
+}
+
+const checkPanel = computed<CheckPanel>(() => {
+  const check = session.value?.check
+  const command = check?.command ?? session.value?.checkCommand ?? ''
+  const took = formatDuration(check?.durationMs)
+  const ran = check
+    ? [command, relativeTime(check.at), took ? `took ${took}` : null].filter(Boolean).join(' · ')
+    : command
+
+  if (!check) {
+    return {
+      title: 'Not checked yet',
+      detail: `${command} has not run in this workspace.`,
+      icon: 'i-lucide-circle-dashed',
+      color: 'var(--text-secondary)',
+      frame: 'background: var(--surface-raised); border: 1px solid var(--border-subtle);',
+    }
+  }
+
+  if (check.status === 'running') {
+    return {
+      title: 'Checking…',
+      detail: `Running ${command} in this workspace.`,
+      icon: 'i-lucide-loader-2',
+      color: 'var(--accent)',
+      spin: true,
+      frame: 'background: var(--accent-muted); border: 1px solid var(--accent-glow);',
+    }
+  }
+
+  if (check.status === 'failing') {
+    return {
+      title: session.value?.checkStale ? 'Failed, before the latest change' : 'This does not work yet',
+      detail: ran,
+      icon: 'i-lucide-circle-x',
+      color: 'var(--error)',
+      frame: 'background: rgba(248,113,113,0.06); border: 1px solid var(--error);',
+    }
+  }
+
+  if (check.status === 'errored') {
+    return {
+      title: 'The checks could not run',
+      detail: `${ran} — so there is no verdict either way.`,
+      icon: 'i-lucide-circle-help',
+      color: 'var(--warning)',
+      frame: 'background: rgba(212,153,34,0.06); border: 1px solid var(--warning);',
+    }
+  }
+
+  return {
+    title: session.value?.checkStale ? 'Passed, before the latest change' : 'This works',
+    detail: ran,
+    icon: 'i-lucide-check-check',
+    color: session.value?.checkStale ? 'var(--warning)' : 'var(--success)',
+    frame: session.value?.checkStale
+      ? 'background: rgba(212,153,34,0.06); border: 1px solid var(--warning);'
+      : 'background: rgba(34,197,94,0.06); border: 1px solid var(--success);',
+  }
+})
+
+async function onRunCheck() {
+  checking.value = true
+  try {
+    const check = await runCheck(id)
+    await load()
+    if (showMerge.value) mergePreview.value = await previewMerge(id)
+
+    if (check?.status === 'errored') {
+      toast.add({
+        title: 'The checks could not run',
+        description: 'Nothing is wrong with the code as far as this can tell — see the output.',
+        color: 'warning',
+      })
+      showCheckOutput.value = true
+    }
+  } catch (e) {
+    toast.add({ title: 'Could not run the checks', description: errorMessage(e), color: 'error' })
+  } finally {
+    checking.value = false
+  }
+}
+
 async function openMerge() {
   showMerge.value = true
   mergePreview.value = null
@@ -229,14 +342,22 @@ async function openMerge() {
   }
 }
 
-async function onMerge() {
+/**
+ * Merge, optionally over a failing check.
+ *
+ * The override is passed only when the dialog actually offered it, so a stale
+ * preview can never quietly widen into permission to ignore something else.
+ */
+async function onMerge(override = false) {
   merging.value = true
   try {
-    const result = await merge(id, { commitFirst: commitFirst.value })
+    const result = await merge(id, { commitFirst: commitFirst.value, override })
     toast.add({
       title: `Merged into ${mergePreview.value?.targetBranch}`,
-      description: `${result.commitsBrought} commit${result.commitsBrought === 1 ? '' : 's'} brought across.`,
-      color: 'success',
+      description: result.overrodeChecks
+        ? `${result.commitsBrought} commit${result.commitsBrought === 1 ? '' : 's'} brought across, with the checks failing. The merge commit says so.`
+        : `${result.commitsBrought} commit${result.commitsBrought === 1 ? '' : 's'} brought across.`,
+      color: result.overrodeChecks ? 'warning' : 'success',
     })
     showMerge.value = false
     await load()
@@ -541,6 +662,55 @@ const totalChanges = computed(() => {
               </button>
             </span>
           </div>
+        </div>
+
+        <!--
+          Whether it works, above what changed. The diff answers "what did it
+          do"; this answers the question most people were actually asking, and
+          is the only one someone who cannot read a diff can act on.
+        -->
+        <div
+          v-if="session.checkCommand && (session.worktree.changedFiles || session.check)"
+          class="rounded-md px-4 py-3 space-y-2"
+          :style="checkPanel.frame"
+        >
+          <div class="flex items-center gap-2">
+            <UIcon
+              :name="checkPanel.icon"
+              class="size-4 shrink-0"
+              :class="{ 'animate-spin': checkPanel.spin }"
+              :style="{ color: checkPanel.color }"
+            />
+            <div class="flex-1 min-w-0">
+              <div class="type-strong" :style="{ color: checkPanel.color }">{{ checkPanel.title }}</div>
+              <div class="type-meta truncate">{{ checkPanel.detail }}</div>
+            </div>
+
+            <UButton
+              v-if="session.check?.output"
+              :label="showCheckOutput ? 'Hide output' : 'Output'"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              @click="() => { showCheckOutput = !showCheckOutput }"
+            />
+            <UButton
+              :label="session.check ? 'Run again' : 'Run checks'"
+              icon="i-lucide-play"
+              size="xs"
+              variant="soft"
+              color="neutral"
+              :loading="checking || session.check?.status === 'running'"
+              :disabled="isBusy"
+              @click="onRunCheck"
+            />
+          </div>
+
+          <pre
+            v-if="showCheckOutput && session.check?.output"
+            class="font-mono text-[10px] leading-relaxed overflow-x-auto max-h-64 p-2.5 rounded"
+            style="background: var(--surface-inset); color: var(--text-secondary);"
+          >{{ session.check.output }}</pre>
         </div>
 
         <!-- Changes -->
@@ -1049,15 +1219,64 @@ const totalChanges = computed(() => {
               </span>
             </label>
 
+            <!-- What the checks said, next to the decision they inform -->
+            <div
+              v-if="mergePreview.check"
+              class="rounded-md px-3 py-2.5 space-y-2"
+              style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+            >
+              <div class="flex items-center gap-2">
+                <UIcon
+                  :name="mergePreview.check.status === 'passing' ? 'i-lucide-check-check' : 'i-lucide-circle-x'"
+                  class="size-3.5 shrink-0"
+                  :style="{ color: mergePreview.check.status === 'passing' ? 'var(--success)' : 'var(--error)' }"
+                />
+                <span class="font-mono type-detail">{{ mergePreview.check.command }}</span>
+                <UButton
+                  label="Run again"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  class="ml-auto"
+                  :loading="checking"
+                  @click="onRunCheck"
+                />
+              </div>
+              <p v-if="mergePreview.checkStale" class="type-meta">
+                This was the answer before the workspace changed. Run it again to know where it stands.
+              </p>
+              <pre
+                v-if="mergePreview.check.status === 'failing' && mergePreview.check.output"
+                class="font-mono text-[10px] leading-relaxed overflow-x-auto max-h-40 p-2 rounded"
+                style="background: var(--surface-inset); color: var(--text-secondary);"
+              >{{ mergePreview.check.output }}</pre>
+            </div>
+
             <div class="flex justify-end gap-2 pt-1">
               <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { showMerge = false }" />
+              <!--
+                Offered only when the checks are the sole objection. Labelled
+                for what it is, so nobody clicks it thinking it is the merge
+                button that was there a moment ago.
+              -->
               <UButton
+                v-if="mergePreview.blockedByChecks && mergePreview.check?.status === 'failing'"
+                label="Merge anyway"
+                icon="i-lucide-triangle-alert"
+                size="sm"
+                color="warning"
+                variant="soft"
+                :loading="merging"
+                @click="onMerge(true)"
+              />
+              <UButton
+                v-else
                 label="Merge"
                 icon="i-lucide-git-merge"
                 size="sm"
                 :loading="merging"
                 :disabled="!mergePreview.canMerge"
-                @click="onMerge"
+                @click="onMerge(false)"
               />
             </div>
           </template>

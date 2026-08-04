@@ -95,11 +95,31 @@ function repoName(session: Session) {
   return session.repoDir.split('/').filter(Boolean).pop() ?? session.repoDir
 }
 
+/**
+ * Two things earn a card an outline: it is waiting on you, or it has produced
+ * something that does not work. Both are cases where scrolling past would be a
+ * mistake, which is the only thing an outline is for.
+ */
+function cardAccent(session: Session) {
+  if (session.activity === 'awaiting-permission') return 'border-color: var(--accent-glow);'
+  if (session.activity === 'idle' && session.check?.status === 'failing') {
+    return 'border-color: var(--error);'
+  }
+  return undefined
+}
+
 /** Sessions needing an answer come first — they are the ones blocking. */
 const ordered = computed(() => {
-  const rank = { 'awaiting-permission': 0, working: 1, failed: 2, idle: 3, missing: 4 }
+  const rank = { 'awaiting-permission': 0, working: 2, failed: 3, idle: 4, missing: 5 }
+
+  // A session that finished and does not work needs you almost as much as one
+  // that is asking — it just has not said so. Without this it sorts as plain
+  // idle and sits below whatever ran most recently.
+  const rankOf = (s: Session) =>
+    s.activity === 'idle' && s.check?.status === 'failing' ? 1 : rank[s.activity]
+
   return [...here.value].sort(
-    (a, b) => rank[a.activity] - rank[b.activity] || b.updatedAt - a.updatedAt,
+    (a, b) => rankOf(a) - rankOf(b) || b.updatedAt - a.updatedAt,
   )
 })
 </script>
@@ -228,9 +248,7 @@ const ordered = computed(() => {
           :key="session.id"
           :to="`/sessions/${session.id}`"
           class="block rounded-md p-4 focus-ring hover-card bg-card"
-          :style="session.activity === 'awaiting-permission'
-            ? 'border-color: var(--accent-glow);'
-            : undefined"
+          :style="cardAccent(session)"
         >
           <div class="flex items-start gap-3">
             <div class="flex-1 min-w-0 space-y-1.5">
@@ -240,6 +258,7 @@ const ordered = computed(() => {
                   :activity="session.activity"
                   :changed-files="session.worktree.changedFiles"
                   :dirty="session.worktree.dirty"
+                  :check="session.check"
                 />
               </div>
 

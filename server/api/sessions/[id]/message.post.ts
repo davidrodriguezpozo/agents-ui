@@ -7,6 +7,8 @@ import { notify } from '../../../utils/notify'
 import { rulesForProject } from '../../../utils/projectRules'
 import { permissionModeFor } from '../../../utils/trust'
 import { ensureTranscriptFor } from '../../../utils/transcripts'
+import { worktreeFingerprint } from '../../../utils/checks'
+import { verifySessionAfterTurn } from '../../../utils/sessionChecks'
 
 /**
  * A turn short enough that you never looked away does not warrant a banner —
@@ -117,6 +119,11 @@ export default defineEventHandler(async (event) => {
 
   const startedAt = Date.now()
 
+  // What the workspace looked like before the turn. Comparing against it
+  // afterwards is what distinguishes a turn that changed the code from one
+  // that answered a question — only the first is worth a test run.
+  const fingerprintBefore = await worktreeFingerprint(session.worktreePath)
+
   void executeRun(run, options, { resumeSessionId: session.sdkSessionId })
     .finally(async () => {
       // The SDK hands back its own id on the first turn; keep it so the next
@@ -128,6 +135,11 @@ export default defineEventHandler(async (event) => {
       })
 
       await announceTurn(session.title, finished, Date.now() - startedAt)
+
+      // Detached: the checks outlast the turn by minutes, and the session is
+      // idle and usable throughout. The verdict lands on the record when it
+      // arrives.
+      void verifySessionAfterTurn(id, fingerprintBefore)
     })
 
   return { runId: run.id, sessionId: session.id }
