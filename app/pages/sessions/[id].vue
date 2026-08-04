@@ -68,10 +68,28 @@ async function refreshDiff() {
   }
 }
 
+/**
+ * An adopted conversation resumes believing it is still in the checkout it
+ * started in, with its edits in place. It is not: this is a clean worktree cut
+ * from the base branch. Nothing but the first message can correct that, so one
+ * is written for you — editable, and deletable if you would rather not.
+ */
+function suggestedOpener(): string {
+  const path = session.value?.worktreePath ?? 'a new workspace'
+  return `Before anything else: we have moved. You are now in a fresh checkout of this repository at ${path}, `
+    + `on a new branch cut from ${session.value?.baseBranch ?? 'the base branch'}. `
+    + `Any edits you made earlier are not here — read the files again before changing them. `
+    + `Then carry on from where we left off.`
+}
+
 onMounted(async () => {
   await load()
   await refreshDiff()
   await loadProjectRules()
+
+  if (session.value?.adoptedAt && !session.value.turns.length && !input.value) {
+    input.value = suggestedOpener()
+  }
 })
 
 onUnmounted(() => controller?.abort())

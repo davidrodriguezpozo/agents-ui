@@ -23,6 +23,8 @@ export interface Session {
   createdAt: number
   updatedAt: number
   worktreeRemovedAt?: number
+  /** Set when this continues a conversation started in the terminal. */
+  adoptedAt?: number
   worktree: WorktreeState
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity

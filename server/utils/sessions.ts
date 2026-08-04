@@ -33,6 +33,12 @@ export interface Session {
   worktreeRemovedAt?: number
   /** Set when this record was rebuilt from a worktree rather than created. */
   recoveredAt?: number
+  /**
+   * Set when the session continues a conversation started in the terminal.
+   * The work has moved to a fresh checkout, which the conversation does not
+   * know yet — see the note the session offers to send first.
+   */
+  adoptedAt?: number
 }
 
 /**

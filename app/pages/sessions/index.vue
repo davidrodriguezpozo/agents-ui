@@ -4,6 +4,7 @@ import type { Session } from '~/composables/useSessions'
 
 const { sessions, here, elsewhere, workingCount, needsYouCount, loading, fetchAll, create } = useSessions()
 const { fetchAll: fetchWorktrees } = useWorktrees()
+const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
 const router = useRouter()
 const toast = useToast()
@@ -12,8 +13,27 @@ const title = ref('')
 const creating = ref(false)
 let poll: ReturnType<typeof setInterval> | null = null
 
+const adopting = ref<string | null>(null)
+
+/**
+ * Continue a terminal conversation here. It resumes exactly where it left off,
+ * but in a worktree — which is the part the terminal cannot give you.
+ */
+async function onAdopt(sdkSessionId: string) {
+  adopting.value = sdkSessionId
+  try {
+    const session = await adopt(sdkSessionId)
+    await fetchWorktrees()
+    router.push(`/sessions/${session.id}`)
+  } catch (e) {
+    toast.add({ title: 'Could not continue that', description: errorMessage(e), color: 'error' })
+  } finally {
+    adopting.value = null
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([fetchAll(), fetchWorktrees()])
+  await Promise.all([fetchAll(), fetchWorktrees(), fetchTranscripts()])
   // Only poll while something could change on its own.
   poll = setInterval(() => {
     if (sessions.value.some(s => s.activity === 'working')) fetchAll()
@@ -112,6 +132,40 @@ const ordered = computed(() => {
         <span class="type-detail" style="color: var(--text-secondary);">
           Pick a project folder in the sidebar to start a session. Sessions branch from a git repository.
         </span>
+      </div>
+
+      <!-- Work already started in the terminal, which this can pick up -->
+      <div v-if="workingDir && transcripts.length" class="space-y-2">
+        <h2 class="text-section-label">Continue from your terminal</h2>
+        <p class="type-meta">
+          Conversations you had with Claude Code here. Continuing one resumes it in a
+          workspace of its own, so what it does next is reviewable before it lands.
+          The workspace is a clean copy of the branch — uncommitted work from the terminal
+          stays where it is.
+        </p>
+        <div
+          v-for="transcript in transcripts.slice(0, 5)"
+          :key="transcript.sdkSessionId"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-md"
+          style="border: 1px dashed var(--border-subtle);"
+        >
+          <UIcon name="i-lucide-terminal" class="size-4 shrink-0" style="color: var(--text-disabled);" />
+          <div class="flex-1 min-w-0">
+            <div class="type-strong truncate text-body">{{ transcript.title }}</div>
+            <div class="type-mono-meta">
+              {{ transcript.turnCount }} turn{{ transcript.turnCount === 1 ? '' : 's' }}
+              · {{ relative(transcript.updatedAt) }}
+            </div>
+          </div>
+          <UButton
+            label="Continue here"
+            size="xs"
+            variant="soft"
+            :loading="adopting === transcript.sdkSessionId"
+            :disabled="Boolean(adopting)"
+            @click="onAdopt(transcript.sdkSessionId)"
+          />
+        </div>
       </div>
 
       <div v-if="loading && !sessions.length" class="space-y-1">
