@@ -5,16 +5,19 @@ import {
   deleteBranch,
   isGitRepo,
   listWorktrees,
+  looksLikeSessionWorktree,
   pruneWorktrees,
   removeWorktree,
   unmergedCommits,
+  worktreeRootFor,
 } from '../../utils/worktrees'
 
 /**
  * Clean up worktrees this app made that no longer have a session behind them.
  *
- * Only touches paths git reports and branches under `agents-ui/`, so a worktree
- * someone made by hand is never removed. Two things block removal unless
+ * Only touches paths git reports that sit inside this repository's
+ * `.worktrees/` directory, so a worktree someone made by hand is never
+ * removed. Two things block removal unless
  * explicitly forced: uncommitted changes in the directory, and commits on the
  * branch that exist nowhere else. The second matters most — the branch is
  * deleted with `-D`, so without the check a single "clean up" click could
@@ -30,7 +33,10 @@ export default defineEventHandler(async (event) => {
 
   const [worktrees, sessions] = await Promise.all([listWorktrees(repoDir), readSessions()])
   const claimed = new Set(await Promise.all(sessions.map(s => canonicalPath(s.worktreePath))))
-  const canonicalRepoDir = await canonicalPath(repoDir)
+  const [canonicalRepoDir, worktreeRoot] = await Promise.all([
+    canonicalPath(repoDir),
+    canonicalPath(worktreeRootFor(repoDir)),
+  ])
 
   const resolved = await Promise.all(
     worktrees.map(async w => ({ ...w, canonical: await canonicalPath(w.path) })),
@@ -39,7 +45,7 @@ export default defineEventHandler(async (event) => {
   const candidates = resolved.filter(w =>
     w.canonical !== canonicalRepoDir
     && !claimed.has(w.canonical)
-    && Boolean(w.branch?.startsWith('agents-ui/'))
+    && looksLikeSessionWorktree(worktreeRoot, w)
     && (!body?.paths?.length || body.paths.includes(w.path))
   )
 

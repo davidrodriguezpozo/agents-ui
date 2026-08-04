@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile, realpath } from 'node:fs/promises'
-import { dirname, isAbsolute, join } from 'node:path'
+import { dirname, isAbsolute, join, sep } from 'node:path'
 import { promisify } from 'node:util'
 
 const exec = promisify(execFile)
@@ -56,7 +56,46 @@ export function branchNameFor(title: string, id: string): string {
     .slice(0, 40)
     .replace(/-+$/, '')
 
-  return slug ? `agents-ui/${slug}-${id}` : `agents-ui/session-${id}`
+  return slug ? `${slug}-${id}` : `session-${id}`
+}
+
+/**
+ * Branches this app used to make.
+ *
+ * Everything was namespaced under `agents-ui/` so a session's branch could be
+ * recognised on sight. It also made every branch read as belonging to the tool
+ * rather than to the work, in a repository where they are ordinary branches
+ * you push and open pull requests from — so new ones are named plainly.
+ *
+ * Kept only for recognising what is already on disk. Nothing new matches it.
+ */
+export const LEGACY_BRANCH_PREFIX = 'agents-ui/'
+
+/**
+ * Whether a worktree is one this app made.
+ *
+ * This used to be answered by the branch prefix, which was doing real work:
+ * it is what stops `prune` — which deletes branches with `-D` — from touching
+ * a worktree somebody set up by hand. Without the prefix the question needs a
+ * different answer, and location is a better one than naming ever was. These
+ * live in `<repo>/.worktrees/` because that is where this app puts them, and
+ * unlike a name that cannot be quietly invalidated by renaming a branch.
+ *
+ * The legacy prefix still counts, so worktrees made before this keep being
+ * recognised rather than becoming invisible to cleanup and recovery.
+ */
+export function looksLikeSessionWorktree(
+  canonicalWorktreeRoot: string,
+  entry: { canonical: string; branch?: string | null },
+): boolean {
+  const root = canonicalWorktreeRoot.endsWith(sep)
+    ? canonicalWorktreeRoot
+    : `${canonicalWorktreeRoot}${sep}`
+
+  // Prefix match on a separator-terminated root, so a sibling directory named
+  // `.worktrees-old` is never mistaken for something inside `.worktrees`.
+  return entry.canonical.startsWith(root)
+    || entry.branch?.startsWith(LEGACY_BRANCH_PREFIX) === true
 }
 
 /** Inside the repository, so a session's work sits next to the project it belongs to. */

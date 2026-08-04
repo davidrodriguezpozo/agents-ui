@@ -6,6 +6,7 @@ import {
   canonicalPath,
   isGitRepo,
   listWorktrees,
+  looksLikeSessionWorktree,
   unmergedCommits,
   worktreeRootFor,
 } from '../utils/worktrees'
@@ -30,10 +31,11 @@ export default defineEventHandler(async (event) => {
 
   // Match on resolved paths: git resolves symlinks and we do not, so comparing
   // the raw strings would report live sessions as abandoned.
-  const [sessionPaths, worktreePaths, canonicalRepoDir] = await Promise.all([
+  const [sessionPaths, worktreePaths, canonicalRepoDir, worktreeRoot] = await Promise.all([
     Promise.all(sessions.map(s => canonicalPath(s.worktreePath))),
     Promise.all(worktrees.map(w => canonicalPath(w.path))),
     canonicalPath(repoDir),
+    canonicalPath(worktreeRootFor(repoDir)),
   ])
   const byPath = new Map(sessionPaths.map((path, i) => [path, sessions[i]!]))
 
@@ -42,8 +44,9 @@ export default defineEventHandler(async (event) => {
     const session = byPath.get(canonical)
     const isMain = canonical === canonicalRepoDir
 
-    // Ours by naming convention, but with no session behind it.
-    const orphaned = !session && !isMain && Boolean(worktree.branch?.startsWith('agents-ui/'))
+    // Ours by where it sits, but with no session behind it.
+    const orphaned = !session && !isMain
+      && looksLikeSessionWorktree(worktreeRoot, { canonical, branch: worktree.branch })
 
     return {
       ...worktree,

@@ -1,7 +1,9 @@
 import { getProjectDir } from '../../utils/scope'
 import { readSessions, saveSession, type Session } from '../../utils/sessions'
 import { inspectForRecovery, recoveredSessionFrom } from '../../utils/sessionRecovery'
-import { canonicalPath, isGitRepo, listWorktrees } from '../../utils/worktrees'
+import {
+  canonicalPath, isGitRepo, listWorktrees, looksLikeSessionWorktree, worktreeRootFor,
+} from '../../utils/worktrees'
 
 /**
  * Rebuild session records for worktrees that lost theirs.
@@ -27,11 +29,14 @@ export default defineEventHandler(async (event) => {
   const claimed = new Set(await Promise.all(sessions.map(s => canonicalPath(s.worktreePath))))
   const wanted = body?.paths?.length ? new Set(body.paths) : null
 
-  const candidates = await Promise.all(
+  const worktreeRoot = await canonicalPath(worktreeRootFor(repoDir))
+
+  const candidates = (await Promise.all(
     worktrees
-      .filter(w => Boolean(w.branch?.startsWith('agents-ui/')))
       .filter(w => !wanted || wanted.has(w.path))
       .map(async w => ({ worktree: w, canonical: await canonicalPath(w.path) })),
+  )).filter(({ worktree, canonical }) =>
+    looksLikeSessionWorktree(worktreeRoot, { canonical, branch: worktree.branch }),
   )
 
   const recovered: Session[] = []
