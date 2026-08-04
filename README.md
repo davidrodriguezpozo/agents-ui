@@ -86,6 +86,18 @@ node bin/start.mjs uninstall
 Run these from the repository — this package is not published, so `npx agents-ui` only
 finds it from in here.
 
+It listens on `127.0.0.1`, so only this machine can reach it. That default is deliberate:
+sessions and rituals run commands as you, with your Claude credentials, against your
+repositories, and there is no authentication in front of any of it. To reach it from
+another device — your phone, say — bind it wider on purpose:
+
+```bash
+make service HOST=0.0.0.0
+```
+
+and understand that on a shared network, anyone who can reach the port can do everything
+you can.
+
 If something else already has port 3000 — a Docker container publishing it is the usual
 culprit — install refuses and names the occupant, rather than registering a service that
 would fail to bind and be restarted forever. Pick another port with `make service

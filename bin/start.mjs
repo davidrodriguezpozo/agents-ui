@@ -23,7 +23,17 @@ const root = resolve(__dirname, '..')
 const outputServer = resolve(root, '.output', 'server', 'index.mjs')
 
 const port = Number(process.env.PORT) || 3000
-const host = process.env.HOST || '0.0.0.0'
+/**
+ * Loopback by default.
+ *
+ * This app starts sessions and rituals that run commands as you, with your
+ * Claude credentials, against your repositories — and it has no authentication
+ * of any kind. Bound to every interface, anyone who can reach this port owns
+ * all of that. Reaching it from your phone is a real thing to want, so it is
+ * still one environment variable away, but it has to be asked for.
+ */
+const host = process.env.HOST || '127.0.0.1'
+const exposed = host !== '127.0.0.1' && host !== 'localhost'
 const claudeDir = process.env.CLAUDE_DIR || join(homedir(), '.claude')
 const logPath = join(claudeDir, 'agents-ui', 'logs', 'service.log')
 
@@ -127,6 +137,21 @@ async function answering(target, timeoutMs = 2000) {
   }
 }
 
+/**
+ * Stopping a service is not instant, and the replacement cannot bind until the
+ * old one has actually let go. Without this the reinstall races itself: the new
+ * process starts, fails to bind, and is restarted into a wall until the install
+ * gives up on a service that was only ever a second early.
+ */
+async function waitForPortFree(target, withinMs = 8_000) {
+  const deadline = Date.now() + withinMs
+  while (Date.now() < deadline) {
+    if (await portIsFree(target)) return true
+    await new Promise(r => setTimeout(r, 250))
+  }
+  return portIsFree(target)
+}
+
 /** Give it a moment to boot before deciding it failed. */
 async function waitUntilAnswering(target, withinMs = 15_000) {
   const deadline = Date.now() + withinMs
@@ -167,7 +192,10 @@ async function install() {
   const replacingOurselves = existsSync(definitionPath)
     && portFromDefinition(readFileSync(definitionPath, 'utf-8')) === port
 
-  if (replacingOurselves) stopExisting()
+  if (replacingOurselves) {
+    stopExisting()
+    await waitForPortFree(port)
+  }
 
   if (!await portIsFree(port)) {
     const holder = portHolder(port)
@@ -184,6 +212,7 @@ async function install() {
 
   // Only now is it safe to displace whatever was registered before.
   stopExisting()
+  await waitForPortFree(port)
 
   const environment = serviceEnvironment({
     port,
@@ -246,6 +275,9 @@ async function install() {
   console.log(`Installed and running on http://localhost:${port}`)
   console.log(`  definition  ${definitionPath}`)
   console.log(`  running     its own copy of the build, so rebuilding cannot disturb it`)
+  console.log(exposed
+    ? `  reachable   on ${host} — ANYONE on your network can run commands as you`
+    : '  reachable   from this machine only')
   console.log(`  logs        ${logPath}`)
   if (supervisor === 'systemd') {
     console.log('  note        systemctl --user services stop at logout unless you run:')
@@ -315,6 +347,9 @@ function start() {
   process.env.PORT = String(port)
   process.env.HOST = host
   console.log(`Starting agents-ui on http://localhost:${port}`)
+  if (exposed) {
+    console.log(`Bound to ${host}: anyone on your network can reach this, and it has no password.`)
+  }
   return import(outputServer)
 }
 

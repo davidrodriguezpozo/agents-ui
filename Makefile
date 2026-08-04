@@ -11,7 +11,10 @@
 
 PKG  ?= bun
 PORT ?= 3000
-export PORT
+# Loopback: this app runs commands as you and has no authentication. Set
+# HOST=0.0.0.0 to reach it from another device, knowing what that means.
+HOST ?= 127.0.0.1
+export PORT HOST
 
 # The service runs the build rather than the dev server, so several targets
 # below have to go through `build` first to mean anything.
