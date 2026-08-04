@@ -6,6 +6,7 @@ import { executeRun } from '../../../utils/runner'
 import { notify } from '../../../utils/notify'
 import { rulesForProject } from '../../../utils/projectRules'
 import { permissionModeFor } from '../../../utils/trust'
+import { ensureTranscriptFor } from '../../../utils/transcripts'
 
 /**
  * A turn short enough that you never looked away does not warrant a banner —
@@ -79,6 +80,14 @@ export default defineEventHandler(async (event) => {
         data: { error: 'session_busy', message: 'This session is still working. Wait for it to finish or stop it.' },
       })
     }
+  }
+
+  // Sessions adopted before this was understood have their conversation only
+  // in the repository's transcript directory, where a run in the worktree will
+  // never find it. Putting it in place here repairs them on their next turn
+  // rather than leaving them permanently unable to resume.
+  if (session.adoptedAt && session.sdkSessionId) {
+    await ensureTranscriptFor(session.repoDir, session.worktreePath, session.sdkSessionId)
   }
 
   const options = await resolveRunOptionsFor({

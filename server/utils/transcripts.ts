@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readdir, readFile, stat } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, readFile, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { transcriptDirFor } from './sessionRecovery'
 
@@ -11,8 +11,9 @@ import { transcriptDirFor } from './sessionRecovery'
  * needs to resume — which means a conversation started in a terminal can be
  * picked up here, in a worktree, with a diff and a merge behind it.
  *
- * Nothing here writes: these files belong to Claude Code, and adopting one
- * copies its id rather than touching it.
+ * These files belong to Claude Code. Nothing here changes one: adopting a
+ * conversation copies it into the workspace the session runs in, because that
+ * is where the SDK looks for it, and leaves the original alone.
  */
 
 export interface TranscriptSummary {
@@ -63,6 +64,45 @@ export function summarizeTranscript(raw: string): { title: string | null; turnCo
   }
 
   return { title, turnCount }
+}
+
+/**
+ * Put the conversation where the SDK will look for it.
+ *
+ * Claude Code finds a conversation to resume by looking in the transcript
+ * directory for the working directory it is running in. An adopted session
+ * runs in a worktree, and the conversation it is continuing was held in the
+ * repository — a different directory, so a different transcript directory, so
+ * `resume` fails with "no conversation found" and the whole point of adopting
+ * is lost on the first turn.
+ *
+ * Copying it across is what makes the session resumable. The original is left
+ * exactly as it was: the terminal conversation still belongs to the repository
+ * and can still be continued there.
+ */
+export async function copyTranscriptTo(
+  fromCwd: string,
+  toCwd: string,
+  sdkSessionId: string,
+): Promise<boolean> {
+  const source = join(transcriptDirFor(fromCwd), `${sdkSessionId}.jsonl`)
+  if (!existsSync(source)) return false
+
+  const targetDir = transcriptDirFor(toCwd)
+  await mkdir(targetDir, { recursive: true })
+  await copyFile(source, join(targetDir, `${sdkSessionId}.jsonl`))
+
+  return true
+}
+
+/** Copy it across only if it is not already there. Cheap enough to always ask. */
+export async function ensureTranscriptFor(
+  fromCwd: string,
+  toCwd: string,
+  sdkSessionId: string,
+): Promise<boolean> {
+  if (existsSync(join(transcriptDirFor(toCwd), `${sdkSessionId}.jsonl`))) return true
+  return copyTranscriptTo(fromCwd, toCwd, sdkSessionId)
 }
 
 export interface TranscriptMessage {

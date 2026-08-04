@@ -1,5 +1,5 @@
 import { getProjectDir } from '../../utils/scope'
-import { listTranscripts } from '../../utils/transcripts'
+import { copyTranscriptTo, listTranscripts } from '../../utils/transcripts'
 import { startSession } from '../../utils/startSession'
 
 /**
@@ -34,11 +34,28 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  return startSession({
+  const session = await startSession({
     repoDir: dir,
     title: transcript.title,
     agentSlug: body.agentSlug,
     sdkSessionId: transcript.sdkSessionId,
     adoptedAt: Date.now(),
   })
+
+  // Without this the first turn fails with "no conversation found": the SDK
+  // resumes by looking in the transcript directory for the working directory
+  // it runs in, and this session runs somewhere the conversation has never
+  // been held.
+  const copied = await copyTranscriptTo(dir, session.worktreePath, transcript.sdkSessionId)
+  if (!copied) {
+    throw createError({
+      statusCode: 409,
+      data: {
+        error: 'transcript_unreadable',
+        message: 'That conversation could not be copied into the new workspace, so it would not resume.',
+      },
+    })
+  }
+
+  return session
 })

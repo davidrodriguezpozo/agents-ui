@@ -312,6 +312,50 @@ export async function listRunsBySchedule(perSchedule = 10): Promise<Record<strin
 }
 
 /**
+ * Close off runs that were in flight when the server stopped.
+ *
+ * A run lives in memory: the SDK query, the abort controller, the listeners.
+ * Restarting loses all of that, but the record on disk still says `running`,
+ * so an interrupted run sits in Activity forever claiming to be working, keeps
+ * its session marked busy, and counts toward the badge that says something
+ * needs you.
+ *
+ * Called once at boot, when nothing can legitimately be running yet.
+ */
+export async function closeInterruptedRuns(): Promise<number> {
+  const dir = runsDir()
+  if (!existsSync(dir)) return 0
+
+  const files = (await readdir(dir).catch(() => [] as string[])).filter(f => f.endsWith('.json'))
+  let closed = 0
+
+  for (const file of files) {
+    const path = join(dir, file)
+    let run: Run
+    try {
+      run = JSON.parse(await readFile(path, 'utf-8')) as Run
+    } catch {
+      continue
+    }
+
+    if (run.status !== 'running' && run.status !== 'queued') continue
+
+    run.status = 'failed'
+    run.completedAt = Date.now()
+    run.error = 'Interrupted — the server stopped while this was running. Nothing was lost on disk, but the run did not finish.'
+
+    try {
+      await writeFile(path, JSON.stringify(run, null, 2), 'utf-8')
+      closed++
+    } catch {
+      // A run we cannot rewrite is not worth failing startup over.
+    }
+  }
+
+  return closed
+}
+
+/**
  * Drop finished runs from memory once nothing is watching them. They stay on
  * disk; this just stops a long-lived server accumulating completed runs.
  */
