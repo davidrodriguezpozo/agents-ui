@@ -168,6 +168,23 @@ the agent wrote them.
 
 ![A session's conversation](docs/screenshots/03-session-conversation.jpg)
 
+### What it did
+
+The list could always tell you a session changed four files across three turns. It could
+never tell you *what it did* — which is the thing you need in order to decide whether to
+look closer, and the only thing on the row a non-programmer can act on.
+
+So after a session changes something, a small model writes one sentence from its diff and
+its closing message, and that sits on the row:
+
+> **Add a maximum file size limit of 5MB to the upload…**
+> Upload function now rejects files larger than 5MB.
+
+It costs just under a cent per turn that changes files. That is small next to the turn
+that produced the work but it is not nothing, so it can be turned off in Settings, and it
+is reported on the spend page as its own **summary** line rather than disappearing into
+the background — the honest way to let you decide whether it earns its keep.
+
 ### Whether it works
 
 A diff tells you what changed. It does not tell you whether the result runs, and that is

@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
 import type { SessionCheck } from './checks'
+import type { SessionSummary } from './sessionSummary'
 import type { TrustLevel } from './trust'
 
 /**
@@ -48,6 +49,8 @@ export interface Session {
    * and is shown as the difference it is.
    */
   check?: SessionCheck
+  /** What this session did, in a sentence, written by a small model. */
+  summary?: SessionSummary
   /**
    * Set when the session continues a conversation started in the terminal.
    * The work has moved to a fresh checkout, which the conversation does not

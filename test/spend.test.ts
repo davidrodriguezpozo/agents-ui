@@ -115,3 +115,60 @@ describe('projecting forward', () => {
     expect(summarizeSpend([], 7, NOW).monthlyEstimate).toBe(0)
   })
 })
+
+describe('costs that are not runs', () => {
+  const summaryCost = (patch: Partial<{ costUsd: number; at: number }> = {}) => ({
+    source: 'summary' as const,
+    costUsd: 0.002,
+    at: NOW,
+    ...patch,
+  })
+
+  it('counts them in the total', () => {
+    // Session summaries never enter the run log. Leaving them out here is
+    // exactly the under-reporting this file exists to prevent.
+    const summary = summarizeSpend([run({ costUsd: 1 })], 7, NOW, [summaryCost({ costUsd: 0.5 })])
+
+    expect(summary.total).toBeCloseTo(1.5)
+  })
+
+  it('gives them their own line, so the feature can be judged on its cost', () => {
+    const summary = summarizeSpend([run({ costUsd: 1 })], 7, NOW, [
+      summaryCost({ costUsd: 0.02 }),
+      summaryCost({ costUsd: 0.03 }),
+    ])
+
+    const line = summary.bySource.find(s => s.source === 'summary')
+    expect(line).toEqual({ source: 'summary', cost: 0.05, runs: 2 })
+  })
+
+  it('puts them on the right day', () => {
+    const yesterday = NOW - DAY
+    const summary = summarizeSpend([], 7, NOW, [summaryCost({ costUsd: 0.4, at: yesterday })])
+
+    expect(summary.byDay.find(d => d.date === localDay(yesterday))?.cost).toBeCloseTo(0.4)
+    expect(summary.byDay.find(d => d.date === localDay(NOW))?.cost).toBe(0)
+  })
+
+  it('keeps them out of the runs worth looking at', () => {
+    // Fractions of a cent would only ever crowd out real runs.
+    const summary = summarizeSpend([run({ costUsd: 0.001 })], 7, NOW, [summaryCost({ costUsd: 0.9 })])
+
+    expect(summary.top.map(t => t.source)).not.toContain('summary')
+    expect(summary.top).toHaveLength(1)
+  })
+
+  it('ignores a free one rather than counting it as activity', () => {
+    const summary = summarizeSpend([], 7, NOW, [summaryCost({ costUsd: 0 })])
+
+    expect(summary.total).toBe(0)
+    expect(summary.runs).toBe(0)
+    expect(summary.bySource).toEqual([])
+  })
+
+  it('projects forward including them', () => {
+    const summary = summarizeSpend([run({ costUsd: 3.5 })], 7, NOW, [summaryCost({ costUsd: 3.5 })])
+
+    expect(summary.monthlyEstimate).toBeCloseTo(30)
+  })
+})

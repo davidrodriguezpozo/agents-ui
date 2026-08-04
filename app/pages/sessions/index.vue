@@ -379,6 +379,15 @@ const ordered = computed(() => {
                 />
               </div>
 
+              <!--
+                What it did, in words. The counts below say how much changed;
+                this is the only thing on the row that says what the change
+                was, which is what you actually decide on.
+              -->
+              <p v-if="session.summary" class="type-detail leading-snug" style="color: var(--text-secondary);">
+                {{ session.summary.text }}
+              </p>
+
               <!-- What it has produced, which is what you decide on -->
               <div class="flex items-center gap-3 type-meta">
                 <span v-if="session.worktree.changedFiles" class="flex items-center gap-1">

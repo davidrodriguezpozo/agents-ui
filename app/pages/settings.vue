@@ -64,17 +64,34 @@ const NOTIFICATION_OPTIONS: { key: NotificationKey; label: string; hint: string 
 const notifications = ref<Record<NotificationKey, boolean>>({
   enabled: true, needsYou: true, failed: true, finished: true,
 })
+const summariseSessions = ref(true)
 
 onMounted(async () => {
   void loadChecks()
 
   try {
-    const prefs = await $fetch<{ notifications: Record<NotificationKey, boolean> }>('/api/preferences')
+    const prefs = await $fetch<{
+      notifications: Record<NotificationKey, boolean>
+      summariseSessions: boolean
+    }>('/api/preferences')
     notifications.value = prefs.notifications
+    summariseSessions.value = prefs.summariseSessions
   } catch {
     // Leaving the defaults on screen is better than an error about a toggle.
   }
 })
+
+/** Off is a real choice: this spends money on every turn that changes files. */
+async function setSummarise(value: boolean) {
+  const previous = summariseSessions.value
+  summariseSessions.value = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { summariseSessions: value } })
+  } catch {
+    summariseSessions.value = previous
+    toast.add({ title: 'Could not save that', color: 'error' })
+  }
+}
 
 async function setNotification(key: NotificationKey, value: boolean) {
   const previous = notifications.value[key]
@@ -339,6 +356,29 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                 type="checkbox"
                 :checked="settings?.alwaysThinkingEnabled"
                 @change="toggleAlwaysThinking(($event.target as HTMLInputElement).checked)"
+              />
+              <span class="field-toggle__track">
+                <span class="field-toggle__thumb" />
+              </span>
+            </label>
+          </div>
+
+          <!-- Costs money on every turn, so it says so rather than hiding it -->
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="type-strong">Say what each session did</div>
+              <div class="text-[12px] mt-0.5 text-label">
+                After a session changes something, a small model writes one sentence describing
+                it, shown on the sessions list. Just under a cent per turn that changes files —
+                it appears on the spend page as "summary", so you can see what it comes to
+                rather than taking that on trust.
+              </div>
+            </div>
+            <label class="field-toggle">
+              <input
+                type="checkbox"
+                :checked="summariseSessions"
+                @change="setSummarise(($event.target as HTMLInputElement).checked)"
               />
               <span class="field-toggle__track">
                 <span class="field-toggle__thumb" />

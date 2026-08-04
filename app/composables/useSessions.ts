@@ -11,6 +11,14 @@ export type SessionActivity = 'idle' | 'working' | 'awaiting-permission' | 'fail
 
 export type CheckStatus = 'passing' | 'failing' | 'errored' | 'running'
 
+/** What a session did, in a sentence, written by a small model. */
+export interface SessionSummary {
+  text: string
+  fingerprint: string
+  costUsd: number
+  at: number
+}
+
 /** How the project's own checks last went in a session's workspace. */
 export interface SessionCheck {
   status: CheckStatus
@@ -44,6 +52,8 @@ export interface Session {
   prUrl?: string
   /** Absent means the checks have never run here — not that they passed. */
   check?: SessionCheck
+  /** What this session did, in a sentence. Absent until it has done something. */
+  summary?: SessionSummary
   worktree: WorktreeState
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity

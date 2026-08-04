@@ -17,10 +17,28 @@ export interface DaySpend {
   runs: number
 }
 
+/**
+ * Not every source is a run.
+ *
+ * Session summaries are model calls that deliberately never enter the run log
+ * — one per turn would bury Activity in entries nobody asked for. But they do
+ * cost money, and a spend page that omits them is not a spend page. So they
+ * are counted here as their own line, which also happens to answer the only
+ * question anyone has about the feature: is it worth what it costs.
+ */
+export type SpendSource = RunSource | 'summary'
+
 export interface SourceSpend {
-  source: RunSource
+  source: SpendSource
   cost: number
   runs: number
+}
+
+/** A model call that cost something without being a run. */
+export interface SideCost {
+  source: Exclude<SpendSource, RunSource>
+  costUsd: number
+  at: number
 }
 
 export interface SpendSummary {
@@ -43,7 +61,13 @@ export function localDay(at: number): string {
   return `${date.getFullYear()}-${month}-${day}`
 }
 
-export function summarizeSpend(runs: RunSummary[], days: number, now: number): SpendSummary {
+export function summarizeSpend(
+  runs: RunSummary[],
+  days: number,
+  now: number,
+  /** Model calls that cost money without being runs — see SideCost. */
+  side: SideCost[] = [],
+): SpendSummary {
   const costed = runs.filter(run => typeof run.costUsd === 'number' && run.costUsd > 0)
 
   const byDayMap = new Map<string, DaySpend>()
@@ -54,7 +78,7 @@ export function summarizeSpend(runs: RunSummary[], days: number, now: number): S
     byDayMap.set(date, { date, cost: 0, runs: 0 })
   }
 
-  const bySourceMap = new Map<RunSource, SourceSpend>()
+  const bySourceMap = new Map<SpendSource, SourceSpend>()
   let total = 0
 
   for (const run of costed) {
@@ -73,6 +97,25 @@ export function summarizeSpend(runs: RunSummary[], days: number, now: number): S
     bySourceMap.set(run.source, source)
   }
 
+  // Folded into the totals and the daily chart, but never into `top`: these
+  // are fractions of a cent each and would only ever crowd out the runs that
+  // are worth looking at.
+  for (const entry of side) {
+    if (!(entry.costUsd > 0)) continue
+    total += entry.costUsd
+
+    const day = byDayMap.get(localDay(entry.at))
+    if (day) {
+      day.cost += entry.costUsd
+      day.runs += 1
+    }
+
+    const source = bySourceMap.get(entry.source) ?? { source: entry.source, cost: 0, runs: 0 }
+    source.cost += entry.costUsd
+    source.runs += 1
+    bySourceMap.set(entry.source, source)
+  }
+
   const top = [...costed]
     .sort((a, b) => (b.costUsd ?? 0) - (a.costUsd ?? 0))
     .slice(0, 5)
@@ -86,7 +129,7 @@ export function summarizeSpend(runs: RunSummary[], days: number, now: number): S
 
   return {
     total,
-    runs: costed.length,
+    runs: costed.length + side.filter(s => s.costUsd > 0).length,
     byDay: [...byDayMap.values()],
     bySource: [...bySourceMap.values()].sort((a, b) => b.cost - a.cost),
     top,

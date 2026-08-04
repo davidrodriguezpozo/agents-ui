@@ -9,6 +9,7 @@ import { permissionModeFor } from './trust'
 import { ensureTranscriptFor } from './transcripts'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
+import { summariseAfterTurn } from './sessionSummary'
 
 /**
  * Sending a turn to a session.
@@ -143,6 +144,15 @@ export async function startTurn(session: Session, input: string): Promise<string
       // idle and usable throughout. The verdict lands on the record when it
       // arrives.
       void verifySessionAfterTurn(session.id, fingerprintBefore)
+
+      // Same trigger as the checks, and for the same reason: a turn that
+      // changed nothing has nothing to describe. Kept separate from them
+      // because a sentence takes seconds and a test suite takes minutes —
+      // waiting on the checks would leave the list mute for the whole of it.
+      const after = await worktreeFingerprint(session.worktreePath)
+      if (after && after !== fingerprintBefore) {
+        void summariseAfterTurn(session.id, after)
+      }
     })
 
   return run.id

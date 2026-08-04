@@ -23,6 +23,15 @@ export interface NotificationPreferences {
 
 export interface Preferences {
   notifications: NotificationPreferences
+  /**
+   * Have a small model say what each session did, in a sentence.
+   *
+   * On by default because the list is otherwise mute about the thing you most
+   * want to know, and off is a real choice: it spends a fraction of a cent on
+   * every turn that changes files, which is money wasted on anyone who reads
+   * their own diffs.
+   */
+  summariseSessions: boolean
 }
 
 /**
@@ -37,6 +46,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
     failed: true,
     finished: true,
   },
+  summariseSessions: true,
 }
 
 export const preferencesStore = defineJsonStore<Preferences>({
@@ -48,6 +58,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
       ...DEFAULT_PREFERENCES.notifications,
       ...(parsed?.preferences?.notifications ?? {}),
     },
+    // A file written before this preference existed says nothing about it,
+    // which is not the same as saying no.
+    summariseSessions: parsed?.preferences?.summariseSessions ?? DEFAULT_PREFERENCES.summariseSessions,
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -62,10 +75,15 @@ export async function readPreferences(): Promise<Preferences> {
   }
 }
 
-export async function savePreferences(patch: Partial<NotificationPreferences>): Promise<Preferences> {
+export async function savePreferences(
+  patch: Partial<NotificationPreferences> & { summariseSessions?: boolean },
+): Promise<Preferences> {
+  const { summariseSessions, ...notifications } = patch
+
   return preferencesStore.update((current) => {
     const next: Preferences = {
-      notifications: { ...current.notifications, ...patch },
+      notifications: { ...current.notifications, ...notifications },
+      summariseSessions: summariseSessions ?? current.summariseSessions,
     }
     Object.assign(current, next)
     return next
