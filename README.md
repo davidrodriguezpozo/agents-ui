@@ -272,6 +272,27 @@ what it was called. Searching covers the whole log, not the page of it on screen
 
 ---
 
+### Spending limits
+
+The chart above says what a day cost, which answers the question a day late. Limits stop
+things instead. Both are off until you set them, in Settings.
+
+**Most per day** covers everything — sessions, rituals, summaries. Once reached, a session
+refuses to start a turn and a ritual is skipped rather than run, each saying so plainly.
+A skipped ritual moves on to its next occurrence without recording a run, so it does not
+show up later as a ritual that has started failing.
+
+**Most per run** is the only limit that can stop work part-way, and it is enforced by the
+Agent SDK rather than by us — no price list here to go stale. It is checked between turns,
+so a single expensive turn can overshoot it: a one cent limit stopped a run that had
+already spent six. Read it as "stop after about this", not as a ceiling.
+
+A run stopped by either is marked as needing you, keeps whatever it wrote, and records
+what it spent — a limit whose own enforcement was invisible to the spend page would be a
+poor limit.
+
+---
+
 ## Backups
 
 Your rituals and sessions only exist on this machine. They are snapshotted

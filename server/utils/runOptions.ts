@@ -126,10 +126,22 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
   }
 }
 
-/** Shape the resolved options into the SDK's `query` options object. */
-export function toQueryOptions(options: ResolvedRunOptions, resumeSessionId?: string | null) {
+/**
+ * Shape the resolved options into the SDK's `query` options object.
+ *
+ * `maxBudgetUsd` is the one limit that can stop a run part-way through. Ours
+ * are all checked before a run starts, which cannot help once a single run
+ * goes wrong — so this is handed straight to the SDK, which stops the query
+ * itself and reports `error_max_budget_usd`.
+ */
+export function toQueryOptions(
+  options: ResolvedRunOptions,
+  resumeSessionId?: string | null,
+  maxBudgetUsd?: number,
+) {
   return {
     cwd: options.cwd,
+    ...(maxBudgetUsd && maxBudgetUsd > 0 ? { maxBudgetUsd } : {}),
     ...(options.allowedTools ? { allowedTools: options.allowedTools } : {}),
     ...(options.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),
     permissionMode: options.permissionMode,

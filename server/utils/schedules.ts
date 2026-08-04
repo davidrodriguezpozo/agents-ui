@@ -177,6 +177,24 @@ export async function deleteSchedule(id: string): Promise<boolean> {
  * tick and any edit the user makes, so it has to re-read under the lock — an
  * overwrite here would leave `nextRunAt` in the past and fire the ritual twice.
  */
+/**
+ * Move a ritual on to its next occurrence without recording a run.
+ *
+ * For a firing that was skipped rather than attempted — over the daily
+ * spending limit, say. `nextRunAt` has to advance regardless or the tick would
+ * pick it up again half a minute later, and keep doing so all day. But
+ * `lastRunAt` and `lastRunId` are left alone: nothing ran, and writing a
+ * non-run into the history would make a skipped ritual look like a failing one.
+ */
+export async function skipToNextRun(id: string): Promise<void> {
+  await scheduleStore.update((schedules) => {
+    const schedule = schedules.find(s => s.id === id)
+    if (!schedule) return
+
+    schedule.nextRunAt = computeNextRun(schedule.recurrence)
+  })
+}
+
 export async function markRan(id: string, runId: string): Promise<void> {
   await scheduleStore.update((schedules) => {
     const schedule = schedules.find(s => s.id === id)

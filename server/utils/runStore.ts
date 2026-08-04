@@ -39,6 +39,8 @@ export interface Run {
   needsAttention?: boolean
   /** Tools refused because the run was unattended — the result is incomplete. */
   deniedTools?: string[]
+  /** Set when a limit cut the run short, so the output is not the whole job. */
+  stoppedBy?: 'budget' | 'turns'
   /** Rules that would have let this run through, gathered from its prompts. */
   suggestedRules?: string[]
   /** Set when a ritual started this run, so its allowlist can be updated. */

@@ -32,6 +32,16 @@ export interface Preferences {
    * their own diffs.
    */
   summariseSessions: boolean
+  /**
+   * Most this machine may spend in a day, across sessions, rituals and
+   * everything else. 0 or absent means no limit.
+   *
+   * Off by default: a limit somebody did not choose is a limit that stops
+   * their work at the worst possible moment, having never warned them.
+   */
+  dailyCapUsd: number
+  /** Most a single run may spend before the SDK stops it. 0 means no limit. */
+  runCapUsd: number
 }
 
 /**
@@ -47,6 +57,13 @@ export const DEFAULT_PREFERENCES: Preferences = {
     finished: true,
   },
   summariseSessions: true,
+  dailyCapUsd: 0,
+  runCapUsd: 0,
+}
+
+/** A limit is a positive number of dollars or it is not a limit. */
+export function positiveOrZero(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
 }
 
 export const preferencesStore = defineJsonStore<Preferences>({
@@ -61,6 +78,10 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // A file written before this preference existed says nothing about it,
     // which is not the same as saying no.
     summariseSessions: parsed?.preferences?.summariseSessions ?? DEFAULT_PREFERENCES.summariseSessions,
+    // A negative or non-numeric limit would read as "stop everything", so
+    // anything that is not a usable number means no limit at all.
+    dailyCapUsd: positiveOrZero(parsed?.preferences?.dailyCapUsd),
+    runCapUsd: positiveOrZero(parsed?.preferences?.runCapUsd),
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -76,14 +97,20 @@ export async function readPreferences(): Promise<Preferences> {
 }
 
 export async function savePreferences(
-  patch: Partial<NotificationPreferences> & { summariseSessions?: boolean },
+  patch: Partial<NotificationPreferences> & {
+    summariseSessions?: boolean
+    dailyCapUsd?: number
+    runCapUsd?: number
+  },
 ): Promise<Preferences> {
-  const { summariseSessions, ...notifications } = patch
+  const { summariseSessions, dailyCapUsd, runCapUsd, ...notifications } = patch
 
   return preferencesStore.update((current) => {
     const next: Preferences = {
       notifications: { ...current.notifications, ...notifications },
       summariseSessions: summariseSessions ?? current.summariseSessions,
+      dailyCapUsd: dailyCapUsd === undefined ? current.dailyCapUsd : positiveOrZero(dailyCapUsd),
+      runCapUsd: runCapUsd === undefined ? current.runCapUsd : positiveOrZero(runCapUsd),
     }
     Object.assign(current, next)
     return next

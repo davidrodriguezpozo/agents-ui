@@ -2,6 +2,7 @@ import { getProjectDir } from '../../utils/scope'
 import { startSession } from '../../utils/startSession'
 import { titleFromPrompt, type Session } from '../../utils/sessions'
 import { startTurn } from '../../utils/sessionTurn'
+import { checkBudget } from '../../utils/budget'
 
 /**
  * Start several sessions at once, one per instruction.
@@ -57,6 +58,13 @@ export default defineEventHandler(async (event): Promise<BatchResult> => {
         message: `That is ${prompts.length} sessions, and ${MAX_AT_ONCE} is the most at once. Each one is a full checkout of the repository.`,
       },
     })
+  }
+
+  // Checked once, before any of them: starting twenty workspaces that are all
+  // going to refuse their first turn is twenty checkouts to clean up.
+  const budget = await checkBudget()
+  if (!budget.allowed) {
+    throw createError({ statusCode: 429, data: { error: 'over_budget', message: budget.reason! } })
   }
 
   const started: BatchResult['started'] = []

@@ -1,9 +1,12 @@
-import { computeNextRun, markRan, permissionModeFor, scheduleStore, type Schedule } from './schedules'
+import {
+  computeNextRun, markRan, permissionModeFor, scheduleStore, skipToNextRun, type Schedule,
+} from './schedules'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, type Run } from './runStore'
 import { executeRun } from './runner'
 import { notify } from './notify'
 import { outcomeOf } from './ritualHistory'
+import { checkBudget } from './budget'
 
 const TICK_MS = 30_000
 
@@ -101,6 +104,17 @@ async function announce(title: string, run: Run): Promise<void> {
 /** Already claimed in `inFlight` by the tick that selected it. */
 async function fire(schedule: Schedule): Promise<void> {
   try {
+    // The case the daily limit exists for: work that spends money at 08:00
+    // with nobody watching. Skipped without starting, and said out loud —
+    // a ritual that silently stopped running would be worse than the bill.
+    const budget = await checkBudget()
+    if (!budget.allowed) {
+      console.log(`[scheduler] skipping "${schedule.title}": ${budget.reason}`)
+      await skipToNextRun(schedule.id)
+      await notify('failed', `${schedule.title} was skipped`, budget.reason!)
+      return
+    }
+
     const options = await resolveRunOptionsFor({
       projectDir: schedule.projectDir,
       agentSlug: schedule.agentSlug,
@@ -125,7 +139,7 @@ async function fire(schedule: Schedule): Promise<void> {
     await markRan(schedule.id, run.id)
 
     console.log(`[scheduler] running "${schedule.title}" as ${run.id}`)
-    await executeRun(run, options, { unattended: true })
+    await executeRun(run, options, { unattended: true, maxBudgetUsd: budget.maxBudgetUsd })
     await announce(schedule.title, run)
   } catch (e) {
     console.error(`[scheduler] "${schedule.title}" failed to start`, e)

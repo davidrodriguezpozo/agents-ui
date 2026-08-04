@@ -4,6 +4,7 @@ import { toQueryOptions, type ResolvedRunOptions } from './runOptions'
 import { answerPermission, createPermissionBroker } from './permissionBroker'
 import { mergeRules } from './permissionRules'
 import { notify } from './notify'
+import { budgetStoppedMessage } from './budget'
 
 function previewToolResult(content: unknown): string {
   const text = typeof content === 'string'
@@ -22,7 +23,7 @@ function previewToolResult(content: unknown): string {
 export async function executeRun(
   run: Run,
   options: ResolvedRunOptions,
-  opts: { unattended?: boolean; resumeSessionId?: string } = {},
+  opts: { unattended?: boolean; resumeSessionId?: string; maxBudgetUsd?: number } = {},
 ): Promise<void> {
   const entry = getActive(run.id)
   if (!entry) return
@@ -73,7 +74,7 @@ export async function executeRun(
       options: {
         // Resuming is what makes a session a conversation rather than a series
         // of unrelated runs.
-        ...toQueryOptions(options, opts.resumeSessionId),
+        ...toQueryOptions(options, opts.resumeSessionId, opts.maxBudgetUsd),
         canUseTool: broker.canUseTool,
         abortController: entry.abort,
       },
@@ -129,7 +130,16 @@ export async function executeRun(
         }
       }
 
-      if ('result' in message) {
+      /**
+       * Keyed on the message type rather than on a `result` field, because the
+       * SDK's *error* results do not carry one — a run stopped for hitting its
+       * budget or its turn limit went through here unnoticed, reported as
+       * completed with no output and, worse, with its cost never recorded. A
+       * spending limit whose own enforcement is invisible to the spend page
+       * would be a poor limit.
+       */
+      if (message.type === 'result') {
+        const subtype = (message as { subtype?: string }).subtype
         const usage = (message as { usage?: Record<string, number> }).usage ?? {}
         const stats = {
           usage: {
@@ -147,9 +157,36 @@ export async function executeRun(
         }
 
         entry.run.stats = stats
+
+        // Stopped part-way rather than finished. The work is incomplete, which
+        // is the same situation as a run that was refused a tool it needed —
+        // so it is flagged the same way and does not read as a clean success.
+        const stoppedEarly = subtype === 'error_max_budget_usd' || subtype === 'error_max_turns'
+        if (stoppedEarly) {
+          entry.run.needsAttention = true
+          entry.run.stoppedBy = subtype === 'error_max_budget_usd' ? 'budget' : 'turns'
+        }
+
+        const text = (message as { result?: string }).result
+          ?? (subtype === 'error_max_budget_usd'
+            ? budgetStoppedMessage(opts.maxBudgetUsd)
+            : subtype === 'error_max_turns'
+              ? `This run reached its limit of ${options.maxTurns} turns and was stopped, so the work is unfinished.`
+              : 'The run ended without a final answer.')
+
         // The final result is authoritative — streamed deltas can be partial.
-        entry.run.output = message.result
-        emit(run.id, { type: 'result', text: message.result, stats })
+        entry.run.output = text
+        emit(run.id, { type: 'result', text, stats })
+
+        if (stoppedEarly) {
+          await notify(
+            'failed',
+            `${run.title} stopped early`,
+            entry.run.stoppedBy === 'budget'
+              ? 'It reached its spending limit.'
+              : 'It reached its turn limit.',
+          )
+        }
       }
     }
 

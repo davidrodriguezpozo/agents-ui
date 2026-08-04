@@ -2,6 +2,7 @@ import { getProjectDir } from '../../utils/scope'
 import { startSession } from '../../utils/startSession'
 import { titleFromPrompt } from '../../utils/sessions'
 import { startTurn } from '../../utils/sessionTurn'
+import { checkBudget } from '../../utils/budget'
 
 /**
  * Start a session: cut a branch and an isolated worktree from the repo, so this
@@ -37,6 +38,17 @@ export default defineEventHandler(async (event) => {
   }
 
   const prompt = body?.prompt?.trim() ?? ''
+
+  // Checked before the worktree is cut, not after: a session that is over the
+  // limit cannot do anything, and leaving an empty workspace behind to explain
+  // that is clutter you would then have to clean up. A session started with no
+  // prompt spends nothing, so it is never refused.
+  if (prompt) {
+    const budget = await checkBudget()
+    if (!budget.allowed) {
+      throw createError({ statusCode: 429, data: { error: 'over_budget', message: budget.reason! } })
+    }
+  }
 
   const session = await startSession({
     repoDir,

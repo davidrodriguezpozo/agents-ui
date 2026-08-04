@@ -7,6 +7,7 @@ import { notify } from './notify'
 import { rulesForProject } from './projectRules'
 import { permissionModeFor } from './trust'
 import { ensureTranscriptFor } from './transcripts'
+import { checkBudget } from './budget'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
@@ -88,6 +89,16 @@ export async function startTurn(session: Session, input: string): Promise<string
     }
   }
 
+  // Refused before the workspace is touched and before anything is spent, so
+  // hitting the daily limit costs nothing and changes nothing.
+  const budget = await checkBudget()
+  if (!budget.allowed) {
+    throw createError({
+      statusCode: 429,
+      data: { error: 'over_budget', message: budget.reason! },
+    })
+  }
+
   // Sessions adopted before this was understood have their conversation only
   // in the repository's transcript directory, where a run in the worktree will
   // never find it. Putting it in place here repairs them on their next turn
@@ -128,7 +139,10 @@ export async function startTurn(session: Session, input: string): Promise<string
   // that answered a question — only the first is worth a test run.
   const fingerprintBefore = await worktreeFingerprint(session.worktreePath)
 
-  void executeRun(run, options, { resumeSessionId: session.sdkSessionId })
+  void executeRun(run, options, {
+    resumeSessionId: session.sdkSessionId,
+    maxBudgetUsd: budget.maxBudgetUsd,
+  })
     .finally(async () => {
       // The SDK hands back its own id on the first turn; keep it so the next
       // turn resumes rather than starting a new conversation.

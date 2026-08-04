@@ -65,6 +65,33 @@ const notifications = ref<Record<NotificationKey, boolean>>({
   enabled: true, needsYou: true, failed: true, finished: true,
 })
 const summariseSessions = ref(true)
+const dailyCap = ref('')
+const runCap = ref('')
+const spentToday = ref(0)
+
+/** Blank means no limit, which is what 0 means on the wire. */
+function capToNumber(value: string): number {
+  const parsed = Number(value.trim().replace(/^\$/, ''))
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
+}
+
+async function saveCaps() {
+  try {
+    await $fetch('/api/preferences', {
+      method: 'PUT',
+      body: { dailyCapUsd: capToNumber(dailyCap.value), runCapUsd: capToNumber(runCap.value) },
+    })
+    toast.add({
+      title: 'Limits saved',
+      description: capToNumber(dailyCap.value) || capToNumber(runCap.value)
+        ? 'Work that would go past them is stopped rather than billed.'
+        : 'No limits set — nothing will be stopped for cost.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
+  }
+}
 
 onMounted(async () => {
   void loadChecks()
@@ -73,9 +100,18 @@ onMounted(async () => {
     const prefs = await $fetch<{
       notifications: Record<NotificationKey, boolean>
       summariseSessions: boolean
+      dailyCapUsd: number
+      runCapUsd: number
     }>('/api/preferences')
     notifications.value = prefs.notifications
     summariseSessions.value = prefs.summariseSessions
+    dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
+    runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
+
+    // What today has actually cost, so the limit is set against a real number
+    // rather than a guess.
+    const spend = await $fetch<{ byDay: { date: string; cost: number }[] }>('/api/spend?days=1')
+    spentToday.value = spend.byDay.at(-1)?.cost ?? 0
   } catch {
     // Leaving the defaults on screen is better than an error about a toggle.
   }
@@ -386,6 +422,50 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             </label>
           </div>
         </div>
+      </div>
+
+      <!-- Spending limits -->
+      <div class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Spending limits</h3>
+        <p class="text-[12px] text-meta">
+          These stop work rather than report on it. Leave either blank for no limit.
+          Today has cost <strong>{{ spentToday < 0.01 && spentToday > 0 ? '<$0.01' : `$${spentToday.toFixed(2)}` }}</strong> so far.
+        </p>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div class="field-group">
+            <label class="field-label">Most per day</label>
+            <input
+              v-model="dailyCap"
+              class="field-input"
+              inputmode="decimal"
+              placeholder="No limit"
+              @keydown.enter="saveCaps"
+            />
+            <span class="field-hint">
+              Across everything. Once reached, sessions refuse to start a turn and rituals
+              are skipped until tomorrow — said out loud, never silently.
+            </span>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label">Most per run</label>
+            <input
+              v-model="runCap"
+              class="field-input"
+              inputmode="decimal"
+              placeholder="No limit"
+              @keydown.enter="saveCaps"
+            />
+            <span class="field-hint">
+              The only one that can stop a run part-way. Checked between turns, so a
+              single expensive turn can overshoot it before anything notices — treat it
+              as "stop after about this", not a hard ceiling.
+            </span>
+          </div>
+        </div>
+
+        <UButton label="Save limits" size="sm" @click="saveCaps" />
       </div>
 
       <!-- Checks -->
