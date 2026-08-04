@@ -68,6 +68,35 @@ export const sessionStore = defineJsonStore<Session[]>({
   encode: sessions => ({ version: 1, sessions }),
 })
 
+/** Long enough to be distinguishable, short enough to scan a list of them. */
+const TITLE_MAX = 70
+
+/**
+ * A name for a session, from the thing it was asked to do.
+ *
+ * Sessions used to be named by hand and then told what to do separately, which
+ * meant typing the same intent twice. Now the instruction is the only thing
+ * typed, and this is what turns a paragraph into something a list can show —
+ * the first line, cut at a word rather than mid-word, with the rest implied.
+ */
+export function titleFromPrompt(prompt: string): string {
+  const firstLine = prompt
+    .split('\n')
+    .map(line => line.trim())
+    // Skip anything that carries no words of its own: a prompt opening with a
+    // markdown heading marker or a bullet would otherwise be titled "#".
+    .find(line => /[a-z0-9]/i.test(line.replace(/^[#>*\-\d.\s]+/, '')))
+
+  const cleaned = (firstLine ?? '').replace(/^[#>*\-\s]+/, '').trim()
+  if (!cleaned) return 'Untitled session'
+  if (cleaned.length <= TITLE_MAX) return cleaned
+
+  const cut = cleaned.slice(0, TITLE_MAX)
+  const lastSpace = cut.lastIndexOf(' ')
+  // Only respect the word boundary if it leaves something worth reading.
+  return `${(lastSpace > TITLE_MAX / 2 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`
+}
+
 export function newSessionId(): string {
   return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`
 }

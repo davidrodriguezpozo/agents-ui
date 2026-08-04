@@ -127,6 +127,16 @@ Each session gets its own branch and its own checkout of your repository, so sev
 can run at the same time without overwriting each other. Nothing lands in your working
 copy until you merge it.
 
+Say what you want done and it starts — the session names itself from the instruction
+rather than making you type the intent twice. **Start several at once** takes one
+instruction per line and gives each its own branch, workspace and turn, so setting up
+five parallel sessions costs one paste instead of five round trips. It counts them
+before it does anything, and twenty is the ceiling — each one is a full checkout.
+
+That splitting only happens in the batch box. Multi-line text in the ordinary one is a
+single prompt, because turning a carefully written paragraph into eight sessions is not
+a mistake worth discovering afterwards.
+
 The list is about *what each session has produced* — files changed, commits, work still
 uncommitted, turns taken — rather than about the fact that something is running.
 

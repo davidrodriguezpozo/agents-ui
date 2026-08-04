@@ -144,6 +144,19 @@ export interface MergePreview {
   blockedByChecks?: boolean
 }
 
+/**
+ * A session fresh from being started. `runId` is present when it was given
+ * something to do; `startError` when the workspace was cut but the first turn
+ * would not go — the session is real either way.
+ */
+export type StartedSession = Session & { runId?: string; startError?: string }
+
+export interface BatchResult {
+  started: StartedSession[]
+  /** Never made it as far as a workspace, and why. */
+  failed: { prompt: string; reason: string }[]
+}
+
 export interface DiffFile {
   path: string
   added: number
@@ -166,13 +179,27 @@ export function useSessions() {
     }
   }
 
-  async function create(title: string, agentSlug?: string) {
-    const session = await $fetch<Session>('/api/sessions', {
+  /**
+   * Start a session. Given a prompt it also starts working, and names itself
+   * from what it was asked to do rather than making you type the intent twice.
+   */
+  async function create(prompt: string, agentSlug?: string) {
+    const session = await $fetch<StartedSession>('/api/sessions', {
       method: 'POST',
-      body: { title, agentSlug },
+      body: { prompt, agentSlug },
     })
     await fetchAll()
     return session
+  }
+
+  /** One session per instruction, each on its own branch, all working at once. */
+  async function createMany(prompts: string[], agentSlug?: string) {
+    const result = await $fetch<BatchResult>('/api/sessions/batch', {
+      method: 'POST',
+      body: { prompts, agentSlug },
+    })
+    await fetchAll()
+    return result
   }
 
   /**
@@ -313,6 +340,7 @@ export function useSessions() {
     loading,
     fetchAll,
     create,
+    createMany,
     startFrom,
     fetchOne,
     send,

@@ -2,17 +2,77 @@
 import { errorMessage } from '~/utils/errors'
 import type { Session } from '~/composables/useSessions'
 
-const { sessions, here, elsewhere, workingCount, needsYouCount, loading, fetchAll, create, startFrom } = useSessions()
+const {
+  sessions, here, elsewhere, workingCount, needsYouCount, loading,
+  fetchAll, create, createMany, startFrom,
+} = useSessions()
 const { fetchAll: fetchWorktrees } = useWorktrees()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
 const router = useRouter()
 const toast = useToast()
 
-const title = ref('')
+const prompt = ref('')
 const creating = ref(false)
 const existingRef = ref('')
 const startingFrom = ref(false)
+
+/**
+ * Starting several at once is its own mode rather than a clever reading of the
+ * main box. One instruction per line is only obvious once you have been told;
+ * inferred from a multi-line paste it would turn one carefully written prompt
+ * into eight sessions and eight checkouts, which is not a mistake anyone wants
+ * to discover afterwards.
+ */
+const batchMode = ref(false)
+const batchText = ref('')
+const startingBatch = ref(false)
+
+const batchPrompts = computed(() =>
+  batchText.value.split('\n').map(line => line.trim()).filter(Boolean)
+)
+
+const MAX_AT_ONCE = 20
+const tooMany = computed(() => batchPrompts.value.length > MAX_AT_ONCE)
+
+async function onCreateMany() {
+  if (!batchPrompts.value.length || startingBatch.value || tooMany.value) return
+
+  startingBatch.value = true
+  try {
+    const result = await createMany(batchPrompts.value)
+    await fetchWorktrees()
+
+    if (result.started.length) {
+      const stalled = result.started.filter(s => s.startError).length
+      toast.add({
+        title: `${result.started.length} session${result.started.length === 1 ? '' : 's'} started`,
+        description: stalled
+          ? `${stalled} got a workspace but did not start working — open them to see why.`
+          : 'They are working now. Nothing touches your files until you merge.',
+        color: stalled ? 'warning' : 'success',
+      })
+    }
+
+    // Named individually: "3 failed" tells you nothing you can act on.
+    for (const failure of result.failed) {
+      toast.add({
+        title: `Could not start "${failure.prompt.slice(0, 40)}"`,
+        description: failure.reason,
+        color: 'error',
+      })
+    }
+
+    if (result.started.length) {
+      batchText.value = ''
+      batchMode.value = false
+    }
+  } catch (e) {
+    toast.add({ title: 'Could not start those', description: errorMessage(e), color: 'error' })
+  } finally {
+    startingBatch.value = false
+  }
+}
 
 /**
  * Not all work starts from nothing. Continuing a colleague's branch, picking
@@ -67,14 +127,25 @@ onMounted(async () => {
 onUnmounted(() => { if (poll) clearInterval(poll) })
 
 async function onCreate() {
-  const value = title.value.trim()
+  const value = prompt.value.trim()
   if (!value || creating.value) return
 
   creating.value = true
   try {
     const session = await create(value)
-    title.value = ''
+    prompt.value = ''
     await fetchWorktrees()
+
+    // The session exists either way, so go to it — a workspace that could not
+    // take its first turn is still somewhere you can see why and try again.
+    if (session.startError) {
+      toast.add({
+        title: 'Started, but it is not working yet',
+        description: session.startError,
+        color: 'warning',
+      })
+    }
+
     router.push(`/sessions/${session.id}`)
   } catch (e) {
     toast.add({ title: 'Could not start a session', description: errorMessage(e), color: 'error' })
@@ -145,29 +216,75 @@ const ordered = computed(() => {
 
       <!-- Start a session -->
       <div v-if="workingDir" class="space-y-1.5">
-        <div class="flex gap-2">
-          <input
-            v-model="title"
-            class="field-input flex-1"
-            placeholder="What should this session work on?"
-            :disabled="creating"
-            @keydown.enter="onCreate"
+        <!-- One session, told what to do in the same breath -->
+        <template v-if="!batchMode">
+          <div class="flex gap-2 items-start">
+            <textarea
+              v-model="prompt"
+              rows="2"
+              class="field-input flex-1 resize-y"
+              placeholder="What should this session do? Enter to start, Shift+Enter for a new line."
+              :disabled="creating"
+              @keydown.enter.exact.prevent="onCreate"
+            />
+            <UButton
+              label="Start session"
+              icon="i-lucide-plus"
+              size="sm"
+              :loading="creating"
+              :disabled="!prompt.trim()"
+              @click="onCreate"
+            />
+          </div>
+          <p class="type-meta">
+            Branches from <span class="font-mono">{{ displayPath }}</span> — its own workspace, its own
+            branch — and starts work straight away.
+            <button class="underline underline-offset-2 hover:text-label" @click="batchMode = true">
+              Start several at once
+            </button>
+          </p>
+        </template>
+
+        <!-- Several sessions, one per line, counted before anything happens -->
+        <template v-else>
+          <textarea
+            v-model="batchText"
+            rows="5"
+            class="field-input w-full resize-y font-mono text-[12px]"
+            placeholder="One instruction per line — each becomes its own session:&#10;&#10;Fix the flaky upload test&#10;Update the README for the new install flow&#10;Bump the linter and fix what it finds"
+            :disabled="startingBatch"
           />
-          <UButton
-            label="Start session"
-            icon="i-lucide-plus"
-            size="sm"
-            :loading="creating"
-            :disabled="!title.trim()"
-            @click="onCreate"
-          />
-        </div>
-        <p class="type-meta">
-          Branches from <span class="font-mono">{{ displayPath }}</span> — its own workspace, its own branch.
-        </p>
+          <div class="flex items-center gap-2 flex-wrap">
+            <UButton
+              :label="batchPrompts.length
+                ? `Start ${batchPrompts.length} session${batchPrompts.length === 1 ? '' : 's'}`
+                : 'Start sessions'"
+              icon="i-lucide-layers"
+              size="sm"
+              :loading="startingBatch"
+              :disabled="!batchPrompts.length || tooMany"
+              @click="onCreateMany"
+            />
+            <UButton
+              label="Cancel"
+              size="sm"
+              variant="ghost"
+              color="neutral"
+              :disabled="startingBatch"
+              @click="() => { batchMode = false; batchText = '' }"
+            />
+            <span v-if="tooMany" class="type-meta" style="color: var(--error);">
+              {{ batchPrompts.length }} is too many — {{ MAX_AT_ONCE }} at once is the limit.
+              Each one is a full checkout.
+            </span>
+            <span v-else-if="startingBatch" class="type-meta">
+              Cutting a workspace each. They start working as they are made.
+            </span>
+          </div>
+        </template>
 
         <!-- Or start on something that already exists -->
-        <div class="flex gap-2 pt-1">
+        <div v-if="!batchMode" class="flex gap-2 pt-1">
           <input
             v-model="existingRef"
             class="field-input flex-1"
@@ -186,7 +303,7 @@ const ordered = computed(() => {
             @click="onStartFrom"
           />
         </div>
-        <p class="type-meta">
+        <p v-if="!batchMode" class="type-meta">
           Checks the branch out in its own workspace. What you change from there is
           this session's, shown separately from what the branch already had.
         </p>
