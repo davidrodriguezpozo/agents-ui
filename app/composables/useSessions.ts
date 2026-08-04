@@ -156,6 +156,19 @@ export function useSessions() {
     return session
   }
 
+  /**
+   * Start on work that already exists — a pull request or a branch. The server
+   * decides which from what was pasted.
+   */
+  async function startFrom(ref: string) {
+    const session = await $fetch<Session>('/api/sessions/from-existing', {
+      method: 'POST',
+      body: { ref },
+    })
+    await fetchAll()
+    return session
+  }
+
   async function fetchOne(id: string) {
     return $fetch<Session & { turns: SessionTurn[] }>(`/api/sessions/${encodeURIComponent(id)}`)
   }
@@ -254,6 +267,7 @@ export function useSessions() {
     loading,
     fetchAll,
     create,
+    startFrom,
     fetchOne,
     send,
     fetchTranscript,

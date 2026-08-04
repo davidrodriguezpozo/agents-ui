@@ -2,7 +2,7 @@
 import { errorMessage } from '~/utils/errors'
 import type { Session } from '~/composables/useSessions'
 
-const { sessions, here, elsewhere, workingCount, needsYouCount, loading, fetchAll, create } = useSessions()
+const { sessions, here, elsewhere, workingCount, needsYouCount, loading, fetchAll, create, startFrom } = useSessions()
 const { fetchAll: fetchWorktrees } = useWorktrees()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
@@ -11,6 +11,30 @@ const toast = useToast()
 
 const title = ref('')
 const creating = ref(false)
+const existingRef = ref('')
+const startingFrom = ref(false)
+
+/**
+ * Not all work starts from nothing. Continuing a colleague's branch, picking
+ * up a pull request or fixing a failing check all begin from something that
+ * already exists, and until now that meant doing it by hand first.
+ */
+async function onStartFrom() {
+  const value = existingRef.value.trim()
+  if (!value || startingFrom.value) return
+
+  startingFrom.value = true
+  try {
+    const session = await startFrom(value)
+    existingRef.value = ''
+    await fetchWorktrees()
+    router.push(`/sessions/${session.id}`)
+  } catch (e) {
+    toast.add({ title: 'Could not start there', description: errorMessage(e), color: 'error' })
+  } finally {
+    startingFrom.value = false
+  }
+}
 let poll: ReturnType<typeof setInterval> | null = null
 
 const adopting = ref<string | null>(null)
@@ -120,6 +144,31 @@ const ordered = computed(() => {
         </div>
         <p class="type-meta">
           Branches from <span class="font-mono">{{ displayPath }}</span> — its own workspace, its own branch.
+        </p>
+
+        <!-- Or start on something that already exists -->
+        <div class="flex gap-2 pt-1">
+          <input
+            v-model="existingRef"
+            class="field-input flex-1"
+            placeholder="…or paste a pull request URL, or a branch name"
+            :disabled="startingFrom"
+            @keydown.enter="onStartFrom"
+          />
+          <UButton
+            label="Work on it"
+            icon="i-lucide-git-pull-request-arrow"
+            size="sm"
+            variant="soft"
+            color="neutral"
+            :loading="startingFrom"
+            :disabled="!existingRef.trim()"
+            @click="onStartFrom"
+          />
+        </div>
+        <p class="type-meta">
+          Checks the branch out in its own workspace. What you change from there is
+          this session's, shown separately from what the branch already had.
         </p>
       </div>
 

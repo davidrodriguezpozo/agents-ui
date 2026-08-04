@@ -69,6 +69,50 @@ export function suggestBody(commits: Commit[], files: string[]): string {
   return sections.join('\n\n')
 }
 
+/**
+ * What someone pasted.
+ *
+ * One field takes both, because the answer to "start from what?" is a pull
+ * request URL about as often as it is a branch name, and making people choose
+ * a category first is a form standing between them and the work.
+ */
+export type StartRef =
+  | { kind: 'pr'; ref: string }
+  | { kind: 'branch'; ref: string }
+
+export function parseStartRef(input: string): StartRef | null {
+  const value = input.trim()
+  if (!value) return null
+
+  // Any GitHub pull request URL, including enterprise hosts and trailing paths
+  // like /files or /commits that come from copying the address bar.
+  const url = value.match(/^https?:\/\/[^/]+\/[^/]+\/[^/]+\/pull\/(\d+)/)
+  if (url) return { kind: 'pr', ref: url[1]! }
+
+  // `#123` or a bare number, the way people refer to one in conversation.
+  const number = value.match(/^#?(\d+)$/)
+  if (number) return { kind: 'pr', ref: number[1]! }
+
+  // `origin/feature-x` names a remote-tracking ref; the branch is the tail.
+  // Only the conventional remote names are stripped: guessing that the first
+  // segment of anything is a remote would turn the real branch
+  // `feature/team/thing` into `team/thing`.
+  return {
+    kind: 'branch',
+    ref: value.replace(/^remotes\//, '').replace(/^(origin|upstream)\//, ''),
+  }
+}
+
+export interface ResolvedPullRequest {
+  number: number
+  title: string
+  url: string
+  headBranch: string
+  baseBranch: string
+  state: string
+  isFork: boolean
+}
+
 async function git(cwd: string, args: string[], timeout = 30_000): Promise<string> {
   const { stdout } = await exec('git', args, { cwd, timeout, maxBuffer: 10 * 1024 * 1024 })
   return stdout.trim()
@@ -118,6 +162,79 @@ export async function existingPullRequest(cwd: string, branch: string): Promise<
   } catch {
     // No pull request, no remote branch, or no network. All the same answer.
     return null
+  }
+}
+
+/** Ask GitHub what this pull request is. Read-only. */
+export async function resolvePullRequest(cwd: string, ref: string): Promise<ResolvedPullRequest> {
+  let raw: string
+  try {
+    raw = await gh(cwd, [
+      'pr', 'view', ref,
+      '--json', 'number,title,url,headRefName,baseRefName,state,isCrossRepository',
+    ])
+  } catch (e) {
+    throw createError({
+      statusCode: 404,
+      data: {
+        error: 'pr_not_found',
+        message: `Could not find pull request ${ref} in this repository: ${String((e as { stderr?: string }).stderr ?? '').trim()}`,
+      },
+    })
+  }
+
+  const parsed = JSON.parse(raw) as {
+    number: number
+    title: string
+    url: string
+    headRefName: string
+    baseRefName: string
+    state: string
+    isCrossRepository: boolean
+  }
+
+  return {
+    number: parsed.number,
+    title: parsed.title,
+    url: parsed.url,
+    headBranch: parsed.headRefName,
+    baseBranch: parsed.baseRefName,
+    state: parsed.state,
+    isFork: parsed.isCrossRepository,
+  }
+}
+
+/**
+ * Bring a pull request's commits down as a local branch.
+ *
+ * Fetched through `pull/N/head` rather than by branch name, because that ref
+ * exists whether the pull request comes from this repository or from someone's
+ * fork — and a fork's branch is on a remote you do not have.
+ */
+export async function fetchPullRequestBranch(
+  cwd: string,
+  remote: string,
+  number: number,
+  branch: string,
+): Promise<void> {
+  const exists = await git(cwd, ['rev-parse', '--verify', `refs/heads/${branch}`])
+    .then(() => true)
+    .catch(() => false)
+
+  // Already local: leave it alone rather than force it, since it may hold work
+  // that has not been pushed.
+  if (exists) return
+
+  try {
+    await git(cwd, ['fetch', remote, `pull/${number}/head:${branch}`], 180_000)
+  } catch (e) {
+    throw createError({
+      statusCode: 502,
+      data: {
+        error: 'fetch_failed',
+        message: `Could not fetch pull request #${number}: ${String((e as { stderr?: string }).stderr ?? '').trim()}`,
+      },
+    })
   }
 }
 

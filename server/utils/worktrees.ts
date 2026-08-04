@@ -221,6 +221,97 @@ export async function createWorktree(options: {
 }
 
 /**
+ * Check out a branch that already exists, rather than cutting a new one.
+ *
+ * The other half of starting work: a session usually begins from nothing, but
+ * plenty of work begins from something — a colleague's branch, a pull request,
+ * a branch whose checks are failing. Those need the branch git already has,
+ * not a new one named after it.
+ */
+export async function createWorktreeOn(options: {
+  repoDir: string
+  path: string
+  branch: string
+  remote?: string | null
+}): Promise<{ path: string; branch: string; baseSha: string }> {
+  const { repoDir, path, branch, remote } = options
+
+  await excludeWorktreeDir(repoDir)
+
+  if (existsSync(path)) {
+    throw createError({
+      statusCode: 409,
+      data: { error: 'worktree_exists', message: `A worktree already exists at ${path}` },
+    })
+  }
+
+  const hasLocal = await git(repoDir, ['rev-parse', '--verify', `refs/heads/${branch}`])
+    .then(() => true)
+    .catch(() => false)
+
+  // A branch that only exists on the remote has to be fetched before anything
+  // can be checked out from it.
+  if (!hasLocal && remote) {
+    await git(repoDir, ['fetch', remote, branch], 120_000).catch(() => {})
+  }
+
+  if (!hasLocal) {
+    // Neither here nor on the remote after fetching: almost always a typo, and
+    // git's answer to that is a sentence about upstream branches.
+    const onRemote = remote
+      ? await git(repoDir, ['rev-parse', '--verify', `refs/remotes/${remote}/${branch}`])
+        .then(() => true)
+        .catch(() => false)
+      : false
+
+    if (!onRemote) {
+      throw createError({
+        statusCode: 404,
+        data: {
+          error: 'no_such_branch',
+          message: `There is no branch called \`${branch}\` here${remote ? ` or on ${remote}` : ''}.`,
+        },
+      })
+    }
+  }
+
+  const args = hasLocal
+    ? ['worktree', 'add', path, branch]
+    // Creates the local branch tracking the remote one, which is what you want
+    // when continuing somebody else's work.
+    : ['worktree', 'add', '--track', '-b', branch, path, `${remote ?? 'origin'}/${branch}`]
+
+  try {
+    await git(repoDir, args, 180_000)
+  } catch (e: any) {
+    const stderr = String(e.stderr ?? '').trim()
+
+    // The most common failure by far, and git's own wording is unhelpful about
+    // what to do next.
+    if (/already (checked out|used by worktree)/i.test(stderr)) {
+      throw createError({
+        statusCode: 409,
+        data: {
+          error: 'branch_in_use',
+          message: `\`${branch}\` is already checked out somewhere else. A branch can only be in one working copy at a time — switch that one away, or close the session using it.`,
+        },
+      })
+    }
+
+    throw createError({
+      statusCode: 500,
+      data: {
+        error: 'worktree_failed',
+        message: `Could not check out ${branch}: ${stderr || e.message}`,
+      },
+    })
+  }
+
+  const baseSha = await git(repoDir, ['rev-parse', branch]).catch(() => '')
+  return { path, branch, baseSha }
+}
+
+/**
  * Remove a worktree. Refuses to discard uncommitted work unless forced, so a
  * stray click cannot destroy an agent's output.
  */
