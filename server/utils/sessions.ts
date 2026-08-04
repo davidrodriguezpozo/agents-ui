@@ -86,6 +86,30 @@ export async function patchSession(id: string, patch: Partial<Session>): Promise
   })
 }
 
+/**
+ * Hand a session back to the person after a turn is stopped early.
+ *
+ * The turn's own `finally` already does this when the run unwinds, but a
+ * cancelled run is reported to the browser the moment it aborts — before the
+ * SDK has returned. Reloading in that window would find the session still
+ * marked `running` and leave the composer disabled with nothing left to wait
+ * for. An archived session is left alone: closing one is a deliberate end
+ * state, not something a late cancellation should undo.
+ */
+export async function releaseRunningSession(id: string): Promise<Session | null> {
+  return sessionStore.update((sessions) => {
+    const index = sessions.findIndex(s => s.id === id)
+    if (index < 0) return null
+
+    const current = sessions[index]!
+    if (current.status !== 'running') return current
+
+    const next: Session = { ...current, status: 'idle', updatedAt: Date.now() }
+    sessions[index] = next
+    return next
+  })
+}
+
 export async function deleteSession(id: string): Promise<boolean> {
   return sessionStore.update((sessions) => {
     const index = sessions.findIndex(s => s.id === id)

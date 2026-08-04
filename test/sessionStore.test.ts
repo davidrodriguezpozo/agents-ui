@@ -87,6 +87,35 @@ describe('concurrent writes', () => {
   })
 })
 
+describe('releasing a stopped turn', () => {
+  it('frees a running session so the composer comes back', async () => {
+    await store.saveSession({ ...stub('a'), status: 'running' })
+
+    await store.releaseRunningSession('a')
+
+    expect((await store.findSession('a'))?.status).toBe('idle')
+  })
+
+  it('leaves a closed session closed', async () => {
+    // A cancellation landing after the session was archived must not revive it.
+    await store.saveSession({ ...stub('a'), status: 'archived' })
+
+    await store.releaseRunningSession('a')
+
+    expect((await store.findSession('a'))?.status).toBe('archived')
+  })
+
+  it('does nothing for a session that is already idle', async () => {
+    await store.saveSession(stub('a'))
+
+    await expect(store.releaseRunningSession('a')).resolves.toMatchObject({ status: 'idle' })
+  })
+
+  it('shrugs off a run whose session is gone', async () => {
+    await expect(store.releaseRunningSession('missing')).resolves.toBeNull()
+  })
+})
+
 describe('damaged index', () => {
   it('reports no sessions when the file has never existed', async () => {
     await expect(store.readSessions()).resolves.toEqual([])

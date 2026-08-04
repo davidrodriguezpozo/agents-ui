@@ -8,13 +8,14 @@ const router = useRouter()
 const id = route.params.id as string
 
 const { fetchOne, send, fetchDiff, previewMerge, merge, close } = useSessions()
-const { live, attach, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
+const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const toast = useToast()
 
 const session = ref<(Session & { turns: SessionTurn[] }) | null>(null)
 const loadError = ref<string | null>(null)
 const input = ref('')
 const sending = ref(false)
+const stopping = ref(false)
 const activeRunId = ref<string | null>(null)
 const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
 const showDiff = ref(false)
@@ -85,6 +86,25 @@ async function onSend() {
     toast.add({ title: 'Could not send', description: errorMessage(e), color: 'error' })
   } finally {
     sending.value = false
+  }
+}
+
+/**
+ * Stop the turn that is running. Whatever it already wrote to the worktree
+ * stays there — stopping ends the conversation turn, it does not undo work —
+ * so the diff is refreshed by the stream's own teardown.
+ */
+async function onStop() {
+  if (!activeRunId.value || stopping.value) return
+
+  stopping.value = true
+  try {
+    await cancelRun(activeRunId.value)
+    toast.add({ title: 'Stopped', description: 'Anything already changed is still in the workspace.' })
+  } catch (e) {
+    toast.add({ title: 'Could not stop', description: errorMessage(e), color: 'error' })
+  } finally {
+    stopping.value = false
   }
 }
 
@@ -297,6 +317,11 @@ const totalChanges = computed(() => {
               <UIcon name="i-lucide-loader-2" class="size-3 animate-spin" style="color: var(--accent);" />
               Working — you can close this tab and come back.
             </div>
+            <!-- A stopped turn is not a failure, and its half-finished work is still real -->
+            <div v-if="turn.status === 'cancelled'" class="flex items-center gap-2 type-meta">
+              <UIcon name="i-lucide-square" class="size-3" />
+              {{ turn.output ? 'Stopped part-way through.' : 'Stopped before it said anything.' }}
+            </div>
             <div v-if="turn.error" class="type-detail" style="color: var(--error);">{{ turn.error }}</div>
           </div>
         </div>
@@ -319,12 +344,25 @@ const totalChanges = computed(() => {
             :disabled="isBusy || !session.worktree.exists"
             @keydown.meta.enter="onSend"
           />
+          <!-- While it is working, the useful button is the one that stops it -->
           <UButton
+            v-if="isBusy"
+            label="Stop"
+            icon="i-lucide-square"
+            size="sm"
+            variant="soft"
+            color="error"
+            :loading="stopping"
+            :disabled="!activeRunId"
+            @click="onStop"
+          />
+          <UButton
+            v-else
             label="Send"
             icon="i-lucide-arrow-up"
             size="sm"
             :loading="sending"
-            :disabled="!input.trim() || isBusy || !session.worktree.exists"
+            :disabled="!input.trim() || !session.worktree.exists"
             @click="onSend"
           />
         </div>

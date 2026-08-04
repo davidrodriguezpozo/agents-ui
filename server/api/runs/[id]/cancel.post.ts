@@ -1,4 +1,5 @@
 import { cancel, readRun } from '../../../utils/runStore'
+import { releaseRunningSession } from '../../../utils/sessions'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -9,5 +10,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const cancelled = cancel(id)
+
+  // A stopped turn leaves its session marked `running` until the SDK unwinds,
+  // which is after the browser has already been told the run is over.
+  if (cancelled && run.sessionId) await releaseRunningSession(run.sessionId)
+
   return { cancelled, status: cancelled ? 'cancelled' : run.status }
 })
