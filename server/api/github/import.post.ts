@@ -1,3 +1,4 @@
+import { assertRepoRef } from '../../utils/github'
 export default defineEventHandler(async (event) => {
   const { owner, repo, url, targetPath, selectedSkills } = await readBody<{
     owner: string
@@ -6,6 +7,8 @@ export default defineEventHandler(async (event) => {
     targetPath: string
     selectedSkills: string[]
   }>(event)
+
+  assertRepoRef(owner, repo)
 
   if (!owner || !repo || !url) {
     throw createError({ statusCode: 400, message: 'owner, repo, and url are required' })

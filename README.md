@@ -111,8 +111,24 @@ node bin/start.mjs uninstall
 
 It listens on `127.0.0.1`, so only this machine can reach it. That default is deliberate:
 sessions and rituals run commands as you, with your Claude credentials, against your
-repositories, and there is no authentication in front of any of it. To reach it from
-another device — your phone, say — bind it wider on purpose:
+repositories, and there is no authentication in front of any of it.
+
+What *is* in front of it is a check that every request came from this app rather than
+from a web page you happen to have open. Without it, a page you visited could quietly
+submit a form to `localhost:3000` and have this run a shell command as you — a form post
+needs no permission from the browser to be *sent*, only to be read, and the attacker does
+not need to read the reply. Requests from another site are refused, and so is any request
+addressed to a hostname this server does not recognise, which is what stops the same trick
+being played through DNS. Other programs on your machine are unaffected: they already run
+as you, which is the boundary this has always had.
+
+If you reach it through a proxy or a tunnel under your own name, tell it so:
+
+```bash
+AGENTS_STUDIO_ALLOWED_HOSTS=studio.my-tunnel.dev agents-studio install
+```
+
+To reach it from another device — your phone, say — bind it wider on purpose:
 
 ```bash
 HOST=0.0.0.0 agents-studio install

@@ -1,5 +1,8 @@
+import { assertRepoRef } from '../../utils/github'
 export default defineEventHandler(async (event) => {
   const { owner, repo } = await readBody<{ owner: string; repo: string }>(event)
+
+  assertRepoRef(owner, repo)
 
   const registry = await readImportsRegistry()
   const entry = findImport(registry, owner, repo)

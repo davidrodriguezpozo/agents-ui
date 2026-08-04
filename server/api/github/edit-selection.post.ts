@@ -1,3 +1,4 @@
+import { assertRepoRef } from '../../utils/github'
 import { readdir, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
@@ -9,6 +10,8 @@ export default defineEventHandler(async (event) => {
     repo: string
     selectedSkills?: string[]
   }>(event)
+
+  assertRepoRef(owner, repo)
 
   const registry = await readImportsRegistry()
   const entry = findImport(registry, owner, repo)

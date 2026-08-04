@@ -20,6 +20,39 @@ const SKIP_FILENAMES = new Set([
   'CODE_OF_CONDUCT.md',
 ])
 
+/**
+ * Whether an owner and repo are ones GitHub could actually have.
+ *
+ * They arrive from a request body and end up in a filesystem path —
+ * `<claude dir>/github/<owner>/<repo>` — so `..` in either walks straight out
+ * of the directory this app is allowed to write to. Nothing but the local user
+ * can reach these endpoints, so this is a second lock rather than the only
+ * one, but a path built from unchecked input is worth closing regardless.
+ *
+ * GitHub's own rules are narrower than anything dangerous: owners are
+ * alphanumeric and hyphens, repositories add underscores and dots.
+ */
+export function isValidRepoRef(owner: unknown, repo: unknown): boolean {
+  return typeof owner === 'string' && typeof repo === 'string'
+    && /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/.test(owner)
+    && /^[A-Za-z0-9._-]{1,100}$/.test(repo)
+    // `.` and `..` pass the character test and are exactly what must not through.
+    && repo !== '.' && repo !== '..'
+}
+
+/** Throws the same refusal wherever an owner/repo pair arrives from outside. */
+export function assertRepoRef(owner: unknown, repo: unknown): void {
+  if (isValidRepoRef(owner, repo)) return
+
+  throw createError({
+    statusCode: 400,
+    data: {
+      error: 'bad_repo_ref',
+      message: 'That is not a valid GitHub owner and repository name.',
+    },
+  })
+}
+
 export function parseGithubUrl(url: string): ParsedGithubUrl | null {
   const match = url.match(
     /^https?:\/\/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?(?:\/(tree|blob)\/([^/]+)(?:\/(.+))?)?$/
