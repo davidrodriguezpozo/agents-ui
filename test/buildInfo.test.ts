@@ -38,3 +38,26 @@ describe('saying which build is running', () => {
     expect(describeBuild({ mode: 'source', behind: 0, stale: false })).toBe('Running from source')
   })
 })
+
+describe('installed from npm', () => {
+  /**
+   * There is no repository behind an npm install, so there is nothing to be
+   * behind. Reporting it as "running from source" told someone with no source
+   * at all something that could not be true.
+   */
+  it('names the release rather than claiming to be source', () => {
+    expect(describeBuild({ mode: 'package', version: '0.1.0', behind: 0, stale: false }))
+      .toBe('Running agents-studio 0.1.0')
+  })
+
+  it('says something sensible without a version', () => {
+    expect(describeBuild({ mode: 'package', behind: 0, stale: false }))
+      .toBe('Running an installed release')
+  })
+
+  it('is never stale, because there is nothing to compare against', () => {
+    const status: BuildStatus = { mode: 'package', version: '0.1.0', behind: 0, stale: false }
+    expect(status.stale).toBe(false)
+    expect(describeBuild(status)).not.toContain('behind')
+  })
+})

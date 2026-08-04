@@ -52,9 +52,36 @@ const installedServer = join(installedBuild, 'server', 'index.mjs')
 const supervisor = supervisorFor()
 const definitionPath = supervisor === 'launchd' ? plistPath() : systemdUnitPath()
 
+/** Present when running from the repository rather than from an install. */
+const fromSource = existsSync(resolve(root, 'nuxt.config.ts'))
+
+/** This package's own version, for saying which one is running. */
+function packageVersion() {
+  try {
+    return JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf-8')).version || null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * An installed copy ships its build; only a checkout can make one.
+ *
+ * Falling through to `npx nuxi build` in an installed package would go looking
+ * for source that is not there and a toolchain that was never installed, then
+ * fail somewhere deep in Nuxt. If the build is missing from an install, the
+ * package is broken and saying so is the only useful thing left to do.
+ */
 function ensureBuilt() {
   if (existsSync(outputServer)) return
-  console.log('Building agents-ui...')
+
+  if (!fromSource) {
+    console.error('This copy of agents-studio has no build in it, which should be impossible.')
+    console.error('Reinstall it:  npm install -g agents-studio')
+    process.exit(1)
+  }
+
+  console.log('Building agents-studio...')
   execSync('npx nuxi build', { cwd: root, stdio: 'inherit' })
 }
 
@@ -88,8 +115,21 @@ function writeBuildInfo(target) {
     }
   }
 
-  const sha = read(['rev-parse', 'HEAD'])
-  if (!sha) return
+  const sha = fromSource ? read(['rev-parse', 'HEAD']) : ''
+
+  // Installed from npm there is no repository to be behind, so the useful
+  // thing to record is which release this is. Without it the app reported
+  // "running from source" to someone who has no source at all.
+  if (!sha) {
+    const version = packageVersion()
+    if (!version) return
+
+    writeFileSync(join(target, 'build-info.json'), `${JSON.stringify({
+      version,
+      deployedAt: Date.now(),
+    }, null, 2)}\n`, 'utf-8')
+    return
+  }
 
   writeFileSync(join(target, 'build-info.json'), `${JSON.stringify({
     sha,
@@ -346,7 +386,15 @@ function start() {
   ensureBuilt()
   process.env.PORT = String(port)
   process.env.HOST = host
-  console.log(`Starting agents-ui on http://localhost:${port}`)
+
+  // Running in the foreground writes no deploy note, so this is the only way
+  // the server can know it is a release rather than a checkout.
+  if (!fromSource) {
+    const version = packageVersion()
+    if (version) process.env.AGENTS_STUDIO_VERSION = version
+  }
+
+  console.log(`Starting agents-studio on http://localhost:${port}`)
   if (exposed) {
     console.log(`Bound to ${host}: anyone on your network can reach this, and it has no password.`)
   }

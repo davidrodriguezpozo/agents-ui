@@ -1,35 +1,65 @@
 {
-  "name": "agents-ui",
-  "private": true,
+  "name": "agents-studio",
+  "version": "0.1.0",
   "type": "module",
-  "bin": {
-    "agents-ui": "./bin/start.mjs"
+  "description": "A workbench for Claude Code — run several sessions at once, each on its own branch, put recurring work on a schedule, and see what everything cost.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agents",
+    "git-worktree",
+    "parallel",
+    "ai"
+  ],
+  "license": "MIT",
+  "author": "David Rodriguez Pozo",
+  "homepage": "https://github.com/davidrodriguezpozo/agents-ui#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/davidrodriguezpozo/agents-ui.git"
   },
+  "bugs": {
+    "url": "https://github.com/davidrodriguezpozo/agents-ui/issues"
+  },
+  "bin": {
+    "agents-studio": "./bin/start.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "//": "Only the built server and its launcher ship. The build is self-contained — Nitro vendors dependencies into .output/server/node_modules — so an install has nothing to resolve and nothing to compile.",
+  "files": [
+    ".output",
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "nuxt build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
-    "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepare": "nuxt prepare",
+    "prepublishOnly": "npm run build",
+    "prepack": "node scripts/dereference-output.mjs"
   },
-  "dependencies": {
+  "//dependencies": "There are deliberately none. Nitro vendors what the server needs into .output/server/node_modules, so a published install resolves nothing, compiles nothing, and does not drag Nuxt and the whole build toolchain onto a machine that only wants to run the thing. Everything below is needed to build it, which makes it a dev dependency by definition. `prepare` rather than `postinstall` for the same reason: postinstall would run on a user's machine and fail looking for nuxt.",
+  "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.76",
+    "@iconify-json/lucide": "^1.2.95",
     "@nuxt/ui": "^3",
+    "@types/node": "^26.1.2",
     "@vue-flow/controls": "^1.1",
     "@vue-flow/core": "^1.41",
     "@vue-flow/minimap": "^1.5",
     "marked": "^17.0.4",
     "nuxt": "^3.16",
-    "yaml": "^2.6"
-  },
-  "devDependencies": {
-    "@iconify-json/lucide": "^1.2.95",
-    "@types/node": "^26.1.2",
     "typescript": "^5.7",
     "vitest": "^4.1.10",
-    "vue-tsc": "^3.3.9"
+    "vue-tsc": "^3.3.9",
+    "yaml": "^2.6"
   }
 }

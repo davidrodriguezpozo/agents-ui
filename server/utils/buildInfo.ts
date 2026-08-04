@@ -20,16 +20,25 @@ const exec = promisify(execFile)
  */
 
 export interface DeployedBuild {
-  sha: string
-  subject: string
-  committedAt: number
+  sha?: string
+  subject?: string
+  committedAt?: number
   deployedAt: number
-  repoDir: string
+  repoDir?: string
+  /** Set instead of `sha` when this came from npm rather than a checkout. */
+  version?: string
 }
 
 export interface BuildStatus {
-  /** `source` means someone is running it from the repo, where drift is moot. */
-  mode: 'deployed' | 'source'
+  /**
+   * `source` means someone is running it from the repo, where drift is moot.
+   * `package` means it was installed from npm, where there is no repository to
+   * be behind — reporting that as "from source" told someone with no source
+   * at all something that could not be true.
+   */
+  mode: 'deployed' | 'source' | 'package'
+  /** The release, when installed from npm. */
+  version?: string
   sha?: string
   subject?: string
   deployedAt?: number
@@ -46,6 +55,9 @@ export const BUILD_INFO_FILE = 'build-info.json'
 /** How to say it, kept apart from finding it out so it can be tested. */
 export function describeBuild(status: BuildStatus): string {
   if (status.mode === 'source') return 'Running from source'
+  if (status.mode === 'package') {
+    return status.version ? `Running agents-studio ${status.version}` : 'Running an installed release'
+  }
   if (status.unknownCommit) return 'Running a build from a commit this repository no longer has'
   if (!status.behind) return 'Running the current build'
 
@@ -74,7 +86,27 @@ export async function readDeployedBuild(dir = process.cwd()): Promise<DeployedBu
 
 export async function buildStatus(): Promise<BuildStatus> {
   const deployed = await readDeployedBuild()
-  if (!deployed) return { mode: 'source', behind: 0, stale: false }
+
+  // Started in the foreground from an installed copy: no deploy note was
+  // written, so the launcher passes the release through the environment.
+  if (!deployed) {
+    const version = process.env.AGENTS_STUDIO_VERSION
+    return version
+      ? { mode: 'package', version, behind: 0, stale: false }
+      : { mode: 'source', behind: 0, stale: false }
+  }
+
+  // A note with a version and no commit came from an npm install, where there
+  // is no repository to compare against and nothing to be stale about.
+  if (!deployed.sha) {
+    return {
+      mode: 'package',
+      version: deployed.version,
+      deployedAt: deployed.deployedAt,
+      behind: 0,
+      stale: false,
+    }
+  }
 
   const base: BuildStatus = {
     mode: 'deployed',

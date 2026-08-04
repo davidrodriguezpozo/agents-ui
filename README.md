@@ -47,23 +47,49 @@ trapped inside it.
 ## Quick start
 
 ```bash
+npm install -g agents-studio
+agents-studio
+```
+
+Open **http://localhost:3000**. Pick the project you want to work on from the bottom
+of the sidebar — that's the repository sessions will branch from.
+
+To try it once without installing, `npx agents-studio` works too — though it re-downloads
+about 19MB whenever the cache misses, so the global install is the better home for
+something meant to keep running.
+
+> **You'll need:** Node.js 18+, and Claude Code installed and signed in on this machine.
+> Sessions, rituals and workflows run through the Claude Agent SDK and use that login;
+> there is no separate key to set up. Nothing is compiled at install time — the package
+> ships its own build with dependencies already inside it, so `npm install` has nothing
+> to resolve.
+
+<details>
+<summary>From source instead</summary>
+
+```bash
 git clone https://github.com/davidrodriguezpozo/agents-ui.git
 cd agents-ui
 bun install
 bun run dev
 ```
 
-Open **http://localhost:3000**. Pick the project you want to work on from the bottom
-of the sidebar — that's the repository sessions will branch from.
-
-> **You'll need:** [Bun](https://bun.sh) (or Node.js 18+ — swap `bun` for `npm`), and
-> Claude Code installed and signed in on this machine. Sessions, rituals and workflows
-> run through the Claude Agent SDK and use that login; there is no separate key to set up.
+Wants [Bun](https://bun.sh), or Node.js 18+ with `npm` in place of `bun`.
+</details>
 
 ### Leave it running
 
 A ritual due at 08:00 only happens if something is running at 08:00, so a server you
 started in a terminal yesterday is not enough.
+
+```bash
+agents-studio install     # start at login and after a crash
+agents-studio status      # is it installed, is it answering
+agents-studio uninstall   # stop doing that — nothing you own is touched
+```
+
+<details>
+<summary>From a checkout</summary>
 
 ```bash
 make service          # build, then start at login and after a crash
@@ -72,19 +98,16 @@ make service-logs     # follow what it is saying
 make service-stop     # stop doing that — nothing you own is touched
 ```
 
-<details>
-<summary>Without make</summary>
+Or without make — note the build first, since the service runs the build rather than
+the dev server:
 
 ```bash
-bun run build                     # the service runs the build, not the dev server
+bun run build
 node bin/start.mjs install
 node bin/start.mjs status
 node bin/start.mjs uninstall
 ```
 </details>
-
-Run these from the repository — this package is not published, so `npx agents-ui` only
-finds it from in here.
 
 It listens on `127.0.0.1`, so only this machine can reach it. That default is deliberate:
 sessions and rituals run commands as you, with your Claude credentials, against your
@@ -92,7 +115,7 @@ repositories, and there is no authentication in front of any of it. To reach it 
 another device — your phone, say — bind it wider on purpose:
 
 ```bash
-make service HOST=0.0.0.0
+HOST=0.0.0.0 agents-studio install
 ```
 
 and understand that on a shared network, anyone who can reach the port can do everything
@@ -100,15 +123,17 @@ you can.
 
 If something else already has port 3000 — a Docker container publishing it is the usual
 culprit — install refuses and names the occupant, rather than registering a service that
-would fail to bind and be restarted forever. Pick another port with `make service
-PORT=3001`; it is written into the service definition, so `make service-status` keeps
-reporting on the right one afterwards.
+would fail to bind and be restarted forever. Pick another port with `PORT=3001
+agents-studio install`; it is written into the service definition, so `agents-studio
+status` keeps reporting on the right one afterwards.
 
 Installing is a **deploy**: the build is copied to `~/.claude/agents-ui/installed-build/`
-and the service runs the copy. `bun run build` empties `.output` and rewrites it over about
-a minute, so a service running from there would die on the next chunk it loaded — working
-on the code would take down the thing running your rituals. Run `make service` again to
-deploy what you have just built.
+and the service runs the copy. That matters most from a checkout, where `bun run build`
+empties `.output` and rewrites it over about a minute — a service running from there would
+die on the next chunk it loaded, so working on the code would take down the thing running
+your rituals. Run `make service` again to deploy what you have just built. Installed from
+npm there is nothing to rebuild; `npm update -g agents-studio` then `agents-studio install`
+deploys the new release.
 
 This registers a launchd agent on macOS or a systemd user unit on Linux, and captures the
 `PATH` of the shell you install from — a service otherwise gets a bare one with no `claude`
@@ -117,7 +142,7 @@ in it, and every run would fail at 08:00 with nobody watching.
 Two things it cannot do for you: it will not wake a sleeping machine (an overdue ritual
 still fires if you open the lid within a couple of hours, and is skipped after that rather
 than arriving at teatime), and it keeps serving the build it was installed against — so
-after changing code, rebuild and reinstall.
+after changing code, or after updating the package, install again.
 
 ---
 
