@@ -87,6 +87,9 @@ jobs:
           if npm view "agents-studio@$VERSION" version > /dev/null 2>&1; then
             echo "Version $VERSION is already published, so there is nothing to publish over."
             echo "Checking the package builds and packs cleanly instead."
+            # Only `npm publish` runs prepublishOnly, so nothing has built
+            # .output on this path — and `prepack` needs it to dereference.
+            npm run build
             npm pack --dry-run
             echo ""
             echo "Bump the version to rehearse a real publish."
