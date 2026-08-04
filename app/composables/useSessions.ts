@@ -33,6 +33,14 @@ export interface Session {
   inCurrentProject: boolean
 }
 
+export interface TurnToolCall {
+  id: string
+  toolName: string
+  input: Record<string, unknown>
+  result?: string
+  isError?: boolean
+}
+
 export interface SessionTurn {
   id: string
   input: string
@@ -42,6 +50,8 @@ export interface SessionTurn {
   completedAt?: number
   costUsd?: number
   error?: string
+  /** What the turn did, recovered from its event log. */
+  toolCalls?: TurnToolCall[]
 }
 
 /** What a worktree with no session could be restored into, and what it holds. */

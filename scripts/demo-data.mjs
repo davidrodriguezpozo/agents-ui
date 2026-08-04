@@ -534,8 +534,8 @@ export interface Facets {
 
 The tag rule is the one worth confirming. \`every\` rather than \`some\` means selecting *winter* and *wool* narrows the results rather than widening them, which is what a faceted UI implies. Say the word if you wanted it the other way.`,
         toolCalls: [
-          { toolName: 'Read', preview: 'src/lib/catalogue.ts — 14 lines' },
-          { toolName: 'Edit', preview: 'src/lib/catalogue.ts' },
+          { toolName: 'Read', input: { file_path: `${REPO}/src/lib/catalogue.ts` }, preview: 'src/lib/catalogue.ts — 14 lines' },
+          { toolName: 'Edit', input: { file_path: `${REPO}/src/lib/catalogue.ts` }, preview: 'src/lib/catalogue.ts' },
         ],
         costUsd: 0.0412, durationMs: 18_400,
       },
@@ -551,8 +551,8 @@ The tag rule is the one worth confirming. \`every\` rather than \`some\` means s
 
 All three pass. Both commits are on the branch and the workspace is clean, so this is ready to merge whenever you are.`,
         toolCalls: [
-          { toolName: 'Write', preview: 'src/lib/catalogue.test.ts' },
-          { toolName: 'Bash', preview: 'pnpm vitest run — 3 passed' },
+          { toolName: 'Write', input: { file_path: `${REPO}/src/lib/catalogue.test.ts` }, preview: 'src/lib/catalogue.test.ts' },
+          { toolName: 'Bash', input: { command: 'pnpm vitest run' }, preview: 'pnpm vitest run — 3 passed' },
         ],
         costUsd: 0.0286, durationMs: 12_900,
       },
@@ -616,9 +616,9 @@ One thing to decide before this ships: \`Math.round\` rounds a half-cent up, whi
 
 I have left a test uncommitted asserting the integer property — worth a look before it goes in.`,
         toolCalls: [
-          { toolName: 'Grep', preview: 'applyTax — 2 matches' },
-          { toolName: 'Read', preview: 'src/lib/pricing.ts — 16 lines' },
-          { toolName: 'Edit', preview: 'src/lib/pricing.ts' },
+          { toolName: 'Grep', input: { pattern: 'applyTax' }, preview: 'applyTax — 2 matches' },
+          { toolName: 'Read', input: { file_path: `${REPO}/src/lib/pricing.ts` }, preview: 'src/lib/pricing.ts — 16 lines' },
+          { toolName: 'Edit', input: { file_path: `${REPO}/src/lib/pricing.ts` }, preview: 'src/lib/pricing.ts' },
         ],
         costUsd: 0.0521, durationMs: 22_700,
       },
@@ -657,8 +657,8 @@ Two judgement calls worth your eye:
 
 It is uncommitted so you can edit before it lands.`,
         toolCalls: [
-          { toolName: 'Bash', preview: 'git log v2.0.4..HEAD --oneline — 11 commits' },
-          { toolName: 'Write', preview: 'RELEASE-NOTES.md' },
+          { toolName: 'Bash', input: { command: 'git log v2.0.4..HEAD --oneline' }, preview: 'git log v2.0.4..HEAD --oneline — 11 commits' },
+          { toolName: 'Write', input: { file_path: `${REPO}/RELEASE-NOTES.md` }, preview: 'RELEASE-NOTES.md' },
         ],
         costUsd: 0.0198, durationMs: 9_800,
       },
@@ -688,8 +688,8 @@ Before changing it I would want to confirm the theory rather than assume it:
 
 If both hold, pushing onto the existing array is a two-line fix. I have not made it yet — the measurement should come first.`,
         toolCalls: [
-          { toolName: 'Read', preview: 'src/server/cart.ts — 12 lines' },
-          { toolName: 'Grep', preview: 'addToCart — 4 matches' },
+          { toolName: 'Read', input: { file_path: `${REPO}/src/server/cart.ts` }, preview: 'src/server/cart.ts — 12 lines' },
+          { toolName: 'Grep', input: { pattern: 'addToCart' }, preview: 'addToCart — 4 matches' },
         ],
         costUsd: 0.0334, durationMs: 15_200,
       },
@@ -1169,9 +1169,17 @@ async function seed() {
     const runIds = []
     for (const [turnIndex, turn] of spec.turns.entries()) {
       const runId = `demo-s${index}t${turnIndex}`
+      // A session works inside its own checkout, so the paths its steps name
+      // are worktree paths. Written against the repository they would render
+      // as if the work happened somewhere else.
+      const toolCalls = (turn.toolCalls ?? []).map(call => (
+        call.input?.file_path
+          ? { ...call, input: { ...call.input, file_path: call.input.file_path.replace(REPO, worktreePath) } }
+          : call
+      ))
       runs.push(buildRun({
         id: runId, kind: 'chat', title: spec.title, sessionId: id, projectDir: worktreePath,
-        createdAt: NOW - (SESSIONS.length - index) * 3 * HOUR + turnIndex * 11 * MINUTE, ...turn,
+        createdAt: NOW - (SESSIONS.length - index) * 3 * HOUR + turnIndex * 11 * MINUTE, ...turn, toolCalls,
       }))
       runIds.push(runId)
     }

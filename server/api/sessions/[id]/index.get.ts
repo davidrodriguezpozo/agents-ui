@@ -1,6 +1,7 @@
 import { findSession } from '../../../utils/sessions'
 import { worktreeStatus } from '../../../utils/worktrees'
 import { getActive, readRun, type RunSummary } from '../../../utils/runStore'
+import { toolCallsFromEvents } from '../../../utils/turnActivity'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -26,6 +27,9 @@ export default defineEventHandler(async (event) => {
       completedAt: run.completedAt,
       costUsd: run.stats?.costUsd,
       error: run.error,
+      // What it did, not just what it said. A turn read back tomorrow has only
+      // its event log to recover this from.
+      toolCalls: toolCallsFromEvents(run.events),
     })
   }
 

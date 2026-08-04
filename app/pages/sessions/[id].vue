@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
 import { renderMarkdown } from '~/utils/markdown'
+import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import type { DiffFile, MergePreview, Session, SessionTurn } from '~/composables/useSessions'
 
 const route = useRoute()
@@ -153,6 +154,44 @@ async function onClose(opts: { force?: boolean; keepBranch?: boolean }) {
     closing.value = false
     showClose.value = false
   }
+}
+
+/**
+ * The steps a turn took.
+ *
+ * A turn in flight has them streaming into the run store; one read back later
+ * has them on its record. Same shape either way, so the template does not have
+ * to care which it is looking at.
+ */
+function isLive(turn: SessionTurn) {
+  return turn.id === activeRunId.value && Boolean(liveRun.value?.toolCalls.length)
+}
+
+function stepsFor(turn: SessionTurn): ToolCallLike[] {
+  if (isLive(turn)) return liveRun.value?.toolCalls ?? []
+  return turn.toolCalls ?? []
+}
+
+function describe(step: ToolCallLike) {
+  return describeToolCall(step, session.value?.worktreePath)
+}
+
+function touched(turn: SessionTurn) {
+  return filesTouched(stepsFor(turn), session.value?.worktreePath)
+}
+
+// A finished turn's steps are folded away — the prose is the point by then.
+// A running turn's are the only thing worth watching, so they stay open.
+const expandedTurns = ref<Set<string>>(new Set())
+
+function showSteps(turn: SessionTurn) {
+  return isLive(turn) || expandedTurns.value.has(turn.id)
+}
+
+function toggleSteps(id: string) {
+  const next = new Set(expandedTurns.value)
+  if (!next.delete(id)) next.add(id)
+  expandedTurns.value = next
 }
 
 const totalChanges = computed(() => {
@@ -308,6 +347,62 @@ const totalChanges = computed(() => {
                 {{ turn.input }}
               </div>
             </div>
+            <!-- What it is doing, which is most of what there is to watch -->
+            <div v-if="stepsFor(turn).length" class="space-y-1">
+              <button
+                v-if="!isLive(turn)"
+                class="flex items-center gap-1.5 type-meta hover-bg rounded px-1.5 py-0.5 -ml-1.5 focus-ring"
+                @click="toggleSteps(turn.id)"
+              >
+                <UIcon
+                  :name="showSteps(turn) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                  class="size-3"
+                />
+                {{ stepsFor(turn).length }} step{{ stepsFor(turn).length === 1 ? '' : 's' }}
+              </button>
+
+              <div v-if="showSteps(turn)" class="space-y-px">
+                <div
+                  v-for="(step, index) in stepsFor(turn)"
+                  :key="step.id ?? index"
+                  class="flex items-center gap-2 px-2 py-1 rounded type-mono-meta"
+                  :style="{ background: index === stepsFor(turn).length - 1 && isLive(turn) ? 'var(--surface-raised)' : undefined }"
+                >
+                  <UIcon
+                    v-if="isLive(turn) && index === stepsFor(turn).length - 1 && !step.result"
+                    name="i-lucide-loader-2"
+                    class="size-3 shrink-0 animate-spin"
+                    style="color: var(--accent);"
+                  />
+                  <UIcon
+                    v-else
+                    :name="step.isError ? 'i-lucide-circle-alert' : describe(step).icon"
+                    class="size-3 shrink-0"
+                    :style="{ color: step.isError ? 'var(--error)' : 'var(--text-disabled)' }"
+                  />
+                  <span class="shrink-0" style="color: var(--text-secondary);">{{ describe(step).verb }}</span>
+                  <!-- Falls back to what came back, for a tool whose arguments
+                       we have no rule for — better than a bare verb -->
+                  <span class="truncate" :style="{ color: describe(step).writes ? 'var(--accent)' : undefined }">
+                    {{ describe(step).target || step.result }}
+                  </span>
+                </div>
+              </div>
+
+              <!-- The answer to "what is different now", without reading the diff -->
+              <div v-if="touched(turn).length" class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span class="type-meta">Changed</span>
+                <span
+                  v-for="file in touched(turn)"
+                  :key="file"
+                  class="type-mono-meta px-1.5 py-px rounded"
+                  style="background: var(--accent-muted); color: var(--accent);"
+                >
+                  {{ file }}
+                </span>
+              </div>
+            </div>
+
             <div
               v-if="turn.output"
               class="markdown type-body"
