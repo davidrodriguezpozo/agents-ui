@@ -14,6 +14,7 @@ const { fetchOne, send, fetchTranscript, setTrust, fetchDiff, previewMerge, merg
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
 const { describeRule } = usePermissionRuleLabels()
+const { commands, fetchAll: fetchCommands } = useCommands()
 const toast = useToast()
 
 const session = ref<(Session & { turns: SessionTurn[] }) | null>(null)
@@ -100,6 +101,8 @@ onMounted(async () => {
   if (session.value?.adoptedAt) {
     inherited.value = await fetchTranscript(id).catch(() => [])
   }
+
+  await fetchCommands()
 })
 
 onUnmounted(() => controller?.abort())
@@ -329,6 +332,45 @@ async function onTrust(level: TrustLevel) {
   } catch (e) {
     if (session.value) session.value.trust = previous
     toast.add({ title: 'Could not change that', description: errorMessage(e), color: 'error' })
+  }
+}
+
+/**
+ * The command list.
+ *
+ * Opens when what you have typed is a bare slash-word, which is the moment you
+ * are trying to remember a name, and on demand from the button beside the box
+ * for when you do not know one exists.
+ */
+const paletteOpen = ref(false)
+const palette = ref<{ move: (d: number) => void; choose: () => void; hasMatches: boolean } | null>(null)
+
+const commandQuery = computed(() => {
+  const match = input.value.match(/^\/(\S*)$/)
+  return match ? match[1] ?? '' : ''
+})
+
+watch(input, () => {
+  // Typing past the command itself means you are writing a message now.
+  if (input.value.startsWith('/') && !input.value.includes(' ')) paletteOpen.value = true
+  else if (!input.value.startsWith('/')) paletteOpen.value = false
+})
+
+function insertCommand(invocation: string) {
+  input.value = `${invocation} `
+  paletteOpen.value = false
+}
+
+/** The composer owns the keys while the list is open, so it can drive it. */
+function onComposerKey(event: KeyboardEvent) {
+  if (!paletteOpen.value) return
+
+  if (event.key === 'ArrowDown') { event.preventDefault(); palette.value?.move(1) }
+  else if (event.key === 'ArrowUp') { event.preventDefault(); palette.value?.move(-1) }
+  else if (event.key === 'Escape') { event.preventDefault(); paletteOpen.value = false }
+  else if (event.key === 'Enter' && !event.metaKey && palette.value?.hasMatches) {
+    event.preventDefault()
+    palette.value.choose()
   }
 }
 
@@ -729,13 +771,25 @@ const totalChanges = computed(() => {
         </div>
 
         <!-- Composer -->
-        <div class="flex gap-2">
+        <div class="flex gap-2 relative">
+          <!-- Sits above the box, where what you are typing still shows -->
+          <div v-if="paletteOpen" class="absolute bottom-full left-0 right-0 mb-2 z-10">
+            <CommandPalette
+              ref="palette"
+              :commands="commands"
+              :query="commandQuery"
+              @select="insertCommand"
+              @close="() => { paletteOpen = false }"
+            />
+          </div>
+
           <textarea
             v-model="input"
             rows="2"
             class="field-textarea flex-1"
-            :placeholder="isBusy ? 'Working…' : 'What should it do next?'"
+            :placeholder="isBusy ? 'Working…' : 'What should it do next? Type / for commands'"
             :disabled="isBusy || !session.worktree.exists"
+            @keydown="onComposerKey"
             @keydown.meta.enter="onSend"
           />
           <!-- While it is working, the useful button is the one that stops it -->
@@ -758,6 +812,16 @@ const totalChanges = computed(() => {
             :loading="sending"
             :disabled="!input.trim() || !session.worktree.exists"
             @click="onSend"
+          />
+          <UButton
+            icon="i-lucide-slash"
+            size="sm"
+            variant="ghost"
+            color="neutral"
+            :title="`${commands.length} commands available`"
+            aria-label="Show commands"
+            :disabled="isBusy"
+            @click="() => { paletteOpen = !paletteOpen }"
           />
         </div>
       </template>
