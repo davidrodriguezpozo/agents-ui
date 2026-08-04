@@ -86,6 +86,15 @@ node bin/start.mjs uninstall
 Run these from the repository — this package is not published, so `npx agents-ui` only
 finds it from in here.
 
+If something else already has port 3000 — a Docker container publishing it is the usual
+culprit — install refuses and names the occupant, rather than registering a service that
+would fail to bind and be restarted forever. Pick another port with `make service
+PORT=3001`; it is written into the service definition, so `make service-status` keeps
+reporting on the right one afterwards.
+
+`make service` rebuilds first, and a rebuild empties `.output` for about a minute. An
+already-installed service is down for that minute and is restarted at the end.
+
 This registers a launchd agent on macOS or a systemd user unit on Linux, and captures the
 `PATH` of the shell you install from — a service otherwise gets a bare one with no `claude`
 in it, and every run would fail at 08:00 with nobody watching.

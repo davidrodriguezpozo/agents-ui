@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest'
 // Plain JS on purpose: the installer has to run before anything is built.
-import { escapeXml, plistFor, serviceEnvironment, supervisorFor, systemdUnitFor } from '../bin/service.mjs'
+import {
+  escapeXml,
+  plistFor,
+  portFromDefinition,
+  serviceEnvironment,
+  supervisorFor,
+  systemdUnitFor,
+} from '../bin/service.mjs'
 
 /**
  * The service definition is generated once and then read by launchd or systemd
@@ -95,6 +102,26 @@ describe('the systemd definition', () => {
 
     expect(unit).toContain('Environment=PATH=/usr/bin:/bin')
     expect(unit).toContain('Environment=PORT=3000')
+  })
+})
+
+describe('reading back the port it was installed on', () => {
+  it('finds it in a plist', () => {
+    // Installing with PORT=3001 pins 3001; asking about 3000 afterwards would
+    // report a perfectly healthy service as down.
+    const plist = plistFor({ ...definition, environment: { ...definition.environment, PORT: '3001' } })
+
+    expect(portFromDefinition(plist)).toBe(3001)
+  })
+
+  it('finds it in a systemd unit', () => {
+    const unit = systemdUnitFor({ ...definition, environment: { ...definition.environment, PORT: '4100' } })
+
+    expect(portFromDefinition(unit)).toBe(4100)
+  })
+
+  it('says so when the definition names no port', () => {
+    expect(portFromDefinition('<plist></plist>')).toBeNull()
   })
 })
 

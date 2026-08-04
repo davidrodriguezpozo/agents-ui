@@ -129,6 +129,27 @@ export function systemdUnitPath(home = homedir()) {
 }
 
 /**
+ * The port an installed service was pinned to.
+ *
+ * The definition is the truth once it is written: installing with PORT=3001
+ * bakes 3001 in, and asking about 3000 afterwards would report the wrong
+ * service as down. Reads both formats, since only one of them exists on any
+ * given machine.
+ *
+ * @param {string} text
+ * @returns {number | null}
+ */
+export function portFromDefinition(text) {
+  const plist = text.match(/<key>PORT<\/key>\s*<string>(\d+)<\/string>/)
+  if (plist) return Number(plist[1])
+
+  const unit = text.match(/^Environment=PORT=(\d+)$/m)
+  if (unit) return Number(unit[1])
+
+  return null
+}
+
+/**
  * Which supervisor to talk to, or null when we have nothing to offer.
  * @param {string} [os]
  * @returns {'launchd' | 'systemd' | null}
