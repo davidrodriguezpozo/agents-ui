@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
+import { isSendKey } from '~/utils/keys'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
@@ -541,15 +542,24 @@ function insertCommand(invocation: string) {
 
 /** The composer owns the keys while the list is open, so it can drive it. */
 function onComposerKey(event: KeyboardEvent) {
-  if (!paletteOpen.value) return
-
-  if (event.key === 'ArrowDown') { event.preventDefault(); palette.value?.move(1) }
-  else if (event.key === 'ArrowUp') { event.preventDefault(); palette.value?.move(-1) }
-  else if (event.key === 'Escape') { event.preventDefault(); paletteOpen.value = false }
-  else if (event.key === 'Enter' && !event.metaKey && palette.value?.hasMatches) {
-    event.preventDefault()
-    palette.value.choose()
+  // While the command palette is open it owns the keys that drive it. Enter
+  // there means "pick the highlighted command", which has to win over sending
+  // — otherwise choosing a command would fire off a half-typed message.
+  if (paletteOpen.value) {
+    if (event.key === 'ArrowDown') { event.preventDefault(); palette.value?.move(1); return }
+    if (event.key === 'ArrowUp') { event.preventDefault(); palette.value?.move(-1); return }
+    if (event.key === 'Escape') { event.preventDefault(); paletteOpen.value = false; return }
+    if (event.key === 'Enter' && !event.metaKey && palette.value?.hasMatches) {
+      event.preventDefault()
+      palette.value.choose()
+      return
+    }
   }
+
+  if (!isSendKey(event)) return
+
+  event.preventDefault()
+  onSend()
 }
 
 const totalChanges = computed(() => {
@@ -787,13 +797,13 @@ const totalChanges = computed(() => {
                     rows="2"
                     class="field-textarea w-full"
                     placeholder="What should change about this line?"
-                    @keydown.meta.enter="addComment(line)"
+                    @keydown="e => { if (isSendKey(e)) { e.preventDefault(); addComment(line) } }"
                     @keydown.esc="cancelComment"
                   />
                   <div class="flex items-center gap-2">
                     <UButton label="Add comment" size="xs" :disabled="!commentDraft.trim()" @click="addComment(line)" />
                     <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="cancelComment" />
-                    <span class="type-meta">⌘↵ to add</span>
+                    <span class="type-meta">↵ to add · ⇧↵ for a new line</span>
                   </div>
                 </div>
               </template>
@@ -1036,7 +1046,6 @@ const totalChanges = computed(() => {
             :placeholder="isBusy ? 'Working…' : 'What should it do next? Type / for commands'"
             :disabled="isBusy || !session.worktree.exists"
             @keydown="onComposerKey"
-            @keydown.meta.enter="onSend"
           />
           <!-- While it is working, the useful button is the one that stops it -->
           <UButton
@@ -1070,6 +1079,9 @@ const totalChanges = computed(() => {
             @click="() => { paletteOpen = !paletteOpen }"
           />
         </div>
+
+        <!-- Said out loud, because the shortcut changed and muscle memory has not -->
+        <p v-if="!isBusy" class="type-meta pt-1.5">↵ Send · ⇧↵ New line</p>
       </template>
 
       <div v-else class="flex justify-center py-16">

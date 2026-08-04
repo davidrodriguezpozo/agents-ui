@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
+import { isSendKey } from '~/utils/keys'
 import type { Session } from '~/composables/useSessions'
 
 const {
@@ -225,7 +226,7 @@ const ordered = computed(() => {
               class="field-input flex-1 resize-y"
               placeholder="What should this session do? Enter to start, Shift+Enter for a new line."
               :disabled="creating"
-              @keydown.enter.exact.prevent="onCreate"
+              @keydown="e => { if (isSendKey(e)) { e.preventDefault(); onCreate() } }"
             />
             <UButton
               label="Start session"

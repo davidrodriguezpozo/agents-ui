@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { isSendKey } from "~/utils/keys";
+
 const props = defineProps<{
   modelValue: string;
   placeholder: string;
@@ -23,7 +25,9 @@ function autoResize() {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === "Enter" && !e.shiftKey) {
+  // Already behaved this way; going through the shared rule so it picks up the
+  // input-method guard and cannot drift from the other boxes later.
+  if (isSendKey(e)) {
     e.preventDefault();
     emit("send");
   }
