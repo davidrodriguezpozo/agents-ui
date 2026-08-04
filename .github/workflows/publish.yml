@@ -75,6 +75,22 @@ jobs:
         if: github.event_name == 'release' || inputs.dry_run == false
         run: npm publish
 
+      # `npm publish --dry-run` still asks the registry, and the registry
+      # refuses a version that already exists — so a plain dry run fails every
+      # time except in the window between bumping the version and releasing it,
+      # which is precisely when nobody runs it. Say which case this is, then
+      # check what can actually be checked.
       - name: Dry run
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run
-        run: npm publish --dry-run
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "agents-studio@$VERSION" version > /dev/null 2>&1; then
+            echo "Version $VERSION is already published, so there is nothing to publish over."
+            echo "Checking the package builds and packs cleanly instead."
+            npm pack --dry-run
+            echo ""
+            echo "Bump the version to rehearse a real publish."
+          else
+            echo "Version $VERSION is not published yet — rehearsing the real thing."
+            npm publish --dry-run
+          fi
