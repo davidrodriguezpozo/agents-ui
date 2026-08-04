@@ -1,0 +1,80 @@
+name: Publish
+
+# Publishing happens here and nowhere else.
+#
+# npm authenticates this workflow by OIDC — a short-lived token minted for this
+# run, tied to this repository. There is no npm token stored in the repository
+# or on anyone's laptop, so there is nothing to leak, and every release on npm
+# is traceable to the commit that produced it.
+#
+# Requires the package to be linked to this workflow as a trusted publisher on
+# npmjs.com. See the release notes in CONTRIBUTING.md.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and check everything, but do not publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  # The whole point: lets npm mint a short-lived credential for this run.
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      # Trusted publishing needs npm 11.5.1 or newer; the bundled one is older.
+      - name: Use an npm that can do trusted publishing
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      # Publishing something that does not pass its own checks would be worse
+      # than not publishing at all, and npm releases cannot be taken back.
+      - name: Test
+        run: bun run test
+
+      - name: Type check
+        run: bunx nuxi typecheck
+
+      # A release tagged v0.2.0 that ships 0.1.0 is the kind of mistake nobody
+      # notices until someone reports a bug against a version that never existed.
+      - name: Check the tag matches the version
+        if: github.event_name == 'release'
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $VERSION."
+            exit 1
+          fi
+          echo "Tag and version agree on $VERSION."
+
+      # `prepublishOnly` builds and `prepack` dereferences Nitro's symlinks, so
+      # both run as part of this — see scripts/dereference-output.mjs for why
+      # the second one is not optional.
+      - name: Publish
+        if: github.event_name == 'release' || inputs.dry_run == false
+        run: npm publish
+
+      - name: Dry run
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: npm publish --dry-run
