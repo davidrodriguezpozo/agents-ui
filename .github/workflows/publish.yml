@@ -71,9 +71,21 @@ jobs:
       # `prepublishOnly` builds and `prepack` dereferences Nitro's symlinks, so
       # both run as part of this — see scripts/dereference-output.mjs for why
       # the second one is not optional.
+      # Releasing the same version twice should be a quiet no-op, not a red
+      # run. It happens for ordinary reasons — tagging a version that was
+      # published by hand, re-running a job after a transient failure — and a
+      # release pipeline that cannot be run twice is one nobody trusts to run
+      # once. The tag-versus-version check above is what catches the mistake
+      # this would otherwise hide.
       - name: Publish
         if: github.event_name == 'release' || inputs.dry_run == false
-        run: npm publish
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "agents-studio@$VERSION" version > /dev/null 2>&1; then
+            echo "agents-studio@$VERSION is already on the registry — nothing to do."
+            exit 0
+          fi
+          npm publish
 
       # `npm publish --dry-run` still asks the registry, and the registry
       # refuses a version that already exists — so a plain dry run fails every
