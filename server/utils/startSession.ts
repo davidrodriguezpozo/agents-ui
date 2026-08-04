@@ -4,6 +4,7 @@ import {
   branchNameFor,
   createWorktree,
   currentBranch,
+  hasCommits,
   isGitRepo,
   worktreePathFor,
 } from './worktrees'
@@ -33,6 +34,20 @@ export async function startSession(options: {
       data: {
         error: 'not_a_repo',
         message: `${basename(repoDir)} is not a git repository, so it cannot be branched for parallel work.`,
+      },
+    })
+  }
+
+  // A session is a branch and a checkout, and neither can exist before there is
+  // a commit to cut them from. Said here, where it is still a sentence about
+  // your repository, rather than leaking out of git as an invalid object name.
+  if (!(await hasCommits(repoDir))) {
+    throw createError({
+      statusCode: 400,
+      data: {
+        error: 'no_commits',
+        message: `${basename(repoDir)} has no commits yet, and a session needs one to branch from. `
+          + 'Make the first commit — even an empty one — and it will work from there.',
       },
     })
   }

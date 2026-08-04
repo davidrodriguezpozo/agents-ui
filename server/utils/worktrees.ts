@@ -142,6 +142,25 @@ export async function isGitRepo(dir: string): Promise<boolean> {
 }
 
 /**
+ * Whether this repository has anything to branch from.
+ *
+ * A freshly `git init`ed directory is a real repository with no commits, and
+ * `HEAD` does not resolve in one. Every path here assumed otherwise: the branch
+ * lookup fell back to the literal string "HEAD", which was then handed to
+ * `git worktree add` as a starting point and came back as "fatal: not a valid
+ * object name: 'HEAD'" — true, unhelpful, and nothing to do with what the
+ * person actually needed to hear.
+ */
+export async function hasCommits(repoDir: string): Promise<boolean> {
+  try {
+    await git(repoDir, ['rev-parse', '--verify', 'HEAD'])
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
  * Compare paths by their resolved form. Git reports worktree paths with
  * symlinks already resolved, so comparing them to a path we composed ourselves
  * fails on any machine where part of the path is a symlink — and a session that

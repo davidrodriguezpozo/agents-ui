@@ -1,6 +1,6 @@
 import { getProjectDir } from '../../utils/scope'
 import { newSessionId, saveSession, type Session } from '../../utils/sessions'
-import { createWorktreeOn, currentBranch, isGitRepo, worktreePathFor } from '../../utils/worktrees'
+import { createWorktreeOn, currentBranch, hasCommits, isGitRepo, worktreePathFor } from '../../utils/worktrees'
 import {
   defaultRemote,
   fetchPullRequestBranch,
@@ -34,6 +34,20 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 400,
       data: { error: 'not_a_repo', message: 'That folder is not a git repository.' },
+    })
+  }
+
+  // Same trap as starting from scratch: with no commits the branch lookup
+  // below yields the literal string "HEAD" and git rejects it further down,
+  // by which point the error is about object names rather than about you.
+  if (!(await hasCommits(repoDir))) {
+    throw createError({
+      statusCode: 400,
+      data: {
+        error: 'no_commits',
+        message: 'This repository has no commits yet, so there is no branch to work from. '
+          + 'Make the first commit and try again.',
+      },
     })
   }
 
