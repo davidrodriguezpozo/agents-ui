@@ -66,14 +66,23 @@ A ritual due at 08:00 only happens if something is running at 08:00, so a server
 started in a terminal yesterday is not enough.
 
 ```bash
-npx agents-ui install      # starts at login, comes back after a crash
-npx agents-ui status       # is it installed, is it answering
-npx agents-ui uninstall    # stop doing that — nothing you own is touched
+bun run build                     # the service runs the build, not the dev server
+node bin/start.mjs install        # starts at login, comes back after a crash
+node bin/start.mjs status         # is it installed, is it answering
+node bin/start.mjs uninstall      # stop doing that — nothing you own is touched
 ```
+
+Run these from the repository — this package is not published, so `npx agents-ui` only
+finds it from in here.
 
 This registers a launchd agent on macOS or a systemd user unit on Linux, and captures the
 `PATH` of the shell you install from — a service otherwise gets a bare one with no `claude`
 in it, and every run would fail at 08:00 with nobody watching.
+
+Two things it cannot do for you: it will not wake a sleeping machine (an overdue ritual
+still fires if you open the lid within a couple of hours, and is skipped after that rather
+than arriving at teatime), and it keeps serving the build it was installed against — so
+after changing code, rebuild and reinstall.
 
 ---
 
