@@ -71,6 +71,10 @@ copy until you merge it.
 The list is about *what each session has produced* — files changed, commits, work still
 uncommitted, turns taken — rather than about the fact that something is running.
 
+A turn heading in the wrong direction can be stopped from the session itself. Stopping ends
+the turn, not the work: whatever it already wrote is still in the workspace, and still in
+the diff.
+
 ![Every worktree git actually knows about](docs/screenshots/02-worktrees-on-disk.jpg)
 
 Checkouts live in `.worktrees/` inside your repo and are hidden from `git status` via
@@ -113,6 +117,17 @@ offers the one narrow rule it needed — `Bash(gh issue edit:*)`, not full acces
 
 ![A ritual that stopped on a permission prompt](docs/screenshots/07-ritual-needs-permission.jpg)
 
+### Whether it still works
+
+The useful question about a ritual is not what happened last time — it's whether it has
+quietly stopped working. Each one carries its recent outcomes and expands into them: what
+happened, why, what it cost. When the last few runs in a row came to nothing, the row says
+so, and says when it last worked.
+
+A finished run is not automatically a successful one. A ritual refused a tool it needed
+completes with half the job undone, so that counts against it. A run you stopped by hand
+does not.
+
 ---
 
 ## Activity
@@ -120,6 +135,9 @@ offers the one narrow rule it needed — `Bash(gh issue edit:*)`, not full acces
 Every run there has ever been — scheduled work, agent invocations and session turns —
 with what it cost, how long it took and how it ended. Runs keep going if you close the
 tab; the log replays for whoever attaches next.
+
+Filter by what started it and how it ended, and search what a run *said* rather than only
+what it was called. Searching covers the whole log, not the page of it on screen.
 
 ![Run history with cost, duration and outcome](docs/screenshots/09-activity.jpg)
 
