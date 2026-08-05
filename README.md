@@ -8,6 +8,7 @@ Run several sessions at once, put recurring work on a schedule,
 and see everything Claude has done for you — without leaving the browser.
 
 <a href="#quick-start">Quick start</a> ·
+<a href="#projects">Projects</a> ·
 <a href="#sessions">Sessions</a> ·
 <a href="#daily-rituals">Rituals</a> ·
 <a href="#activity">Activity</a> ·
@@ -33,6 +34,7 @@ trapped inside it.
 
 | Section | What it's for |
 | --- | --- |
+| **Projects** | The repositories you work in — switch between them in a click |
 | **Sessions** | Several pieces of work at once, each on its own branch and its own checkout |
 | **Daily** | Rituals — work that runs on a schedule, so the result is waiting when you get in |
 | **Activity** | Every run there has ever been, with cost, duration and outcome |
@@ -51,8 +53,9 @@ npm install -g agents-studio
 agents-studio
 ```
 
-Open **http://localhost:3000**. Pick the project you want to work on from the bottom
-of the sidebar — that's the repository sessions will branch from.
+Open **http://localhost:3000**. Add the project you want to work on from the bottom
+of the sidebar — that's the repository sessions will branch from. Add as many as you
+work in; switching between them is a click.
 
 To try it once without installing, `npx agents-studio` works too — though it re-downloads
 about 19MB whenever the cache misses, so the global install is the better home for
@@ -159,6 +162,33 @@ Two things it cannot do for you: it will not wake a sleeping machine (an overdue
 still fires if you open the lid within a couple of hours, and is skipped after that rather
 than arriving at teatime), and it keeps serving the build it was installed against — so
 after changing code, or after updating the package, install again.
+
+---
+
+## Projects
+
+The repositories you work in, in a list at the bottom of the sidebar. Add one and it
+stays; switching between them is a click, and each says what branch it is on and how
+many sessions it holds.
+
+The list lives on disk next to your sessions, not in the browser, so it survives closing
+the tab and is the same list whichever browser you open. Removing one is removing a
+bookmark: the repository, its worktrees and the sessions that branched from it are all
+left exactly where they were.
+
+One project is *active* at a time, because project-scoped configuration comes from
+exactly one `.claude` directory and pretending otherwise would make "which agents do I
+have" unanswerable. Everything that isn't configuration spans all of them:
+
+- **Sessions** are grouped by repository, so work waiting on you in a project you are
+  not currently in still says so — rather than being a title on a row with no status.
+- **Rituals** stay pinned to the repository they were created against. Editing one from
+  somewhere else changes its time, not where it runs.
+- **Checks** are set per project, as they always were.
+
+**No project** is a real choice too, and the last item in the switcher. It works against
+your personal `~/.claude` alone, which is what you want when the agents and skills you
+are editing are not any one repository's.
 
 ---
 

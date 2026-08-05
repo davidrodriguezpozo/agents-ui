@@ -1,4 +1,5 @@
 import { basename } from 'node:path'
+import { addProject } from './projects'
 import { newSessionId, saveSession, type Session } from './sessions'
 import {
   branchNameFor,
@@ -63,6 +64,12 @@ export async function startSession(options: {
     branch,
     baseRef: baseBranch,
   })
+
+  // A repository worth branching is a project worth listing. Added rather than
+  // activated: this can be reached from a session started against a path that
+  // came from somewhere else, and moving what the person is looking at is not
+  // part of what they asked for.
+  await addProject(repoDir).catch(() => {})
 
   const now = Date.now()
 

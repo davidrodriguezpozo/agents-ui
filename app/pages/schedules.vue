@@ -8,6 +8,8 @@ const {
   fetchAll, remove, setEnabled, adopt, revokeRule,
 } = useSchedules()
 const { describeRule } = usePermissionRuleLabels()
+const { nameFor, ensureLoaded: ensureProjectsLoaded } = useProjects()
+const { workingDir } = useWorkingDir()
 const toast = useToast()
 
 const editing = ref<Schedule | null>(null)
@@ -15,7 +17,7 @@ const showModal = ref(false)
 const adopting = ref<string | null>(null)
 const expanded = ref<string | null>(null)
 
-onMounted(fetchAll)
+onMounted(() => Promise.all([fetchAll(), ensureProjectsLoaded()]))
 
 function createNew() {
   editing.value = null
@@ -173,6 +175,18 @@ function nextLabel(schedule: Schedule) {
                 <span>{{ schedule.description }}</span>
                 <span>·</span>
                 <span>{{ nextLabel(schedule) }}</span>
+                <!--
+                  Which repository this runs against. Said only when it is not
+                  the one you are in: with several projects, "a briefing at
+                  08:00" stops being a complete description of a ritual.
+                -->
+                <template v-if="schedule.projectDir && schedule.projectDir !== workingDir">
+                  <span>·</span>
+                  <span class="flex items-center gap-1 truncate" :title="schedule.projectDir">
+                    <UIcon name="i-lucide-folder-git-2" class="size-2.5 shrink-0" />
+                    {{ nameFor(schedule.projectDir) }}
+                  </span>
+                </template>
               </div>
 
               <!-- A ritual nobody watches fails quietly, so say it on the row -->

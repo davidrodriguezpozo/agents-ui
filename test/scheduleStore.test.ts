@@ -108,3 +108,46 @@ describe('a damaged ritual file', () => {
     expect(saved.map(s => s.title)).toEqual(['briefing'])
   })
 })
+
+/**
+ * Which repository a ritual runs in used to be unambiguous, because there was
+ * only one to be in. With several, an edit made from the wrong one could move
+ * a ritual without saying so — a morning briefing quietly reporting on
+ * somebody else's repository is the kind of failure nobody goes looking for.
+ */
+describe('the project a ritual is pinned to', () => {
+  it('takes the project you are in when the ritual is new', () => {
+    expect(schedules.projectDirForSave({}, '/repo/a')).toBe('/repo/a')
+  })
+
+  it('takes nothing on an edit, so the ritual keeps where it runs', () => {
+    expect(schedules.projectDirForSave({ id: 'r1' }, '/repo/b')).toBeUndefined()
+  })
+
+  it('still honours a project named outright, on a new ritual or an edit', () => {
+    expect(schedules.projectDirForSave({ projectDir: '/repo/c' }, '/repo/a')).toBe('/repo/c')
+    expect(schedules.projectDirForSave({ id: 'r1', projectDir: '/repo/c' }, '/repo/a')).toBe('/repo/c')
+  })
+
+  it('leaves a new ritual unpinned when no project is selected', () => {
+    expect(schedules.projectDirForSave({}, null)).toBeUndefined()
+  })
+
+  it('keeps the original project through an edit, end to end', async () => {
+    const created = await schedules.upsertSchedule({
+      ...ritual('briefing'),
+      projectDir: schedules.projectDirForSave({}, '/repo/a'),
+    })
+
+    // The same ritual, edited while a different project is selected.
+    const edited = await schedules.upsertSchedule({
+      ...ritual('briefing'),
+      id: created.id,
+      recurrence: { hour: 9, minute: 30, days: [1] },
+      projectDir: schedules.projectDirForSave({ id: created.id }, '/repo/b'),
+    })
+
+    expect(edited.projectDir).toBe('/repo/a')
+    expect(edited.recurrence.hour).toBe(9)
+  })
+})

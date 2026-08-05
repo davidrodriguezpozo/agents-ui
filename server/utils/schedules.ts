@@ -128,6 +128,24 @@ export function describeRecurrence(recurrence: Recurrence): string {
 
 export { permissionModeFor }
 
+/**
+ * Which repository a ritual should be pinned to when it is saved.
+ *
+ * A new ritual takes the project you are in, because the scheduler has no idea
+ * what is selected at 08:00 and there is nobody to ask. An edit takes nothing:
+ * `undefined` here lets `upsertSchedule` keep what the ritual already had, so
+ * changing a ritual's time from a different project does not quietly move
+ * where it runs. Invisible while there was only one project to be in.
+ */
+export function projectDirForSave(
+  body: { id?: string; projectDir?: string },
+  currentProjectDir: string | null,
+): string | undefined {
+  if (body.projectDir) return body.projectDir
+  if (body.id) return undefined
+  return currentProjectDir ?? undefined
+}
+
 export async function upsertSchedule(input: Partial<Schedule> & { input: string; title: string }): Promise<Schedule> {
   const recurrence = normalizeRecurrence(input.recurrence)
 

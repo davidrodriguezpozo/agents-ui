@@ -10,6 +10,7 @@ const {
 const { fetchAll: fetchWorktrees } = useWorktrees()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
+const { nameFor, activate, ensureLoaded: ensureProjectsLoaded } = useProjects()
 const router = useRouter()
 const toast = useToast()
 
@@ -118,7 +119,7 @@ async function onAdopt(sdkSessionId: string) {
 }
 
 onMounted(async () => {
-  await Promise.all([fetchAll(), fetchWorktrees(), fetchTranscripts()])
+  await Promise.all([fetchAll(), fetchWorktrees(), fetchTranscripts(), ensureProjectsLoaded()])
   // Only poll while something could change on its own.
   poll = setInterval(() => {
     if (sessions.value.some(s => s.activity === 'working')) fetchAll()
@@ -163,25 +164,21 @@ function relative(ts: number) {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
-function repoName(session: Session) {
-  return session.repoDir.split('/').filter(Boolean).pop() ?? session.repoDir
-}
-
 /**
- * Two things earn a card an outline: it is waiting on you, or it has produced
- * something that does not work. Both are cases where scrolling past would be a
- * mistake, which is the only thing an outline is for.
+ * Which projects the list covers.
+ *
+ * Kept in shared state rather than in the component, so going into a session
+ * and coming back does not quietly narrow the view again — a person who asked
+ * to see everything meant it for longer than one navigation.
  */
-function cardAccent(session: Session) {
-  if (session.activity === 'awaiting-permission') return 'border-color: var(--accent-glow);'
-  if (session.activity === 'idle' && session.check?.status === 'failing') {
-    return 'border-color: var(--error);'
-  }
-  return undefined
-}
+const scope = useState<'here' | 'all'>('sessions-scope', () => 'here')
+
+// With no project selected there is no "here" to narrow to, and the toggle
+// would be a control with one working position.
+watchEffect(() => { if (!workingDir.value) scope.value = 'all' })
 
 /** Sessions needing an answer come first — they are the ones blocking. */
-const ordered = computed(() => {
+function byUrgency(a: Session, b: Session) {
   const rank = { 'awaiting-permission': 0, working: 2, failed: 3, idle: 4, missing: 5 }
 
   // A session that finished and does not work needs you almost as much as one
@@ -190,16 +187,85 @@ const ordered = computed(() => {
   const rankOf = (s: Session) =>
     s.activity === 'idle' && s.check?.status === 'failing' ? 1 : rank[s.activity]
 
-  return [...here.value].sort(
-    (a, b) => rankOf(a) - rankOf(b) || b.updatedAt - a.updatedAt,
-  )
+  return rankOf(a) - rankOf(b) || b.updatedAt - a.updatedAt
+}
+
+/** A session nobody has answered is the reason to look at another project. */
+function needsYou(list: Session[]) {
+  return list.filter(
+    s => s.activity === 'awaiting-permission'
+      || (s.activity === 'idle' && s.check?.status === 'failing'),
+  ).length
+}
+
+const elsewhereNeedsYou = computed(() => needsYou(elsewhere.value))
+
+/**
+ * Sessions by repository. The project you are in leads, and the rest follow by
+ * whichever has been touched most recently — the same order the switcher uses,
+ * so the two never disagree about what "recent" means.
+ */
+const groups = computed(() => {
+  const visible = scope.value === 'here' ? here.value : sessions.value
+  const byRepo = new Map<string, Session[]>()
+
+  for (const session of visible) {
+    const existing = byRepo.get(session.repoDir)
+    if (existing) existing.push(session)
+    else byRepo.set(session.repoDir, [session])
+  }
+
+  return [...byRepo.entries()]
+    .map(([path, list]) => ({
+      path,
+      name: nameFor(path),
+      isActive: path === workingDir.value,
+      sessions: [...list].sort(byUrgency),
+      needsYou: needsYou(list),
+    }))
+    .sort((a, b) => {
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1
+      // A project with something blocked outranks one that is merely recent.
+      if (Boolean(a.needsYou) !== Boolean(b.needsYou)) return a.needsYou ? -1 : 1
+      return (b.sessions[0]?.updatedAt ?? 0) - (a.sessions[0]?.updatedAt ?? 0)
+    })
 })
+
+/** One project needs no heading to say which project it is. */
+const showProjectHeadings = computed(() => groups.value.length > 1)
+
+async function switchTo(path: string) {
+  await activate(path)
+  scope.value = 'here'
+}
 </script>
 
 <template>
   <div>
     <PageHeader width="narrow" title="Sessions">
       <template #trailing>
+        <!--
+          Only worth a control when there is somewhere else to look. One project
+          means one possible answer, and a toggle with one position is furniture.
+        -->
+        <div
+          v-if="workingDir && elsewhere.length"
+          class="flex items-center gap-0.5 p-0.5 rounded-md"
+          style="background: var(--input-bg); border: 1px solid var(--border-subtle);"
+        >
+          <button
+            v-for="option in [{ value: 'here' as const, label: 'This project' }, { value: 'all' as const, label: 'All projects' }]"
+            :key="option.value"
+            class="px-2 py-0.5 rounded text-[10px] font-medium transition-all"
+            :style="{
+              background: scope === option.value ? 'var(--accent-muted)' : 'transparent',
+              color: scope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+            }"
+            @click="scope = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
         <span v-if="sessions.length" class="type-mono-meta">{{ sessions.length }}</span>
         <SessionStatus
           v-if="needsYouCount"
@@ -359,95 +425,77 @@ const ordered = computed(() => {
         <SkeletonRow v-for="i in 3" :key="i" />
       </div>
 
-      <!-- Sessions in the current project -->
-      <div v-else-if="ordered.length" class="space-y-2">
-        <NuxtLink
-          v-for="session in ordered"
-          :key="session.id"
-          :to="`/sessions/${session.id}`"
-          class="block rounded-md p-4 focus-ring hover-card bg-card"
-          :style="cardAccent(session)"
-        >
-          <div class="flex items-start gap-3">
-            <div class="flex-1 min-w-0 space-y-1.5">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="type-strong truncate">{{ session.title }}</span>
-                <SessionStatus
-                  :activity="session.activity"
-                  :changed-files="session.worktree.changedFiles"
-                  :dirty="session.worktree.dirty"
-                  :check="session.check"
-                />
-              </div>
-
-              <!--
-                What it did, in words. The counts below say how much changed;
-                this is the only thing on the row that says what the change
-                was, which is what you actually decide on.
-              -->
-              <p v-if="session.summary" class="type-detail leading-snug" style="color: var(--text-secondary);">
-                {{ session.summary.text }}
-              </p>
-
-              <!-- What it has produced, which is what you decide on -->
-              <div class="flex items-center gap-3 type-meta">
-                <span v-if="session.worktree.changedFiles" class="flex items-center gap-1">
-                  <UIcon name="i-lucide-file-diff" class="size-3 shrink-0" />
-                  {{ session.worktree.changedFiles }} file{{ session.worktree.changedFiles === 1 ? '' : 's' }}
-                </span>
-                <span v-if="session.worktree.ahead" class="flex items-center gap-1">
-                  <UIcon name="i-lucide-git-commit-horizontal" class="size-3 shrink-0" />
-                  {{ session.worktree.ahead }} commit{{ session.worktree.ahead === 1 ? '' : 's' }}
-                </span>
-                <span v-if="session.worktree.dirty" style="color: var(--accent);">uncommitted</span>
-                <span v-if="session.turnCount" class="flex items-center gap-1">
-                  <UIcon name="i-lucide-message-square" class="size-3 shrink-0" />
-                  {{ session.turnCount }}
-                </span>
-                <span v-if="!session.worktree.changedFiles && !session.turnCount">
-                  Nothing yet
-                </span>
-              </div>
-            </div>
-
-            <span class="type-mono-meta shrink-0">{{ relative(session.updatedAt) }}</span>
+      <!--
+        Grouped by repository rather than split into "here" and "everything
+        else". A session that is blocked is blocked whichever project it is in,
+        and the old shape made that answerable only after switching.
+      -->
+      <div v-else-if="groups.length" class="space-y-6">
+        <div v-for="group in groups" :key="group.path" class="space-y-2">
+          <div v-if="showProjectHeadings" class="flex items-center gap-2">
+            <UIcon
+              name="i-lucide-folder-git-2"
+              class="size-3.5 shrink-0"
+              :style="{ color: group.isActive ? 'var(--accent)' : 'var(--text-disabled)' }"
+            />
+            <h2 class="text-section-label !mb-0">{{ group.name }}</h2>
+            <span v-if="group.needsYou" class="type-meta" style="color: var(--error);">
+              {{ group.needsYou }} needing you
+            </span>
+            <button
+              v-if="!group.isActive"
+              class="ml-auto type-meta px-2 py-0.5 rounded hover-bg shrink-0"
+              style="color: var(--text-disabled);"
+              title="Work in this project"
+              @click="switchTo(group.path)"
+            >
+              Switch to it
+            </button>
           </div>
 
-          <!-- Branch detail last: useful, but not what you scan for -->
-          <div class="flex items-center gap-1.5 mt-2.5 pt-2.5 type-mono-meta" style="border-top: 1px solid var(--border-subtle);">
-            <UIcon name="i-lucide-git-branch" class="size-2.5 shrink-0" />
-            <span class="truncate">{{ session.branch }}</span>
-            <span class="shrink-0">from {{ session.baseBranch }}</span>
-          </div>
-        </NuxtLink>
+          <!--
+            The repository is named once. A heading says it for a group, and
+            the sidebar says it for the project you are already in — so the
+            card only carries it in the one case neither covers: a single
+            group that is not the project you are looking at.
+          -->
+          <SessionCard
+            v-for="session in group.sessions"
+            :key="session.id"
+            :session="session"
+            :repo-name="showProjectHeadings || group.isActive ? null : group.name"
+          />
+        </div>
       </div>
 
       <EmptyState
         v-else-if="workingDir"
         icon="i-lucide-git-branch"
-        title="No sessions in this project"
+        :title="scope === 'here' ? 'No sessions in this project' : 'No sessions yet'"
         description="Start one to give Claude its own copy of this project to work in. You can run several at once and review each one's changes before keeping them."
       />
 
-      <!-- Sessions elsewhere, so they never vanish just because the folder changed -->
-      <div v-if="elsewhere.length" class="space-y-2">
-        <h2 class="text-section-label">In other projects</h2>
-        <NuxtLink
-          v-for="session in elsewhere"
-          :key="session.id"
-          :to="`/sessions/${session.id}`"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-md group focus-ring hover-row"
-        >
-          <UIcon name="i-lucide-folder-git-2" class="size-3.5 shrink-0 text-meta" />
-          <span class="type-detail truncate flex-1">{{ session.title }}</span>
-          <span class="type-mono-meta shrink-0">{{ repoName(session) }}</span>
-          <SessionStatus
-            :activity="session.activity"
-            :changed-files="session.worktree.changedFiles"
-            compact
-          />
-        </NuxtLink>
-      </div>
+      <!--
+        The way back to work happening somewhere else. Only worth saying when
+        the current view is hiding some of it.
+      -->
+      <button
+        v-if="scope === 'here' && elsewhere.length"
+        class="w-full flex items-center gap-2 px-3 py-2.5 rounded-md hover-row focus-ring"
+        style="border: 1px dashed var(--border-subtle);"
+        @click="scope = 'all'"
+      >
+        <UIcon name="i-lucide-folders" class="size-3.5 shrink-0 text-meta" />
+        <span class="type-detail">
+          {{ elsewhere.length }} session{{ elsewhere.length === 1 ? '' : 's' }} in other projects
+        </span>
+        <span
+          v-if="elsewhereNeedsYou"
+          class="type-meta"
+          style="color: var(--error);"
+        >{{ elsewhereNeedsYou }} needing you</span>
+        <span class="ml-auto type-meta" style="color: var(--accent);">Show</span>
+      </button>
 
       <!-- Always visible, so worktrees never accumulate unnoticed -->
       <WorktreePanel />

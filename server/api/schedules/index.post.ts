@@ -1,4 +1,9 @@
-import { describeRecurrence, upsertSchedule, type Schedule } from '../../utils/schedules'
+import {
+  describeRecurrence,
+  projectDirForSave,
+  upsertSchedule,
+  type Schedule,
+} from '../../utils/schedules'
 import { getProjectDir } from '../../utils/scope'
 
 export default defineEventHandler(async (event) => {
@@ -15,8 +20,7 @@ export default defineEventHandler(async (event) => {
     ...body,
     input: body.input.trim(),
     title: body.title.trim(),
-    // Pin the folder now — the scheduler has no idea what's selected later.
-    projectDir: body.projectDir ?? getProjectDir(event) ?? undefined,
+    projectDir: projectDirForSave(body, getProjectDir(event)),
   })
 
   return { ...schedule, description: describeRecurrence(schedule.recurrence) }
