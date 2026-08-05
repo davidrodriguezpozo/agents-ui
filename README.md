@@ -182,8 +182,10 @@ have" unanswerable. Everything that isn't configuration spans all of them:
 
 - **Sessions** are grouped by repository, so work waiting on you in a project you are
   not currently in still says so — rather than being a title on a row with no status.
-- **Rituals** stay pinned to the repository they were created against. Editing one from
-  somewhere else changes its time, not where it runs.
+- **Rituals** are pinned to a repository, chosen when you write one and defaulting to
+  the project you are in. Editing one from somewhere else changes its time, not where
+  it runs. *No project* is available here too, for a ritual that works on your own
+  configuration rather than on any one repository.
 - **Checks** are set per project, as they always were.
 
 **No project** is a real choice too, and the last item in the switcher. It works against

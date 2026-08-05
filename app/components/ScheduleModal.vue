@@ -13,8 +13,48 @@ const props = defineProps<{
 const emit = defineEmits<{ saved: [Schedule]; close: [] }>()
 
 const { save } = useSchedules()
-const { workingDir, displayPath } = useWorkingDir()
+const { workingDir } = useWorkingDir()
+const { projects, ensureLoaded: ensureProjectsLoaded, display } = useProjects()
 const toast = useToast()
+
+/**
+ * Which repository this runs against, pinned now because at 08:00 there is
+ * nobody to ask and nothing selected to read.
+ *
+ * A new ritual defaults to the project you are in — the overwhelmingly common
+ * intent, and what it always did. An edit keeps whatever the ritual already
+ * had, including a project you are not currently in: a briefing pinned to one
+ * repository should not follow you around because you opened its settings from
+ * somewhere else.
+ *
+ * The empty string is "no project", which is a real answer for a ritual that
+ * works on your personal config rather than on any one repository. It is sent
+ * as `null` so the server can tell it apart from having said nothing.
+ */
+const projectDir = ref<string>(
+  props.schedule
+    ? props.schedule.projectDir ?? ''
+    : workingDir.value,
+)
+
+onMounted(ensureProjectsLoaded)
+
+/**
+ * A ritual can be pinned to a repository that is no longer on the list —
+ * removed since, or seeded from before it existed. Dropping it from the
+ * options would silently repoint the ritual the next time anyone saved it.
+ */
+const options = computed(() => {
+  const known = projects.value.map(p => ({ path: p.path, name: p.name, missing: !p.exists }))
+  if (projectDir.value && !known.some(o => o.path === projectDir.value)) {
+    known.unshift({
+      path: projectDir.value,
+      name: projectDir.value.split('/').filter(Boolean).pop() ?? projectDir.value,
+      missing: true,
+    })
+  }
+  return known
+})
 
 const title = ref(props.schedule?.title ?? props.presetTitle ?? '')
 const input = ref(props.schedule?.input ?? props.presetInput ?? '')
@@ -53,6 +93,9 @@ async function onSave() {
       recurrence: { hour: hour.value, minute: minute.value, days: days.value },
       permission: permission.value,
       enabled: props.schedule?.enabled ?? true,
+      // Always sent, so the answer is this form's rather than whatever project
+      // happened to be selected when the request went out.
+      projectDir: projectDir.value || null,
     })
     toast.add({ title: isEdit.value ? 'Ritual updated' : `"${saved.title}" scheduled`, color: 'success' })
     emit('saved', saved)
@@ -112,17 +155,17 @@ async function onSave() {
     </div>
 
     <!-- Where it will run, pinned now because the scheduler can't ask later -->
-    <div
-      class="rounded-md px-3 py-2.5 flex items-start gap-2.5"
-      style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
-    >
-      <UIcon name="i-lucide-folder" class="size-3.5 shrink-0 mt-0.5" style="color: var(--accent);" />
-      <div class="flex-1 min-w-0">
-        <div class="text-[11px] font-medium text-body">Always runs in</div>
-        <div class="font-mono text-[10px] truncate text-meta">
-          {{ displayPath || 'your Claude settings folder' }}
-        </div>
-      </div>
+    <div class="field-group">
+      <label class="field-label">Always runs in</label>
+      <select v-model="projectDir" class="field-select w-full">
+        <option v-for="option in options" :key="option.path" :value="option.path">
+          {{ option.name }}{{ option.missing ? ' — not on disk' : '' }}
+        </option>
+        <option value="">No project — your Claude settings folder</option>
+      </select>
+      <span class="field-hint font-mono">
+        {{ projectDir ? display(projectDir) : 'Runs against ~/.claude, with no repository of its own.' }}
+      </span>
     </div>
 
     <!-- Decided here, because 8am with nobody watching is the wrong time to ask -->

@@ -98,7 +98,14 @@ export function useSchedules() {
     }
   }
 
-  async function save(schedule: Partial<Schedule>): Promise<Schedule> {
+  /**
+   * `projectDir: null` says "no project, on purpose", which the server has to
+   * be able to tell from having said nothing — otherwise a ritual could be
+   * pinned to a repository but never unpinned.
+   */
+  async function save(
+    schedule: Partial<Omit<Schedule, 'projectDir'>> & { projectDir?: string | null },
+  ): Promise<Schedule> {
     const saved = await $fetch<Schedule>('/api/schedules', { method: 'POST', body: schedule })
     const idx = schedules.value.findIndex(s => s.id === saved.id)
     if (idx >= 0) schedules.value[idx] = saved

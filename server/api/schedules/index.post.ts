@@ -7,7 +7,10 @@ import {
 import { getProjectDir } from '../../utils/scope'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody<Partial<Schedule>>(event)
+  // `projectDir` is nullable on the way in — see projectDirForSave.
+  const body = await readBody<
+    Partial<Omit<Schedule, 'projectDir'>> & { projectDir?: string | null }
+  >(event)
 
   if (!body?.input?.trim()) {
     throw createError({ statusCode: 400, message: 'input is required' })

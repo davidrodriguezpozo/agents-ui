@@ -133,6 +133,27 @@ describe('the project a ritual is pinned to', () => {
     expect(schedules.projectDirForSave({}, null)).toBeUndefined()
   })
 
+  it('tells "none, on purpose" apart from having said nothing', () => {
+    // Without this a ritual could be pinned but never unpinned, because both
+    // answers would arrive as the same absent value.
+    expect(schedules.projectDirForSave({ id: 'r1', projectDir: null }, '/repo/a')).toBeNull()
+    expect(schedules.projectDirForSave({ id: 'r1' }, '/repo/a')).toBeUndefined()
+  })
+
+  it('clears the project when asked to, and only then', async () => {
+    const created = await schedules.upsertSchedule({ ...ritual('briefing'), projectDir: '/repo/a' })
+
+    const kept = await schedules.upsertSchedule({ ...ritual('briefing'), id: created.id })
+    expect(kept.projectDir).toBe('/repo/a')
+
+    const cleared = await schedules.upsertSchedule({
+      ...ritual('briefing'),
+      id: created.id,
+      projectDir: null,
+    })
+    expect(cleared.projectDir).toBeUndefined()
+  })
+
   it('keeps the original project through an edit, end to end', async () => {
     const created = await schedules.upsertSchedule({
       ...ritual('briefing'),

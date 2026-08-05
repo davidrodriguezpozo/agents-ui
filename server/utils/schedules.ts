@@ -131,22 +131,33 @@ export { permissionModeFor }
 /**
  * Which repository a ritual should be pinned to when it is saved.
  *
- * A new ritual takes the project you are in, because the scheduler has no idea
- * what is selected at 08:00 and there is nobody to ask. An edit takes nothing:
- * `undefined` here lets `upsertSchedule` keep what the ritual already had, so
- * changing a ritual's time from a different project does not quietly move
- * where it runs. Invisible while there was only one project to be in.
+ * Three answers, not two, which is why this is not a `??` chain:
+ *
+ *   - A named project is used as given, on a new ritual or an edit.
+ *   - `null` means "none, on purpose" — the ritual runs against your personal
+ *     `~/.claude` alone. Without a way to say this, a ritual could be pinned but
+ *     never unpinned, because "no project" and "did not say" would be the same
+ *     value.
+ *   - Absent means "did not say". On a new ritual that takes the project you
+ *     are in, because the scheduler has no idea what is selected at 08:00 and
+ *     there is nobody to ask. On an edit it takes nothing, so changing a
+ *     ritual's time from a different project does not quietly move where it
+ *     runs — invisible while there was only one project to be in.
  */
 export function projectDirForSave(
-  body: { id?: string; projectDir?: string },
+  body: { id?: string; projectDir?: string | null },
   currentProjectDir: string | null,
-): string | undefined {
+): string | null | undefined {
+  if (body.projectDir === null) return null
   if (body.projectDir) return body.projectDir
   if (body.id) return undefined
   return currentProjectDir ?? undefined
 }
 
-export async function upsertSchedule(input: Partial<Schedule> & { input: string; title: string }): Promise<Schedule> {
+export async function upsertSchedule(
+  input: Partial<Omit<Schedule, 'projectDir'>>
+    & { input: string; title: string; projectDir?: string | null },
+): Promise<Schedule> {
   const recurrence = normalizeRecurrence(input.recurrence)
 
   return scheduleStore.update((schedules) => {
@@ -159,7 +170,9 @@ export async function upsertSchedule(input: Partial<Schedule> & { input: string;
       input: input.input,
       invocation: input.invocation ?? existing?.invocation,
       agentSlug: input.agentSlug ?? existing?.agentSlug,
-      projectDir: input.projectDir ?? existing?.projectDir,
+      // `null` is "no project, on purpose" and must clear what is there;
+      // absent is "did not say" and must keep it. See projectDirForSave.
+      projectDir: input.projectDir === null ? undefined : input.projectDir ?? existing?.projectDir,
       recurrence,
       permission: input.permission ?? existing?.permission ?? 'edits',
       allowRules: mergeRules(input.allowRules ?? existing?.allowRules ?? []),
