@@ -74,6 +74,8 @@ function openRun(cmd: Command) {
         </p>
       </div>
 
+      <WhileYouWereAway />
+
       <!-- Working folder -->
       <div
         class="rounded-lg px-4 py-3 flex items-center gap-3"

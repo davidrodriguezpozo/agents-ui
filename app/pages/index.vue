@@ -186,6 +186,13 @@ const statItems = computed(() => [
     <PageHeader title="Dashboard" />
 
     <div class="px-6 py-5 stagger-section space-y-5">
+      <!--
+        What happened while you were away, above everything else. The counters
+        below say how much you own; this says what changed, which is the reason
+        to have opened the page at all.
+      -->
+      <WhileYouWereAway v-if="hasContent" />
+
       <!-- Hero stat bar. Hidden on first run: a row of zeros is a worse
            opening than the welcome that follows it, and counts only mean
            something once there is something to count. -->
