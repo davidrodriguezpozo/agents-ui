@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseMcpList, parseMcpLine } from '../server/utils/mcp'
+import { addArgs, invalidName, parseMcpList, parseMcpLine } from '../server/utils/mcp'
 
 /**
  * Reading `claude mcp list`.
@@ -99,5 +99,58 @@ describe('parseMcpLine', () => {
 
   it('does not invent a server from a line with no status marker', () => {
     expect(parseMcpLine('something: else - and more')).toBeNull()
+  })
+})
+
+describe('addArgs', () => {
+  const base = { name: 'acme', scope: 'local' as const }
+
+  it('builds an http server', () => {
+    expect(addArgs({ ...base, transport: 'http', target: 'https://mcp.acme.dev/mcp' }))
+      .toEqual(['mcp', 'add', '--scope', 'local', '--transport', 'http', 'acme', 'https://mcp.acme.dev/mcp'])
+  })
+
+  it('leaves transport off for stdio, which is the default', () => {
+    expect(addArgs({ ...base, transport: 'stdio', target: 'my-server' }))
+      .toEqual(['mcp', 'add', '--scope', 'local', 'acme', '--', 'my-server'])
+  })
+
+  it('puts the command behind `--` so its own flags survive', () => {
+    // Without the separator, `--verbose` is read as a flag to `claude mcp add`.
+    expect(addArgs({ ...base, transport: 'stdio', target: 'npx', args: ['-y', 'srv', '--verbose'] }))
+      .toEqual(['mcp', 'add', '--scope', 'local', 'acme', '--', 'npx', '-y', 'srv', '--verbose'])
+  })
+
+  it('keeps an argument containing a space in one piece', () => {
+    const args = addArgs({ ...base, transport: 'stdio', target: '/opt/my server/run', args: ['--dir', '/a b/c'] })
+    expect(args).toContain('/opt/my server/run')
+    expect(args).toContain('/a b/c')
+  })
+
+  it('passes env and headers in the shape the CLI wants', () => {
+    expect(addArgs({ ...base, transport: 'stdio', target: 'srv', env: { API_KEY: 'x' } }))
+      .toContain('API_KEY=x')
+    expect(addArgs({ ...base, transport: 'http', target: 'https://a.dev', headers: { Authorization: 'Bearer x' } }))
+      .toContain('Authorization: Bearer x')
+  })
+
+  it('writes the scope it was given', () => {
+    expect(addArgs({ ...base, scope: 'project', transport: 'http', target: 'https://a.dev' }))
+      .toEqual(expect.arrayContaining(['--scope', 'project']))
+  })
+})
+
+describe('invalidName', () => {
+  it('accepts what Claude Code and a URL can both carry', () => {
+    expect(invalidName('acme')).toBeNull()
+    expect(invalidName('acme-tools_v2.1')).toBeNull()
+  })
+
+  it('refuses a name nothing could address afterwards', () => {
+    expect(invalidName('')).not.toBeNull()
+    expect(invalidName('   ')).not.toBeNull()
+    expect(invalidName('my server')).not.toBeNull()
+    expect(invalidName('a/b')).not.toBeNull()
+    expect(invalidName('x'.repeat(65))).not.toBeNull()
   })
 })

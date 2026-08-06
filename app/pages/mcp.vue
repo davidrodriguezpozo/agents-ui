@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { McpServer, McpStatus } from '~/composables/useMcp'
+import { errorMessage } from '~/utils/errors'
 
 /**
  * The MCP servers this machine has.
@@ -9,10 +10,46 @@ import type { McpServer, McpStatus } from '~/composables/useMcp'
  * file could: not "what have I configured" but "which of these is actually
  * answering" — which turns out to be a different list.
  */
-const { sorted, cwd, loading, error, loaded, broken, load } = useMcp()
+const { sorted, cwd, loading, error, loaded, broken, load, remove, signIn } = useMcp()
 const expanded = ref<string | null>(null)
+const adding = ref(false)
+const busy = ref<string | null>(null)
+const toast = useToast()
 
 onMounted(() => { if (!loaded.value) void load() })
+
+/**
+ * Signing in happens in a browser window, and takes as long as it takes. The
+ * request is open throughout, so the button says what is going on rather than
+ * spinning silently for two minutes and looking hung.
+ */
+async function onSignIn(server: McpServer) {
+  busy.value = server.name
+  toast.add({
+    title: `Signing in to ${displayName(server)}`,
+    description: 'A browser window is opening. Finish there and this will catch up.',
+  })
+  try {
+    await signIn(server.name)
+    toast.add({ title: `${displayName(server)} signed in`, color: 'success' })
+  } catch (e) {
+    toast.add({ title: 'Sign-in did not finish', description: errorMessage(e), color: 'error' })
+  } finally {
+    busy.value = null
+  }
+}
+
+async function onRemove(server: McpServer) {
+  busy.value = server.name
+  try {
+    await remove(server.name)
+    toast.add({ title: `${displayName(server)} removed`, color: 'success' })
+  } catch (e) {
+    toast.add({ title: 'Could not remove it', description: errorMessage(e), color: 'error' })
+  } finally {
+    busy.value = null
+  }
+}
 
 const LOOKS: Record<McpStatus, { label: string; icon: string; colour: string }> = {
   connected: { label: 'Working', icon: 'i-lucide-circle-check', colour: 'var(--success)' },
@@ -49,6 +86,12 @@ function displayName(server: McpServer): string {
           color="neutral"
           :loading="loading"
           @click="load(true)"
+        />
+        <UButton
+          label="Add a server"
+          icon="i-lucide-plus"
+          size="xs"
+          @click="() => { adding = true }"
         />
       </template>
     </PageHeader>
@@ -139,19 +182,59 @@ function displayName(server: McpServer): string {
                   {{ LOOKS[server.status].label }}
                 </div>
               </div>
+
+              <div class="flex items-center gap-1 shrink-0">
+                <!--
+                  The fix for the commonest state there is. It opens a browser
+                  window and takes as long as the person does, so the label
+                  says what is happening rather than spinning silently.
+                -->
+                <UButton
+                  v-if="server.status === 'needs-auth'"
+                  :label="busy === server.name ? 'Waiting for the browser…' : 'Sign in'"
+                  icon="i-lucide-log-in"
+                  size="xs"
+                  variant="soft"
+                  :loading="busy === server.name"
+                  :disabled="Boolean(busy)"
+                  @click="onSignIn(server)"
+                />
+                <!--
+                  Only what this app put here. A plugin's server belongs to the
+                  plugin and a claude.ai connector to claude.ai — removing
+                  either from underneath its owner would be a lie about where
+                  the change had been made.
+                -->
+                <UButton
+                  v-if="server.origin === 'project'"
+                  icon="i-lucide-trash-2"
+                  size="xs"
+                  variant="ghost"
+                  color="error"
+                  :title="`Remove ${displayName(server)}`"
+                  :disabled="Boolean(busy)"
+                  @click="onRemove(server)"
+                />
+              </div>
             </div>
           </div>
         </div>
 
         <!--
-          Said plainly rather than left to be discovered by looking for a button
-          that isn't there.
+          Where the ones this app cannot remove came from, said plainly rather
+          than left to be worked out from a missing button.
         -->
         <p class="type-meta pt-1">
-          Adding and changing servers is still <code>claude mcp add</code> or a
-          <code>.mcp.json</code> in your project. This reads what you have.
+          Servers from a plugin or from claude.ai are managed where they came from —
+          this can sign you in to them, but not delete them.
         </p>
       </template>
     </div>
+
+    <UModal :open="adding" @update:open="v => { adding = v }">
+      <template #content>
+        <McpAddModal @close="() => { adding = false }" />
+      </template>
+    </UModal>
   </div>
 </template>

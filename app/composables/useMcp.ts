@@ -57,5 +57,33 @@ export function useMcp() {
 
   const broken = computed(() => servers.value.filter(s => s.status === 'failed' || s.status === 'needs-auth').length)
 
-  return { servers, sorted, cwd, loading, error, loaded, broken, load }
+  async function add(input: {
+    name: string
+    transport: 'stdio' | 'http' | 'sse'
+    scope: 'local' | 'user' | 'project'
+    target: string
+    args?: string[]
+    env?: Record<string, string>
+    headers?: Record<string, string>
+  }) {
+    await $fetch('/api/mcp', { method: 'POST', body: input })
+    await load(true)
+  }
+
+  async function remove(name: string) {
+    await $fetch(`/api/mcp/${encodeURIComponent(name)}`, { method: 'DELETE' })
+    await load(true)
+  }
+
+  /**
+   * Opens a browser window and does not come back until the person has
+   * finished in it — minutes, potentially. Callers should say so rather than
+   * showing a spinner that looks stuck.
+   */
+  async function signIn(name: string) {
+    await $fetch(`/api/mcp/${encodeURIComponent(name)}/login`, { method: 'POST' })
+    await load(true)
+  }
+
+  return { servers, sorted, cwd, loading, error, loaded, broken, load, add, remove, signIn }
 }

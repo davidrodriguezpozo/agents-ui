@@ -114,6 +114,117 @@ export function parseMcpList(stdout: string): McpServer[] {
     .filter((server): server is McpServer => server !== null)
 }
 
+// --- Changing them -----------------------------------------------------------
+
+/**
+ * Where a server is written down.
+ *
+ * `local` is this machine only, `user` follows you between projects, `project`
+ * goes in a `.mcp.json` beside the code and therefore into the commit — which
+ * is the one worth thinking about before choosing, since it decides for
+ * everyone who clones the repository.
+ */
+export const MCP_SCOPES = ['local', 'user', 'project'] as const
+export type McpScope = (typeof MCP_SCOPES)[number]
+
+export const MCP_TRANSPORTS = ['stdio', 'http', 'sse'] as const
+export type McpTransport = (typeof MCP_TRANSPORTS)[number]
+
+export interface AddMcpInput {
+  name: string
+  transport: McpTransport
+  scope: McpScope
+  /** The URL for http/sse, or the executable for stdio. */
+  target: string
+  /** stdio only — one argument per entry, so a path with a space survives. */
+  args?: string[]
+  /** stdio only. Values are secrets: they go to the CLI and are never read back. */
+  env?: Record<string, string>
+  /** http/sse only, e.g. `Authorization: Bearer …`. Secrets, as above. */
+  headers?: Record<string, string>
+}
+
+/**
+ * A name Claude Code will accept and we can hand back on a URL.
+ *
+ * Deliberately narrow. Everything here is passed as an argv entry rather than
+ * through a shell, so this is not what stands between you and an injection —
+ * it is what stops a name that cannot later be removed, because nothing could
+ * address it.
+ */
+export function invalidName(name: string): string | null {
+  const trimmed = name.trim()
+  if (!trimmed) return 'Give the server a name.'
+  if (trimmed.length > 64) return 'That name is too long.'
+  if (!/^[\w.-]+$/.test(trimmed)) {
+    return 'Use letters, numbers, dots, dashes and underscores — no spaces.'
+  }
+  return null
+}
+
+/** The argv for `claude mcp add`, which is the whole of this function's job. */
+export function addArgs(input: AddMcpInput): string[] {
+  const args = ['mcp', 'add', '--scope', input.scope]
+
+  if (input.transport !== 'stdio') args.push('--transport', input.transport)
+
+  for (const [key, value] of Object.entries(input.env ?? {})) {
+    args.push('--env', `${key}=${value}`)
+  }
+  for (const [key, value] of Object.entries(input.headers ?? {})) {
+    args.push('--header', `${key}: ${value}`)
+  }
+
+  args.push(input.name.trim())
+
+  if (input.transport === 'stdio') {
+    // `--` so that a flag belonging to the server's own command is not read as
+    // one of Claude Code's. Without it `add x -- server --verbose` loses.
+    args.push('--', input.target.trim(), ...(input.args ?? []))
+  } else {
+    args.push(input.target.trim())
+  }
+
+  return args
+}
+
+export async function addMcpServer(input: AddMcpInput, cwd?: string): Promise<void> {
+  // A project-scoped server is written beside the code, so it has to be written
+  // in the right place — there is no sensible default when we don't know where.
+  if (input.scope === 'project' && !cwd) {
+    throw createError({
+      statusCode: 409,
+      data: {
+        error: 'no_project',
+        message: 'Pick a project first — a project-scoped server is written into that repository.',
+      },
+    })
+  }
+
+  await runClaude(addArgs(input), { cwd, timeout: 30_000 })
+  forgetMcpCache()
+}
+
+export async function removeMcpServer(name: string, cwd?: string): Promise<void> {
+  await runClaude(['mcp', 'remove', name], { cwd, timeout: 30_000 })
+  forgetMcpCache()
+}
+
+/**
+ * Sign in to a server that is asking for it.
+ *
+ * `claude mcp login` opens a browser and waits on a local callback, so this
+ * spawns it and waits for the process to end — which is the person having
+ * finished in the browser, one way or the other.
+ *
+ * The timeout is what makes it safe to offer: an abandoned login would
+ * otherwise leave a process holding a callback port until the server restarts.
+ */
+export async function loginToMcpServer(name: string, cwd?: string): Promise<void> {
+  await runClaude(['mcp', 'login', name], { cwd, timeout: 5 * 60_000 })
+  forgetMcpCache()
+}
+
 /**
  * Health-checking every server takes seconds, and the page that shows them is
  * one people leave open. Cached per directory, briefly — long enough that
