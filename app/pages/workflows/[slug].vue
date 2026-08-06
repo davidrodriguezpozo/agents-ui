@@ -15,7 +15,7 @@ const toast = useToast()
 const slug = route.params.slug as string
 const { fetchOne, update, remove } = useWorkflows()
 const { agents } = useAgents()
-const { steps: execSteps, isRunning, isPaused, isComplete, currentStepIndex, run, continueWorkflow, continueWith, respondToStep, stop } = useWorkflowExecution()
+const { run: activeRun, isRunning, starting, start, watch: watchRun, stop, history } = useWorkflowRun()
 
 const workflow = ref<Workflow | null>(null)
 const workflowSteps = ref<WorkflowStep[]>([])
@@ -39,7 +39,15 @@ onMounted(async () => {
   } catch {
     toast.add({ title: 'Workflow not found', color: 'error' })
     router.push('/workflows')
+    return
   }
+
+  // Runs outlive this page now, so opening it has to ask what is already
+  // happening rather than assuming a blank slate — which is what the old
+  // browser-side version could safely assume, having lost anything in flight.
+  pastRuns.value = await history(slug).catch(() => [])
+  const latest = pastRuns.value[0]
+  if (latest?.status === 'running') await watchRun(latest.id)
 })
 
 // Compute VueFlow nodes from steps
@@ -153,30 +161,76 @@ async function deleteWorkflow() {
   }
 }
 
-// Run
+/**
+ * The run happens on the server now, so this only has to start it and then
+ * watch. Navigating away no longer stops anything — coming back picks the same
+ * run up wherever it has got to.
+ */
 async function startRun(prompt: string, projectDir?: string) {
   showRunModal.value = false
   if (!workflow.value) return
-  const w = { ...workflow.value, steps: workflowSteps.value }
-  await run(w, prompt, projectDir)
-  // Update lastRunAt
+
   try {
-    await update(slug, { lastRunAt: new Date().toISOString() } as any)
-  } catch {
-    // Non-critical
+    await start(slug, prompt, projectDir)
+    await update(slug, { lastRunAt: new Date().toISOString() } as any).catch(() => {})
+    pastRuns.value = await history(slug).catch(() => [])
+  } catch (e) {
+    toast.add({ title: 'Could not start it', description: errorMessage(e), color: 'error' })
   }
 }
 
-const canRun = computed(() => workflowSteps.value.length > 0 && !isRunning.value)
+async function onStop() {
+  try {
+    await stop()
+  } catch (e) {
+    toast.add({ title: 'Could not stop it', description: errorMessage(e), color: 'error' })
+  }
+}
+
+const canRun = computed(() => workflowSteps.value.length > 0 && !isRunning.value && !starting.value)
+
+/**
+ * The server's step runs in the shape the log already reads.
+ *
+ * Steps that have not started yet are not on the record at all — they are
+ * padded here so the log shows the whole workflow from the outset rather than
+ * growing a row at a time.
+ */
+const STATUS: Record<string, 'pending' | 'running' | 'completed' | 'failed' | 'skipped'> = {
+  queued: 'pending',
+  running: 'running',
+  completed: 'completed',
+  failed: 'failed',
+  cancelled: 'skipped',
+}
+
+const execSteps = computed(() => workflowSteps.value.map((step) => {
+  const actual = activeRun.value?.steps.find(s => s.stepId === step.id)
+  if (!actual) {
+    // Never reached, because something before it stopped everything after it.
+    const stopped = activeRun.value && activeRun.value.status !== 'running'
+    return { stepId: step.id, status: stopped ? 'skipped' as const : 'pending' as const, input: '', output: '' }
+  }
+  return {
+    stepId: step.id,
+    status: STATUS[actual.status] ?? 'pending',
+    input: '',
+    output: actual.output,
+    error: actual.error,
+  }
+}))
+
+const currentStepIndex = computed(() => activeRun.value?.currentStep ?? -1)
 const filteredAgents = computed(() => {
   if (!paletteSearch.value) return agents.value
   const q = paletteSearch.value.toLowerCase()
   return agents.value.filter(a => a.frontmatter.name.toLowerCase().includes(q))
 })
 
-const allCompleted = computed(() =>
-  execSteps.value.length > 0 && execSteps.value.every(s => s.status === 'completed' || s.status === 'failed' || s.status === 'skipped') && !isRunning.value
-)
+const allCompleted = computed(() => activeRun.value?.status === 'completed')
+
+/** What this workflow has done before — a question the page could not answer. */
+const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
 </script>
 
 <template>
@@ -348,18 +402,18 @@ const allCompleted = computed(() =>
         </div>
 
         <!-- Execution log -->
-        <div v-if="execSteps.length > 0" class="p-4">
+        <div v-if="activeRun" class="p-4">
           <WorkflowExecutionLog
             :steps="execSteps"
             :workflow-steps="workflowSteps"
             :current-step-index="currentStepIndex"
-            :is-paused="isPaused"
-            :is-complete="isComplete"
-            @continue="continueWorkflow"
-            @continue-with="continueWith"
-            @respond="respondToStep"
-            @stop="stop"
+            :is-paused="false"
+            :is-complete="allCompleted"
+            @stop="onStop"
           />
+          <p v-if="activeRun.error" class="type-detail mt-2" style="color: var(--error);">
+            {{ activeRun.error }}
+          </p>
         </div>
       </div>
     </div>
