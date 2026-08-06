@@ -1,0 +1,68 @@
+name: Bug report
+description: Something behaves differently from how it's documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. The two fields that save the most back-and-forth are
+        the version and what you were doing — please don't skip them.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+      placeholder: |
+        I merged a session that had passing checks, and…
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "`agents-studio --version`, or the commit SHA if you're running from a checkout."
+      placeholder: 0.1.2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How it's installed
+      options:
+        - npm global install
+        - npx
+        - from a checkout
+        - installed as a background service
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS and Node version
+      placeholder: macOS 15.2, Node 22.11
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything in the logs
+      description: >
+        Browser console, or the server output. Running as a service, `agents-studio
+        status` says where the logs are. This is rendered as a code block — no backticks
+        needed.
+      render: shell
+
+  - type: checkboxes
+    id: checked
+    attributes:
+      label: Before submitting
+      options:
+        - label: I'm on the latest version, or I've said above why I can't be
+          required: true
+        - label: I've removed anything private from the logs and screenshots
+          required: true

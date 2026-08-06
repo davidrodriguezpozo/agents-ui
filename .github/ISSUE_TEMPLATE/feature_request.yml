@@ -1,0 +1,31 @@
+name: Feature request
+description: Something you want this to do that it doesn't
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The most useful thing you can write here is what you were trying to get done —
+        not the feature you had in mind for it. Often there's a shorter route.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The situation, and what makes it awkward today.
+      placeholder: |
+        Every Monday I start the same four sessions by hand, and…
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you had in mind
+      description: Optional. A rough shape is fine.
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: What you do instead today
+      description: Including "nothing, I gave up" — that's useful information.
