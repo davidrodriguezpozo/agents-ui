@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addArgs, invalidName, parseMcpList, parseMcpLine } from '../server/utils/mcp'
+import { addArgs, invalidName, parseMcpList, parseMcpLine, ttyWrapped } from '../server/utils/mcp'
 
 /**
  * Reading `claude mcp list`.
@@ -152,5 +152,31 @@ describe('invalidName', () => {
     expect(invalidName('my server')).not.toBeNull()
     expect(invalidName('a/b')).not.toBeNull()
     expect(invalidName('x'.repeat(65))).not.toBeNull()
+  })
+})
+
+describe('ttyWrapped', () => {
+  it('wraps the command so it gets a terminal', () => {
+    // `claude mcp login` refuses outright when stdin is not a TTY, so this
+    // wrapper is the whole reason signing in can be a button rather than an
+    // instruction to go and open a terminal.
+    const wrapped = ttyWrapped('/usr/local/bin/claude', ['mcp', 'login', 'acme'])
+    expect(wrapped).not.toBeNull()
+    expect(wrapped!.file).toBe('script')
+    expect(wrapped!.args.join(' ')).toContain('mcp')
+    expect(wrapped!.args.join(' ')).toContain('acme')
+  })
+
+  it('keeps a name with spaces and colons in one piece', () => {
+    // Real names look like `claude.ai Google Drive` and `plugin:slack:slack`.
+    const wrapped = ttyWrapped('/usr/local/bin/claude', ['mcp', 'login', 'claude.ai Google Drive'])!
+
+    if (process.platform === 'linux') {
+      // One string, so it has to survive quoting rather than word-splitting.
+      const line = wrapped.args[wrapped.args.indexOf('-c') + 1]!
+      expect(line).toContain(`'claude.ai Google Drive'`)
+    } else {
+      expect(wrapped.args).toContain('claude.ai Google Drive')
+    }
   })
 })

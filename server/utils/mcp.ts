@@ -1,4 +1,8 @@
-import { runClaude } from './cli'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { findClaude, runClaude } from './cli'
+
+const exec = promisify(execFile)
 
 /**
  * The MCP servers this machine has, and whether they work.
@@ -210,18 +214,94 @@ export async function removeMcpServer(name: string, cwd?: string): Promise<void>
   forgetMcpCache()
 }
 
+/** Shell-quote one argument, for the platforms whose `script` wants a string. */
+function quote(arg: string): string {
+  return `'${arg.replace(/'/g, `'\\''`)}'`
+}
+
+/**
+ * The same command, but with a terminal attached.
+ *
+ * `claude mcp login` refuses to run when stdin is not a TTY — it prints the
+ * authorization URL, says it is waiting, and then gives up on the spot. That
+ * rules out driving it headlessly and it rules out `--no-browser` too: there
+ * is no prompt to answer, because it never gets as far as prompting.
+ *
+ * `script` exists to allocate a pseudo-terminal, so the login runs under one.
+ * With a terminal it does the thing it always meant to: opens a browser and
+ * waits on its own callback on localhost, which needs no input from us at all.
+ *
+ * Returns null where there is no `script` to lean on, which is Windows — the
+ * caller says so rather than failing in a way that reads like a bug.
+ */
+export function ttyWrapped(command: string, args: string[]): { file: string; args: string[] } | null {
+  // BSD, which is what macOS has: the command follows the typescript file.
+  if (process.platform === 'darwin') {
+    return { file: 'script', args: ['-q', '/dev/null', command, ...args] }
+  }
+
+  // GNU wants one string, so this is the one place quoting matters. Server
+  // names come from Claude Code and contain spaces and colons in practice.
+  if (process.platform === 'linux') {
+    const line = [command, ...args].map(quote).join(' ')
+    return { file: 'script', args: ['-q', '-c', line, '/dev/null'] }
+  }
+
+  return null
+}
+
 /**
  * Sign in to a server that is asking for it.
  *
- * `claude mcp login` opens a browser and waits on a local callback, so this
- * spawns it and waits for the process to end — which is the person having
- * finished in the browser, one way or the other.
- *
- * The timeout is what makes it safe to offer: an abandoned login would
- * otherwise leave a process holding a callback port until the server restarts.
+ * Waits for the browser flow to finish, which is minutes if the person is slow
+ * and forever if they wander off — hence the ceiling, which is what makes this
+ * safe to offer at all. An abandoned login would otherwise leave a process
+ * holding the OAuth callback port until the server restarted.
  */
 export async function loginToMcpServer(name: string, cwd?: string): Promise<void> {
-  await runClaude(['mcp', 'login', name], { cwd, timeout: 5 * 60_000 })
+  const claude = await findClaude()
+  if (!claude) {
+    throw createError({
+      statusCode: 500,
+      data: { error: 'cli_not_found', message: 'Claude Code CLI not found.' },
+    })
+  }
+
+  const wrapped = ttyWrapped(claude, ['mcp', 'login', name])
+  if (!wrapped) {
+    throw createError({
+      statusCode: 501,
+      data: {
+        error: 'needs_terminal',
+        message: `Signing in needs a terminal on this platform. Run: claude mcp login "${name}"`,
+      },
+    })
+  }
+
+  try {
+    await exec(wrapped.file, wrapped.args, { cwd, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024 })
+  } catch (e: any) {
+    const output = `${e.stdout ?? ''}${e.stderr ?? ''}`
+
+    if (e.killed) {
+      throw createError({
+        statusCode: 504,
+        data: {
+          error: 'login_timeout',
+          message: 'The sign-in was not finished in time. Try again — the browser window is where it happens.',
+        },
+      })
+    }
+
+    // `script` reports the child's exit code as its own, so a refusal from
+    // Claude Code arrives here rather than as anything of `script`'s.
+    const said = output.split('\n').map(l => l.trim()).filter(Boolean).at(-1)
+    throw createError({
+      statusCode: 502,
+      data: { error: 'login_failed', message: said || 'The sign-in did not complete.' },
+    })
+  }
+
   forgetMcpCache()
 }
 
