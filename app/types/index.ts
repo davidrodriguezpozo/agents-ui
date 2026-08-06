@@ -62,7 +62,6 @@ export interface Settings {
   enabledPlugins?: Record<string, boolean>
   statusLine?: { type: string; command: string }
   alwaysThinkingEnabled?: boolean
-  onboardingCompleted?: boolean
   guidanceSeen?: {
     agentDetail?: boolean
     explore?: boolean
