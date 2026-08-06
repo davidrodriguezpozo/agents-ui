@@ -15,7 +15,7 @@ const id = route.params.id as string
 
 const {
   fetchOne, send, fetchTranscript, setTrust, fetchDiff,
-  previewPullRequest, openPullRequest, previewMerge, merge, runCheck, repair, close,
+  previewPullRequest, openPullRequest, previewMerge, merge, runCheck, repair, updateFromBase, close,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
@@ -328,6 +328,20 @@ const checkPanel = computed<CheckPanel>(() => {
     }
   }
 
+  // A pass against a base that has since moved is the more dangerous of the
+  // two stale states, and the one nothing used to mention: git will refuse a
+  // textual conflict, but it has nothing to say about the other branch having
+  // renamed something this one calls.
+  if (behind.value) {
+    return {
+      title: `Passed, before ${session.value?.baseBranch} moved on`,
+      detail: `${ran} — ${behindWord.value} since then.`,
+      icon: 'i-lucide-git-pull-request-arrow',
+      color: 'var(--warning)',
+      frame: 'background: rgba(212,153,34,0.06); border: 1px solid var(--warning);',
+    }
+  }
+
   return {
     title: session.value?.checkStale ? 'Passed, before the latest change' : 'This works',
     detail: ran,
@@ -338,6 +352,37 @@ const checkPanel = computed<CheckPanel>(() => {
       : 'background: rgba(34,197,94,0.06); border: 1px solid var(--success);',
   }
 })
+
+/** How far this session's base has moved without it. */
+const behind = computed(() => session.value?.worktree.behind ?? 0)
+const behindWord = computed(() =>
+  `${behind.value} commit${behind.value === 1 ? '' : 's'} on ${session.value?.baseBranch}`,
+)
+
+const updatingBase = ref(false)
+
+async function onUpdateBase() {
+  updatingBase.value = true
+  try {
+    const result = await updateFromBase(id)
+    await load()
+    if (showMerge.value) mergePreview.value = await previewMerge(id)
+
+    toast.add({
+      title: result.message,
+      description: result.check
+        ? result.check.status === 'passing'
+          ? 'Checks still pass against the new base.'
+          : 'The checks do not pass any more — worth a look before merging.'
+        : undefined,
+      color: result.status === 'conflicted' ? 'warning' : result.check?.status === 'failing' ? 'error' : 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not bring it in', description: errorMessage(e), color: 'error' })
+  } finally {
+    updatingBase.value = false
+  }
+}
 
 /**
  * What the session is doing about its own failing checks, if anything.
@@ -785,6 +830,20 @@ const totalChanges = computed(() => {
               code is still here and the failure is right there, so offer the
               obvious next move rather than leaving it as homework.
             -->
+            <!--
+              The fix for a verdict taken against a base that has moved. Offered
+              whether or not the checks passed: behind is behind.
+            -->
+            <UButton
+              v-if="behind"
+              :label="`Bring in ${session.baseBranch}`"
+              icon="i-lucide-git-merge"
+              size="xs"
+              variant="soft"
+              :loading="updatingBase"
+              :disabled="isBusy || checking"
+              @click="onUpdateBase"
+            />
             <UButton
               v-if="session.check?.status === 'failing'"
               label="Fix it"

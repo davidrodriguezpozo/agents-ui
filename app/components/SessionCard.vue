@@ -77,6 +77,20 @@ const accent = computed(() => {
             {{ session.worktree.ahead }} commit{{ session.worktree.ahead === 1 ? '' : 's' }}
           </span>
           <span v-if="session.worktree.dirty" style="color: var(--accent);">uncommitted</span>
+          <!--
+            Said on the row because it is the one that goes wrong quietly: merge
+            one session and every other one is now judged against a base it does
+            not have, while still showing the green it earned beforehand.
+          -->
+          <span
+            v-if="session.worktree.behind"
+            class="flex items-center gap-1"
+            style="color: var(--warning);"
+            :title="`${session.baseBranch} has moved on since this was last checked`"
+          >
+            <UIcon name="i-lucide-git-pull-request-arrow" class="size-3 shrink-0" />
+            {{ session.worktree.behind }} behind
+          </span>
           <span v-if="session.turnCount" class="flex items-center gap-1">
             <UIcon name="i-lucide-message-square" class="size-3 shrink-0" />
             {{ session.turnCount }}

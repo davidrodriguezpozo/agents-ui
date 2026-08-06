@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
   const sessions = await readSessions()
 
   const enriched = await Promise.all(sessions.map(async (session) => {
-    const worktree = await worktreeStatus(session.worktreePath, session.baseSha || session.baseBranch)
+    const worktree = await worktreeStatus(session.worktreePath, session.baseSha || session.baseBranch, session.baseBranch)
 
     const lastRunId = session.runIds.at(-1)
     const lastRun = lastRunId ? getActive(lastRunId)?.run ?? await readRun(lastRunId) : null

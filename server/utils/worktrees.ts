@@ -45,6 +45,16 @@ export interface WorktreeStatus {
   /** Uncommitted changes sitting in the worktree. */
   dirty: boolean
   ahead: number
+  /**
+   * Commits on the base branch this session does not have.
+   *
+   * The number that makes parallel sessions honest. Six sessions branch from
+   * main and all go green; you merge one, and the other five are now verified
+   * against a main that no longer exists. Git will refuse a textual conflict,
+   * but it has nothing to say about the case where one session renamed a
+   * function another one calls — that merges cleanly and breaks.
+   */
+  behind: number
 }
 
 /** Branch names have real constraints; a session title does not. */
@@ -410,12 +420,87 @@ export async function pruneWorktrees(repoDir: string): Promise<void> {
   await git(repoDir, ['worktree', 'prune']).catch(() => {})
 }
 
+export interface UpdateFromBaseResult {
+  status: 'updated' | 'already-current' | 'conflicted' | 'refused'
+  /** What happened, in words worth showing someone. */
+  message: string
+}
+
+/**
+ * Bring the base branch into a session's workspace.
+ *
+ * The other half of knowing a session is behind. Merging one session moves the
+ * base under all the others, and a green check taken before that move is a
+ * claim about code that is no longer what would land. This is how a session
+ * catches up so its checks can mean something again.
+ *
+ * A merge rather than a rebase, deliberately. Rebasing rewrites commits the
+ * person may already have pushed or opened a pull request from, and a merge
+ * commit in a branch that exists to be merged costs nothing.
+ */
+export async function updateFromBase(
+  worktreePath: string,
+  baseBranch: string,
+): Promise<UpdateFromBaseResult> {
+  if (!existsSync(worktreePath)) {
+    return { status: 'refused', message: 'This session\'s workspace is no longer on disk.' }
+  }
+
+  const behind = Number(
+    await git(worktreePath, ['rev-list', '--count', `HEAD..${baseBranch}`]).catch(() => '0')
+  ) || 0
+
+  if (!behind) {
+    return { status: 'already-current', message: `Already up to date with ${baseBranch}.` }
+  }
+
+  // Uncommitted work would be caught up in the merge, and a conflict on top of
+  // it is a mess nobody asked for. Said plainly rather than attempted.
+  const porcelain = await git(worktreePath, ['status', '--porcelain']).catch(() => '')
+  if (porcelain.trim()) {
+    return {
+      status: 'refused',
+      message: 'There are uncommitted changes here. Commit them first, then bring the base in.',
+    }
+  }
+
+  try {
+    await git(worktreePath, ['merge', '--no-edit', baseBranch], 120_000)
+    return {
+      status: 'updated',
+      message: `Brought in ${behind} commit${behind === 1 ? '' : 's'} from ${baseBranch}.`,
+    }
+  } catch (e: any) {
+    const output = `${e.stdout ?? ''}${e.stderr ?? ''}`
+
+    if (/conflict/i.test(output)) {
+      // Left in place on purpose: the conflict is the session's to resolve, and
+      // it now has both sides of it in the workspace to work with.
+      return {
+        status: 'conflicted',
+        message: `${baseBranch} conflicts with this session's work. The conflict is in the workspace — ask the session to resolve it.`,
+      }
+    }
+
+    await git(worktreePath, ['merge', '--abort']).catch(() => {})
+    return { status: 'refused', message: output.trim().split('\n').at(-1) || 'The merge did not go through.' }
+  }
+}
+
+/**
+ * `baseRef` is what this session branched from — usually the sha, so the diff
+ * is against the code as it was. `baseBranch` is where that branch has got to
+ * since, which is a different question and the only one that can tell you a
+ * green check has gone out of date. Passing the sha for both would always
+ * report zero, because a sha does not move.
+ */
 export async function worktreeStatus(
   worktreePath: string,
   baseRef: string,
+  baseBranch?: string,
 ): Promise<WorktreeStatus> {
   if (!existsSync(worktreePath)) {
-    return { path: worktreePath, exists: false, branch: null, changedFiles: 0, dirty: false, ahead: 0 }
+    return { path: worktreePath, exists: false, branch: null, changedFiles: 0, dirty: false, ahead: 0, behind: 0 }
   }
 
   const branch = await currentBranch(worktreePath)
@@ -432,6 +517,14 @@ export async function worktreeStatus(
     await git(worktreePath, ['rev-list', '--count', `${baseRef}..HEAD`]).catch(() => '0')
   ) || 0
 
+  // Zero when there is no branch to ask about, which is honest: without one
+  // there is nothing this session could be out of date with respect to.
+  const behind = baseBranch
+    ? Number(
+        await git(worktreePath, ['rev-list', '--count', `HEAD..${baseBranch}`]).catch(() => '0')
+      ) || 0
+    : 0
+
   return {
     path: worktreePath,
     exists: true,
@@ -439,6 +532,7 @@ export async function worktreeStatus(
     changedFiles: new Set([...committed, ...uncommitted]).size,
     dirty,
     ahead,
+    behind,
   }
 }
 

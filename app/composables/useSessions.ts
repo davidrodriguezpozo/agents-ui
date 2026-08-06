@@ -5,6 +5,12 @@ export interface WorktreeState {
   changedFiles: number
   dirty: boolean
   ahead: number
+  /**
+   * Commits on the base branch this session hasn't got. Above zero means any
+   * check it has passed was against a base that has since moved on — which is
+   * what happens to every other session the moment you merge one.
+   */
+  behind: number
 }
 
 export type SessionActivity = 'idle' | 'working' | 'awaiting-permission' | 'failed' | 'missing'
@@ -276,6 +282,22 @@ export function useSessions() {
     return result.runId
   }
 
+  /**
+   * Bring the base branch into this session and re-run its checks.
+   *
+   * Resolves with the verdict, because that is the question being asked —
+   * "is this still good now that main has moved" — and a merge with no answer
+   * after it is the stale badge again under a different name.
+   */
+  async function updateFromBase(id: string) {
+    const result = await $fetch<{ status: string; message: string; check: SessionCheck | null }>(
+      `/api/sessions/${encodeURIComponent(id)}/update-base`,
+      { method: 'POST' },
+    )
+    await fetchAll()
+    return result
+  }
+
   /** Returns the run id, which the caller attaches to for live output. */
   async function send(id: string, input: string): Promise<string> {
     const result = await $fetch<{ runId: string }>(`/api/sessions/${encodeURIComponent(id)}/message`, {
@@ -392,6 +414,7 @@ export function useSessions() {
     merge,
     runCheck,
     repair,
+    updateFromBase,
     close,
   }
 }

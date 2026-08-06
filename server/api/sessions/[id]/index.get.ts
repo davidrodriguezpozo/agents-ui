@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: `Session not found: ${id}` })
   }
 
-  const worktree = await worktreeStatus(session.worktreePath, session.baseSha || session.baseBranch)
+  const worktree = await worktreeStatus(session.worktreePath, session.baseSha || session.baseBranch, session.baseBranch)
 
   // The turns, oldest first, so the page can render the conversation.
   const turns = []
