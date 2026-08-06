@@ -23,10 +23,28 @@ import { readPreferences } from './preferences'
 let active = 0
 const waiting: (() => void)[] = []
 
-/** Read per acquisition, so changing it in Settings applies to the next run. */
+/**
+ * Admissions, one at a time, in the order they arrived.
+ *
+ * Deciding in parallel was wrong in a way that only showed up under load:
+ * every caller awaited its own read of the preference before looking at the
+ * queue, so three runs starting together were admitted in whatever order those
+ * three reads happened to finish. The ritual that had been waiting ten minutes
+ * could go last.
+ */
+let admissions: Promise<unknown> = Promise.resolve()
+
+/** Read per admission, so changing it in Settings applies to the next run. */
 async function limit(): Promise<number> {
   const preferred = (await readPreferences()).maxConcurrentRuns
   return preferred > 0 ? preferred : Infinity
+}
+
+/** Resolves holding a slot. Only ever one of these is in flight. */
+async function admit(): Promise<void> {
+  const max = await limit()
+  if (active >= max) await new Promise<void>(resolve => waiting.push(resolve))
+  active++
 }
 
 export function queueDepth(): { active: number; waiting: number } {
@@ -37,6 +55,7 @@ export function queueDepth(): { active: number; waiting: number } {
 export function resetRunQueue(): void {
   active = 0
   waiting.length = 0
+  admissions = Promise.resolve()
 }
 
 /**
@@ -47,16 +66,12 @@ export function resetRunQueue(): void {
  * narrower every time something goes wrong, until nothing runs at all.
  */
 export async function withRunSlot<T>(fn: () => Promise<T>): Promise<T> {
-  const max = await limit()
+  // Chained rather than raced. Nothing after this point can jump the queue,
+  // because the next caller cannot even look at it until this one is in.
+  const turn = admissions.then(admit)
+  admissions = turn.catch(() => {})
+  await turn
 
-  // Queued behind anyone already waiting, not just behind a full queue.
-  // Without the second half, a run arriving in the instant after a slot frees
-  // walks straight past a queue that has been waiting ten minutes.
-  if (active >= max || waiting.length) {
-    await new Promise<void>(resolve => waiting.push(resolve))
-  }
-
-  active++
   try {
     return await fn()
   } finally {

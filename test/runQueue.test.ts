@@ -87,19 +87,44 @@ describe('withRunSlot', () => {
   })
 
   it('keeps its order, so the first thing waiting is the first thing run', async () => {
+    // Every caller used to await its own read of the preference before looking
+    // at the queue, and was admitted in whatever order those reads finished —
+    // so the ritual that had waited longest could go last. Enough of them here
+    // that a regression cannot pass by luck.
     await preferences.savePreferences({ maxConcurrentRuns: 1 })
 
     const first = held()
-    const order: string[] = []
+    const order: number[] = []
 
-    const running = queue.withRunSlot(async () => { order.push('first'); await first.done })
-    const second = queue.withRunSlot(async () => { order.push('second') })
-    const third = queue.withRunSlot(async () => { order.push('third') })
+    const all = Array.from({ length: 8 }, (_, i) => queue.withRunSlot(async () => {
+      order.push(i)
+      if (i === 0) await first.done
+    }))
 
     await new Promise(r => setTimeout(r, 20))
     first.release()
-    await Promise.all([running, second, third])
+    await Promise.all(all)
 
-    expect(order).toEqual(['first', 'second', 'third'])
+    expect(order).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+  })
+
+  it('does not let a latecomer past something already waiting', async () => {
+    await preferences.savePreferences({ maxConcurrentRuns: 1 })
+
+    const holding = held()
+    const order: string[] = []
+
+    const busy = queue.withRunSlot(async () => { order.push('busy'); await holding.done })
+    const patient = queue.withRunSlot(async () => { order.push('patient') })
+
+    // Arrives while the queue is full — and, critically, is still behind
+    // `patient` in the instant the slot frees.
+    await new Promise(r => setTimeout(r, 20))
+    const latecomer = queue.withRunSlot(async () => { order.push('latecomer') })
+
+    holding.release()
+    await Promise.all([busy, patient, latecomer])
+
+    expect(order).toEqual(['busy', 'patient', 'latecomer'])
   })
 })
