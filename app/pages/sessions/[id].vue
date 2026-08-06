@@ -56,6 +56,21 @@ const prDraft = ref(false)
 const opening = ref(false)
 let controller: AbortController | null = null
 
+/**
+ * Set the moment this page goes away.
+ *
+ * The stream's `finally` runs *after* the abort that unmounting causes, and
+ * what it did there was reload the session — which re-attached to the run, on
+ * a controller nothing would ever abort, because the thing that aborts them
+ * had already run. One permanently open connection per visit.
+ *
+ * A browser allows six concurrent connections to an origin. So the seventh
+ * session you opened took the app down: every request after it queued behind a
+ * stream that never ends, the dashboard's counts came back as zeros, and it
+ * looked for all the world like the browser had started blocking requests.
+ */
+let gone = false
+
 const liveRun = computed(() => (activeRunId.value ? live.value[activeRunId.value] : null))
 const prompts = computed(() => (activeRunId.value ? promptsFor(activeRunId.value).value : []))
 const isBusy = computed(() => session.value?.status === 'running' || liveRun.value?.status === 'running')
@@ -72,12 +87,22 @@ async function load() {
 }
 
 function watchRun(runId: string) {
+  if (gone) return
+
   activeRunId.value = runId
   controller?.abort()
-  controller = new AbortController()
-  attach(runId, controller.signal)
+
+  // Held locally as well as on `controller`, so the stream that ends can tell
+  // whether it is still the one this page is watching.
+  const own = new AbortController()
+  controller = own
+
+  attach(runId, own.signal)
     .catch(() => {})
     .finally(async () => {
+      // Gone, or superseded by a later attach. Either way this stream's ending
+      // is not news, and reloading on the back of it is what leaked.
+      if (gone || controller !== own) return
       await load()
       await refreshDiff()
     })
@@ -125,7 +150,10 @@ onMounted(async () => {
   await fetchCommands()
 })
 
-onUnmounted(() => controller?.abort())
+onUnmounted(() => {
+  gone = true
+  controller?.abort()
+})
 
 async function onSend() {
   const value = input.value.trim()
@@ -348,7 +376,9 @@ async function onRepair() {
   try {
     const runId = await repair(id)
     await load()
-    attach(runId)
+    // Through `watchRun`, so it gets a controller and is closed with the page.
+    // A bare `attach` here would leak the connection exactly as above.
+    watchRun(runId)
   } catch (e) {
     toast.add({ title: 'Could not start fixing it', description: errorMessage(e), color: 'error' })
   } finally {
