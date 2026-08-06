@@ -136,7 +136,7 @@ function handleQuickAction(prompt: string) {
               <span class="text-[14px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">Claude</span>
               <span class="text-[9px] font-mono tracking-widest uppercase px-1.5 py-px rounded-full transition-all duration-300" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', color: isStreaming ? 'var(--accent)' : 'var(--text-disabled)' }">{{ statusText }}</span>
             </div>
-            <span class="text-[10px] font-mono" style="color: var(--text-disabled);">{{ activeAgent ? activeAgent.name : 'Agent Manager' }}</span>
+            <span class="text-[10px] font-mono" style="color: var(--text-disabled);">{{ activeAgent ? activeAgent.name : 'Agents Studio' }}</span>
           </div>
           <button v-if="messages.length" class="p-1.5 rounded-md transition-all hover-bg" style="color: var(--text-disabled);" title="New conversation" @click="() => { clearChat(); clearAgent() }">
             <UIcon name="i-lucide-rotate-ccw" class="size-3.5" />

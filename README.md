@@ -1,6 +1,6 @@
 <div align="center">
 
-# Agent Manager
+# Agents Studio
 
 **A workbench for Claude Code.**
 

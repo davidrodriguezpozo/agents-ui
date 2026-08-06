@@ -80,8 +80,8 @@ const { build, isStale, load: loadBuildStatus } = useBuildStatus()
 useHead({
   title: computed(() =>
     attention.value.needsYou > 0
-      ? `(${attention.value.needsYou}) Claude Code Agent Manager`
-      : 'Claude Code Agent Manager',
+      ? `(${attention.value.needsYou}) Agents Studio`
+      : 'Agents Studio',
   ),
 })
 
@@ -224,7 +224,7 @@ function badgeFor(to: string) {
           </div>
           <div class="flex flex-col">
             <span class="text-[12px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
-              Agent Manager
+              Agents Studio
             </span>
             <span class="text-[9px] font-mono tracking-wider uppercase" style="color: var(--text-disabled);">
               Claude Code

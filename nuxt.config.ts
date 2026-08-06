@@ -15,14 +15,14 @@ export default defineNuxtConfig({
 
   app: {
     head: {
-      title: 'Claude Code Agent Manager',
+      title: 'Agents Studio',
       htmlAttrs: { lang: 'en' },
       meta: [
-        { name: 'description', content: 'Visual manager for Claude Code agents, commands, skills, and plugins. Configure AI assistants without touching the terminal.' },
+        { name: 'description', content: 'A workbench for Claude Code. Run several sessions at once, each on its own branch, put recurring work on a schedule, and see what everything cost.' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
         { name: 'theme-color', content: '#F7F8FA' },
-        { property: 'og:title', content: 'Agent Manager — Claude Code' },
-        { property: 'og:description', content: 'Visual manager for Claude Code agents, commands, skills, and plugins. Configure AI assistants without touching the terminal.' },
+        { property: 'og:title', content: 'Agents Studio — a workbench for Claude Code' },
+        { property: 'og:description', content: 'A workbench for Claude Code. Run several sessions at once, each on its own branch, put recurring work on a schedule, and see what everything cost.' },
         { property: 'og:type', content: 'website' },
         { name: 'twitter:card', content: 'summary' },
       ],

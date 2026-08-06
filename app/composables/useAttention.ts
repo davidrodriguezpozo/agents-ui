@@ -44,7 +44,7 @@ export function useAttention() {
    * so it carries the count when there is one.
    */
   const title = computed(() =>
-    attention.value.needsYou > 0 ? `(${attention.value.needsYou}) Agent Manager` : 'Agent Manager'
+    attention.value.needsYou > 0 ? `(${attention.value.needsYou}) Agents Studio` : 'Agents Studio'
   )
 
   return { attention, title, refresh, watchContinuously, stopWatching }

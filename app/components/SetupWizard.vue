@@ -41,10 +41,10 @@ function finish() {
 
         <div class="space-y-2">
           <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
-            Set up Agent Manager
+            Set up Agents Studio
           </h2>
           <p class="type-body leading-relaxed max-w-sm mx-auto">
-            Agent Manager needs a folder to store your agents, commands, and skills. This is the same folder Claude Code uses.
+            Agents Studio reads the folder Claude Code already keeps your configuration in. Point it at that one and everything you have shows up.
           </p>
         </div>
 
