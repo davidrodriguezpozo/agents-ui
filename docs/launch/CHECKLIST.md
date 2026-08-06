@@ -4,10 +4,15 @@ Ordered. Everything above the line should be done before a single post goes out.
 
 ## Blocking
 
-- [ ] **Fresh-machine install test.** On a machine (or container) that has never run this:
-      `npm install -g agents-studio && agents-studio`, open localhost:3000, point it at a
-      repo, start a session, let checks run. Every launch post says this works. Nothing
-      kills a Show HN faster than the install command failing in the first ten comments.
+- [x] **Global install works** — `npm install -g agents-studio`, verified by hand.
+- [x] **First run against an empty config directory** — verified with a throwaway
+      `CLAUDE_DIR`: the welcome leads with the workbench pitch, and team setup offers the
+      sessions route rather than dead-ending someone with no repository to paste.
+- [ ] **The rest of a genuinely cold machine.** Still unverified, because a machine that
+      already has Node, git and a signed-in Claude Code can't test for their absence. In a
+      container: no global npm cache, no `~/.claude`, and check that the setup wizard —
+      which only fires when the directory does not exist at all — says something useful.
+      Nothing kills a Show HN faster than the install failing in the first ten comments.
 - [ ] **Decide the repo name.** The npm package is `agents-studio`, the app and README now
       say *Agents Studio*, the repo is still `agents-ui`. Rename the repo to match
       (GitHub redirects the old URL and the git remote keeps working), or leave it and
