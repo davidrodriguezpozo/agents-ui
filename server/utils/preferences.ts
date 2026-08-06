@@ -64,6 +64,14 @@ export interface Preferences {
    * with no way to say otherwise.
    */
   maxTurns: number
+  /**
+   * How many unattended runs may go at once — rituals, self-repair, workflow
+   * steps. A turn you typed is never queued. 0 means no limit.
+   *
+   * Three by default rather than unlimited, which is what it was: ten rituals
+   * due at the same minute started ten agents on a machine nobody was watching.
+   */
+  maxConcurrentRuns: number
 }
 
 /**
@@ -83,6 +91,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   runCapUsd: 0,
   repairAttempts: 0,
   maxTurns: 0,
+  maxConcurrentRuns: 3,
 }
 
 /** A limit is a positive number of dollars or it is not a limit. */
@@ -131,6 +140,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Same clamp the request path uses, so a hand-edited file cannot ask for
     // a thousand turns any more than the settings page can.
     maxTurns: clampTurns(parsed?.preferences?.maxTurns),
+    // Absent means the default, not unlimited — a file written before this
+    // existed says nothing about it.
+    maxConcurrentRuns: parsed?.preferences?.maxConcurrentRuns ?? DEFAULT_PREFERENCES.maxConcurrentRuns,
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -152,9 +164,13 @@ export async function savePreferences(
     runCapUsd?: number
     repairAttempts?: number
     maxTurns?: number
+    maxConcurrentRuns?: number
   },
 ): Promise<Preferences> {
-  const { summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, ...notifications } = patch
+  const {
+    summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
+    ...notifications
+  } = patch
 
   return preferencesStore.update((current) => {
     const next: Preferences = {
@@ -164,6 +180,9 @@ export async function savePreferences(
       runCapUsd: runCapUsd === undefined ? current.runCapUsd : positiveOrZero(runCapUsd),
       repairAttempts: repairAttempts === undefined ? current.repairAttempts : clampAttempts(repairAttempts),
       maxTurns: maxTurns === undefined ? current.maxTurns : clampTurns(maxTurns),
+      maxConcurrentRuns: maxConcurrentRuns === undefined
+        ? current.maxConcurrentRuns
+        : Math.max(0, Math.min(Math.floor(maxConcurrentRuns), 20)),
     }
     Object.assign(current, next)
     return next

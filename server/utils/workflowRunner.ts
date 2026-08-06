@@ -3,6 +3,7 @@ import { resolveRunOptionsFor } from './runOptions'
 import { createRun, getActive, readRun } from './runStore'
 import { executeRun } from './runner'
 import { checkBudget } from './budget'
+import { withRunSlot } from './runQueue'
 import { notify } from './notify'
 import {
   newWorkflowRunId, patchWorkflowRun, saveWorkflowRun,
@@ -136,7 +137,7 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
       steps.push({ stepId: step.id, agentSlug: step.agentSlug, runId: run.id })
       await patchWorkflowRun(record.id, { steps: [...steps], currentStep: index })
 
-      await executeRun(run, options, { maxBudgetUsd: budget.maxBudgetUsd })
+      await withRunSlot(() => executeRun(run, options, { maxBudgetUsd: budget.maxBudgetUsd }))
 
       const finished = getActive(run.id)?.run ?? await readRun(run.id)
 

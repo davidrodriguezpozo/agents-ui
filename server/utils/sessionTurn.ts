@@ -8,6 +8,7 @@ import { rulesForProject } from './projectRules'
 import { permissionModeFor } from './trust'
 import { ensureTranscriptFor } from './transcripts'
 import { checkBudget } from './budget'
+import { withRunSlot } from './runQueue'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
@@ -209,10 +210,15 @@ export async function startTurn(
   // that answered a question — only the first is worth a test run.
   const fingerprintBefore = await worktreeFingerprint(session.worktreePath)
 
-  void executeRun(run, options, {
-    resumeSessionId: session.sdkSessionId,
-    maxBudgetUsd: budget.maxBudgetUsd,
-  })
+  const execution = { resumeSessionId: session.sdkSessionId, maxBudgetUsd: budget.maxBudgetUsd }
+
+  // A turn you typed goes now — you are sitting in front of it, and "queued
+  // behind a ritual" is a worse experience than a busy machine. A repair turn
+  // is nobody's foreground, so it waits its turn like the rest of the
+  // unattended work.
+  void (opts.repair
+    ? withRunSlot(() => executeRun(run, options, execution))
+    : executeRun(run, options, execution))
     .finally(async () => {
       // The SDK hands back its own id on the first turn; keep it so the next
       // turn resumes rather than starting a new conversation.

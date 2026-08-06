@@ -9,6 +9,7 @@ import { notify } from './notify'
 import { outcomeOf, summarizeRitualRuns, type RitualHistory } from './ritualHistory'
 import { RETRY_DELAY_MS, shouldGiveUp, shouldRetry } from './ritualHealth'
 import { checkBudget } from './budget'
+import { withRunSlot } from './runQueue'
 
 const TICK_MS = 30_000
 
@@ -199,6 +200,8 @@ async function runOnce(schedule: Schedule, maxBudgetUsd: number | undefined): Pr
   await markRan(schedule.id, run.id)
 
   console.log(`[scheduler] running "${schedule.title}" as ${run.id}`)
-  await executeRun(run, options, { unattended: true, maxBudgetUsd })
+  // Queued: several rituals falling due in the same minute is the normal case,
+  // not the exception.
+  await withRunSlot(() => executeRun(run, options, { unattended: true, maxBudgetUsd }))
   return run
 }

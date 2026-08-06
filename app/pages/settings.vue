@@ -101,6 +101,7 @@ const notifications = ref<Record<NotificationKey, boolean>>({
 const summariseSessions = ref(true)
 const repairAttempts = ref(0)
 const maxTurns = ref('')
+const maxConcurrentRuns = ref(3)
 const dailyCap = ref('')
 const runCap = ref('')
 const spentToday = ref(0)
@@ -119,6 +120,7 @@ async function saveCaps() {
         dailyCapUsd: capToNumber(dailyCap.value),
         runCapUsd: capToNumber(runCap.value),
         maxTurns: Math.max(0, Math.trunc(Number(maxTurns.value.trim()) || 0)),
+        maxConcurrentRuns: maxConcurrentRuns.value,
       },
     })
     const anyLimit = capToNumber(dailyCap.value) || capToNumber(runCap.value) || Number(maxTurns.value.trim())
@@ -144,6 +146,7 @@ onMounted(async () => {
       summariseSessions: boolean
       repairAttempts: number
       maxTurns: number
+      maxConcurrentRuns: number
       dailyCapUsd: number
       runCapUsd: number
     }>('/api/preferences')
@@ -151,6 +154,7 @@ onMounted(async () => {
     summariseSessions.value = prefs.summariseSessions
     repairAttempts.value = prefs.repairAttempts ?? 0
     maxTurns.value = prefs.maxTurns ? String(prefs.maxTurns) : ''
+    maxConcurrentRuns.value = prefs.maxConcurrentRuns ?? 3
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
 
@@ -543,6 +547,25 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             A turn is one exchange that used a tool, so real work spends them quickly. This is
             here to stop a loop running all night, not to say how much work is reasonable —
             a run that hits it stops unfinished and says so. Blank for the default of 40, up to 200.
+          </p>
+        </div>
+
+        <div class="field-group">
+          <label class="field-label">How much runs at once</label>
+          <div class="w-48">
+            <select v-model.number="maxConcurrentRuns" class="field-select">
+              <option :value="1">One at a time</option>
+              <option :value="2">2 at once</option>
+              <option :value="3">3 at once</option>
+              <option :value="5">5 at once</option>
+              <option :value="0">No limit</option>
+            </select>
+          </div>
+          <p class="field-hint">
+            Work nobody is watching — rituals, sessions fixing their own checks, workflow
+            steps — waits its turn above this. A turn you type is never queued: it starts
+            immediately whatever else is going on. Five rituals due at 08:00 used to mean
+            five agents at once on a sleeping laptop.
           </p>
         </div>
 

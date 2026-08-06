@@ -8,6 +8,7 @@ export default defineEventHandler(async (event) => {
     summariseSessions?: boolean
     repairAttempts?: number
     maxTurns?: number
+    maxConcurrentRuns?: number
     dailyCapUsd?: number
     runCapUsd?: number
   }>(event)
@@ -17,6 +18,7 @@ export default defineEventHandler(async (event) => {
     summariseSessions?: boolean
     repairAttempts?: number
     maxTurns?: number
+    maxConcurrentRuns?: number
     dailyCapUsd?: number
     runCapUsd?: number
   } = {}
@@ -37,6 +39,7 @@ export default defineEventHandler(async (event) => {
   if (typeof body?.repairAttempts === 'number') patch.repairAttempts = body.repairAttempts
   // 0 is how this returns to the built-in default, so absent is the only skip.
   if (typeof body?.maxTurns === 'number') patch.maxTurns = body.maxTurns
+  if (typeof body?.maxConcurrentRuns === 'number') patch.maxConcurrentRuns = body.maxConcurrentRuns
 
   return savePreferences(patch)
 })
