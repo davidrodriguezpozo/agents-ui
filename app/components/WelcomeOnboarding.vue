@@ -4,6 +4,13 @@ import type { Agent } from '~/types'
 import { agentTemplates } from '~/utils/templates'
 import { getAgentColor } from '~/utils/colors'
 
+/**
+ * First run, advanced mode. Leads with the two things this is for — running
+ * sessions and scheduling rituals — rather than with what an agent is. Someone
+ * arriving here has just installed a workbench; explaining the vocabulary
+ * before showing the work gets the order backwards, and the templates below
+ * are still one scroll away for whoever wants them.
+ */
 const emit = defineEmits<{
   created: [agent: Agent]
 }>()
@@ -30,52 +37,79 @@ async function useTemplate(templateId: string) {
     creating.value = null
   }
 }
+
+const starts = [
+  {
+    to: '/sessions',
+    icon: 'i-lucide-git-branch',
+    title: 'Start a session',
+    body: 'Say what you want done. It gets its own branch and its own checkout, so several can run at once without touching your working copy.',
+    cta: 'Run something',
+  },
+  {
+    to: '/schedules',
+    icon: 'i-lucide-alarm-clock',
+    title: 'Put work on a schedule',
+    body: 'A morning briefing, issue triage, a migration review — waiting for you when you get in, with what it cost and whether it worked.',
+    cta: 'Write a ritual',
+  },
+  {
+    to: '/explore',
+    icon: 'i-lucide-compass',
+    title: 'Add tools',
+    body: 'Skills, plugins and commands from marketplaces and GitHub, installed without leaving the app.',
+    cta: 'Browse',
+  },
+]
 </script>
 
 <template>
   <div class="space-y-8">
     <!-- Hero -->
     <div class="text-center space-y-3 pt-2">
-      <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">Welcome to Agent Manager</h2>
-      <p class="type-body max-w-lg mx-auto leading-relaxed">
-        This tool helps you configure how Claude Code behaves. Create <strong class="text-body">agents</strong> with custom instructions, build reusable <strong class="text-body">commands</strong>, and organize <strong class="text-body">skills</strong> — all without touching the terminal.
+      <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
+        A workbench for Claude Code
+      </h2>
+      <p class="type-body max-w-xl mx-auto leading-relaxed">
+        Run several pieces of work at once, each on its own branch. Put the recurring ones on a
+        schedule. See what everything did, whether it worked, and what it cost — without leaving
+        the browser.
       </p>
     </div>
 
-    <!-- Concepts -->
+    <!-- Where to start -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
-      <div class="rounded-md p-4 bg-card">
+      <NuxtLink
+        v-for="start in starts"
+        :key="start.to"
+        :to="start.to"
+        class="rounded-md p-4 bg-card hover-card focus-ring group flex flex-col"
+      >
         <div class="flex items-center gap-2 mb-2">
-          <UIcon name="i-lucide-cpu" class="size-4" style="color: var(--accent);" />
-          <span class="type-strong">Agents</span>
+          <UIcon :name="start.icon" class="size-4" style="color: var(--accent);" />
+          <span class="type-strong">{{ start.title }}</span>
         </div>
-        <p class="type-detail leading-relaxed">
-          Specialized AI assistants. Each agent has its own personality, instructions, and model. Think of them as different team members.
+        <p class="type-detail leading-relaxed flex-1">
+          {{ start.body }}
         </p>
-      </div>
-      <div class="rounded-md p-4 bg-card">
-        <div class="flex items-center gap-2 mb-2">
-          <UIcon name="i-lucide-terminal" class="size-4" style="color: var(--accent);" />
-          <span class="type-strong">Commands</span>
+        <div class="flex items-center gap-1.5 mt-3 text-[12px] font-medium" style="color: var(--accent);">
+          {{ start.cta }}
+          <UIcon
+            name="i-lucide-arrow-right"
+            class="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5"
+          />
         </div>
-        <p class="type-detail leading-relaxed">
-          Reusable workflows triggered with a slash (e.g., /deploy). Like shortcuts for things you do repeatedly.
-        </p>
-      </div>
-      <div class="rounded-md p-4 bg-card">
-        <div class="flex items-center gap-2 mb-2">
-          <UIcon name="i-lucide-sparkles" class="size-4" style="color: var(--accent);" />
-          <span class="type-strong">Skills</span>
-        </div>
-        <p class="type-detail leading-relaxed">
-          Specific capabilities you can add to agents. A skill teaches an agent how to do one thing well.
-        </p>
-      </div>
+      </NuxtLink>
     </div>
 
-    <!-- Quick start templates -->
+    <!-- Subagent templates, for whoever wants them -->
     <div>
-      <h3 class="text-section-label mb-3">Quick start — pick a template</h3>
+      <h3 class="text-section-label mb-1.5">Or set up a subagent</h3>
+      <p class="type-detail mb-3 max-w-xl leading-relaxed">
+        Subagents are specialists a session can hand work to — a reviewer, a researcher — each
+        with its own instructions, model and tool allowlist. Start from a template and change
+        anything afterwards.
+      </p>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         <button
           v-for="template in agentTemplates"
@@ -104,9 +138,6 @@ async function useTemplate(templateId: string) {
           </p>
         </button>
       </div>
-      <p class="text-[12px] text-meta mt-3">
-        Click any template to create it instantly. You can customize everything afterwards.
-      </p>
     </div>
   </div>
 </template>

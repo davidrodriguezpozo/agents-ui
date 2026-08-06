@@ -210,5 +210,20 @@ async function onInstall(marketplace: string, plugin: string) {
       </p>
       <UButton label="See what I can do" icon="i-lucide-arrow-right" size="sm" @click="emit('done')" />
     </div>
+
+    <!--
+      Not everyone arriving here has a team repository to paste. Someone who
+      installed this to run Claude against their own code would otherwise be
+      stuck on a form they have no answer for.
+    -->
+    <div class="pt-2 text-center" style="border-top: 1px solid var(--border-subtle);">
+      <p class="type-detail pt-4">
+        Here to run Claude on your own code instead?
+        <NuxtLink to="/sessions" class="font-medium hover:underline" style="color: var(--accent);">
+          Start a session
+        </NuxtLink>
+        — it gets its own branch and checkout, and nothing here needs setting up first.
+      </p>
+    </div>
   </div>
 </template>
