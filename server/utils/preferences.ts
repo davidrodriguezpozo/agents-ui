@@ -42,6 +42,16 @@ export interface Preferences {
   dailyCapUsd: number
   /** Most a single run may spend before the SDK stops it. 0 means no limit. */
   runCapUsd: number
+  /**
+   * How many turns a session may spend fixing its own failing checks before it
+   * stops and waits for you. 0 or absent means it never tries.
+   *
+   * Off by default, for the same reason the spending limits are the other way
+   * round: this one spends money without being asked, on work nobody watched
+   * being decided. Turning it on should be somebody's choice. **Fix it** on a
+   * failing session works either way — pressing a button is that choice.
+   */
+  repairAttempts: number
 }
 
 /**
@@ -59,11 +69,22 @@ export const DEFAULT_PREFERENCES: Preferences = {
   summariseSessions: true,
   dailyCapUsd: 0,
   runCapUsd: 0,
+  repairAttempts: 0,
 }
 
 /** A limit is a positive number of dollars or it is not a limit. */
 export function positiveOrZero(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+}
+
+/** Nobody's runaway loop is worth more than this, whatever the file says. */
+export const MAX_REPAIR_ATTEMPTS = 10
+
+/** Lives here rather than with the repair loop so that reading a preference
+ * does not depend on the thing that consumes it. */
+export function clampAttempts(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0
+  return Math.min(Math.floor(value), MAX_REPAIR_ATTEMPTS)
 }
 
 export const preferencesStore = defineJsonStore<Preferences>({
@@ -82,6 +103,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // anything that is not a usable number means no limit at all.
     dailyCapUsd: positiveOrZero(parsed?.preferences?.dailyCapUsd),
     runCapUsd: positiveOrZero(parsed?.preferences?.runCapUsd),
+    // Clamped on the way in as well as the way out: a hand-edited file saying
+    // 500 should not buy a session five hundred turns at its own discretion.
+    repairAttempts: clampAttempts(parsed?.preferences?.repairAttempts),
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -101,9 +125,10 @@ export async function savePreferences(
     summariseSessions?: boolean
     dailyCapUsd?: number
     runCapUsd?: number
+    repairAttempts?: number
   },
 ): Promise<Preferences> {
-  const { summariseSessions, dailyCapUsd, runCapUsd, ...notifications } = patch
+  const { summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, ...notifications } = patch
 
   return preferencesStore.update((current) => {
     const next: Preferences = {
@@ -111,6 +136,7 @@ export async function savePreferences(
       summariseSessions: summariseSessions ?? current.summariseSessions,
       dailyCapUsd: dailyCapUsd === undefined ? current.dailyCapUsd : positiveOrZero(dailyCapUsd),
       runCapUsd: runCapUsd === undefined ? current.runCapUsd : positiveOrZero(runCapUsd),
+      repairAttempts: repairAttempts === undefined ? current.repairAttempts : clampAttempts(repairAttempts),
     }
     Object.assign(current, next)
     return next

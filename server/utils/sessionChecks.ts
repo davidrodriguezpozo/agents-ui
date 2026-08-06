@@ -111,30 +111,27 @@ export async function verifySession(sessionId: string): Promise<SessionCheck | n
  *
  * Never throws: this runs detached from the request that caused it, and a
  * check that cannot run must not take a completed turn down with it.
+ *
+ * Returns the verdict rather than announcing it. A failing one may earn the
+ * session another turn to fix itself, and whether that happens decides whether
+ * the failure is worth interrupting anyone about — so the caller, which knows,
+ * does the telling. Null covers every case where there is nothing to react to:
+ * no session, nothing changed, no checks configured.
  */
 export async function verifySessionAfterTurn(
   sessionId: string,
   fingerprintBefore: string,
-): Promise<void> {
+): Promise<SessionCheck | null> {
   try {
     const session = await findSession(sessionId)
-    if (!session) return
+    if (!session) return null
 
     const after = await worktreeFingerprint(session.worktreePath)
-    if (!after || after === fingerprintBefore) return
+    if (!after || after === fingerprintBefore) return null
 
-    const check = await verifySession(sessionId)
-
-    // Worth interrupting for: the person has been told the turn finished, and
-    // "finished" reads as "done" until something says otherwise.
-    if (check?.status === 'failing') {
-      await notify(
-        'failed',
-        `${session.title} — checks failed`,
-        `\`${check.command}\` did not pass in this session's workspace.`,
-      )
-    }
+    return await verifySession(sessionId)
   } catch {
     // A verdict we could not reach is the same as not having one.
+    return null
   }
 }

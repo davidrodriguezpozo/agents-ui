@@ -3,6 +3,7 @@ import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
 import type { SessionCheck } from './checks'
 import type { SessionSummary } from './sessionSummary'
+import type { SessionRepair } from './sessionRepair'
 import type { TrustLevel } from './trust'
 
 /**
@@ -51,6 +52,11 @@ export interface Session {
   check?: SessionCheck
   /** What this session did, in a sentence, written by a small model. */
   summary?: SessionSummary
+  /**
+   * Whether this session is trying to fix its own failing checks, and how far
+   * it has got. Absent means it is not, and never has been on this instruction.
+   */
+  repair?: SessionRepair
   /**
    * Set when the session continues a conversation started in the terminal.
    * The work has moved to a fresh checkout, which the conversation does not

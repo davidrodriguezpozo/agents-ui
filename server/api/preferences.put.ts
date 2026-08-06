@@ -6,6 +6,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody<{
     notifications?: Partial<NotificationPreferences>
     summariseSessions?: boolean
+    repairAttempts?: number
     dailyCapUsd?: number
     runCapUsd?: number
   }>(event)
@@ -13,6 +14,7 @@ export default defineEventHandler(async (event) => {
   // Only the switches, and only as booleans — nothing else belongs in here.
   const patch: Partial<NotificationPreferences> & {
     summariseSessions?: boolean
+    repairAttempts?: number
     dailyCapUsd?: number
     runCapUsd?: number
   } = {}
@@ -29,6 +31,8 @@ export default defineEventHandler(async (event) => {
   // ignored when absent, not when falsy.
   if (typeof body?.dailyCapUsd === 'number') patch.dailyCapUsd = body.dailyCapUsd
   if (typeof body?.runCapUsd === 'number') patch.runCapUsd = body.runCapUsd
+  // Same reasoning: 0 is how this is turned off, so absent is the only skip.
+  if (typeof body?.repairAttempts === 'number') patch.repairAttempts = body.repairAttempts
 
   return savePreferences(patch)
 })

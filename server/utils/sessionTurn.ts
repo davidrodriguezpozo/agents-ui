@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { patchSession, type Session } from './sessions'
+import { findSession, patchSession, type Session } from './sessions'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, getActive, readRun, type Run } from './runStore'
 import { executeRun } from './runner'
@@ -11,6 +11,8 @@ import { checkBudget } from './budget'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
+import { clearRepair, planRepair } from './sessionRepair'
+import type { SessionCheck } from './checks'
 
 /**
  * Sending a turn to a session.
@@ -68,11 +70,74 @@ export function turnRefusal(session: Session): { error: string; message: string 
 }
 
 /**
+ * What a failing verdict leads to, once the checks are in.
+ *
+ * Either the session takes another turn at fixing itself, or the failure is
+ * somebody's problem and they should be told. Exactly one of those, which is
+ * why both live here rather than in the checks.
+ *
+ * Never throws — everything below this point is detached from a turn that has
+ * already finished and been reported.
+ */
+async function actOnVerdict(sessionId: string, check: SessionCheck | null): Promise<void> {
+  try {
+    const prompt = await planRepair(sessionId, check)
+
+    if (!prompt) {
+      // No repair coming, so a failure now needs a person. Re-read the session:
+      // a suite can run for ten minutes and the title, or the session itself,
+      // may not be what it was when the turn ended.
+      const session = await findSession(sessionId)
+      if (session && check?.status === 'failing') {
+        await notify(
+          'failed',
+          `${session.title} — checks failed`,
+          `\`${check.command}\` did not pass in this session's workspace.`,
+        )
+      }
+      return
+    }
+
+    const session = await findSession(sessionId)
+    if (!session) return
+
+    // Everything a person's turn is refused for applies here too — an archived
+    // session or a missing workspace is not something to retry into.
+    if (turnRefusal(session)) return
+
+    await startTurn(session, prompt, { repair: true })
+  } catch (e: any) {
+    // The likely one is the daily limit: `startTurn` refuses, and a streak that
+    // cannot afford another attempt has ended rather than paused. Recorded on
+    // the session so the row says why it stopped instead of looking abandoned.
+    const session = await findSession(sessionId)
+    if (session?.repair?.state === 'running') {
+      await patchSession(sessionId, {
+        repair: {
+          ...session.repair,
+          state: 'gave-up',
+          reason: e?.data?.message || 'Could not start another attempt.',
+          updatedAt: Date.now(),
+        },
+      })
+    }
+  }
+}
+
+/**
  * Start a turn and return its run id. The run itself is detached: it outlives
  * the request, streams to whoever is attached, and persists for whoever
  * attaches later.
+ *
+ * `repair` marks a turn this app decided to send, rather than one a person
+ * typed. The difference matters in one place: a turn somebody typed is a new
+ * instruction, and ends whatever the session had been doing on its own.
  */
-export async function startTurn(session: Session, input: string): Promise<string> {
+export async function startTurn(
+  session: Session,
+  input: string,
+  opts: { repair?: boolean } = {},
+): Promise<string> {
   const refusal = turnRefusal(session)
   if (refusal) throw createError({ statusCode: 409, data: refusal })
 
@@ -98,6 +163,11 @@ export async function startTurn(session: Session, input: string): Promise<string
       data: { error: 'over_budget', message: budget.reason! },
     })
   }
+
+  // A fresh instruction supersedes whatever the session was doing unattended.
+  // Without this, a streak that gave up an hour ago still counts against the
+  // checks that fail after what you have just asked for.
+  if (!opts.repair) await clearRepair(session)
 
   // Sessions adopted before this was understood have their conversation only
   // in the repository's transcript directory, where a run in the worktree will
@@ -156,8 +226,15 @@ export async function startTurn(session: Session, input: string): Promise<string
 
       // Detached: the checks outlast the turn by minutes, and the session is
       // idle and usable throughout. The verdict lands on the record when it
-      // arrives.
-      void verifySessionAfterTurn(session.id, fingerprintBefore)
+      // arrives, and may start the next turn on its own.
+      //
+      // A turn you stopped by hand does not lead anywhere. You interrupted it
+      // deliberately, and having it immediately restart itself to fix what it
+      // was halfway through is the opposite of what stopping means.
+      if (finished?.status !== 'cancelled') {
+        void verifySessionAfterTurn(session.id, fingerprintBefore)
+          .then(check => actOnVerdict(session.id, check))
+      }
 
       // Same trigger as the checks, and for the same reason: a turn that
       // changed nothing has nothing to describe. Kept separate from them
