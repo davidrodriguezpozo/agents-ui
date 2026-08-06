@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addArgs, invalidName, parseMcpList, parseMcpLine, ttyWrapped } from '../server/utils/mcp'
+import { addArgs, invalidName, parseMcpList, parseMcpLine, ptyCommand } from '../server/utils/mcp'
 
 /**
  * Reading `claude mcp list`.
@@ -155,28 +155,34 @@ describe('invalidName', () => {
   })
 })
 
-describe('ttyWrapped', () => {
-  it('wraps the command so it gets a terminal', () => {
-    // `claude mcp login` refuses outright when stdin is not a TTY, so this
-    // wrapper is the whole reason signing in can be a button rather than an
-    // instruction to go and open a terminal.
-    const wrapped = ttyWrapped('/usr/local/bin/claude', ['mcp', 'login', 'acme'])
-    expect(wrapped).not.toBeNull()
-    expect(wrapped!.file).toBe('script')
-    expect(wrapped!.args.join(' ')).toContain('mcp')
-    expect(wrapped!.args.join(' ')).toContain('acme')
+describe('ptyCommand', () => {
+  const CLAUDE = '/usr/local/bin/claude'
+
+  it('passes every part as its own argument under python', () => {
+    // `claude mcp login` refuses outright without a terminal, which is why the
+    // wrapper exists at all. Separate argv entries mean nothing needs quoting.
+    const { file, args } = ptyCommand('python', CLAUDE, ['mcp', 'login', 'claude.ai Google Drive'])
+    expect(file).toBe('python3')
+    expect(args.slice(-4)).toEqual([CLAUDE, 'mcp', 'login', 'claude.ai Google Drive'])
+    expect(args[0]).toBe('-c')
+    expect(args[1]).toContain('pty.spawn')
   })
 
-  it('keeps a name with spaces and colons in one piece', () => {
-    // Real names look like `claude.ai Google Drive` and `plugin:slack:slack`.
-    const wrapped = ttyWrapped('/usr/local/bin/claude', ['mcp', 'login', 'claude.ai Google Drive'])!
+  it('keeps a name with spaces and colons in one piece under script', () => {
+    // Real names look like `plugin:slack:slack` and `claude.ai Google Drive`.
+    const { args } = ptyCommand('script', CLAUDE, ['mcp', 'login', 'plugin:slack:slack'])
 
-    if (process.platform === 'linux') {
-      // One string, so it has to survive quoting rather than word-splitting.
-      const line = wrapped.args[wrapped.args.indexOf('-c') + 1]!
-      expect(line).toContain(`'claude.ai Google Drive'`)
+    if (process.platform === 'darwin') {
+      expect(args).toEqual(['-q', '/dev/null', CLAUDE, 'mcp', 'login', 'plugin:slack:slack'])
     } else {
-      expect(wrapped.args).toContain('claude.ai Google Drive')
+      const line = args[args.indexOf('-c') + 1]!
+      expect(line).toContain(`'plugin:slack:slack'`)
     }
+  })
+
+  it('escapes a quote rather than letting it end the string', () => {
+    if (process.platform === 'darwin') return
+    const { args } = ptyCommand('script', CLAUDE, ['mcp', 'login', "od'd"])
+    expect(args[args.indexOf('-c') + 1]).toContain(`'od'\\''d'`)
   })
 })

@@ -214,40 +214,86 @@ export async function removeMcpServer(name: string, cwd?: string): Promise<void>
   forgetMcpCache()
 }
 
-/** Shell-quote one argument, for the platforms whose `script` wants a string. */
+/** Shell-quote one argument, for the platform whose `script` wants a string. */
 function quote(arg: string): string {
   return `'${arg.replace(/'/g, `'\\''`)}'`
 }
 
 /**
- * The same command, but with a terminal attached.
+ * Ways to get a pseudo-terminal without adding a dependency.
  *
  * `claude mcp login` refuses to run when stdin is not a TTY — it prints the
  * authorization URL, says it is waiting, and then gives up on the spot. That
- * rules out driving it headlessly and it rules out `--no-browser` too: there
- * is no prompt to answer, because it never gets as far as prompting.
+ * rules out driving it headlessly, and `--no-browser` too: there is no prompt
+ * to answer, because it never reaches one. So it has to be given a terminal.
  *
- * `script` exists to allocate a pseudo-terminal, so the login runs under one.
- * With a terminal it does the thing it always meant to: opens a browser and
- * waits on its own callback on localhost, which needs no input from us at all.
+ * Two ways, and the order matters:
  *
- * Returns null where there is no `script` to lean on, which is Windows — the
- * caller says so rather than failing in a way that reads like a bug.
+ *   - **python** is first because it is the one that works from a server.
+ *     `pty.spawn` allocates the terminal for the child and wraps the read of
+ *     *our* stdin in a try/except, so a piped stdin is fine.
+ *   - **script** is the obvious tool for this and the wrong one here. BSD
+ *     `script` calls `tcgetattr` on its own stdin before it does anything, and
+ *     a process spawned by Node is handed a pipe — so it dies with
+ *     "tcgetattr/ioctl: Operation not supported on socket" before the login
+ *     starts. It is kept only for a machine with no usable python, where it
+ *     will work if this app was started from a terminal.
  */
-export function ttyWrapped(command: string, args: string[]): { file: string; args: string[] } | null {
-  // BSD, which is what macOS has: the command follows the typescript file.
-  if (process.platform === 'darwin') {
-    return { file: 'script', args: ['-q', '/dev/null', command, ...args] }
+export type PtyRunner = 'python' | 'script'
+
+/**
+ * Passed as separate argv entries, so nothing here needs quoting and a server
+ * name is never parsed as anything but a name.
+ */
+const PY_SPAWN = [
+  'import pty, sys, os',
+  'status = pty.spawn(sys.argv[1:])',
+  'sys.exit(os.waitstatus_to_exitcode(status) if hasattr(os, "waitstatus_to_exitcode") else status >> 8)',
+].join('\n')
+
+export function ptyCommand(
+  runner: PtyRunner,
+  command: string,
+  args: string[],
+): { file: string; args: string[] } {
+  if (runner === 'python') {
+    return { file: 'python3', args: ['-c', PY_SPAWN, command, ...args] }
   }
 
-  // GNU wants one string, so this is the one place quoting matters. Server
-  // names come from Claude Code and contain spaces and colons in practice.
-  if (process.platform === 'linux') {
-    const line = [command, ...args].map(quote).join(' ')
-    return { file: 'script', args: ['-q', '-c', line, '/dev/null'] }
+  // BSD: the command follows the typescript file. GNU wants one string, which
+  // is the only place quoting is needed — real names are `plugin:slack:slack`
+  // and `claude.ai Google Drive`.
+  return process.platform === 'darwin'
+    ? { file: 'script', args: ['-q', '/dev/null', command, ...args] }
+    : { file: 'script', args: ['-q', '-c', [command, ...args].map(quote).join(' '), '/dev/null'] }
+}
+
+let ptyRunner: PtyRunner | null | undefined
+
+/** Which of them this machine actually has. Memoised — it cannot change. */
+export async function detectPtyRunner(): Promise<PtyRunner | null> {
+  if (ptyRunner !== undefined) return ptyRunner
+
+  try {
+    await exec('python3', ['-c', 'import pty'], { timeout: 5_000 })
+    ptyRunner = 'python'
+    return ptyRunner
+  } catch {
+    // Fall through.
   }
 
-  return null
+  if (process.platform !== 'win32') {
+    try {
+      await exec('sh', ['-c', 'command -v script'], { timeout: 5_000 })
+      ptyRunner = 'script'
+      return ptyRunner
+    } catch {
+      // Fall through.
+    }
+  }
+
+  ptyRunner = null
+  return ptyRunner
 }
 
 /**
@@ -267,16 +313,18 @@ export async function loginToMcpServer(name: string, cwd?: string): Promise<void
     })
   }
 
-  const wrapped = ttyWrapped(claude, ['mcp', 'login', name])
-  if (!wrapped) {
+  const runner = await detectPtyRunner()
+  if (!runner) {
     throw createError({
       statusCode: 501,
       data: {
         error: 'needs_terminal',
-        message: `Signing in needs a terminal on this platform. Run: claude mcp login "${name}"`,
+        message: `Signing in needs a terminal, and this machine has no way to make one. Run it yourself: claude mcp login "${name}"`,
       },
     })
   }
+
+  const wrapped = ptyCommand(runner, claude, ['mcp', 'login', name])
 
   try {
     await exec(wrapped.file, wrapped.args, { cwd, timeout: 5 * 60_000, maxBuffer: 4 * 1024 * 1024 })
