@@ -58,6 +58,58 @@ const options = computed(() => {
 
 const title = ref(props.schedule?.title ?? props.presetTitle ?? '')
 const input = ref(props.schedule?.input ?? props.presetInput ?? '')
+
+/**
+ * The same command list the session composer offers, for the same reason:
+ * writing a ritual is exactly the moment you are trying to remember what a
+ * command is called, and this dialog was the one place you had to know it
+ * from memory. Opens on a bare slash-word, or from the button beside the box
+ * when you don't know one exists.
+ *
+ * Downwards rather than upwards — the field is at the top of the dialog, and a
+ * list that opened above it would leave the screen.
+ */
+const { commands, fetchAll: fetchCommands } = useCommands()
+const paletteOpen = ref(false)
+const palette = ref<{ move: (d: number) => void; choose: () => void; hasMatches: boolean } | null>(null)
+
+onMounted(() => { void fetchCommands() })
+
+const commandQuery = computed(() => {
+  const match = input.value.match(/^\/(\S*)$/)
+  return match ? match[1] ?? '' : ''
+})
+
+watch(input, () => {
+  // Typing past the command itself means you are writing an instruction now.
+  if (input.value.startsWith('/') && !input.value.includes(' ')) paletteOpen.value = true
+  else if (!input.value.startsWith('/')) paletteOpen.value = false
+})
+
+function insertCommand(invocation: string) {
+  input.value = `${invocation} `
+  paletteOpen.value = false
+}
+
+/** While the list is open it owns the keys that drive it. */
+function onInputKey(event: KeyboardEvent) {
+  if (!paletteOpen.value) return
+
+  if (event.key === 'ArrowDown') { event.preventDefault(); palette.value?.move(1); return }
+  if (event.key === 'ArrowUp') { event.preventDefault(); palette.value?.move(-1); return }
+  if (event.key === 'Escape') {
+    // Swallowed so it closes the list rather than the whole dialog, which
+    // would take the half-written ritual with it.
+    event.preventDefault()
+    event.stopPropagation()
+    paletteOpen.value = false
+    return
+  }
+  if (event.key === 'Enter' && palette.value?.hasMatches) {
+    event.preventDefault()
+    palette.value.choose()
+  }
+}
 const hour = ref(props.schedule?.recurrence.hour ?? 8)
 const minute = ref(props.schedule?.recurrence.minute ?? 0)
 const days = ref<number[]>(props.schedule?.recurrence.days?.length ? [...props.schedule.recurrence.days] : [...WEEKDAYS])
@@ -116,8 +168,37 @@ async function onSave() {
 
     <div class="field-group">
       <label class="field-label">What to run</label>
-      <input v-model="input" class="field-input font-mono text-[12px]" placeholder="/hd:goodmorning" />
-      <span class="field-hint">A command, or anything you'd normally ask Claude.</span>
+      <div class="relative">
+        <div class="flex gap-2">
+          <input
+            v-model="input"
+            class="field-input font-mono text-[12px] flex-1"
+            placeholder="/hd:goodmorning"
+            @keydown="onInputKey"
+          />
+          <UButton
+            icon="i-lucide-slash"
+            size="sm"
+            variant="ghost"
+            color="neutral"
+            :title="`${commands.length} commands available`"
+            aria-label="Show commands"
+            @click="() => { paletteOpen = !paletteOpen }"
+          />
+        </div>
+
+        <!-- Below the field: this one sits near the top of the dialog -->
+        <div v-if="paletteOpen" class="absolute top-full left-0 right-0 mt-2 z-10">
+          <CommandPalette
+            ref="palette"
+            :commands="commands"
+            :query="commandQuery"
+            @select="insertCommand"
+            @close="() => { paletteOpen = false }"
+          />
+        </div>
+      </div>
+      <span class="field-hint">A command, or anything you'd normally ask Claude. Type / to see what you have.</span>
     </div>
 
     <div class="field-group">
