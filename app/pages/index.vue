@@ -186,8 +186,10 @@ const statItems = computed(() => [
     <PageHeader title="Dashboard" />
 
     <div class="px-6 py-5 stagger-section space-y-5">
-      <!-- Hero stat bar -->
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <!-- Hero stat bar. Hidden on first run: a row of zeros is a worse
+           opening than the welcome that follows it, and counts only mean
+           something once there is something to count. -->
+      <div v-if="hasContent" class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <NuxtLink
           v-for="item in statItems"
           :key="item.to"
