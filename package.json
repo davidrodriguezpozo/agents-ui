@@ -1,6 +1,6 @@
 {
   "name": "agents-studio",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "type": "module",
   "description": "A workbench for Claude Code — run several sessions at once, each on its own branch, put recurring work on a schedule, and see what everything cost.",
   "keywords": [
