@@ -77,7 +77,7 @@ function displayName(server: McpServer): string {
 <template>
   <div>
     <PageHeader title="MCP servers">
-      <template #actions>
+      <template #right>
         <UButton
           label="Check again"
           icon="i-lucide-refresh-cw"
