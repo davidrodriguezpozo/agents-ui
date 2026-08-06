@@ -2,17 +2,18 @@
 
 # Agents Studio
 
-**A workbench for Claude Code.**
+**Leave Claude Code running.**
 
-Run several sessions at once, put recurring work on a schedule,
-and see everything Claude has done for you — without leaving the browser.
+Work that fires on a schedule against your own repositories, checks itself
+with your own tests, and stops when it can't. You come back to what it did,
+what it cost, and what needs you.
 
 <a href="#quick-start">Quick start</a> ·
-<a href="#projects">Projects</a> ·
-<a href="#sessions">Sessions</a> ·
 <a href="#daily-rituals">Rituals</a> ·
+<a href="#sessions">Sessions</a> ·
+<a href="#whether-it-works">Verification</a> ·
 <a href="#activity">Activity</a> ·
-<a href="#configuration">Configuration</a> ·
+<a href="#alongside-claude-code-desktop">vs. Desktop</a> ·
 <a href="CONTRIBUTING.md">Contributing</a>
 
 <img src="https://img.shields.io/badge/license-MIT-5b5bd6?style=flat-square" alt="MIT licence" />
@@ -21,27 +22,47 @@ and see everything Claude has done for you — without leaving the browser.
 
 <br />
 
-![Sessions running in parallel, each on its own branch](docs/screenshots/01-sessions-list.jpg)
+![Scheduled work, with what each run produced and which have quietly stopped working](docs/screenshots/06-daily-rituals.jpg)
 
 </div>
 
 ---
 
-Agent Manager reads the `.claude` directory you already have and the repository you
+Agents Studio reads the `.claude` directory you already have and the repositories you
 point it at. Everything it shows you is a real file or a real branch; everything it
 writes is something you could have written by hand. Close the app and nothing is
 trapped inside it.
 
+## Alongside Claude Code Desktop
+
+Claude Code Desktop is where you sit down and work: parallel sessions in a sidebar,
+worktrees, a diff viewer, panes you can arrange. It is good at that, and this does not
+try to replace it.
+
+This is the other half — the part where nobody is watching.
+
+| | Desktop | Here |
+| --- | --- | --- |
+| Work while you're there | ✅ and better at it | ✅ |
+| Fires at 08:00 against your local repo | Cloud routines only | ✅ |
+| Runs *your* test suite and blocks a merge on it | — | ✅ |
+| Fixes its own failures, up to a limit you set | — | ✅ |
+| Stops a scheduled job that has quietly broken | — | ✅ |
+| A daily spend cap that skips work rather than billing you | Quota display | ✅ |
+| Every repository at once, not one window's worth | — | ✅ |
+
+If you only ever work with Claude while looking at it, use Desktop. This is for when
+you want to leave things running.
+
 | Section | What it's for |
 | --- | --- |
-| **Projects** | The repositories you work in — switch between them in a click |
-| **Sessions** | Several pieces of work at once, each on its own branch and its own checkout |
-| **Daily** | Rituals — work that runs on a schedule, so the result is waiting when you get in |
+| **Daily** | Rituals — work on a schedule, retried when it blips, stopped when it breaks |
+| **Sessions** | Several pieces of work at once, each on its own branch, each verified |
 | **Activity** | Every run there has ever been, with cost, duration and outcome |
-| **Agents** | Subagents, their model tier and what tools each is allowed |
-| **Workflows** | Agents chained into a pipeline, run step by step |
-| **Commands** | Slash commands, grouped by whether you wrote them or a plugin brought them |
-| **Skills · Plugins** | What is installed, where it came from, and what it adds |
+| **Workflows** | Agents chained into a pipeline, run to the end and kept |
+| **Projects** | The repositories you work in — switch between them in a click |
+| **Agents · Commands** | Subagents and slash commands, with where each came from |
+| **Skills · Plugins · MCP** | What is installed, what it adds, and which of it actually works |
 | **Explore · Graph** | Find new things to install; see how what you have connects |
 
 ---
@@ -194,6 +215,61 @@ are editing are not any one repository's.
 
 ---
 
+## Daily rituals
+
+Work that runs on a schedule: a morning briefing, issue triage, a migration review
+before anyone opens the repo. Each ritual is a command, a recurrence and a next run —
+and it tells you which ones came from a plugin rather than being written by hand.
+
+![Scheduled rituals with recurrence and next run](docs/screenshots/06-daily-rituals.jpg)
+
+### When nobody is there to answer
+
+A scheduled run that hits a permission prompt does not sit and wait for ten minutes and
+then deny anyway. It stops immediately, tells you exactly what it was blocked on, and
+offers the one narrow rule it needed — `Bash(gh issue edit:*)`, not full access.
+
+![A ritual that stopped on a permission prompt](docs/screenshots/07-ritual-needs-permission.jpg)
+
+### Whether it still works
+
+The useful question about a ritual is not what happened last time — it's whether it has
+quietly stopped working. Each one carries its recent outcomes and expands into them: what
+happened, why, what it cost. When the last few runs in a row came to nothing, the row says
+so, and says when it last worked.
+
+A finished run is not automatically a successful one. A ritual refused a tool it needed
+completes with half the job undone, so that counts against it. A run you stopped by hand
+does not.
+
+### Doing something about it
+
+Knowing was never the point on its own. A ritual that breaks on Tuesday used to go on
+failing every morning, spending money to produce nothing, until somebody noticed.
+
+**A failure gets one more go, ten minutes later.** Nobody is awake to press the button,
+and losing the morning to a dropped connection is a poor reason to have no briefing. Only
+a genuine failure, and only the first one — a run that was *refused a tool* is excluded
+deliberately, because running it again produces the identical refusal a minute later, for
+money. What that needs is the narrow rule it already offers you.
+
+**After three runs in a row come to nothing, it stops firing** and says why. Stopping is
+the useful act: it ends the waste, and it is the only way the next failure reaches anybody
+instead of joining a queue of identical ones nobody reads. Turning it back on clears the
+note — asking for it again is not the moment to bring up what it broke on last week.
+
+### Being told
+
+Work that carries on without you is only useful if it can reach you when it stops being
+able to carry on. A blocked permission, a failure, or a turn that ran long enough that you
+looked away each raise a **desktop** notification — not a browser one, because the browser
+is usually shut, which is the case this exists for. Each kind can be turned off in Settings.
+
+Meanwhile the sidebar counts what is stuck rather than what you own, and the tab title
+carries that count too, so it's readable from another window.
+
+---
+
 ## Sessions
 
 Each session gets its own branch and its own checkout of your repository, so several
@@ -275,13 +351,18 @@ and offers *Merge anyway* — because sometimes the base branch is already red, 
 with no way through is a gate people route around. Taking it is recorded in the merge
 commit, so "was this known to be broken when it landed" has an answer later.
 
-Three distinctions it is careful about:
+Four distinctions it is careful about:
 
 - **Failing is not the same as not running.** A workspace missing its dependencies, or a
   command that isn't on `PATH`, exits non-zero and means nothing about your code. Those
   are reported as having no verdict, and they never block a merge.
 - **A verdict has a shelf life.** Edit the workspace after a run and the result is marked
   as describing code that no longer exists, rather than quietly believed.
+- **So does the base it was taken against.** Merge one session and every other one is
+  suddenly verified against a `main` that no longer exists. Git will catch a textual
+  conflict; it has nothing to say about one session renaming a function another one calls.
+  Sessions show how far behind they are, and offer to bring the base in and re-check in
+  one go.
 - **Checks queue per repository.** Six sessions finishing together would otherwise build
   the same project six times at once, which thrashes the machine and breaks any suite
   that binds a port.
@@ -291,44 +372,22 @@ The command is guessed from your repository — a `check` target in your `Makefi
 per project in Settings. Telling it your project has no checks is a real answer, and it
 stops asking.
 
----
+### Making the workspace runnable first
 
-## Daily rituals
+A worktree is a bare checkout: the tracked files and nothing else. No `node_modules`, no
+`.venv`, no generated types. So a check running there is being asked to test a workspace
+that cannot run anything — and it fails in a way that looks like broken code rather than
+a missing install.
 
-Work that runs on a schedule: a morning briefing, issue triage, a migration review
-before anyone opens the repo. Each ritual is a command, a recurrence and a next run —
-and it tells you which ones came from a plugin rather than being written by hand.
+It hides rather than failing loudly, too. Worktrees live inside the repository, so Node
+walks up and finds the main checkout's dependencies by accident; the command half-starts
+and then dies on something generated that isn't there. On the machine this was found on,
+fifteen sessions had no verdict between them and nothing said why.
 
-![Scheduled rituals with recurrence and next run](docs/screenshots/06-daily-rituals.jpg)
-
-### When nobody is there to answer
-
-A scheduled run that hits a permission prompt does not sit and wait for ten minutes and
-then deny anyway. It stops immediately, tells you exactly what it was blocked on, and
-offers the one narrow rule it needed — `Bash(gh issue edit:*)`, not full access.
-
-![A ritual that stopped on a permission prompt](docs/screenshots/07-ritual-needs-permission.jpg)
-
-### Whether it still works
-
-The useful question about a ritual is not what happened last time — it's whether it has
-quietly stopped working. Each one carries its recent outcomes and expands into them: what
-happened, why, what it cost. When the last few runs in a row came to nothing, the row says
-so, and says when it last worked.
-
-A finished run is not automatically a successful one. A ritual refused a tool it needed
-completes with half the job undone, so that counts against it. A run you stopped by hand
-does not.
-
-### Being told
-
-Work that carries on without you is only useful if it can reach you when it stops being
-able to carry on. A blocked permission, a failure, or a turn that ran long enough that you
-looked away each raise a **desktop** notification — not a browser one, because the browser
-is usually shut, which is the case this exists for. Each kind can be turned off in Settings.
-
-Meanwhile the sidebar counts what is stuck rather than what you own, and the tab title
-carries that count too, so it's readable from another window.
+So a project has a **setup command** as well as a check command, guessed from your
+lockfile and set in Settings beside it. It runs once per workspace, before the first
+check — lazily, so starting a session stays instant and the minute it costs is paid when
+something actually wants the answer.
 
 ---
 

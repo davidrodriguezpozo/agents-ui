@@ -6,8 +6,8 @@ Ordered. Everything above the line should be done before a single post goes out.
 
 - [x] **Global install works** — `npm install -g agents-studio`, verified by hand.
 - [x] **First run against an empty config directory** — verified with a throwaway
-      `CLAUDE_DIR`: the welcome leads with the workbench pitch, and team setup offers the
-      sessions route rather than dead-ending someone with no repository to paste.
+      `CLAUDE_DIR`: the welcome leads with the pitch, and team setup offers the sessions
+      route rather than dead-ending someone with no repository to paste.
 - [ ] **The rest of a genuinely cold machine.** Still unverified, because a machine that
       already has Node, git and a signed-in Claude Code can't test for their absence. In a
       container: no global npm cache, no `~/.claude`, and check that the setup wizard —
@@ -26,9 +26,15 @@ Ordered. Everything above the line should be done before a single post goes out.
 - [ ] **Social preview uploaded.** Settings → General → Social preview, 1280×640. This is
       the image every Slack, Discord and X share renders. Manual, GitHub UI only.
 - [ ] **Repo description and topics.** See `gh` commands at the bottom.
-- [ ] **Hero GIF.** 20–40s, no audio: sessions list → open one → diff → merge preview with
-      checks passing. Put it directly under the README title. It's the single highest-
-      leverage asset and the only item here I can't produce for you.
+- [ ] **Hero GIF.** 20–40s, no audio, and it has to show the *unattended* pitch rather
+      than the session one Desktop now also has: a ritual firing → the run it produced →
+      a session whose checks passed → merge. Put it directly under the README title. The
+      single highest-leverage asset, and the only item here I can't produce for you.
+- [ ] **Rewrite the launch drafts.** They still sell parallel sessions, which Claude Code
+      Desktop shipped in April 2026 — sidebar, worktrees, diff viewer, archive-on-merge.
+      Leading with that now invites the obvious comment. The posts need to lead with what
+      Desktop does not do: scheduling against a local repo, your own tests as a merge gate,
+      a spend cap that skips work, and jobs that stop when they break.
 
 ## Same day, before posting
 
@@ -71,7 +77,7 @@ Nearly all of the outcome is decided by how fast the first ten comments get a re
 
 ```bash
 # Repo description and topics
-gh repo edit --description "A workbench for Claude Code — run several sessions at once, each on its own branch, put recurring work on a schedule, and see what everything cost."
+gh repo edit --description "Leave Claude Code running — work that fires on a schedule against your own repositories, checks itself with your own tests, and stops when it can't."
 gh repo edit --add-topic claude,claude-code,ai-agents,developer-tools,git-worktree,nuxt,vue,agent-orchestration
 
 # Labels

@@ -7,7 +7,7 @@ import { getAgentColor } from '~/utils/colors'
 /**
  * First run, advanced mode. Leads with the two things this is for — running
  * sessions and scheduling rituals — rather than with what an agent is. Someone
- * arriving here has just installed a workbench; explaining the vocabulary
+ * arriving here wants to leave something running; explaining the vocabulary
  * before showing the work gets the order backwards, and the templates below
  * are still one scroll away for whoever wants them.
  */
@@ -40,18 +40,18 @@ async function useTemplate(templateId: string) {
 
 const starts = [
   {
-    to: '/sessions',
-    icon: 'i-lucide-git-branch',
-    title: 'Start a session',
-    body: 'Say what you want done. It gets its own branch and its own checkout, so several can run at once without touching your working copy.',
-    cta: 'Run something',
-  },
-  {
     to: '/schedules',
     icon: 'i-lucide-alarm-clock',
     title: 'Put work on a schedule',
-    body: 'A morning briefing, issue triage, a migration review — waiting for you when you get in, with what it cost and whether it worked.',
+    body: 'A morning briefing, issue triage, a migration review — done before you sit down, retried when it blips, and stopped when it breaks.',
     cta: 'Write a ritual',
+  },
+  {
+    to: '/sessions',
+    icon: 'i-lucide-git-branch',
+    title: 'Start a session',
+    body: 'Say what you want done. It gets its own branch and checkout, runs your tests when it is finished, and will not merge if they fail.',
+    cta: 'Run something',
   },
   {
     to: '/explore',
@@ -68,12 +68,11 @@ const starts = [
     <!-- Hero -->
     <div class="text-center space-y-3 pt-2">
       <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
-        A workbench for Claude Code
+        Leave Claude Code running
       </h2>
       <p class="type-body max-w-xl mx-auto leading-relaxed">
-        Run several pieces of work at once, each on its own branch. Put the recurring ones on a
-        schedule. See what everything did, whether it worked, and what it cost — without leaving
-        the browser.
+        Work that fires on a schedule against your own repositories, checks itself with your own
+        tests, and stops when it can't. Come back to what it did, what it cost, and what needs you.
       </p>
     </div>
 
