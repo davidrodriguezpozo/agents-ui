@@ -47,7 +47,7 @@ describe('after a restart', () => {
   it('closes a run that was still going', async () => {
     await writeRun('a', 'running')
 
-    await expect(store.closeInterruptedRuns()).resolves.toBe(1)
+    await expect(store.closeInterruptedRuns()).resolves.toHaveLength(1)
 
     const run = await readRunFile('a')
     expect(run.status).toBe('failed')
@@ -58,7 +58,7 @@ describe('after a restart', () => {
   it('closes one that never started, too', async () => {
     await writeRun('a', 'queued')
 
-    await expect(store.closeInterruptedRuns()).resolves.toBe(1)
+    await expect(store.closeInterruptedRuns()).resolves.toHaveLength(1)
     expect((await readRunFile('a')).status).toBe('failed')
   })
 
@@ -67,7 +67,7 @@ describe('after a restart', () => {
     await writeRun('bad', 'failed', { error: 'the original reason' })
     await writeRun('stopped', 'cancelled')
 
-    await expect(store.closeInterruptedRuns()).resolves.toBe(0)
+    await expect(store.closeInterruptedRuns()).resolves.toHaveLength(0)
 
     expect((await readRunFile('done')).output).toBe('the answer')
     // Overwriting this would replace why it failed with why the server did.
@@ -80,10 +80,10 @@ describe('after a restart', () => {
     await writeFile(join(runsDir(), 'broken.json'), 'not json', 'utf-8')
     await writeRun('a', 'running')
 
-    await expect(store.closeInterruptedRuns()).resolves.toBe(1)
+    await expect(store.closeInterruptedRuns()).resolves.toHaveLength(1)
   })
 
   it('has nothing to do on a machine that has never run anything', async () => {
-    await expect(store.closeInterruptedRuns()).resolves.toBe(0)
+    await expect(store.closeInterruptedRuns()).resolves.toHaveLength(0)
   })
 })

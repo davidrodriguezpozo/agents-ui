@@ -324,12 +324,12 @@ export async function listRunsBySchedule(perSchedule = 10): Promise<Record<strin
  *
  * Called once at boot, when nothing can legitimately be running yet.
  */
-export async function closeInterruptedRuns(): Promise<number> {
+export async function closeInterruptedRuns(): Promise<Run[]> {
   const dir = runsDir()
-  if (!existsSync(dir)) return 0
+  if (!existsSync(dir)) return []
 
   const files = (await readdir(dir).catch(() => [] as string[])).filter(f => f.endsWith('.json'))
-  let closed = 0
+  const closed: Run[] = []
 
   for (const file of files) {
     const path = join(dir, file)
@@ -348,7 +348,9 @@ export async function closeInterruptedRuns(): Promise<number> {
 
     try {
       await writeFile(path, JSON.stringify(run, null, 2), 'utf-8')
-      closed++
+      // Returned, not just counted: what was interrupted decides what should
+      // be picked up again, and this is the only place that knows.
+      closed.push(run)
     } catch {
       // A run we cannot rewrite is not worth failing startup over.
     }
