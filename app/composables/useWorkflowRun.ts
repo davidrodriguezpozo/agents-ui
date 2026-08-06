@@ -25,6 +25,9 @@ export interface WorkflowRun {
   error?: string
   startedAt: number
   endedAt?: number
+  /** Joined from the step runs, and only present in history. */
+  costUsd?: number
+  durationMs?: number
 }
 
 /**

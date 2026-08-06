@@ -227,6 +227,14 @@ const filteredAgents = computed(() => {
 
 /** What this workflow has done before — a question the page could not answer. */
 const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
+
+/** What a past run took. Without this the history is a list of timestamps. */
+function pastFacts(past: { costUsd?: number; durationMs?: number }): string {
+  const parts: string[] = []
+  if (past.durationMs) parts.push(`${Math.round(past.durationMs / 1000)}s`)
+  if (past.costUsd) parts.push(past.costUsd < 0.01 ? '<$0.01' : `$${past.costUsd.toFixed(2)}`)
+  return parts.join(' · ')
+}
 </script>
 
 <template>
@@ -366,6 +374,7 @@ const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
               :style="{ color: PAST[past.status].colour }"
             />
             <span class="type-detail flex-1 min-w-0 truncate">{{ past.input }}</span>
+            <span v-if="pastFacts(past)" class="type-meta shrink-0">{{ pastFacts(past) }}</span>
             <span class="type-meta shrink-0">{{ relativeTime(past.startedAt) }}</span>
           </div>
         </div>

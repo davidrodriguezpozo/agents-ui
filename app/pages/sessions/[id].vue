@@ -866,6 +866,19 @@ const totalChanges = computed(() => {
             />
           </div>
 
+          <!--
+            Being behind matters whatever the verdict is, and it was only said
+            in the passing case — so a session 17 commits adrift with no checks
+            read as "Not checked yet" and nothing else, with the only clue
+            buried in a button label.
+          -->
+          <div v-if="behind && session.check?.status !== 'passing'" class="flex items-center gap-2 pt-0.5">
+            <UIcon name="i-lucide-git-pull-request-arrow" class="size-3.5 shrink-0" style="color: var(--warning);" />
+            <span class="type-meta">
+              {{ behindWord }} since this workspace was cut — bring them in before trusting anything here.
+            </span>
+          </div>
+
           <div v-if="repairNote" class="flex items-center gap-2 pt-0.5">
             <UIcon
               :name="repairNote.icon"
