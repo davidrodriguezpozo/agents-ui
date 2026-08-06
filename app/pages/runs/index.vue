@@ -49,6 +49,10 @@ watch(query, () => {
 onMounted(async () => {
   // Independent of the filters: the total is about the whole log, not the
   // slice you happen to be looking at.
+  $fetch<{ maxConcurrentRuns: number }>('/api/preferences')
+    .then((prefs) => { concurrencyLimit.value = prefs.maxConcurrentRuns })
+    .catch(() => {})
+
   $fetch<SpendData>('/api/spend', { query: { days: 30 } })
     .then((result) => { spend.value = result })
     .catch(() => { spend.value = null })
@@ -73,6 +77,20 @@ function clearFilters() {
 
 const active = computed(() => runs.value.filter(r => r.status === 'running' || r.status === 'queued'))
 const finished = computed(() => runs.value.filter(r => r.status !== 'running' && r.status !== 'queued'))
+
+/**
+ * Running and waiting, told apart.
+ *
+ * "Queued" used to last a fraction of a second, so counting it as running cost
+ * nothing. Now that unattended work waits its turn it can last minutes, and a
+ * spinner over a run that has not started is the page saying something is
+ * happening when nothing is.
+ */
+const running = computed(() => active.value.filter(r => r.status === 'running'))
+const waiting = computed(() => active.value.filter(r => r.status === 'queued'))
+
+/** Only read to explain a queue, so a failure here just means no explanation. */
+const concurrencyLimit = ref(0)
 
 function statusStyle(status: string) {
   switch (status) {
@@ -109,7 +127,7 @@ function sourceIcon(value: RunSource) {
     <PageHeader width="narrow" title="Activity">
       <template #trailing>
         <span v-if="active.length" class="text-[11px] font-mono" style="color: var(--accent);">
-          {{ active.length }} running
+          {{ running.length }} running<template v-if="waiting.length">, {{ waiting.length }} waiting</template>
         </span>
       </template>
     </PageHeader>
@@ -195,10 +213,27 @@ function sourceIcon(value: RunSource) {
             class="flex items-center gap-3 px-3 py-2.5 rounded-lg group focus-ring hover-row"
             style="border: 1px solid var(--accent-glow); background: var(--accent-muted);"
           >
-            <UIcon name="i-lucide-loader-2" class="size-3.5 shrink-0 animate-spin" style="color: var(--accent);" />
+            <UIcon
+              :name="run.status === 'queued' ? 'i-lucide-hourglass' : 'i-lucide-loader-2'"
+              class="size-3.5 shrink-0"
+              :class="{ 'animate-spin': run.status !== 'queued' }"
+              style="color: var(--accent);"
+            />
             <span class="type-strong truncate flex-1 text-body">{{ run.title }}</span>
+            <span v-if="run.status === 'queued'" class="font-mono text-[10px] shrink-0 text-meta">waiting</span>
             <span class="font-mono text-[10px] shrink-0 text-meta">{{ relativeTime(run.createdAt) }}</span>
           </NuxtLink>
+
+          <!--
+            Said here rather than left to be guessed. A run that has not started
+            looks identical to one that is stuck, and the difference is the whole
+            question you came to this page with.
+          -->
+          <p v-if="waiting.length" class="text-[11px] text-meta">
+            Work nobody is watching waits its turn
+            <template v-if="concurrencyLimit"> — {{ concurrencyLimit }} at once</template>.
+            A turn you type starts straight away. Change it in Settings.
+          </p>
         </div>
 
         <div v-if="finished.length" class="space-y-2">
