@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { renderMarkdown } from '~/utils/markdown'
+import { errorMessage } from '~/utils/errors'
 
 const props = defineProps<{
   modelValue: string
@@ -42,7 +43,10 @@ async function improveInstructions() {
     })
     suggestion.value = response.improvedInstructions
   } catch (e: unknown) {
-    improveError.value = e instanceof Error ? e.message : 'Failed to improve instructions'
+    // `errorMessage` rather than `e.message`: ofetch's own wording is
+    // `[POST] "/api/…": 502 Bad Gateway`, which tells the reader nothing and
+    // hides what the server actually said.
+    improveError.value = errorMessage(e, 'Failed to improve instructions')
   } finally {
     isImproving.value = false
   }

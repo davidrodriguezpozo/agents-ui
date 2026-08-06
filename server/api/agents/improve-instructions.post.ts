@@ -1,4 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { parseJsonFromReply } from '../../utils/extractJson'
 
 interface ImproveRequest {
   name: string
@@ -64,15 +65,23 @@ export default defineEventHandler(async (event): Promise<ImproveResponse> => {
     return { suggestions: [], improvedInstructions: resultText.trim() }
   }
 
-  // For improvement mode, try to parse JSON
-  try {
-    const parsed = JSON.parse(resultText) as ImproveResponse
-    if (parsed.improvedInstructions && Array.isArray(parsed.suggestions)) {
-      return parsed
+  // Improvement mode answers in JSON, which the model may have fenced or
+  // wrapped in commentary. Both are readable; what is not is being handed the
+  // whole reply as though it were the instructions.
+  const parsed = parseJsonFromReply<Partial<ImproveResponse>>(resultText)
+
+  if (typeof parsed?.improvedInstructions === 'string' && parsed.improvedInstructions.trim()) {
+    return {
+      suggestions: Array.isArray(parsed.suggestions) ? parsed.suggestions : [],
+      improvedInstructions: parsed.improvedInstructions.trim(),
     }
-  } catch {
-    // Malformed JSON fallback: return raw text
   }
 
-  return { suggestions: [], improvedInstructions: resultText.trim() }
+  // Refuse rather than fall back to the raw reply. What the caller does with
+  // this is write it into the agent's instructions on one click — so a reply
+  // we could not read must fail visibly, not arrive looking like an answer.
+  throw createError({
+    statusCode: 502,
+    message: 'Claude replied with something this could not read as suggestions. Try again.',
+  })
 })
