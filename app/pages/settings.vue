@@ -65,6 +65,7 @@ const notifications = ref<Record<NotificationKey, boolean>>({
   enabled: true, needsYou: true, failed: true, finished: true,
 })
 const summariseSessions = ref(true)
+const repairAttempts = ref(0)
 const dailyCap = ref('')
 const runCap = ref('')
 const spentToday = ref(0)
@@ -100,11 +101,13 @@ onMounted(async () => {
     const prefs = await $fetch<{
       notifications: Record<NotificationKey, boolean>
       summariseSessions: boolean
+      repairAttempts: number
       dailyCapUsd: number
       runCapUsd: number
     }>('/api/preferences')
     notifications.value = prefs.notifications
     summariseSessions.value = prefs.summariseSessions
+    repairAttempts.value = prefs.repairAttempts ?? 0
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
 
@@ -125,6 +128,21 @@ async function setSummarise(value: boolean) {
     await $fetch('/api/preferences', { method: 'PUT', body: { summariseSessions: value } })
   } catch {
     summariseSessions.value = previous
+    toast.add({ title: 'Could not save that', color: 'error' })
+  }
+}
+
+/**
+ * How many turns a session may spend fixing itself before it stops and waits.
+ * Off by default: this one spends money on work nobody watched being decided.
+ */
+async function setRepairAttempts(value: number) {
+  const previous = repairAttempts.value
+  repairAttempts.value = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { repairAttempts: value } })
+  } catch {
+    repairAttempts.value = previous
     toast.add({ title: 'Could not save that', color: 'error' })
   }
 }
@@ -420,6 +438,34 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                 <span class="field-toggle__thumb" />
               </span>
             </label>
+          </div>
+
+          <!--
+            Spends a whole turn at its own discretion, which is why it is off
+            until somebody chooses it and why the ceiling is the setting rather
+            than a checkbox.
+          -->
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <div class="type-strong">Let sessions fix their own failing checks</div>
+              <div class="text-[12px] mt-0.5 text-label">
+                When a turn leaves the checks failing, the session takes another turn at fixing
+                it, carrying the failure with it, until they pass or it runs out of attempts.
+                Off by default because it spends a full turn each time without being asked —
+                <strong>Fix it</strong> on a failing session works either way.
+              </div>
+            </div>
+            <select
+              class="field-input w-32 shrink-0"
+              :value="String(repairAttempts)"
+              @change="setRepairAttempts(Number(($event.target as HTMLSelectElement).value))"
+            >
+              <option value="0">Never</option>
+              <option value="1">1 attempt</option>
+              <option value="2">2 attempts</option>
+              <option value="3">3 attempts</option>
+              <option value="5">5 attempts</option>
+            </select>
           </div>
         </div>
       </div>

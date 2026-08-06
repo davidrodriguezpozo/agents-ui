@@ -15,7 +15,7 @@ const id = route.params.id as string
 
 const {
   fetchOne, send, fetchTranscript, setTrust, fetchDiff,
-  previewPullRequest, openPullRequest, previewMerge, merge, runCheck, close,
+  previewPullRequest, openPullRequest, previewMerge, merge, runCheck, repair, close,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
@@ -29,6 +29,7 @@ const session = ref<(Session & {
   checkCommand: string | null
 }) | null>(null)
 const checking = ref(false)
+const repairing = ref(false)
 const showCheckOutput = ref(false)
 const loadError = ref<string | null>(null)
 const input = ref('')
@@ -309,6 +310,51 @@ const checkPanel = computed<CheckPanel>(() => {
       : 'background: rgba(34,197,94,0.06); border: 1px solid var(--success);',
   }
 })
+
+/**
+ * What the session is doing about its own failing checks, if anything.
+ *
+ * Only shown while it means something: a streak that ended in success is
+ * already said by the green panel above it, and repeating it there would be
+ * two sentences competing to tell you the same thing.
+ */
+const repairNote = computed(() => {
+  const state = session.value?.repair
+  if (!state) return null
+
+  if (state.state === 'running') {
+    return {
+      text: `Fixing it — attempt ${state.attempts} of ${state.max}.`,
+      icon: 'i-lucide-wrench',
+      spin: false,
+      color: 'var(--accent)',
+    }
+  }
+
+  if (state.state === 'gave-up') {
+    return {
+      text: state.reason || `Gave up after ${state.attempts} of ${state.max} attempts.`,
+      icon: 'i-lucide-hand',
+      spin: false,
+      color: 'var(--warning)',
+    }
+  }
+
+  return null
+})
+
+async function onRepair() {
+  repairing.value = true
+  try {
+    const runId = await repair(id)
+    await load()
+    attach(runId)
+  } catch (e) {
+    toast.add({ title: 'Could not start fixing it', description: errorMessage(e), color: 'error' })
+  } finally {
+    repairing.value = false
+  }
+}
 
 async function onRunCheck() {
   checking.value = true
@@ -704,6 +750,21 @@ const totalChanges = computed(() => {
               color="neutral"
               @click="() => { showCheckOutput = !showCheckOutput }"
             />
+            <!--
+              The whole point of knowing it is broken. The thing that wrote the
+              code is still here and the failure is right there, so offer the
+              obvious next move rather than leaving it as homework.
+            -->
+            <UButton
+              v-if="session.check?.status === 'failing'"
+              label="Fix it"
+              icon="i-lucide-wrench"
+              size="xs"
+              variant="soft"
+              :loading="repairing"
+              :disabled="isBusy || checking"
+              @click="onRepair"
+            />
             <UButton
               :label="session.check ? 'Run again' : 'Run checks'"
               icon="i-lucide-play"
@@ -714,6 +775,16 @@ const totalChanges = computed(() => {
               :disabled="isBusy"
               @click="onRunCheck"
             />
+          </div>
+
+          <div v-if="repairNote" class="flex items-center gap-2 pt-0.5">
+            <UIcon
+              :name="repairNote.icon"
+              class="size-3.5 shrink-0"
+              :class="{ 'animate-spin': repairNote.spin }"
+              :style="{ color: repairNote.color }"
+            />
+            <span class="type-meta">{{ repairNote.text }}</span>
           </div>
 
           <pre

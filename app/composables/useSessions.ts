@@ -30,6 +30,17 @@ export interface SessionCheck {
   at: number
 }
 
+/** Whether a session is trying to fix its own failing checks, and how far in. */
+export interface SessionRepair {
+  attempts: number
+  max: number
+  state: 'running' | 'fixed' | 'gave-up'
+  /** Why it stopped, when it stopped for a reason worth reading. */
+  reason?: string
+  startedAt: number
+  updatedAt: number
+}
+
 export interface Session {
   id: string
   title: string
@@ -54,6 +65,8 @@ export interface Session {
   check?: SessionCheck
   /** What this session did, in a sentence. Absent until it has done something. */
   summary?: SessionSummary
+  /** Absent means it has not tried to fix itself on this instruction. */
+  repair?: SessionRepair
   worktree: WorktreeState
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity
@@ -247,6 +260,22 @@ export function useSessions() {
     return result.check
   }
 
+  /**
+   * Have the session fix its own failing checks, starting now.
+   *
+   * Returns the run id of the first attempt. What follows is not this call's
+   * business: the turn runs, the checks run, and a still-failing verdict earns
+   * another attempt until they pass or the attempts are spent.
+   */
+  async function repair(id: string): Promise<string> {
+    const result = await $fetch<{ runId: string }>(
+      `/api/sessions/${encodeURIComponent(id)}/repair`,
+      { method: 'POST' },
+    )
+    await fetchAll()
+    return result.runId
+  }
+
   /** Returns the run id, which the caller attaches to for live output. */
   async function send(id: string, input: string): Promise<string> {
     const result = await $fetch<{ runId: string }>(`/api/sessions/${encodeURIComponent(id)}/message`, {
@@ -362,6 +391,7 @@ export function useSessions() {
     previewMerge,
     merge,
     runCheck,
+    repair,
     close,
   }
 }
