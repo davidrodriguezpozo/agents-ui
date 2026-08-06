@@ -3,7 +3,7 @@ import {
   type SessionCheck,
 } from './checks'
 import { findSession, patchSession } from './sessions'
-import { notify } from './notify'
+import { prepareWorkspace } from './projectSetup'
 
 /**
  * Running a project's checks for a session, and keeping the verdict on it.
@@ -80,6 +80,26 @@ export async function verifySession(sessionId: string): Promise<SessionCheck | n
       // Taken inside the queue: waiting for our turn behind another session
       // proves nothing about this one, but the workspace may have moved on.
       const fingerprint = await worktreeFingerprint(session.worktreePath)
+
+      // A worktree is a bare checkout — no dependencies, nothing generated. So
+      // this comes first, or the check reports a broken workspace as broken
+      // code. Once per workspace, and inside the queue because six sessions
+      // installing the same project at once is the thrash this queue exists to
+      // prevent.
+      const setup = await prepareWorkspace(session.repoDir, session.worktreePath)
+      if (setup.status === 'failed') {
+        const check: SessionCheck = {
+          status: 'errored',
+          command: resolved.command,
+          fingerprint,
+          exitCode: null,
+          output: `The workspace could not be made ready, so the checks were not run.\n\n${setup.message}`,
+          durationMs: 0,
+          at: Date.now(),
+        }
+        await patchSession(sessionId, { check })
+        return check
+      }
 
       const outcome = await runCheck({
         command: resolved.command,
