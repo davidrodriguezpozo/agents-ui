@@ -1,0 +1,157 @@
+<script setup lang="ts">
+import type { McpServer, McpStatus } from '~/composables/useMcp'
+
+/**
+ * The MCP servers this machine has.
+ *
+ * Read-only, deliberately, and it says so rather than implying otherwise with
+ * buttons that aren't there. The question it exists to answer is the one no
+ * file could: not "what have I configured" but "which of these is actually
+ * answering" — which turns out to be a different list.
+ */
+const { sorted, cwd, loading, error, loaded, broken, load } = useMcp()
+const expanded = ref<string | null>(null)
+
+onMounted(() => { if (!loaded.value) void load() })
+
+const LOOKS: Record<McpStatus, { label: string; icon: string; colour: string }> = {
+  connected: { label: 'Working', icon: 'i-lucide-circle-check', colour: 'var(--success)' },
+  'needs-auth': { label: 'Needs signing in', icon: 'i-lucide-log-in', colour: 'var(--warning)' },
+  failed: { label: 'Not working', icon: 'i-lucide-circle-x', colour: 'var(--error)' },
+  pending: { label: 'Waiting for approval', icon: 'i-lucide-pause-circle', colour: 'var(--text-secondary)' },
+  unknown: { label: 'Unclear', icon: 'i-lucide-circle-help', colour: 'var(--text-secondary)' },
+}
+
+/** Where it came from, in words rather than in the prefix on its name. */
+function provenance(server: McpServer): string {
+  if (server.origin === 'plugin') return `from the ${server.pluginName} plugin`
+  if (server.origin === 'claude.ai') return 'connected through claude.ai'
+  return 'from this project'
+}
+
+/** `plugin:slack:slack` is the id; `slack` is what anyone calls it. */
+function displayName(server: McpServer): string {
+  if (server.origin === 'plugin') return server.name.replace(/^plugin:[^:]+:/, '')
+  if (server.origin === 'claude.ai') return server.name.replace(/^claude\.ai /, '')
+  return server.name
+}
+</script>
+
+<template>
+  <div>
+    <PageHeader title="MCP servers">
+      <template #actions>
+        <UButton
+          label="Check again"
+          icon="i-lucide-refresh-cw"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          :loading="loading"
+          @click="load(true)"
+        />
+      </template>
+    </PageHeader>
+
+    <div class="px-6 py-5 space-y-5">
+      <p class="type-body max-w-2xl leading-relaxed">
+        Tools your agents can reach that don't live on this machine — issue trackers, docs,
+        mail. Each one is asked whether it is answering, so this says which of them
+        <em>work</em>, not just which are set up.
+        <span v-if="cwd" class="type-meta block mt-1 font-mono">{{ cwd }}</span>
+      </p>
+
+      <div
+        v-if="error"
+        class="rounded-md px-4 py-3 type-detail"
+        style="background: rgba(248,113,113,0.06); border: 1px solid var(--error); color: var(--error);"
+      >
+        {{ error }}
+      </div>
+
+      <div v-else-if="loading && !sorted.length" class="flex items-center gap-2 py-10 justify-center">
+        <UIcon name="i-lucide-loader-2" class="size-4 animate-spin text-meta" />
+        <span class="type-meta">Asking each server whether it answers…</span>
+      </div>
+
+      <div v-else-if="!sorted.length" class="surface-card">
+        <EmptyState
+          variant="inset"
+          icon="i-lucide-unplug"
+          title="No MCP servers"
+          description="Nothing is connected yet. Add one with `claude mcp add`, or install a plugin that brings its own — they show up here either way."
+        />
+      </div>
+
+      <template v-else>
+        <p v-if="broken" class="type-detail" style="color: var(--warning);">
+          {{ broken }} of {{ sorted.length }} {{ broken === 1 ? 'needs' : 'need' }} attention.
+        </p>
+
+        <div class="space-y-2">
+          <div
+            v-for="server in sorted"
+            :key="server.name"
+            class="rounded-lg px-4 py-3 bg-card"
+          >
+            <div class="flex items-start gap-3">
+              <UIcon
+                :name="LOOKS[server.status].icon"
+                class="size-4 shrink-0 mt-0.5"
+                :style="{ color: LOOKS[server.status].colour }"
+              />
+
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="type-strong">{{ displayName(server) }}</span>
+                  <span
+                    class="text-[10px] px-1.5 py-px rounded-full"
+                    style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+                  >
+                    {{ provenance(server) }}
+                  </span>
+                  <span v-if="server.transport" class="type-mono-meta">{{ server.transport }}</span>
+                </div>
+
+                <div class="font-mono text-[11px] truncate mt-0.5 text-meta" :title="server.target">
+                  {{ server.target }}
+                </div>
+
+                <!--
+                  Only for the ones that are not working: next to a tick, the
+                  word "Connected" is the same thing said twice.
+                -->
+                <div v-if="server.detail" class="mt-1">
+                  <button
+                    class="type-detail underline hover:opacity-80"
+                    :style="{ color: LOOKS[server.status].colour }"
+                    @click="expanded = expanded === server.name ? null : server.name"
+                  >
+                    {{ LOOKS[server.status].label }}{{ expanded === server.name ? '' : ' — why?' }}
+                  </button>
+                  <pre
+                    v-if="expanded === server.name"
+                    class="font-mono text-[10px] leading-relaxed whitespace-pre-wrap mt-1.5 p-2.5 rounded max-h-56 overflow-y-auto"
+                    style="background: var(--surface-inset); color: var(--text-secondary);"
+                  >{{ server.detail }}</pre>
+                </div>
+                <div v-else class="type-detail mt-0.5" :style="{ color: LOOKS[server.status].colour }">
+                  {{ LOOKS[server.status].label }}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!--
+          Said plainly rather than left to be discovered by looking for a button
+          that isn't there.
+        -->
+        <p class="type-meta pt-1">
+          Adding and changing servers is still <code>claude mcp add</code> or a
+          <code>.mcp.json</code> in your project. This reads what you have.
+        </p>
+      </template>
+    </div>
+  </div>
+</template>

@@ -114,6 +114,7 @@ const navLinks = computed(() => isSimple.value
       { label: 'Commands', icon: 'i-lucide-terminal', to: '/commands' },
       { label: 'Skills', icon: 'i-lucide-sparkles', to: '/skills' },
       { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
+      { label: 'MCP', icon: 'i-lucide-plug', to: '/mcp' },
     ]
 )
 

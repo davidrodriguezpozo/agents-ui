@@ -54,7 +54,14 @@ export function resetClaudeLookup(): void {
   cached = undefined
 }
 
-export async function runClaude(args: string[], timeout = 120_000): Promise<{ stdout: string; stderr: string }> {
+export async function runClaude(
+  args: string[],
+  // Accepts a number for the callers that predate there being anything else to
+  // pass. `cwd` matters for anything project-scoped — MCP servers can come from
+  // a `.mcp.json` beside the code, so the answer depends on where you ask.
+  opts: number | { cwd?: string; timeout?: number } = 120_000,
+): Promise<{ stdout: string; stderr: string }> {
+  const { cwd, timeout = 120_000 } = typeof opts === 'number' ? { cwd: undefined, timeout: opts } : opts
   const claude = await findClaude()
   if (!claude) {
     throw createError({
@@ -67,7 +74,7 @@ export async function runClaude(args: string[], timeout = 120_000): Promise<{ st
   }
 
   try {
-    const result = await exec(claude, args, { timeout })
+    const result = await exec(claude, args, { timeout, cwd })
     return { stdout: result.stdout.trim(), stderr: result.stderr.trim() }
   } catch (e: any) {
     if (e.killed) {
