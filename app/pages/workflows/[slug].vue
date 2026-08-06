@@ -1,11 +1,5 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
-import { MarkerType, VueFlow } from '@vue-flow/core'
-import { Controls } from '@vue-flow/controls'
-import { MiniMap } from '@vue-flow/minimap'
-import '@vue-flow/core/dist/style.css'
-import '@vue-flow/controls/dist/style.css'
-import '@vue-flow/minimap/dist/style.css'
 import type { Workflow, WorkflowStep } from '~/types'
 import { getAgentColor } from '~/utils/colors'
 
@@ -23,7 +17,6 @@ const name = ref('')
 const description = ref('')
 const saving = ref(false)
 const showRunModal = ref(false)
-const showMobileAgentPicker = ref(false)
 const paletteSearch = ref('')
 const editingName = ref(false)
 const editingDescription = ref(false)
@@ -50,68 +43,41 @@ onMounted(async () => {
   if (latest?.status === 'running') await watchRun(latest.id)
 })
 
-// Compute VueFlow nodes from steps
-const nodes = computed(() =>
-  workflowSteps.value.map((step, i) => {
-    const agent = agents.value.find(a => a.slug === step.agentSlug)
-    const exec = execSteps.value.find(e => e.stepId === step.id)
-    return {
-      id: step.id,
-      type: 'workflow',
-      position: { x: i * 220, y: 100 },
-      data: {
-        label: step.label,
-        agentSlug: step.agentSlug,
-        agentColor: agent?.frontmatter.color,
-        agentModel: agent?.frontmatter.model,
-        stepNumber: i + 1,
-        status: exec?.status,
-      },
-    }
-  })
-)
+/**
+ * Adding a step, and changing which agent one uses, are the same picker.
+ * `replacing` is the step id being changed, or null when appending.
+ */
+const picking = ref(false)
+const replacing = ref<string | null>(null)
 
-// Compute edges (sequential: step[i] -> step[i+1])
-const edges = computed(() =>
-  workflowSteps.value.flatMap((step, i) => {
-    const next = workflowSteps.value[i + 1]
-    if (!next) return []
-
-    return [{
-      id: `e-${step.id}-${next.id}`,
-      source: step.id,
-      target: next.id,
-      animated: true,
-      style: { strokeDasharray: '5 5', stroke: 'var(--accent)' },
-      markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--accent)' },
-    }]
-  })
-)
-
-// Drag-and-drop from palette
-function onDrop(event: DragEvent) {
-  const agentSlug = event.dataTransfer?.getData('agentSlug')
-  if (!agentSlug) return
-  const agent = agents.value.find(a => a.slug === agentSlug)
-  if (!agent) return
-  workflowSteps.value.push({
-    id: crypto.randomUUID(),
-    agentSlug,
-    label: agent.frontmatter.name,
-  })
+function openPicker(stepId: string | null = null) {
+  replacing.value = stepId
+  paletteSearch.value = ''
+  picking.value = true
 }
-
-function onDragOver(event: DragEvent) { event.preventDefault() }
 
 function addAgent(agentSlug: string) {
   const agent = agents.value.find(a => a.slug === agentSlug)
   if (!agent) return
-  workflowSteps.value.push({
-    id: crypto.randomUUID(),
-    agentSlug,
-    label: agent.frontmatter.name,
-  })
-  showMobileAgentPicker.value = false
+
+  if (replacing.value) {
+    workflowSteps.value = workflowSteps.value.map(s => (
+      s.id === replacing.value ? { ...s, agentSlug } : s
+    ))
+  } else {
+    workflowSteps.value = [...workflowSteps.value, {
+      id: crypto.randomUUID(),
+      agentSlug,
+      label: agent.frontmatter.name,
+    }]
+  }
+
+  picking.value = false
+  replacing.value = null
+}
+
+function relabelStep(stepId: string, label: string) {
+  workflowSteps.value = workflowSteps.value.map(s => (s.id === stepId ? { ...s, label } : s))
 }
 
 // Node actions
@@ -204,30 +170,60 @@ const STATUS: Record<string, 'pending' | 'running' | 'completed' | 'failed' | 's
   cancelled: 'skipped',
 }
 
-const execSteps = computed(() => workflowSteps.value.map((step) => {
-  const actual = activeRun.value?.steps.find(s => s.stepId === step.id)
+/**
+ * How a step is going, for the row that shows it.
+ *
+ * Steps that have not started are not on the record at all, so they have no
+ * status until the run reaches them — except once the run has stopped, when
+ * "never ran" is the honest thing to say about the ones it never got to.
+ */
+function execFor(stepId: string) {
+  if (!activeRun.value) return undefined
+
+  const actual = activeRun.value.steps.find(s => s.stepId === stepId)
   if (!actual) {
-    // Never reached, because something before it stopped everything after it.
-    const stopped = activeRun.value && activeRun.value.status !== 'running'
-    return { stepId: step.id, status: stopped ? 'skipped' as const : 'pending' as const, input: '', output: '' }
+    return activeRun.value.status === 'running'
+      ? { status: 'pending' as const }
+      : { status: 'skipped' as const }
   }
+
   return {
-    stepId: step.id,
-    status: STATUS[actual.status] ?? 'pending',
-    input: '',
+    status: STATUS[actual.status] ?? ('pending' as const),
     output: actual.output,
     error: actual.error,
+    costUsd: actual.costUsd,
+    durationMs: actual.durationMs,
   }
-}))
+}
 
-const currentStepIndex = computed(() => activeRun.value?.currentStep ?? -1)
+const RUN_LOOKS = {
+  running: { text: 'Running…', colour: 'var(--accent)' },
+  completed: { text: 'Finished', colour: 'var(--success)' },
+  failed: { text: 'Stopped on a failure', colour: 'var(--error)' },
+  stopped: { text: 'Stopped by you', colour: 'var(--text-secondary)' },
+} as const
+
+const runLook = computed(() => RUN_LOOKS[activeRun.value?.status ?? 'running'])
+
+/** What the whole run has cost, which is the number worth seeing. */
+const runCost = computed(() => {
+  const total = (activeRun.value?.steps ?? []).reduce((sum, s) => sum + (s.costUsd ?? 0), 0)
+  if (!total) return ''
+  return total < 0.01 ? '<$0.01' : `$${total.toFixed(2)}`
+})
+
+const PAST = {
+  running: { icon: 'i-lucide-loader-2', colour: 'var(--accent)' },
+  completed: { icon: 'i-lucide-circle-check', colour: 'var(--success)' },
+  failed: { icon: 'i-lucide-circle-x', colour: 'var(--error)' },
+  stopped: { icon: 'i-lucide-minus-circle', colour: 'var(--text-disabled)' },
+} as const
+
 const filteredAgents = computed(() => {
   if (!paletteSearch.value) return agents.value
   const q = paletteSearch.value.toLowerCase()
   return agents.value.filter(a => a.frontmatter.name.toLowerCase().includes(q))
 })
-
-const allCompleted = computed(() => activeRun.value?.status === 'completed')
 
 /** What this workflow has done before — a question the page could not answer. */
 const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
@@ -263,15 +259,6 @@ const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
         </button>
       </div>
 
-      <!-- Mobile: Add Agent button -->
-      <UButton
-        class="md:hidden"
-        label="Add Agent"
-        icon="i-lucide-plus"
-        size="xs"
-        variant="soft"
-        @click="() => { showMobileAgentPicker = true }"
-      />
 
       <UButton
         v-if="isRunning"
@@ -280,7 +267,7 @@ const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
         size="sm"
         color="error"
         variant="soft"
-        @click="stop"
+        @click="onStop"
       />
       <UButton
         v-else
@@ -314,109 +301,77 @@ const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
       </button>
     </div>
 
-    <!-- Body: palette + canvas -->
-    <div class="flex-1 flex min-h-0">
-      <!-- Left palette (hidden on mobile) -->
-      <div
-        class="hidden md:flex flex-col w-[200px] shrink-0 overflow-hidden"
-        style="border-right: 1px solid var(--border-subtle); background: var(--surface-raised);"
-      >
-        <div class="px-3 pt-3 pb-2">
-          <div class="text-[11px] font-medium mb-2" style="color: var(--text-secondary);">Your Agents</div>
-          <input
-            v-model="paletteSearch"
-            placeholder="Filter..."
-            class="field-search w-full text-[11px]"
+    <!-- Steps -->
+    <div class="flex-1 overflow-y-auto">
+      <div class="page-container page-container--narrow py-5 space-y-5">
+        <div v-if="activeRun" class="flex items-center gap-2">
+          <span class="type-detail" :style="{ color: runLook.colour }">{{ runLook.text }}</span>
+          <span v-if="runCost" class="type-meta">{{ runCost }} in total</span>
+        </div>
+
+        <div v-if="workflowSteps.length" class="space-y-2">
+          <WorkflowStepRow
+            v-for="(step, i) in workflowSteps"
+            :key="step.id"
+            :step="step"
+            :index="i"
+            :total="workflowSteps.length"
+            :agent="agents.find(a => a.slug === step.agentSlug)"
+            :status="execFor(step.id)?.status"
+            :output="execFor(step.id)?.output"
+            :error="execFor(step.id)?.error"
+            :cost-usd="execFor(step.id)?.costUsd"
+            :duration-ms="execFor(step.id)?.durationMs"
+            :locked="isRunning"
+            @remove="removeStep(step.id)"
+            @move="(d) => moveStep(step.id, d)"
+            @relabel="(label) => relabelStep(step.id, label)"
+            @pick="openPicker(step.id)"
           />
         </div>
-        <div class="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5">
-          <div
-            v-for="agent in filteredAgents"
-            :key="agent.slug"
-            draggable="true"
-            class="flex items-center gap-2 px-2.5 py-2 rounded-md cursor-grab active:cursor-grabbing hover-bg transition-colors"
-            @dragstart="(e: DragEvent) => { e.dataTransfer?.setData('agentSlug', agent.slug) }"
-          >
-            <div
-              class="size-2 rounded-full shrink-0"
-              :style="{ background: getAgentColor(agent.frontmatter.color) }"
-            />
-            <span class="text-[11px] truncate" style="color: var(--text-secondary);">
-              {{ agent.frontmatter.name }}
-            </span>
-            <UIcon name="i-lucide-grip-vertical" class="size-3 ml-auto text-meta opacity-50" />
-          </div>
-          <div v-if="!filteredAgents.length" class="text-[11px] text-center py-4 text-meta">
-            No agents found
-          </div>
-        </div>
-      </div>
 
-      <!-- Canvas -->
-      <div class="flex-1 flex flex-col min-w-0">
-        <div class="flex-1 min-h-[300px]">
-          <VueFlow
-            :nodes="nodes"
-            :edges="edges"
-            fit-view-on-init
-            :min-zoom="0.3"
-            :max-zoom="2"
-            @drop="onDrop"
-            @dragover="onDragOver"
-          >
-            <template #node-workflow="nodeProps">
-              <WorkflowNode
-                :data="nodeProps.data"
-                @remove="removeStep(nodeProps.id)"
-                @move-up="moveStep(nodeProps.id, -1)"
-                @move-down="moveStep(nodeProps.id, 1)"
-              />
-            </template>
-
-            <Controls position="bottom-right" />
-            <MiniMap v-if="workflowSteps.length >= 5" position="top-right" />
-          </VueFlow>
-
-          <!-- Empty canvas state -->
-          <div
-            v-if="!workflowSteps.length && workflow"
-            class="absolute inset-0 flex items-center justify-center pointer-events-none"
-          >
-            <div class="text-center space-y-2">
-              <UIcon name="i-lucide-mouse-pointer-click" class="size-8 mx-auto" style="color: var(--text-disabled);" />
-              <p class="text-[13px]" style="color: var(--text-tertiary);">
-                Drag agents from the left panel onto the canvas
-              </p>
-            </div>
-          </div>
+        <!-- Nothing to run yet, said as the next thing to do rather than a state -->
+        <div v-else class="surface-card">
+          <EmptyState
+            variant="inset"
+            icon="i-lucide-list-ordered"
+            title="No steps yet"
+            description="A workflow is a handful of agents, each picking up where the last one left off. Add the first."
+            action-label="Add a step"
+            action-icon="i-lucide-plus"
+            @action="openPicker()"
+          />
         </div>
 
-        <!-- Workflow complete banner -->
-        <div
-          v-if="allCompleted && execSteps.length > 0"
-          class="px-4 py-2.5 flex items-center gap-2"
-          style="background: rgba(74, 222, 128, 0.06); border-top: 1px solid rgba(74, 222, 128, 0.12);"
+        <button
+          v-if="workflowSteps.length && !isRunning"
+          class="w-full rounded-lg py-2.5 type-detail hover-bg focus-ring"
+          style="border: 1px dashed var(--border-subtle); color: var(--text-secondary);"
+          @click="openPicker()"
         >
-          <UIcon name="i-lucide-check-circle" class="size-4" style="color: var(--success, #22c55e);" />
-          <span class="text-[12px] font-medium" style="color: var(--success, #22c55e);">Workflow complete</span>
-        </div>
+          + Add a step
+        </button>
 
-        <!-- Execution log -->
-        <div v-if="activeRun" class="p-4">
-          <WorkflowExecutionLog
-            :steps="execSteps"
-            :workflow-steps="workflowSteps"
-            :current-step-index="currentStepIndex"
-            :is-paused="false"
-            :is-complete="allCompleted"
-            @stop="onStop"
-          />
-          <p v-if="activeRun.error" class="type-detail mt-2" style="color: var(--error);">
-            {{ activeRun.error }}
-          </p>
+        <!-- What it has done before. The page could not say, until runs were kept. -->
+        <div v-if="pastRuns.length" class="space-y-2 pt-2">
+          <h3 class="text-section-label">Past runs</h3>
+          <div
+            v-for="past in pastRuns"
+            :key="past.id"
+            class="flex items-center gap-2.5 px-3 py-2 rounded-md bg-card"
+          >
+            <UIcon
+              :name="PAST[past.status].icon"
+              class="size-3.5 shrink-0"
+              :style="{ color: PAST[past.status].colour }"
+            />
+            <span class="type-detail flex-1 min-w-0 truncate">{{ past.input }}</span>
+            <span class="type-meta shrink-0">{{ relativeTime(past.startedAt) }}</span>
+          </div>
         </div>
       </div>
     </div>
+
 
     <!-- Run modal -->
     <WorkflowRunModal
@@ -425,34 +380,31 @@ const pastRuns = ref<Awaited<ReturnType<typeof history>>>([])
       @start="startRun"
     />
 
-    <!-- Mobile agent picker -->
-    <UModal v-model:open="showMobileAgentPicker">
+    <!--
+      One picker for both jobs: adding a step, and changing which agent an
+      existing one uses. They were separate before, and the desktop path was a
+      drag from a palette onto a canvas where position meant nothing.
+    -->
+    <UModal v-model:open="picking">
       <template #content>
         <div class="p-4 space-y-3 bg-overlay">
-          <h3 class="text-page-title">Add Agent</h3>
-          <input
-            v-model="paletteSearch"
-            placeholder="Search agents..."
-            class="field-search w-full"
-          />
-          <div class="space-y-1 max-h-64 overflow-y-auto">
+          <h3 class="text-page-title">{{ replacing ? 'Use a different agent' : 'Add a step' }}</h3>
+          <input v-model="paletteSearch" placeholder="Search agents..." class="field-search w-full" autofocus />
+          <div class="space-y-1 max-h-72 overflow-y-auto">
             <button
               v-for="agent in filteredAgents"
               :key="agent.slug"
-              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover-bg text-left"
+              class="w-full flex items-center gap-2.5 px-3 py-2 rounded-md hover-bg text-left focus-ring"
               @click="addAgent(agent.slug)"
             >
-              <div
-                class="size-2 rounded-full shrink-0"
-                :style="{ background: getAgentColor(agent.frontmatter.color) }"
-              />
-              <span class="text-[12px]" style="color: var(--text-secondary);">
-                {{ agent.frontmatter.name }}
-              </span>
+              <div class="size-2 rounded-full shrink-0" :style="{ background: getAgentColor(agent.frontmatter.color) }" />
+              <span class="type-detail flex-1 min-w-0 truncate">{{ agent.frontmatter.name }}</span>
+              <span v-if="agent.frontmatter.model" class="type-mono-meta shrink-0">{{ agent.frontmatter.model }}</span>
             </button>
+            <p v-if="!filteredAgents.length" class="type-meta text-center py-6">Nothing matches that.</p>
           </div>
           <div class="flex justify-end">
-            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { showMobileAgentPicker = false }" />
+            <UButton label="Cancel" variant="ghost" color="neutral" size="sm" @click="() => { picking = false }" />
           </div>
         </div>
       </template>
