@@ -24,11 +24,20 @@ const saving = ref(false)
 
 const isStdio = computed(() => transport.value === 'stdio')
 
+/**
+ * Claude Code's own words for these are "private to you in this project",
+ * "across all projects" and the shared `.mcp.json`. Worth matching, because
+ * two of the three are about *this project* and calling one of them "this
+ * machine" sends people to the wrong one.
+ */
 const SCOPES = [
-  { value: 'local', label: 'This machine', hint: 'Only here. The safe default.' },
-  { value: 'user', label: 'All my projects', hint: 'Follows you between repositories.' },
-  { value: 'project', label: 'This project', hint: 'Written into the repo — everyone who clones it gets it too.' },
+  { value: 'local', label: 'Just me, here', hint: 'This project only, private to you. Not committed. The default.' },
+  { value: 'user', label: 'Just me, everywhere', hint: 'Follows you into every project on this machine.' },
+  { value: 'project', label: 'Everyone on this project', hint: 'Written into the repo — anyone who clones it gets it too.' },
 ] as const
+
+/** Only `user` is answerable without knowing which project you mean. */
+const needsProject = computed(() => scope.value !== 'user')
 
 /**
  * One per line, `KEY=value` for stdio and `Header: value` for the rest.
@@ -148,8 +157,8 @@ async function onSave() {
           </span>
         </label>
       </div>
-      <span v-if="scope === 'project' && !workingDir" class="field-hint" style="color: var(--warning);">
-        Pick a project first — this one is written into a repository.
+      <span v-if="needsProject && !workingDir" class="field-hint" style="color: var(--warning);">
+        Pick a project first — both of these are saved against one.
       </span>
     </div>
 
@@ -160,7 +169,7 @@ async function onSave() {
         icon="i-lucide-check"
         size="sm"
         :loading="saving"
-        :disabled="!name.trim() || !target.trim() || (scope === 'project' && !workingDir)"
+        :disabled="!name.trim() || !target.trim() || (needsProject && !workingDir)"
         @click="onSave"
       />
     </div>

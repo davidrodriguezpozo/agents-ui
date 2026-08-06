@@ -193,14 +193,17 @@ export function addArgs(input: AddMcpInput): string[] {
 }
 
 export async function addMcpServer(input: AddMcpInput, cwd?: string): Promise<void> {
-  // A project-scoped server is written beside the code, so it has to be written
-  // in the right place — there is no sensible default when we don't know where.
-  if (input.scope === 'project' && !cwd) {
+  // Two of the three scopes are about a project — `local` is "private to you
+  // in this project", not machine-wide, whatever the name suggests. Without a
+  // project both would be written against whatever directory this process
+  // happens to be in, which for a background service is nobody's idea of
+  // anywhere.
+  if (input.scope !== 'user' && !cwd) {
     throw createError({
       statusCode: 409,
       data: {
         error: 'no_project',
-        message: 'Pick a project first — a project-scoped server is written into that repository.',
+        message: 'Pick a project first — that scope is saved against one.',
       },
     })
   }
