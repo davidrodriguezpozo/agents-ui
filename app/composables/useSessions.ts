@@ -467,6 +467,50 @@ export function useProjectChecks() {
   return { state, saving, load, save, reset }
 }
 
+/**
+ * What makes a fresh workspace of this project runnable.
+ *
+ * The same shape as the check command, and for a reason: they are two halves
+ * of one answer. A worktree is a bare checkout, so without this the checks run
+ * somewhere that cannot run anything, and report a missing dependency as
+ * broken code.
+ */
+export function useProjectSetup() {
+  const state = useState<ProjectChecks | null>('project-setup', () => null)
+  const saving = useState('project-setup-saving', () => false)
+
+  async function load() {
+    try {
+      state.value = await $fetch<ProjectChecks>('/api/project/setup')
+    } catch (e) {
+      console.error('[useProjectSetup] load:', e)
+    }
+  }
+
+  /** An empty command is a real answer: a checkout of this is ready as it is. */
+  async function save(command: string) {
+    saving.value = true
+    try {
+      await $fetch('/api/project/setup', { method: 'POST', body: { command } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function reset() {
+    saving.value = true
+    try {
+      await $fetch('/api/project/setup', { method: 'POST', body: { reset: true } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return { state, saving, load, save, reset }
+}
+
 /** Worktrees as git reports them, including ones with no session behind them. */
 export function useWorktrees() {
   const data = useState<{ repoDir: string | null; isRepo: boolean; root: string | null; home: string | null; worktrees: WorktreeEntry[] }>(

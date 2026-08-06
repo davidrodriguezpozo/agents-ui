@@ -21,6 +21,14 @@ const {
   reset: resetCheckCommand,
 } = useProjectChecks()
 
+const {
+  state: setup,
+  saving: setupSaving,
+  load: loadSetup,
+  save: saveSetupCommand,
+  reset: resetSetupCommand,
+} = useProjectSetup()
+
 const rawJson = ref('')
 const saving = ref(false)
 const viewMode = ref<'structured' | 'raw'>('structured')
@@ -50,6 +58,32 @@ async function turnOffChecks() {
 
 async function resetChecks() {
   await resetCheckCommand()
+}
+
+/** Seeded with whatever applies, detected guess included — same as the checks. */
+const setupCommand = ref('')
+watch(setup, (next) => { setupCommand.value = next?.command ?? '' }, { immediate: true })
+
+async function saveSetup() {
+  try {
+    await saveSetupCommand(setupCommand.value)
+    toast.add({
+      title: 'Saved',
+      description: 'New workspaces in this project will be prepared with it.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
+  }
+}
+
+async function turnOffSetup() {
+  await saveSetupCommand('')
+  setupCommand.value = ''
+}
+
+async function resetSetup() {
+  await resetSetupCommand()
 }
 
 type NotificationKey = 'enabled' | 'needsYou' | 'failed' | 'finished'
@@ -96,6 +130,7 @@ async function saveCaps() {
 
 onMounted(async () => {
   void loadChecks()
+  void loadSetup()
 
   try {
     const prefs = await $fetch<{
@@ -446,7 +481,9 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             than a checkbox.
           -->
           <div class="flex items-start justify-between gap-4">
-            <div>
+            <!-- flex-1 min-w-0, or the select's width wins and the prose next
+                 to it collapses to one word per line. -->
+            <div class="flex-1 min-w-0">
               <div class="type-strong">Let sessions fix their own failing checks</div>
               <div class="text-[12px] mt-0.5 text-label">
                 When a turn leaves the checks failing, the session takes another turn at fixing
@@ -455,17 +492,25 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                 <strong>Fix it</strong> on a failing session works either way.
               </div>
             </div>
-            <select
-              class="field-input w-32 shrink-0"
-              :value="String(repairAttempts)"
-              @change="setRepairAttempts(Number(($event.target as HTMLSelectElement).value))"
-            >
-              <option value="0">Never</option>
-              <option value="1">1 attempt</option>
-              <option value="2">2 attempts</option>
-              <option value="3">3 attempts</option>
-              <option value="5">5 attempts</option>
-            </select>
+            <!--
+              Width on a wrapper, not on the control. `.field-select` sets
+              `width: 100%`, which beats a `w-32` utility — and with `shrink-0`
+              on top, flex could not correct it either, so the select ate the
+              row and left the prose in a column one word wide.
+            -->
+            <div class="w-36 shrink-0">
+              <select
+                class="field-select"
+                :value="String(repairAttempts)"
+                @change="setRepairAttempts(Number(($event.target as HTMLSelectElement).value))"
+              >
+                <option value="0">Never</option>
+                <option value="1">1 attempt</option>
+                <option value="2">2 attempts</option>
+                <option value="3">3 attempts</option>
+                <option value="5">5 attempts</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>
@@ -577,6 +622,73 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               color="neutral"
               :loading="checksSaving"
               @click="resetChecks"
+            />
+          </div>
+        </template>
+      </div>
+
+      <!-- Preparing a workspace -->
+      <div class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Making a workspace runnable</h3>
+        <p class="text-[12px] text-meta">
+          A session works in its own checkout of your repository, and a fresh checkout is only
+          the tracked files — no dependencies, nothing generated. This is what makes one usable,
+          run once per workspace before its first check.
+        </p>
+
+        <div v-if="!setup?.dir" class="text-[12px] text-label">
+          Pick a project folder in the sidebar first — this is set per repository.
+        </div>
+
+        <template v-else>
+          <div class="field-group">
+            <label class="field-label">Command</label>
+            <div class="flex gap-2">
+              <input
+                v-model="setupCommand"
+                class="field-input flex-1 font-mono"
+                placeholder="pnpm install"
+                spellcheck="false"
+                @keydown.enter="saveSetup"
+              />
+              <UButton
+                label="Save"
+                size="sm"
+                :loading="setupSaving"
+                :disabled="setupCommand === (setup.command ?? '')"
+                @click="saveSetup"
+              />
+            </div>
+            <p v-if="setup.source === 'detected' && setup.from" class="field-hint">
+              Nothing chosen yet, so this was inferred from {{ setup.from }}. Saving makes it the answer.
+            </p>
+            <p v-else-if="setup.configured === ''" class="field-hint">
+              Turned off — a checkout of this project is treated as ready to run as it is.
+            </p>
+            <p v-else class="field-hint">
+              A monorepo often needs more than a bare install — a build, or generated types.
+              Chain them with <span class="font-mono">&amp;&amp;</span>.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="setup.configured !== ''"
+              label="Checkouts here need nothing"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="setupSaving"
+              @click="turnOffSetup"
+            />
+            <UButton
+              v-if="setup.configured !== null"
+              label="Reset to what's detected"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="setupSaving"
+              @click="resetSetup"
             />
           </div>
         </template>
