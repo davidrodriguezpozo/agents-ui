@@ -10,6 +10,8 @@ export interface DigestRitual {
   costUsd?: number
   preview: string
   problem?: string
+  /** Rules that would have let a blocked run through. */
+  suggestedRules?: string[]
 }
 
 export interface DigestSession {

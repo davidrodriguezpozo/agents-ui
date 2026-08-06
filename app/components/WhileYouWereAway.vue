@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { DigestRitual, DigestSession } from '~/composables/useDigest'
+import { errorMessage } from '~/utils/errors'
 
 /**
  * The morning report.
@@ -13,8 +14,40 @@ import type { DigestRitual, DigestSession } from '~/composables/useDigest'
  * What worked comes after, quieter, because a working ritual needs no reading.
  */
 const { digest, loading, load } = useDigest()
+const { allowRules } = useSchedules()
+const { describeRule } = usePermissionRuleLabels()
+const toast = useToast()
+
+const granting = ref<string | null>(null)
+const granted = ref<Set<string>>(new Set())
 
 onMounted(() => { if (!digest.value) void load() })
+
+/**
+ * Grant the narrow rules the run was refused, from here.
+ *
+ * The whole point of reporting a blocked ritual is that it will be blocked
+ * again tomorrow. Saying so and then sending you to another page to do
+ * something about it is most of a feature.
+ */
+async function onAllow(item: DigestRitual) {
+  if (!item.suggestedRules?.length) return
+
+  granting.value = item.scheduleId
+  try {
+    await allowRules(item.scheduleId, item.suggestedRules)
+    granted.value = new Set([...granted.value, item.scheduleId])
+    toast.add({
+      title: `${item.title} can do that now`,
+      description: 'It will not stop for these again. Nothing else was granted.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not allow that', description: errorMessage(e), color: 'error' })
+  } finally {
+    granting.value = null
+  }
+}
 
 const RITUAL: Record<DigestRitual['outcome'], { icon: string; colour: string }> = {
   ok: { icon: 'i-lucide-circle-check', colour: 'var(--success)' },
@@ -83,6 +116,34 @@ const money = computed(() => {
         <div class="flex-1 min-w-0">
           <NuxtLink to="/schedules" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
           <p class="type-detail">{{ item.problem }}</p>
+
+          <!--
+            The fix, where the problem is reported. Naming the rules rather than
+            counting them, because "allow 3 rules" asks you to trust a number.
+          -->
+          <div v-if="item.suggestedRules?.length" class="flex items-center gap-2 flex-wrap mt-1">
+            <template v-if="granted.has(item.scheduleId)">
+              <UIcon name="i-lucide-shield-check" class="size-3.5" style="color: var(--success);" />
+              <span class="type-meta">Allowed. It will not stop for these again.</span>
+            </template>
+            <template v-else>
+              <UButton
+                label="Allow this from now on"
+                icon="i-lucide-shield-check"
+                size="xs"
+                variant="soft"
+                :loading="granting === item.scheduleId"
+                :disabled="Boolean(granting)"
+                @click="onAllow(item)"
+              />
+              <!-- Two of them, then a count. Five rule descriptions is a wall,
+                   and the button is the thing being decided on. -->
+              <span class="type-meta truncate">
+                {{ item.suggestedRules.slice(0, 2).map(describeRule).join(' · ')
+                }}{{ item.suggestedRules.length > 2 ? ` · and ${item.suggestedRules.length - 2} more` : '' }}
+              </span>
+            </template>
+          </div>
         </div>
         <span class="type-meta shrink-0">{{ relativeTime(item.at) }}</span>
       </div>

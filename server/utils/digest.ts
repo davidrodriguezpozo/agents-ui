@@ -27,6 +27,12 @@ export interface DigestRitual {
   preview: string
   /** Why it is worth your attention, when it is. */
   problem?: string
+  /**
+   * The narrow rules that would have let it through, gathered from the prompts
+   * it was refused. Granting these is the fix, and it is one click from here
+   * rather than a trip to the ritual and back.
+   */
+  suggestedRules?: string[]
 }
 
 export interface DigestSession {
@@ -122,6 +128,7 @@ export async function buildDigest(since: number): Promise<Digest> {
         at: run.createdAt,
         costUsd: run.costUsd,
         preview: run.preview,
+        suggestedRules: outcome === 'blocked' ? run.suggestedRules : undefined,
         problem: outcome === 'failed'
           ? run.error || 'It ended early.'
           : outcome === 'blocked'
