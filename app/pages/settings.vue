@@ -100,6 +100,7 @@ const notifications = ref<Record<NotificationKey, boolean>>({
 })
 const summariseSessions = ref(true)
 const repairAttempts = ref(0)
+const maxTurns = ref('')
 const dailyCap = ref('')
 const runCap = ref('')
 const spentToday = ref(0)
@@ -114,13 +115,18 @@ async function saveCaps() {
   try {
     await $fetch('/api/preferences', {
       method: 'PUT',
-      body: { dailyCapUsd: capToNumber(dailyCap.value), runCapUsd: capToNumber(runCap.value) },
+      body: {
+        dailyCapUsd: capToNumber(dailyCap.value),
+        runCapUsd: capToNumber(runCap.value),
+        maxTurns: Math.max(0, Math.trunc(Number(maxTurns.value.trim()) || 0)),
+      },
     })
+    const anyLimit = capToNumber(dailyCap.value) || capToNumber(runCap.value) || Number(maxTurns.value.trim())
     toast.add({
       title: 'Limits saved',
-      description: capToNumber(dailyCap.value) || capToNumber(runCap.value)
-        ? 'Work that would go past them is stopped rather than billed.'
-        : 'No limits set — nothing will be stopped for cost.',
+      description: anyLimit
+        ? 'Work that would go past them is stopped rather than allowed to run on.'
+        : 'Nothing set — sessions, rituals and workflows run to the built-in defaults.',
       color: 'success',
     })
   } catch (e) {
@@ -137,12 +143,14 @@ onMounted(async () => {
       notifications: Record<NotificationKey, boolean>
       summariseSessions: boolean
       repairAttempts: number
+      maxTurns: number
       dailyCapUsd: number
       runCapUsd: number
     }>('/api/preferences')
     notifications.value = prefs.notifications
     summariseSessions.value = prefs.summariseSessions
     repairAttempts.value = prefs.repairAttempts ?? 0
+    maxTurns.value = prefs.maxTurns ? String(prefs.maxTurns) : ''
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
 
@@ -517,11 +525,26 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- Spending limits -->
       <div class="rounded-lg p-5 space-y-4 bg-card">
-        <h3 class="text-section-title">Spending limits</h3>
+        <h3 class="text-section-title">Limits</h3>
         <p class="text-[12px] text-meta">
-          These stop work rather than report on it. Leave either blank for no limit.
+          These stop work rather than report on it. Leave any of them blank for no limit.
           Today has cost <strong>{{ spentToday < 0.01 && spentToday > 0 ? '<$0.01' : `$${spentToday.toFixed(2)}` }}</strong> so far.
         </p>
+
+        <div class="field-group">
+          <label class="field-label">Most turns in one run</label>
+          <input
+            v-model="maxTurns"
+            class="field-input sm:max-w-xs"
+            placeholder="40"
+            spellcheck="false"
+          />
+          <p class="field-hint">
+            A turn is one exchange that used a tool, so real work spends them quickly. This is
+            here to stop a loop running all night, not to say how much work is reasonable —
+            a run that hits it stops unfinished and says so. Blank for the default of 40, up to 200.
+          </p>
+        </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="field-group">

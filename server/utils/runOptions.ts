@@ -6,6 +6,7 @@ import { resolveAgentInRoots, toSdkModel, type ResolvedAgent } from './resolveAg
 import { readInstalledPlugins } from './pluginScan'
 import { resolveEnabledPluginsInRoots } from './pluginState'
 import { toSettingsPermissions } from './permissionRules'
+import { readPreferences } from './preferences'
 import type { PermissionMode } from '~/types'
 
 export const DEFAULT_MAX_TURNS = 40
@@ -77,6 +78,9 @@ export async function resolveRunOptions(event: H3Event, body: RunRequest): Promi
  */
 export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRunOptions> {
   const claudeDir = getClaudeDir()
+  // 0 means "no preference", which must fall through to the default rather
+  // than being read as a limit of zero turns.
+  const preferredTurns = (await readPreferences()).maxTurns || undefined
   const projectDir = body.projectDir && existsSync(body.projectDir) ? body.projectDir : null
   const roots = scopeRootsFor(projectDir)
 
@@ -116,7 +120,10 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     allowedTools,
     disallowedTools: body.disallowedTools?.length ? body.disallowedTools : undefined,
     permissionMode: body.permissionMode ?? 'acceptEdits',
-    maxTurns: Math.max(1, Math.min(body.maxTurns ?? DEFAULT_MAX_TURNS, 200)),
+    // An explicit request wins; then whatever this machine was set to; then
+    // the built-in. Sessions, rituals and workflows all pass nothing, which is
+    // why the preference has to be consulted here rather than at each caller.
+    maxTurns: Math.max(1, Math.min(body.maxTurns ?? preferredTurns ?? DEFAULT_MAX_TURNS, 200)),
     model: toSdkModel(body.model || agent?.model),
     loadSettings: body.loadProjectSettings !== false,
     plugins,

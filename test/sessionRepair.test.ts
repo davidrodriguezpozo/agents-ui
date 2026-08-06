@@ -212,3 +212,19 @@ describe('clampAttempts', () => {
     expect(preferences.clampAttempts(undefined)).toBe(0)
   })
 })
+
+describe('clampTurns', () => {
+  it('treats 0 and nonsense as "no preference", not as a limit of zero', () => {
+    // A limit of zero turns would mean every run stops before doing anything.
+    expect(preferences.clampTurns(0)).toBe(0)
+    expect(preferences.clampTurns(-5)).toBe(0)
+    expect(preferences.clampTurns('lots')).toBe(0)
+    expect(preferences.clampTurns(undefined)).toBe(0)
+  })
+
+  it('keeps a real number and caps it at what the SDK will take', () => {
+    expect(preferences.clampTurns(120)).toBe(120)
+    expect(preferences.clampTurns(5000)).toBe(preferences.MAX_TURNS_CEILING)
+    expect(preferences.clampTurns(12.9)).toBe(12)
+  })
+})

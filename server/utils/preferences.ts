@@ -52,6 +52,18 @@ export interface Preferences {
    * failing session works either way — pressing a button is that choice.
    */
   repairAttempts: number
+  /**
+   * How many turns a single run may take before the SDK stops it.
+   *
+   * A turn is one exchange with a tool in it, so a long piece of work spends
+   * them quickly — the ceiling exists to stop a loop running all night, not to
+   * describe how much work is reasonable. 0 means the built-in default.
+   *
+   * Was only reachable from the Agent Studio panel, which meant sessions,
+   * rituals and workflows — everything anyone actually runs — were fixed at 40
+   * with no way to say otherwise.
+   */
+  maxTurns: number
 }
 
 /**
@@ -70,6 +82,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   dailyCapUsd: 0,
   runCapUsd: 0,
   repairAttempts: 0,
+  maxTurns: 0,
 }
 
 /** A limit is a positive number of dollars or it is not a limit. */
@@ -79,6 +92,15 @@ export function positiveOrZero(value: unknown): number {
 
 /** Nobody's runaway loop is worth more than this, whatever the file says. */
 export const MAX_REPAIR_ATTEMPTS = 10
+
+/** The SDK's own ceiling. Asking for more is asking for something it won't do. */
+export const MAX_TURNS_CEILING = 200
+
+/** 0 is "use the built-in default", which is what an unset preference means. */
+export function clampTurns(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return 0
+  return Math.min(Math.floor(value), MAX_TURNS_CEILING)
+}
 
 /** Lives here rather than with the repair loop so that reading a preference
  * does not depend on the thing that consumes it. */
@@ -106,6 +128,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Clamped on the way in as well as the way out: a hand-edited file saying
     // 500 should not buy a session five hundred turns at its own discretion.
     repairAttempts: clampAttempts(parsed?.preferences?.repairAttempts),
+    // Same clamp the request path uses, so a hand-edited file cannot ask for
+    // a thousand turns any more than the settings page can.
+    maxTurns: clampTurns(parsed?.preferences?.maxTurns),
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -126,9 +151,10 @@ export async function savePreferences(
     dailyCapUsd?: number
     runCapUsd?: number
     repairAttempts?: number
+    maxTurns?: number
   },
 ): Promise<Preferences> {
-  const { summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, ...notifications } = patch
+  const { summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, ...notifications } = patch
 
   return preferencesStore.update((current) => {
     const next: Preferences = {
@@ -137,6 +163,7 @@ export async function savePreferences(
       dailyCapUsd: dailyCapUsd === undefined ? current.dailyCapUsd : positiveOrZero(dailyCapUsd),
       runCapUsd: runCapUsd === undefined ? current.runCapUsd : positiveOrZero(runCapUsd),
       repairAttempts: repairAttempts === undefined ? current.repairAttempts : clampAttempts(repairAttempts),
+      maxTurns: maxTurns === undefined ? current.maxTurns : clampTurns(maxTurns),
     }
     Object.assign(current, next)
     return next

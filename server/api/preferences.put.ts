@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
     notifications?: Partial<NotificationPreferences>
     summariseSessions?: boolean
     repairAttempts?: number
+    maxTurns?: number
     dailyCapUsd?: number
     runCapUsd?: number
   }>(event)
@@ -15,6 +16,7 @@ export default defineEventHandler(async (event) => {
   const patch: Partial<NotificationPreferences> & {
     summariseSessions?: boolean
     repairAttempts?: number
+    maxTurns?: number
     dailyCapUsd?: number
     runCapUsd?: number
   } = {}
@@ -33,6 +35,8 @@ export default defineEventHandler(async (event) => {
   if (typeof body?.runCapUsd === 'number') patch.runCapUsd = body.runCapUsd
   // Same reasoning: 0 is how this is turned off, so absent is the only skip.
   if (typeof body?.repairAttempts === 'number') patch.repairAttempts = body.repairAttempts
+  // 0 is how this returns to the built-in default, so absent is the only skip.
+  if (typeof body?.maxTurns === 'number') patch.maxTurns = body.maxTurns
 
   return savePreferences(patch)
 })
