@@ -189,9 +189,29 @@ function nextLabel(schedule: Schedule) {
                 </template>
               </div>
 
+              <!--
+                Turned off by the scheduler rather than by you. Takes the place
+                of the warning below: once it has stopped firing, how many runs
+                came to nothing is history, and what matters is that it is off
+                and why.
+              -->
+              <div
+                v-if="schedule.pausedReason"
+                class="flex items-start gap-1.5 mt-1 type-detail"
+                style="color: var(--warning);"
+              >
+                <UIcon name="i-lucide-pause-circle" class="size-3 shrink-0 mt-0.5" />
+                <span>
+                  {{ schedule.pausedReason }}
+                  <button class="underline hover:opacity-80" @click="onToggle(schedule, true)">
+                    Turn it back on
+                  </button>
+                </span>
+              </div>
+
               <!-- A ritual nobody watches fails quietly, so say it on the row -->
               <div
-                v-if="historyFor(schedule.id).failingStreak >= 2"
+                v-else-if="historyFor(schedule.id).failingStreak >= 2"
                 class="flex items-center gap-1.5 mt-1 type-detail"
                 style="color: var(--error);"
               >

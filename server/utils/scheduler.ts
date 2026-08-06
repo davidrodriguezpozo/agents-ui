@@ -1,11 +1,13 @@
 import {
-  computeNextRun, markRan, permissionModeFor, scheduleStore, skipToNextRun, type Schedule,
+  computeNextRun, markRan, pauseRitual, permissionModeFor, scheduleStore, skipToNextRun,
+  type Schedule,
 } from './schedules'
 import { resolveRunOptionsFor } from './runOptions'
-import { createRun, type Run } from './runStore'
+import { createRun, listRunsBySchedule, type Run } from './runStore'
 import { executeRun } from './runner'
 import { notify } from './notify'
-import { outcomeOf } from './ritualHistory'
+import { outcomeOf, summarizeRitualRuns, type RitualHistory } from './ritualHistory'
+import { RETRY_DELAY_MS, shouldGiveUp, shouldRetry } from './ritualHealth'
 import { checkBudget } from './budget'
 
 const TICK_MS = 30_000
@@ -101,6 +103,18 @@ async function announce(title: string, run: Run): Promise<void> {
   }
 }
 
+/** How this ritual's recent runs stand. Empty history on any trouble reading. */
+async function historyFor(scheduleId: string): Promise<RitualHistory> {
+  try {
+    const bySchedule = await listRunsBySchedule()
+    return summarizeRitualRuns(bySchedule[scheduleId] ?? [])
+  } catch {
+    return { runs: [], failingStreak: 0 }
+  }
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
 /** Already claimed in `inFlight` by the tick that selected it. */
 async function fire(schedule: Schedule): Promise<void> {
   try {
@@ -115,35 +129,76 @@ async function fire(schedule: Schedule): Promise<void> {
       return
     }
 
-    const options = await resolveRunOptionsFor({
-      projectDir: schedule.projectDir,
-      agentSlug: schedule.agentSlug,
-      // The trust level was chosen when the ritual was created, so a run at 8am
-      // doesn't have to ask a question nobody is there to answer.
-      permissionMode: permissionModeFor(schedule.permission),
-      allowRules: schedule.allowRules,
-    })
+    // Where this ritual stood *before* today's attempt. It decides whether a
+    // failure is a bad morning or the latest in a run of them, so it has to be
+    // read before the run that is about to join it.
+    const before = await historyFor(schedule.id)
 
-    const run = createRun({
-      kind: 'command',
-      title: schedule.title,
-      input: schedule.input,
-      invocation: schedule.invocation,
-      agentSlug: schedule.agentSlug,
-      projectDir: options.cwd,
-      scheduleId: schedule.id,
-    })
-
-    // Advance the schedule before the run finishes, so a long run can't cause
-    // a second fire on the next tick.
-    await markRan(schedule.id, run.id)
-
-    console.log(`[scheduler] running "${schedule.title}" as ${run.id}`)
-    await executeRun(run, options, { unattended: true, maxBudgetUsd: budget.maxBudgetUsd })
+    const run = await runOnce(schedule, budget.maxBudgetUsd)
     await announce(schedule.title, run)
+
+    // One more go at a failure that might not repeat. Nobody is awake to press
+    // the button, and losing the morning to a dropped connection is a poor
+    // reason to have no briefing.
+    if (shouldRetry(outcomeOf(run), before)) {
+      console.log(`[scheduler] "${schedule.title}" failed — retrying once in ${Math.round(RETRY_DELAY_MS / 60_000)} min`)
+
+      // Waited out while still holding this ritual's claim, so no tick can fire
+      // it underneath us. A restart during the wait loses the retry, which is
+      // the right way round: the next occurrence is never far away.
+      await sleep(RETRY_DELAY_MS)
+
+      // Re-checked rather than reused: ten minutes have passed, and the rest of
+      // the machine has been spending money throughout them.
+      const retryBudget = await checkBudget()
+      if (retryBudget.allowed) {
+        const again = await runOnce(schedule, retryBudget.maxBudgetUsd)
+        await announce(schedule.title, again)
+      }
+    }
+
+    // With the attempt on disk, ask the question the history was always for:
+    // has this stopped working? Stopping is the useful answer — it ends the
+    // waste, and it is the only way the next failure reaches anybody instead
+    // of joining a queue of identical ones nobody reads.
+    const verdict = shouldGiveUp(await historyFor(schedule.id))
+    if (verdict) {
+      await pauseRitual(schedule.id, verdict.reason)
+      await notify('needsYou', `${schedule.title} has been turned off`, verdict.reason)
+    }
   } catch (e) {
     console.error(`[scheduler] "${schedule.title}" failed to start`, e)
   } finally {
     inFlight.delete(schedule.id)
   }
+}
+
+/** One attempt, start to finish, recorded against the ritual. */
+async function runOnce(schedule: Schedule, maxBudgetUsd: number | undefined): Promise<Run> {
+  const options = await resolveRunOptionsFor({
+    projectDir: schedule.projectDir,
+    agentSlug: schedule.agentSlug,
+    // The trust level was chosen when the ritual was created, so a run at 8am
+    // doesn't have to ask a question nobody is there to answer.
+    permissionMode: permissionModeFor(schedule.permission),
+    allowRules: schedule.allowRules,
+  })
+
+  const run = createRun({
+    kind: 'command',
+    title: schedule.title,
+    input: schedule.input,
+    invocation: schedule.invocation,
+    agentSlug: schedule.agentSlug,
+    projectDir: options.cwd,
+    scheduleId: schedule.id,
+  })
+
+  // Advance the schedule before the run finishes, so a long run can't cause
+  // a second fire on the next tick.
+  await markRan(schedule.id, run.id)
+
+  console.log(`[scheduler] running "${schedule.title}" as ${run.id}`)
+  await executeRun(run, options, { unattended: true, maxBudgetUsd })
+  return run
 }

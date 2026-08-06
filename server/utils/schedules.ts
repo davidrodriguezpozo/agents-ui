@@ -47,6 +47,16 @@ export interface Schedule {
   lastRunAt?: number
   lastRunId?: string
   nextRunAt?: number
+  /**
+   * Why the scheduler turned this off by itself, when it did.
+   *
+   * `enabled: false` on its own is ambiguous — it is also what the switch on
+   * the row means. Without this, a ritual that stopped because it had broken
+   * would be indistinguishable from one somebody paused on purpose, and the
+   * only thing worth knowing is which. Cleared the moment it is turned back on.
+   */
+  pausedReason?: string
+  pausedAt?: number
 }
 
 /**
@@ -178,6 +188,8 @@ export async function upsertSchedule(
       allowRules: mergeRules(input.allowRules ?? existing?.allowRules ?? []),
       enabled: input.enabled ?? existing?.enabled ?? true,
       origin: input.origin ?? existing?.origin ?? 'user',
+      pausedReason: existing?.pausedReason,
+      pausedAt: existing?.pausedAt,
       pluginName: input.pluginName ?? existing?.pluginName,
       createdAt: existing?.createdAt ?? Date.now(),
       // Preserve run history: an edit must not make a ritual look like it has
@@ -185,6 +197,14 @@ export async function upsertSchedule(
       lastRunAt: existing?.lastRunAt,
       lastRunId: existing?.lastRunId,
       nextRunAt: computeNextRun(recurrence),
+    }
+
+    // A ritual that is on is not paused. Turning it back on is somebody saying
+    // they want it to run again; whatever it broke on before is last week's
+    // problem, and a reason left on the row would go on accusing it of it.
+    if (schedule.enabled) {
+      schedule.pausedReason = undefined
+      schedule.pausedAt = undefined
     }
 
     if (existingIndex >= 0) schedules[existingIndex] = schedule
@@ -223,6 +243,24 @@ export async function skipToNextRun(id: string): Promise<void> {
     if (!schedule) return
 
     schedule.nextRunAt = computeNextRun(schedule.recurrence)
+  })
+}
+
+/**
+ * Stop firing a ritual that has broken, and record what it broke on.
+ *
+ * Deliberately the same `enabled: false` the switch on the row sets, so there
+ * is one idea of "off" rather than two that can disagree. The reason beside it
+ * is what makes the two distinguishable to a person.
+ */
+export async function pauseRitual(id: string, reason: string): Promise<void> {
+  await scheduleStore.update((schedules) => {
+    const schedule = schedules.find(s => s.id === id)
+    if (!schedule) return
+
+    schedule.enabled = false
+    schedule.pausedReason = reason
+    schedule.pausedAt = Date.now()
   })
 }
 

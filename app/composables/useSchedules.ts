@@ -27,6 +27,13 @@ export interface Schedule {
   lastRunAt?: number
   lastRunId?: string
   nextRunAt?: number
+  /**
+   * Why the scheduler turned this off by itself. Absent on a ritual somebody
+   * switched off on purpose — which is the distinction the row has to draw,
+   * since `enabled: false` means both.
+   */
+  pausedReason?: string
+  pausedAt?: number
   /** Human-readable recurrence, built server-side. */
   description: string
 }
