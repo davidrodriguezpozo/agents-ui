@@ -184,12 +184,10 @@ onMounted(() => void list(''))
 
         <p v-if="fileError" class="px-3 py-2 type-meta" style="color: var(--error);">{{ fileError }}</p>
 
-        <textarea
+        <CodeEditor
           v-else-if="openPath"
           v-model="content"
-          class="editor-textarea w-full"
-          rows="18"
-          spellcheck="false"
+          :path="openPath"
           :disabled="loading"
         />
 

@@ -1624,3 +1624,112 @@ details summary::-webkit-details-marker {
 
 /* GFM task lists carry their own markers. */
 .markdown li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.2em; }
+
+/* ============================================
+   Code editor — a textarea you can read
+   ============================================ */
+
+/*
+ * The colours sit in a <pre> behind a transparent textarea, so every property
+ * that decides where a glyph lands is set on BOTH layers and must stay
+ * identical. A difference of half a pixel in padding or line-height is a
+ * highlight that slides off the characters as you scroll.
+ */
+.code-editor {
+  display: flex;
+  align-items: stretch;
+  /*
+   * The height lives here, on the flex container, and both children take all
+   * of it. Putting it on the text pane instead let the gutter grow to its own
+   * content height — so the box stretched past the text, the numbers ran on
+   * beside empty space, and the gutter never overflowed, which meant setting
+   * its scrollTop did nothing and the numbers desynced the moment you scrolled.
+   */
+  height: clamp(18rem, 60vh, 46rem);
+  background: var(--editor-bg);
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+  /* Catppuccin Mocha, which is what --editor-bg already is. */
+  --tok-comment: #6c7086;
+  --tok-string: #a6e3a1;
+  --tok-number: #fab387;
+  --tok-keyword: #cba6f7;
+  --tok-literal: #fab387;
+  --tok-function: #89b4fa;
+  --tok-property: #89dceb;
+  --tok-tag: #f38ba8;
+  --tok-attribute: #f9e2af;
+  --tok-punctuation: #9399b2;
+}
+
+.code-editor__gutter {
+  flex: 0 0 auto;
+  height: 100%;
+  min-width: 3.25rem;
+  padding: 20px 10px 20px 0;
+  text-align: right;
+  overflow: hidden;
+  user-select: none;
+  color: var(--editor-line-number);
+  background: var(--editor-bg);
+  border-right: 1px solid var(--editor-border);
+}
+
+.code-editor__body {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+/* Everything below this line applies to both layers, and that is the point. */
+.code-editor__gutter,
+.code-editor__layer {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.75;
+  tab-size: 2;
+  letter-spacing: normal;
+}
+
+.code-editor__layer {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 20px;
+  border: 0;
+  white-space: pre;
+  overflow: auto;
+  word-break: normal;
+  overflow-wrap: normal;
+}
+
+.code-editor__layer:not(.code-editor__input) {
+  pointer-events: none;
+  color: var(--editor-text);
+}
+
+.code-editor__input {
+  background: transparent;
+  /* Transparent text over the coloured copy, but a caret you can still see. */
+  color: transparent;
+  caret-color: var(--editor-text);
+  resize: none;
+  outline: none;
+}
+
+.code-editor__input::selection {
+  /* The selection has to be translucent or it hides the layer underneath. */
+  background: rgba(137, 180, 250, 0.3);
+}
+
+.tok-comment { color: var(--tok-comment); font-style: italic; }
+.tok-string { color: var(--tok-string); }
+.tok-number { color: var(--tok-number); }
+.tok-keyword { color: var(--tok-keyword); }
+.tok-literal { color: var(--tok-literal); }
+.tok-function { color: var(--tok-function); }
+.tok-property { color: var(--tok-property); }
+.tok-tag { color: var(--tok-tag); }
+.tok-attribute { color: var(--tok-attribute); }
+.tok-punctuation { color: var(--tok-punctuation); }
