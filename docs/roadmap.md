@@ -186,11 +186,25 @@ A dev server started in the workspace and shown. The setup and check commands al
 know how to make a workspace runnable, so this is mostly plumbing plus deciding what to
 do about ports.
 
-### 4. Rewind
+### ~~4. Rewind~~ — shipped, taken out of order
 
-Cheapest of the four and nearly free: the workspace is a git worktree, so "put this back
-the way it was before that turn" is a reset, not a checkpointing system. Worth doing
-early despite being fourth on frequency.
+Fourth on frequency and first on value-per-hour, so it went second. Editing files by
+hand is what made it matter: an agent's work was always recoverable by simply not
+merging it, but a change you made yourself on top of a turn you now want gone was not.
+
+Two things, kept apart because they cost differently — throw away what is uncommitted,
+and take a whole turn off. Both name the files rather than counting them, because a
+count is something you have to trust.
+
+The guard is `baseSha`. A rewind must never pass the commit the session branched from:
+below that is the repository's own history, which the session does not own and which no
+button on a web page may destroy. Every reset target is checked to descend from the base
+and refused otherwise rather than clamped to something plausible. Proven against a real
+repository with prior commits — the refusal holds at the boundary and the history is
+untouched.
+
+`git clean -fd` without `-x`, so ignored files survive: a discard must not delete
+`node_modules` and cost a fresh setup run.
 
 ### 5. Arranging the panes
 

@@ -939,6 +939,14 @@ const totalChanges = computed(() => {
           @saved="onWorkspaceEdited"
         />
 
+        <!-- Beside the editor, because they are the same kind of thing: acting
+             on the workspace directly rather than asking the agent to. -->
+        <RewindPanel
+          v-if="showFiles && session"
+          :session-id="session.id"
+          @changed="onWorkspaceEdited"
+        />
+
         <!-- Changes -->
         <div v-if="showDiff && diff" class="rounded-md overflow-hidden" style="border: 1px solid var(--border-subtle);">
           <div
