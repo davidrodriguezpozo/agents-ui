@@ -221,6 +221,9 @@ const groups = computed(() => {
       name: nameFor(path),
       isActive: path === workingDir.value,
       sessions: [...list].sort(byUrgency),
+      // Split into what each one wants from you, after the urgency sort so
+      // the order inside a section is still the order it earned.
+      sections: bySection([...list].sort(byUrgency)),
       needsYou: needsYou(list),
     }))
     .sort((a, b) => {
@@ -459,12 +462,27 @@ async function switchTo(path: string) {
             card only carries it in the one case neither covers: a single
             group that is not the project you are looking at.
           -->
-          <SessionCard
-            v-for="session in group.sessions"
-            :key="session.id"
-            :session="session"
-            :repo-name="showProjectHeadings || group.isActive ? null : group.name"
-          />
+          <!--
+            Sectioned rather than listed. Sixteen sessions in one chronological
+            wall is a pile to work through; the same sixteen under "needs you",
+            "done, waiting for you" and "nothing came of it" is three decisions.
+            A single section needs no heading — the list is already the answer.
+          -->
+          <template v-for="part in group.sections" :key="part.section.outcome">
+            <div v-if="group.sections.length > 1" class="flex items-baseline gap-2 pt-2 first:pt-0">
+              <h3 class="text-section-label">{{ part.section.title }}</h3>
+              <span class="type-mono-meta">{{ part.sessions.length }}</span>
+              <span v-if="part.section.hint" class="text-[11px] text-meta truncate">
+                {{ part.section.hint }}
+              </span>
+            </div>
+            <SessionCard
+              v-for="session in part.sessions"
+              :key="session.id"
+              :session="session"
+              :repo-name="showProjectHeadings || group.isActive ? null : group.name"
+            />
+          </template>
         </div>
       </div>
 

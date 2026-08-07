@@ -129,7 +129,11 @@ const state = computed<Badge>(() => {
         background: 'rgba(34, 197, 94, 0.12)',
       }
     : {
-        label: 'Idle',
+        // "Idle" described the session; this describes the result. They are
+        // not the same thing, and the second is the one worth knowing — a
+        // session that thought about it and wrote nothing is finished
+        // business, not something still to get round to.
+        label: 'No changes',
         icon: 'i-lucide-circle-dashed',
         color: 'var(--text-disabled)',
         background: 'var(--badge-subtle-bg)',
