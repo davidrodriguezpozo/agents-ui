@@ -38,6 +38,7 @@ const stopping = ref(false)
 const activeRunId = ref<string | null>(null)
 const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
 const showDiff = ref(false)
+const showFiles = ref(false)
 /** The terminal conversation this session continues, if it adopted one. */
 const inherited = ref<TranscriptMessage[]>([])
 const showPatch = ref(false)
@@ -115,6 +116,23 @@ async function refreshDiff() {
     if (diff.value.files.length && !session.value?.turns.length) showDiff.value = true
   } catch {
     diff.value = null
+  }
+}
+
+/**
+ * A hand edit changes the same things a turn does: what the diff shows, how far
+ * the branch is ahead, and whether the recorded check verdict still describes
+ * the code — the fingerprint has moved, so it does not.
+ *
+ * Refreshed together rather than leaving the page reporting a passing check
+ * over a file that has just been changed underneath it.
+ */
+async function onWorkspaceEdited() {
+  await refreshDiff()
+  try {
+    session.value = await fetchOne(id)
+  } catch {
+    // The diff is the part that mattered; a stale header is not worth an error.
   }
 }
 
@@ -715,6 +733,20 @@ const totalChanges = computed(() => {
           color="neutral"
           @click="() => { showDiff = !showDiff }"
         />
+        <!--
+          The workspace itself, rather than what changed in it. Beside the diff
+          because they are the same question asked two ways, and the answer to
+          "that is nearly right" lives here.
+        -->
+        <UButton
+          v-if="session"
+          :label="showFiles ? 'Hide files' : 'Files'"
+          icon="i-lucide-folder-open"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          @click="() => { showFiles = !showFiles }"
+        />
         <UButton
           v-if="session?.prUrl"
           label="View pull request"
@@ -895,6 +927,17 @@ const totalChanges = computed(() => {
             style="background: var(--surface-inset); color: var(--text-secondary);"
           >{{ session.check.output }}</pre>
         </div>
+
+        <!--
+          The workspace. Saving here writes into the session's branch, so the
+          diff above it and the check verdict beside it both go stale — which is
+          why refreshing them is what a save asks for.
+        -->
+        <WorkspaceEditor
+          v-if="showFiles && session"
+          :session-id="session.id"
+          @saved="onWorkspaceEdited"
+        />
 
         <!-- Changes -->
         <div v-if="showDiff && diff" class="rounded-md overflow-hidden" style="border: 1px solid var(--border-subtle);">

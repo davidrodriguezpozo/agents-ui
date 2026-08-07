@@ -130,9 +130,80 @@ anything that reads somebody else's output, look at the real output before desig
 around it.** It cost one cheap probe each time and would have shipped three silent
 no-ops otherwise.
 
-## Not planned
+---
 
-- **Integrated terminal, file editor, live preview, rewind.** Desktop owns the workbench.
+## The direction changed: absorb the workbench
+
+Decided deliberately, and it reverses the previous position. This used to say Desktop
+owns the workbench and every hour spent there was an hour losing a race. The counter-
+argument is simpler and was accepted: **people do not run two things.** A tool you only
+open when something is wrong is a tool that has to be worth opening, and the way it
+becomes worth opening is that you can finish the work in it.
+
+The failure mode is obvious and worth naming so it can be steered around: *absorb* done
+badly is a worse Desktop, built by one person, arriving second. So it is defined
+narrowly.
+
+**Absorb means: you never have to leave a session's workspace to finish its work.** Not
+"have every feature Desktop has". The test for anything below is whether it removes a
+reason people currently alt-tab away, and whether it compounds with what is already here
+— worktrees, checks, verdicts, landing — rather than sitting beside it.
+
+Ordered by how often it forces somebody out, which is not the same as by size.
+
+### 1. Open and edit a file in the workspace
+
+The commonest exit by a distance: the agent got it nearly right and you want to change
+one line. Today that means finding the worktree on disk and opening your editor.
+
+It compounds rather than duplicates. Editing a workspace already invalidates its verdict
+— `worktreeFingerprint` covers uncommitted content, so a check result is already marked
+as describing code that no longer exists. Edit, re-check, land: that loop exists and has
+a hole in the middle where the editing should be.
+
+Needs a file tree and read/write scoped to the worktree, and the scoping is the whole
+job — a path that escapes the workspace is arbitrary file write on the machine, reachable
+from a page.
+
+### 2. A terminal in the workspace
+
+The second exit: trying something by hand. Technically the largest item here, and it
+collides with a property this project protects on purpose.
+
+`package.json` has **no runtime dependencies** and says so at length: nothing is compiled
+at install time, an install resolves nothing. `node-pty` is a native module and would end
+that. The alternative is already in the codebase — `mcp.ts` allocates a pseudo-terminal
+through Python's `pty.spawn` to get `claude mcp login` to run at all — but that is a
+one-shot spawn, and a terminal needs bidirectional streaming over the life of a session.
+
+So this is a real fork, and it should be taken knowingly rather than discovered halfway:
+either the no-compile install goes, or the terminal is built on the Python pty with
+streaming bolted on. I would take the second.
+
+### 3. Run it and look at it
+
+A dev server started in the workspace and shown. The setup and check commands already
+know how to make a workspace runnable, so this is mostly plumbing plus deciding what to
+do about ports.
+
+### 4. Rewind
+
+Cheapest of the four and nearly free: the workspace is a git worktree, so "put this back
+the way it was before that turn" is a reset, not a checkpointing system. Worth doing
+early despite being fourth on frequency.
+
+### 5. Arranging the panes
+
+Only once there are three things worth arranging. Not before.
+
+### What this costs
+
+Everything under *After launch* moves back. Absorb is not a feature, it is a second
+product surface, and pretending it fits alongside the rest of the list would be the way
+to do both badly.
+
+## Still not planned
+
 - **Mobile, remote access, authentication, hosted mode.** One person, one machine.
 - **Webhooks.** Taking them means opening a port to the internet, which is a different
   product with a different threat model. Polling asks the same question from inside.
