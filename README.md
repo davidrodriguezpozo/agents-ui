@@ -44,12 +44,18 @@ This is the other half — the part where nobody is watching.
 | | Desktop | Here |
 | --- | --- | --- |
 | Work while you're there | ✅ and better at it | ✅ |
-| Fires at 08:00 against your local repo | Cloud routines only | ✅ |
 | Runs *your* test suite and blocks a merge on it | — | ✅ |
 | Fixes its own failures, up to a limit you set | — | ✅ |
 | Stops a scheduled job that has quietly broken | — | ✅ |
+| Lands several finished branches in an order that accounts for each other | — | ✅ |
 | A daily spend cap that skips work rather than billing you | Quota display | ✅ |
 | Every repository at once, not one window's worth | — | ✅ |
+| Fires at 08:00 against your local repo | Cloud routines | ✅ |
+
+That last row is the one narrowing. Routines run in Anthropic's cloud, but self-hosted
+environments now let Team and Enterprise plans run sessions on their own machines, and
+that gap will keep closing. The rows above it are the ones to judge this on: none of
+them are about *where* the work runs.
 
 If you only ever work with Claude while looking at it, use Desktop. This is for when
 you want to leave things running.
