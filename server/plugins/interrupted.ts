@@ -1,6 +1,7 @@
 import { closeInterruptedRuns } from '../utils/runStore'
 import { readSessions, patchSession } from '../utils/sessions'
 import { closeInterruptedWorkflowRuns } from '../utils/workflowRuns'
+import { closeInterruptedLandingRuns } from '../utils/landingRuns'
 import { resumeInterruptedRituals } from '../utils/restartRecovery'
 
 /**
@@ -33,6 +34,11 @@ export default defineNitroPlugin(async () => {
     // went away, so nothing is going to finish them.
     const workflows = await closeInterruptedWorkflowRuns()
     if (workflows) console.log(`[startup] closed ${workflows} workflow run${workflows === 1 ? '' : 's'} interrupted by a restart`)
+
+    // Merges that already happened are in git and are not in doubt; what is
+    // lost is whatever was mid-flight when the process went away.
+    const landings = await closeInterruptedLandingRuns()
+    if (landings) console.log(`[startup] closed ${landings} landing run${landings === 1 ? '' : 's'} interrupted by a restart`)
   } catch (e) {
     // Startup housekeeping must never stop the server coming up.
     console.error('[startup] could not tidy interrupted work', e)
