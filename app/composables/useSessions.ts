@@ -513,6 +513,62 @@ export function useProjectSetup() {
   return { state, saving, load, save, reset }
 }
 
+export interface ProjectSandboxState {
+  dir: string | null
+  enabled: boolean | null
+  allowedDomains: string[]
+  source: 'configured' | 'default' | null
+  /** This project has unattended work that predates the sandbox and has not been told. */
+  warn: boolean
+}
+
+/**
+ * What this project's runs are allowed to touch.
+ *
+ * There is nothing to detect here, unlike the check and setup commands — an
+ * unconfigured project is sandboxed — so `source` carries the only distinction
+ * worth drawing: whether somebody chose this or it is simply the default.
+ */
+export function useProjectSandbox() {
+  const state = useState<ProjectSandboxState | null>('project-sandbox', () => null)
+  const saving = useState('project-sandbox-saving', () => false)
+
+  async function load() {
+    try {
+      state.value = await $fetch<ProjectSandboxState>('/api/project/sandbox')
+    } catch (e) {
+      console.error('[useProjectSandbox] load:', e)
+    }
+  }
+
+  async function save(patch: {
+    enabled?: boolean
+    allowedDomains?: string[]
+    /** Records that the notice was read, without choosing anything. */
+    acknowledge?: boolean
+  }) {
+    saving.value = true
+    try {
+      await $fetch('/api/project/sandbox', { method: 'POST', body: patch })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function reset() {
+    saving.value = true
+    try {
+      await $fetch('/api/project/sandbox', { method: 'POST', body: { reset: true } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return { state, saving, load, save, reset }
+}
+
 /** Worktrees as git reports them, including ones with no session behind them. */
 export function useWorktrees() {
   const data = useState<{ repoDir: string | null; isRepo: boolean; root: string | null; home: string | null; worktrees: WorktreeEntry[] }>(

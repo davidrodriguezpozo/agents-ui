@@ -29,6 +29,14 @@ const {
   reset: resetSetupCommand,
 } = useProjectSetup()
 
+const {
+  state: sandbox,
+  saving: sandboxSaving,
+  load: loadSandbox,
+  save: saveSandbox,
+  reset: resetSandboxChoice,
+} = useProjectSandbox()
+
 const rawJson = ref('')
 const saving = ref(false)
 const viewMode = ref<'structured' | 'raw'>('structured')
@@ -86,6 +94,41 @@ async function resetSetup() {
   await resetSetupCommand()
 }
 
+/**
+ * Hosts, one per line — the shape people already have when they arrive here,
+ * which is a failure message listing what a run was refused.
+ */
+const allowedDomains = ref('')
+watch(sandbox, (next) => {
+  allowedDomains.value = (next?.allowedDomains ?? []).join('\n')
+}, { immediate: true })
+
+const domainsChanged = computed(() => {
+  const current = (sandbox.value?.allowedDomains ?? []).join('\n')
+  return allowedDomains.value.trim() !== current
+})
+
+function parseDomains(text: string): string[] {
+  return text.split('\n').map(line => line.trim()).filter(Boolean)
+}
+
+async function saveDomains() {
+  try {
+    await saveSandbox({ allowedDomains: parseDomains(allowedDomains.value) })
+    toast.add({ title: 'Saved', description: 'Runs in this project may reach these.', color: 'success' })
+  } catch (e: any) {
+    toast.add({ title: 'Could not save', description: e?.message ?? String(e), color: 'error' })
+  }
+}
+
+async function toggleSandbox(enabled: boolean) {
+  try {
+    await saveSandbox({ enabled })
+  } catch (e: any) {
+    toast.add({ title: 'Could not save', description: e?.message ?? String(e), color: 'error' })
+  }
+}
+
 type NotificationKey = 'enabled' | 'needsYou' | 'failed' | 'finished'
 
 const NOTIFICATION_OPTIONS: { key: NotificationKey; label: string; hint: string }[] = [
@@ -105,6 +148,28 @@ const maxConcurrentRuns = ref(3)
 const dailyCap = ref('')
 const runCap = ref('')
 const spentToday = ref(0)
+const pauseOnQuotaWarning = ref(false)
+
+/**
+ * What is left of the subscription. Never fetched on its own — it is collected
+ * from the SDK during runs that were happening anyway — so "nothing heard yet"
+ * is a normal state on a fresh install rather than a failure.
+ */
+const quota = ref<{
+  known: boolean
+  status?: 'allowed' | 'allowed_warning' | 'rejected'
+  window?: string
+  resetsAt?: number | null
+  stale?: boolean
+} | null>(null)
+
+const quotaLabel = computed(() => {
+  if (!quota.value?.known) return ''
+  const window = quota.value.window ?? 'usage'
+  if (quota.value.status === 'rejected') return `${window} limit used up`
+  if (quota.value.status === 'allowed_warning') return `close to the ${window} limit`
+  return `room on the ${window} limit`
+})
 
 /** Blank means no limit, which is what 0 means on the wire. */
 function capToNumber(value: string): number {
@@ -121,6 +186,7 @@ async function saveCaps() {
         runCapUsd: capToNumber(runCap.value),
         maxTurns: Math.max(0, Math.trunc(Number(maxTurns.value.trim()) || 0)),
         maxConcurrentRuns: maxConcurrentRuns.value,
+        pauseOnQuotaWarning: pauseOnQuotaWarning.value,
       },
     })
     const anyLimit = capToNumber(dailyCap.value) || capToNumber(runCap.value) || Number(maxTurns.value.trim())
@@ -139,6 +205,12 @@ async function saveCaps() {
 onMounted(async () => {
   void loadChecks()
   void loadSetup()
+  void loadSandbox()
+
+  // Never worth failing the page over — it is a reading, not a setting.
+  $fetch<typeof quota.value>('/api/quota')
+    .then((result) => { quota.value = result })
+    .catch(() => { quota.value = null })
 
   try {
     const prefs = await $fetch<{
@@ -147,6 +219,7 @@ onMounted(async () => {
       repairAttempts: number
       maxTurns: number
       maxConcurrentRuns: number
+      pauseOnQuotaWarning: boolean
       dailyCapUsd: number
       runCapUsd: number
     }>('/api/preferences')
@@ -155,6 +228,7 @@ onMounted(async () => {
     repairAttempts.value = prefs.repairAttempts ?? 0
     maxTurns.value = prefs.maxTurns ? String(prefs.maxTurns) : ''
     maxConcurrentRuns.value = prefs.maxConcurrentRuns ?? 3
+    pauseOnQuotaWarning.value = prefs.pauseOnQuotaWarning === true
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
 
@@ -602,6 +676,42 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           </div>
         </div>
 
+        <!--
+          The limit that fits the plan most people are actually on. The two
+          above are denominated in dollars, which is money a Pro or Max
+          subscriber is never billed — their work stops for the rate limit
+          instead, and nothing here used to mention it.
+        -->
+        <label
+          class="flex items-start justify-between gap-4 py-2 px-3 rounded-md cursor-pointer"
+          style="background: var(--input-bg);"
+        >
+          <span>
+            <span class="type-strong text-body block">Leave room when I am near my limit</span>
+            <span class="type-meta">
+              Rituals and later workflow steps are skipped while Claude says you are close
+              to a rate limit, so what is left goes to work you are doing yourself. A turn
+              you type is never held back.
+              <template v-if="quota?.known">
+                Last heard: {{ quota.stale ? 'too long ago to rely on' : quotaLabel }}.
+              </template>
+              <template v-else>
+                Nothing heard yet — it arrives during the next run.
+              </template>
+            </span>
+          </span>
+          <span class="field-toggle shrink-0 mt-0.5">
+            <input
+              type="checkbox"
+              :checked="pauseOnQuotaWarning"
+              @change="pauseOnQuotaWarning = ($event.target as HTMLInputElement).checked"
+            />
+            <span class="field-toggle__track">
+              <span class="field-toggle__thumb" />
+            </span>
+          </span>
+        </label>
+
         <UButton label="Save limits" size="sm" @click="saveCaps" />
       </div>
 
@@ -737,6 +847,98 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               @click="resetSetup"
             />
           </div>
+        </template>
+      </div>
+
+      <!-- What a run may touch -->
+      <div class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title flex items-center gap-2">
+          What a run may touch
+          <HelpTip
+            title="Sandboxing"
+            body="Commands a run decides to execute go through a sandbox: no network beyond the hosts you list, and no reaching outside what its permission rules already allow. It also means a sandboxed command need not stop and ask, so unattended work is interrupted less often."
+          />
+        </h3>
+        <p class="text-[12px] text-meta">
+          Sessions and rituals run shell commands as you. Sandboxed, they reach only the hosts
+          listed here — which is what makes leaving one running at 08:00 a reasonable thing to do.
+        </p>
+
+        <div v-if="!sandbox?.dir" class="text-[12px] text-label">
+          Pick a project folder in the sidebar first — this is set per repository.
+        </div>
+
+        <template v-else>
+          <label
+            class="flex items-start justify-between gap-4 py-2 px-3 rounded-md cursor-pointer"
+            style="background: var(--input-bg);"
+          >
+            <span>
+              <span class="type-strong text-body block">Sandbox runs in this project</span>
+              <span class="type-meta">
+                {{
+                  sandbox.source === 'default'
+                    ? 'On, because nothing has been chosen here. This is the default.'
+                    : sandbox.enabled
+                      ? 'On, by your choice.'
+                      : 'Off — runs here reach your network and your disk as you do.'
+                }}
+              </span>
+            </span>
+            <span class="field-toggle shrink-0 mt-0.5">
+              <input
+                type="checkbox"
+                :checked="sandbox.enabled ?? true"
+                :disabled="sandboxSaving"
+                @change="toggleSandbox(($event.target as HTMLInputElement).checked)"
+              />
+              <span class="field-toggle__track">
+                <span class="field-toggle__thumb" />
+              </span>
+            </span>
+          </label>
+
+          <div v-if="sandbox.enabled" class="field-group">
+            <label class="field-label">Hosts it may reach</label>
+            <textarea
+              v-model="allowedDomains"
+              class="field-input w-full font-mono"
+              rows="3"
+              placeholder="registry.npmjs.org&#10;github.com"
+              spellcheck="false"
+            />
+            <div class="flex">
+              <UButton
+                label="Save hosts"
+                size="sm"
+                :loading="sandboxSaving"
+                :disabled="!domainsChanged"
+                @click="saveDomains"
+              />
+            </div>
+            <p class="field-hint">
+              One per line, and empty means none at all. A run that needed a host it does not
+              have fails on it, and the denial is in that run's output — which is usually how
+              this list gets filled in: let it fail once, then paste what it asked for.
+            </p>
+          </div>
+
+          <p v-else class="field-hint">
+            Your own checks are unaffected either way — those are commands you configured
+            yourself, and they run outside the sandbox.
+          </p>
+
+          <!-- Outside the two branches above: turning the sandbox off is exactly
+               when you are most likely to want the default back. -->
+          <UButton
+            v-if="sandbox.source === 'configured'"
+            label="Reset to the default"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            :loading="sandboxSaving"
+            @click="resetSandboxChoice"
+          />
         </template>
       </div>
 

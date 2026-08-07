@@ -17,7 +17,24 @@ const showModal = ref(false)
 const adopting = ref<string | null>(null)
 const expanded = ref<string | null>(null)
 
-onMounted(() => Promise.all([fetchAll(), ensureProjectsLoaded()]))
+/**
+ * Sandboxing arrived switched on, and it reaches rituals that were running
+ * happily before it existed. This is the only place those rituals are listed,
+ * which makes it the place to say so — while everything still works, rather
+ * than at 08:00 on the morning one of them stops.
+ */
+const {
+  state: sandbox,
+  saving: acknowledging,
+  load: loadSandbox,
+  save: saveSandbox,
+} = useProjectSandbox()
+
+async function acknowledgeSandbox() {
+  await saveSandbox({ acknowledge: true })
+}
+
+onMounted(() => Promise.all([fetchAll(), ensureProjectsLoaded(), loadSandbox()]))
 
 function createNew() {
   editing.value = null
@@ -124,6 +141,42 @@ function nextLabel(schedule: Schedule) {
         Things Claude runs for you on a schedule, so the result is waiting when you get in.
         They run while this is running — install it as a service and that means always.
       </p>
+
+      <!--
+        Said before anything breaks, not after. These rituals have run before —
+        that is what qualifies a project for this — so anything of theirs that
+        reached the network used to work and now may not.
+      -->
+      <div
+        v-if="sandbox?.warn"
+        class="rounded-md px-4 py-3 flex items-start gap-3"
+        style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
+      >
+        <UIcon name="i-lucide-shield" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
+        <div class="flex-1 min-w-0 space-y-1.5">
+          <div class="text-[12px] font-medium text-body">Runs here are now sandboxed</div>
+          <p class="text-[11px] leading-relaxed text-label">
+            Your rituals reach only the hosts this project allows, and it currently allows
+            none. That is deliberate — it is what makes leaving them running reasonable —
+            but a ritual that has been quietly fetching something will stop being able to.
+            Nothing has broken yet; this is the warning rather than the failure.
+          </p>
+          <p class="text-[11px] leading-relaxed text-label">
+            If one does stop, it will say which host it wanted and offer to allow it. You
+            can also list them now, or turn the sandbox off for this project, in
+            <NuxtLink to="/settings" class="underline" style="color: var(--accent);">Settings</NuxtLink>.
+          </p>
+        </div>
+        <UButton
+          label="Got it"
+          size="xs"
+          variant="soft"
+          color="neutral"
+          class="shrink-0"
+          :loading="acknowledging"
+          @click="acknowledgeSandbox"
+        />
+      </div>
 
       <!-- Never render "no rituals" when the truth is "could not read them" -->
       <div

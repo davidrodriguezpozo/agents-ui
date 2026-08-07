@@ -5,6 +5,7 @@ const base = {
   cwd: '/tmp', permissionMode: 'acceptEdits' as const, maxTurns: 10,
   loadSettings: true, plugins: [], systemAppend: '', agent: null,
   additionalDirectories: [],
+  sandbox: { enabled: true, allowedDomains: [] },
 }
 
 describe('toQueryOptions', () => {
@@ -38,5 +39,30 @@ describe('toQueryOptions', () => {
     const opts = toQueryOptions({ ...base, permissionMode: 'plan', allowRules: ['Read'] }) as any
     expect(opts.permissionMode).toBe('plan')
     expect(opts.settings.permissions.allow).toEqual(['Read'])
+  })
+
+  it('sandboxes the run, and does not let it out again', () => {
+    const opts = toQueryOptions({ ...base, allowRules: [] }) as any
+    expect(opts.sandbox.enabled).toBe(true)
+    // The whole point: a run nobody is watching cannot decide to leave.
+    expect(opts.sandbox.allowUnsandboxedCommands).toBe(false)
+    expect(opts.sandbox.autoAllowBashIfSandboxed).toBe(true)
+  })
+
+  it('omits the sandbox entirely when a project has turned it off', () => {
+    const opts = toQueryOptions({
+      ...base, allowRules: [], sandbox: { enabled: false, allowedDomains: ['registry.npmjs.org'] },
+    }) as any
+    // Not `{ enabled: false }` — an absent key leaves no doubt about what ran.
+    expect(opts.sandbox).toBeUndefined()
+  })
+
+  it('carries the hosts a project was told to allow', () => {
+    const opts = toQueryOptions({
+      ...base, allowRules: [], sandbox: { enabled: true, allowedDomains: ['registry.npmjs.org'] },
+    }) as any
+    expect(opts.sandbox.network.allowedDomains).toEqual(['registry.npmjs.org'])
+    // Binding a port locally is ordinary work, not a way out.
+    expect(opts.sandbox.network.allowLocalBinding).toBe(true)
   })
 })

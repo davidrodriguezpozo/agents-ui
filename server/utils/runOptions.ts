@@ -7,6 +7,7 @@ import { readInstalledPlugins } from './pluginScan'
 import { resolveEnabledPluginsInRoots } from './pluginState'
 import { toSettingsPermissions } from './permissionRules'
 import { readPreferences } from './preferences'
+import { sandboxForProject, toSandboxSettings, type ProjectSandbox } from './sandbox'
 import type { PermissionMode } from '~/types'
 
 export const DEFAULT_MAX_TURNS = 40
@@ -25,6 +26,12 @@ export interface RunRequest {
   allowRules?: string[]
   /** Readable alongside `cwd` — see `Project.contextDir`. */
   additionalDirectories?: string[]
+  /**
+   * Override what this run is allowed to touch. Almost nothing passes this —
+   * the answer belongs to the repository, not to one caller — but a run that
+   * exists to repair a sandbox problem needs a way to say so.
+   */
+  sandbox?: ProjectSandbox
 }
 
 export interface ResolvedRunOptions {
@@ -40,6 +47,7 @@ export interface ResolvedRunOptions {
   agent: ResolvedAgent | null
   allowRules: string[]
   additionalDirectories: string[]
+  sandbox: ProjectSandbox
 }
 
 export function managerPrompt(claudeDir: string): string {
@@ -110,9 +118,10 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
 
   // Without these the SDK cannot resolve plugin slash commands, skills or
   // subagents — they'd be visible in the UI but unusable in a run.
-  const [installed, isEnabled] = await Promise.all([
+  const [installed, isEnabled, projectSandbox] = await Promise.all([
     readInstalledPlugins(roots[0]!.dir),
     resolveEnabledPluginsInRoots(roots),
+    sandboxForProject(projectDir ?? undefined),
   ])
   const plugins = installed
     .filter(p => isEnabled(p.id) && existsSync(p.entry.installPath))
@@ -134,6 +143,10 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     agent,
     allowRules: body.allowRules ?? [],
     additionalDirectories: (body.additionalDirectories ?? []).filter(dir => dir && dir !== (projectDir || claudeDir)),
+    // An explicit request wins, then whatever the repository was set to, then
+    // sandboxed — the default lives in `sandboxForProject`, not here, so there
+    // is one place that decides it.
+    sandbox: body.sandbox ?? projectSandbox,
   }
 }
 
@@ -171,6 +184,9 @@ export function toQueryOptions(
     ...(options.loadSettings
       ? { settingSources: ['user', 'project', 'local'] as ('user' | 'project' | 'local')[] }
       : {}),
+    // Isolation for the commands this run decides to execute. Absent when the
+    // project has turned it off, which is the SDK's own "no sandbox".
+    ...(toSandboxSettings(options.sandbox) ? { sandbox: toSandboxSettings(options.sandbox) } : {}),
     includePartialMessages: true,
     systemPrompt: {
       type: 'preset' as const,
