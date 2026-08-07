@@ -43,6 +43,21 @@ export interface Project {
   addedAt: number
   /** Most recently worked in, first — which is the order a switcher wants. */
   lastUsedAt: number
+  /**
+   * A folder this repository lives inside, kept readable from every session.
+   *
+   * Set when the repository was picked out of a parent that is not one:
+   *
+   *   project/          <- contextDir
+   *     app/            <- the project
+   *     specs/
+   *
+   * A session works in a worktree, which is a copy of the repository alone.
+   * The specs are not in it and never can be, so without this they simply
+   * vanish the moment work moves into a session — which is most of the reason
+   * the parent was chosen in the first place.
+   */
+  contextDir?: string
 }
 
 interface ProjectState {
@@ -106,14 +121,24 @@ export async function readProjects(): Promise<Project[]> {
  * a session started against a path nobody has registered should record the
  * repository without yanking the person's view to it.
  */
-export async function addProject(input: string, name?: string): Promise<Project | null> {
+export async function addProject(
+  input: string,
+  name?: string,
+  contextDir?: string,
+): Promise<Project | null> {
   const path = normaliseProjectPath(input)
   if (!path || !existsSync(path)) return null
+
+  // Only a real directory, and never the project itself — a repository is
+  // already readable from its own worktree.
+  const context = contextDir ? normaliseProjectPath(contextDir) : null
+  const validContext = context && context !== path && existsSync(context) ? context : undefined
 
   return projectStore.update((state) => {
     const existing = state.projects.find(p => p.path === path)
     if (existing) {
       if (name?.trim()) existing.name = name.trim()
+      if (validContext) existing.contextDir = validContext
       return existing
     }
 
@@ -123,6 +148,7 @@ export async function addProject(input: string, name?: string): Promise<Project 
       name: name?.trim() || defaultProjectName(path),
       addedAt: now,
       lastUsedAt: now,
+      ...(validContext ? { contextDir: validContext } : {}),
     }
     state.projects.push(project)
     return project
@@ -235,5 +261,24 @@ export async function seedProjectsIfUnwritten(
   if (seen.size) {
     const active = activePath ? normaliseProjectPath(activePath) : null
     await setActiveProject(active && seen.has(active) ? active : [...seen][0]!)
+  }
+}
+
+/**
+ * Directories a session in this repository should also be able to read.
+ *
+ * Empty for an ordinary project, which is the overwhelming case — this exists
+ * for the repository that was picked out of a larger folder, where everything
+ * it was picked out of is the context the work depends on.
+ */
+export async function contextDirsFor(repoDir: string | undefined): Promise<string[]> {
+  if (!repoDir) return []
+  try {
+    const path = normaliseProjectPath(repoDir)
+    const project = (await projectStore.read()).projects.find(p => p.path === path)
+    return project?.contextDir && existsSync(project.contextDir) ? [project.contextDir] : []
+  } catch {
+    // A session that cannot read the list still runs; it just sees less.
+    return []
   }
 }

@@ -10,7 +10,7 @@ const {
 const { fetchAll: fetchWorktrees } = useWorktrees()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
-const { nameFor, activate, ensureLoaded: ensureProjectsLoaded } = useProjects()
+const { projects, nameFor, activate, addProject, ensureLoaded: ensureProjectsLoaded } = useProjects()
 const router = useRouter()
 const toast = useToast()
 
@@ -171,6 +171,61 @@ function relative(ts: number) {
  * and coming back does not quietly narrow the view again — a person who asked
  * to see everything meant it for longer than one navigation.
  */
+/**
+ * A project that is not a git repository.
+ *
+ *   project/          picked, because the specs are half the work
+ *     app/            the repository
+ *     specs/
+ *
+ * Every session here is refused — a worktree has to be a worktree of
+ * something — but the page said "branches from project/ and starts work
+ * straight away" right up until you pressed the button. The repository it
+ * wants is one directory down and plainly visible, so it offers that instead,
+ * and remembers the folder it came out of so the specs stay readable.
+ */
+const activeProject = computed(() => projects.value.find(p => p.path === workingDir.value) ?? null)
+const notARepo = computed(() => Boolean(activeProject.value && !activeProject.value.isRepo))
+
+const nestedRepos = ref<{ path: string; name: string; depth: number }[]>([])
+const lookingInside = ref(false)
+const adoptingRepo = ref<string | null>(null)
+
+watch([notARepo, workingDir], async () => {
+  nestedRepos.value = []
+  if (!notARepo.value || !workingDir.value) return
+
+  lookingInside.value = true
+  try {
+    const result = await $fetch<{ repos: { path: string; name: string; depth: number }[] }>(
+      '/api/projects/nested',
+      { query: { dir: workingDir.value } },
+    )
+    nestedRepos.value = result.repos
+  } catch {
+    // No suggestion is a worse page, not a broken one.
+  } finally {
+    lookingInside.value = false
+  }
+}, { immediate: true })
+
+/** Switch to the repository inside, keeping its parent readable from sessions. */
+async function useRepoInside(path: string) {
+  adoptingRepo.value = path
+  try {
+    await addProject(path, { contextDir: workingDir.value ?? undefined })
+    toast.add({
+      title: 'Switched to the repository inside',
+      description: 'Sessions branch from here, and the folder around it stays readable.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not switch to it', description: errorMessage(e), color: 'error' })
+  } finally {
+    adoptingRepo.value = null
+  }
+}
+
 const scope = useState<'here' | 'all'>('sessions-scope', () => 'here')
 
 // With no project selected there is no "here" to narrow to, and the toggle
@@ -317,8 +372,59 @@ async function switchTo(path: string) {
         without overwriting each other. Nothing touches your files until you merge it.
       </p>
 
+      <!--
+        Said before the button, not after it. Pressing "Start session" here
+        used to be the first anyone heard that this folder cannot be branched,
+        having just been told it would be — and the repository it needs is
+        usually sitting one directory down.
+      -->
+      <div
+        v-if="notARepo"
+        class="rounded-lg p-4 space-y-3"
+        style="background: rgba(212, 153, 34, 0.08); border: 1px solid rgba(212, 153, 34, 0.25);"
+      >
+        <div class="flex items-start gap-2.5">
+          <UIcon name="i-lucide-folder-git-2" class="size-4 shrink-0 mt-0.5" style="color: var(--warning);" />
+          <div class="space-y-1">
+            <div class="text-[12px] font-medium text-body">
+              <span class="font-mono">{{ displayPath }}</span> is not a git repository
+            </div>
+            <p class="text-[11px] leading-relaxed text-label">
+              Sessions work on their own copy of a repository, so there has to be one to copy.
+            </p>
+          </div>
+        </div>
+
+        <div v-if="lookingInside" class="text-[11px] text-meta">Looking for one inside…</div>
+
+        <div v-else-if="nestedRepos.length" class="space-y-2">
+          <p class="text-[11px] leading-relaxed text-label">
+            {{ nestedRepos.length === 1 ? 'There is one inside' : 'There are some inside' }}.
+            Sessions branch from the repository, and everything around it stays readable —
+            so notes and specs beside it are still there to work from.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-for="repo in nestedRepos"
+              :key="repo.path"
+              :label="`Use ${repo.name}`"
+              icon="i-lucide-corner-down-right"
+              size="xs"
+              :loading="adoptingRepo === repo.path"
+              :disabled="Boolean(adoptingRepo)"
+              @click="useRepoInside(repo.path)"
+            />
+          </div>
+        </div>
+
+        <p v-else class="text-[11px] leading-relaxed text-label">
+          Nothing inside it is one either. Pick a repository in the sidebar, or run
+          <span class="font-mono">git init</span> here.
+        </p>
+      </div>
+
       <!-- Start a session -->
-      <div v-if="workingDir" class="space-y-1.5">
+      <div v-else-if="workingDir" class="space-y-1.5">
         <!-- One session, told what to do in the same breath -->
         <template v-if="!batchMode">
           <div class="flex gap-2 items-start">

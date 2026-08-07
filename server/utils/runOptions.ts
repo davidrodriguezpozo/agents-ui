@@ -23,6 +23,8 @@ export interface RunRequest {
   model?: string
   /** Permanent permission rules, e.g. `Bash(gh:*)`. */
   allowRules?: string[]
+  /** Readable alongside `cwd` — see `Project.contextDir`. */
+  additionalDirectories?: string[]
 }
 
 export interface ResolvedRunOptions {
@@ -37,6 +39,7 @@ export interface ResolvedRunOptions {
   systemAppend: string
   agent: ResolvedAgent | null
   allowRules: string[]
+  additionalDirectories: string[]
 }
 
 export function managerPrompt(claudeDir: string): string {
@@ -130,6 +133,7 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     systemAppend,
     agent,
     allowRules: body.allowRules ?? [],
+    additionalDirectories: (body.additionalDirectories ?? []).filter(dir => dir && dir !== (projectDir || claudeDir)),
   }
 }
 
@@ -156,6 +160,11 @@ export function toQueryOptions(
     maxTurns: options.maxTurns,
     ...(options.model ? { model: options.model } : {}),
     ...(options.plugins.length ? { plugins: options.plugins } : {}),
+    // Readable, not the working directory. Git still happens in `cwd`, so a
+    // worktree stays a worktree and nothing here can be committed by accident.
+    ...(options.additionalDirectories.length
+      ? { additionalDirectories: options.additionalDirectories }
+      : {}),
     // Rules the ritual has been granted permanently, so it stops asking for
     // things its owner already approved.
     ...(toSettingsPermissions(options.allowRules) ? { settings: toSettingsPermissions(options.allowRules) } : {}),

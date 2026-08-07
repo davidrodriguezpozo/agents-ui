@@ -5,6 +5,7 @@ import { createRun, getActive, readRun, type Run } from './runStore'
 import { executeRun } from './runner'
 import { notify } from './notify'
 import { rulesForProject } from './projectRules'
+import { contextDirsFor } from './projects'
 import { permissionModeFor } from './trust'
 import { ensureTranscriptFor } from './transcripts'
 import { checkBudget } from './budget'
@@ -187,6 +188,11 @@ export async function startTurn(
     // session starts from scratch and asks again for approvals given a dozen
     // times before.
     allowRules: await rulesForProject(session.repoDir),
+    // A worktree is a copy of the repository and nothing else. When the
+    // repository was picked out of a larger folder, the rest of that folder is
+    // most of what the work is about — and it would otherwise disappear the
+    // moment anything moved into a session.
+    additionalDirectories: await contextDirsFor(session.repoDir),
   })
 
   const run = createRun({

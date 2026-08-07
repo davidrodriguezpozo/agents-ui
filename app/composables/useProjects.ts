@@ -3,6 +3,8 @@ export interface ProjectEntry {
   name: string
   addedAt: number
   lastUsedAt: number
+  /** A folder this repository sits inside, kept readable from every session. */
+  contextDir?: string
   /** Whether the directory is still there. A registered path can go away. */
   exists: boolean
   isRepo: boolean
@@ -73,10 +75,14 @@ export function useProjects() {
   }
 
   /** Add a directory and switch to it — one intention, from the switcher. */
-  async function addProject(path: string, name?: string) {
+  /**
+   * `contextDir` is the folder this repository sits inside, when it was picked
+   * out of a larger one. Sessions keep it readable — see `Project.contextDir`.
+   */
+  async function addProject(path: string, options: { name?: string; contextDir?: string } = {}) {
     const result = await $fetch<{ project: ProjectEntry; activePath: string }>('/api/projects', {
       method: 'POST',
-      body: { path, name },
+      body: { path, name: options.name, contextDir: options.contextDir },
     })
     setWorkingDir(result.project.path)
     await refresh()
