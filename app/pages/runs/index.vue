@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { formatDuration, relativeTime } from '~/utils/time'
 import type { RunOutcomeFilter, RunSource, RunSummary } from '~/composables/useRuns'
-import type { SpendData } from '~/components/SpendSummary.vue'
+import type { QuotaReading, SpendData } from '~/components/SpendSummary.vue'
 
 const { runs, loading, fetchRuns } = useRuns()
 
 /** What all of this has cost, which no page has ever said. */
 const spend = ref<SpendData | null>(null)
+
+/** And what it cost against the limit that will actually stop you. */
+const quota = ref<QuotaReading | null>(null)
 
 const search = ref('')
 const source = ref<RunSource | null>(null)
@@ -56,6 +59,11 @@ onMounted(async () => {
   $fetch<SpendData>('/api/spend', { query: { days: 30 } })
     .then((result) => { spend.value = result })
     .catch(() => { spend.value = null })
+
+  // Never worth failing the page over: a reading, not a setting.
+  $fetch<QuotaReading>('/api/quota')
+    .then((result) => { quota.value = result })
+    .catch(() => { quota.value = null })
 
   await fetchRuns(query.value)
   // Cheap refresh so in-flight runs tick over without a socket.
@@ -143,7 +151,7 @@ function sourceIcon(value: RunSource) {
         Everything Claude has run for you. Runs keep going if you close the tab — come back any time.
       </p>
 
-      <SpendSummary v-if="spend" :spend="spend" />
+      <SpendSummary v-if="spend" :spend="spend" :quota="quota" />
 
       <!-- Searching the whole log, not the page of it that happens to be loaded -->
       <div class="space-y-2">

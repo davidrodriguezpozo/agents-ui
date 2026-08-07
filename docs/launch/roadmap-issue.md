@@ -25,8 +25,8 @@ that fix their own failing checks · verdicts that expire when the base moves un
 landing several finished sessions in an order that accounts for each other · scheduled
 rituals that retry and stop once they've broken · sandboxed runs, on by default, that
 say which host they were refused · permission handling for unattended runs · spend
-tracking and hard limits · holding unattended work back when you're near your rate
-limit ·
+tracking and hard limits · your rate limit shown beside what it cost, and unattended
+work held back when you're near it ·
 multi-repository projects · MCP servers added, scoped and signed into from the UI ·
 GitHub skill import · marketplace browsing and plugin install · workflow builder ·
 relationship graph · backups · dark mode · `npm i -g agents-studio`.
@@ -57,9 +57,6 @@ that travels through git rather than about several people sharing a server.
 
 ## Next
 
-- **Your rate limit on the spend page** — the limit itself is now readable and can hold
-  unattended work back (see below), but the page you'd actually visit to ask "how am I
-  doing" still shows only dollars.
 - **Rituals that fire on an event** — a PR opened, a check run failed, an issue
   labelled, as well as on a clock.
 - **Rituals that chain** — triage → fix → verify → open a PR as one ritual with one

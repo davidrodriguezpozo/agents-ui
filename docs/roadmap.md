@@ -146,25 +146,27 @@ limit that had already reset.
 
 Off by default, like the spending caps and for the same reason.
 
-Still open here: the spend page shows dollars and does not yet show this. The reading is
-on `/api/quota` and in Settings; putting it next to the chart is the obvious follow-up,
-and is what makes the honest version of "what is this costing me" visible to somebody on
-a subscription.
+**And on the spend page**, which is where the question is actually asked. The reading
+sits directly under the dollar figure it qualifies — a coloured dot, the window, and when
+it resets — with the expanded panel leading on *Against your limit* before *Where it
+went*, and saying in as many words that the money above is what these runs would have
+cost through the API rather than a bill.
+
+Three states, all of them real and all of them checked: nothing heard yet (normal on a
+fresh install, since this arrives with a run rather than being fetched), a live reading,
+and a stale one. A stale `rejected` is suppressed entirely rather than shown greyed —
+telling somebody their limit is used up on the strength of a six-hour-old reading is
+worse than telling them nothing.
+
+`utilization` gets a bar when it is present and nothing when it is not, which is most of
+the time. It arrives as a fraction or a percentage depending on the window, so both are
+normalised rather than assumed.
 
 ---
 
 ## Now
 
-### 1. The subscription reading, next to the spend chart
-
-The spend page answers "what did this cost" in dollars, which for anyone on Pro or Max
-is a number they are never billed. The rate-limit reading now exists — collected free
-during runs, exposed on `/api/quota`, and shown in Settings — but the page that people
-actually go to in order to ask "how am I doing" still shows only money.
-
-Small, and the other half of the work above.
-
-### 2. Rituals that fire on an event
+### 1. Rituals that fire on an event
 
 A ritual triggers on a GitHub event — PR opened, check run failed, issue labelled — as
 well as on a clock. Poll through `gh` first; webhooks can come later.
@@ -178,19 +180,19 @@ are actually adopting Routines for.
 
 ## Next
 
-### 3. Ritual chains
+### 2. Ritual chains
 
 Triage → fix → verify → open a PR, as one ritual with one health record, rather than
 three that do not know about each other. The hard half — deciding what lands in what
 order — is already done in `lander.ts`.
 
-### 4. The PR after the merge
+### 3. The PR after the merge
 
 We can open a pull request; we then forget it. Watch it, react to a CI failure or a
 review comment, land it when it goes green. Desktop does monitoring and auto-merge. The
 differentiated version is the same loop with our verdict system attached to it.
 
-### 5. Configuration that travels through git
+### 4. Configuration that travels through git
 
 Rituals, check commands and setup commands committed to the repository instead of living
 only in `~/.claude`, so a small team shares them by pulling. Today a teammate cloning the
@@ -198,7 +200,7 @@ repo gets none of it and has to be told.
 
 This is the entire team story, and it is a file-format change rather than a server.
 
-### 6. Landing without colliding
+### 5. Landing without colliding
 
 Before landing, look at what is already open against the base — teammates' branches and
 PRs, not just our own sessions. Ordered landing solves this within one machine's sessions
