@@ -9,6 +9,14 @@ export interface Recurrence {
 
 export type SchedulePermission = 'readonly' | 'edits' | 'full'
 
+export type GithubEventKind = 'pr_opened' | 'check_failed'
+
+export interface EventTrigger {
+  kind: GithubEventKind
+  /** Only fire for this branch. Absent means any. */
+  branch?: string
+}
+
 export interface Schedule {
   id: string
   title: string
@@ -17,6 +25,8 @@ export interface Schedule {
   agentSlug?: string
   projectDir?: string
   recurrence: Recurrence
+  /** Set when this fires on something happening rather than on the clock. */
+  trigger?: EventTrigger
   permission: SchedulePermission
   /** Permanent permission rules, e.g. `Bash(gh:*)`. */
   allowRules?: string[]
@@ -111,7 +121,11 @@ export function useSchedules() {
    * pinned to a repository but never unpinned.
    */
   async function save(
-    schedule: Partial<Omit<Schedule, 'projectDir'>> & { projectDir?: string | null },
+    // `projectDir` and `trigger` are both nullable on the way out: null clears
+    // what is stored, absent leaves it alone. Neither can be expressed by
+    // simply omitting the field.
+    schedule: Partial<Omit<Schedule, 'projectDir' | 'trigger'>>
+      & { projectDir?: string | null; trigger?: EventTrigger | null },
   ): Promise<Schedule> {
     const saved = await $fetch<Schedule>('/api/schedules', { method: 'POST', body: schedule })
     const idx = schedules.value.findIndex(s => s.id === saved.id)

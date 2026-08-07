@@ -1,7 +1,8 @@
 import {
-  computeNextRun, markRan, pauseRitual, permissionModeFor, scheduleStore, skipToNextRun,
-  type Schedule,
+  computeNextRun, markRan, pauseRitual, permissionModeFor, scheduleStore, setTriggerCursor,
+  skipToNextRun, type Schedule,
 } from './schedules'
+import { pollTrigger, promptFor, selectNew } from './eventTriggers'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, listRunsBySchedule, type Run } from './runStore'
 import { executeRun } from './runner'
@@ -14,6 +15,9 @@ import { withRunSlot } from './runQueue'
 
 const TICK_MS = 30_000
 
+/** How often triggered rituals ask GitHub what has happened. */
+const POLL_MS = 2 * 60_000
+
 /**
  * How late a missed run may still fire. A laptop asleep overnight shouldn't
  * dump yesterday's 8am briefing on you at 3pm — but opening the lid at 08:20
@@ -22,6 +26,7 @@ const TICK_MS = 30_000
 const CATCH_UP_WINDOW_MS = 2 * 60 * 60 * 1000
 
 let timer: ReturnType<typeof setInterval> | null = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
 /** Schedules with a run currently in flight, so a slow run can't stack up. */
 const inFlight = new Set<string>()
 
@@ -31,12 +36,67 @@ export function startScheduler(): void {
   // A first pass shortly after boot catches anything due while we were down.
   setTimeout(() => void tick(), 5_000)
   timer = setInterval(() => void tick(), TICK_MS)
+
+  // Slower than the clock tick on purpose: this one leaves the machine and
+  // asks GitHub, once per triggered ritual. Thirty seconds would be rude to
+  // somebody else's rate limit for no gain — nothing here is urgent to the
+  // second.
+  setTimeout(() => void pollEvents(), 15_000)
+  pollTimer = setInterval(() => void pollEvents(), POLL_MS)
+
   console.log('[scheduler] started')
 }
 
 export function stopScheduler(): void {
   if (timer) clearInterval(timer)
+  if (pollTimer) clearInterval(pollTimer)
   timer = null
+  pollTimer = null
+}
+
+/**
+ * Ask GitHub what has happened, and fire the rituals waiting on it.
+ *
+ * Each triggered ritual is polled independently and failures are per-ritual:
+ * one repository with no remote must not stop the others being asked.
+ */
+export async function pollEvents(): Promise<void> {
+  let triggered: Schedule[]
+
+  try {
+    triggered = (await scheduleStore.read())
+      .filter(schedule => schedule.enabled && schedule.trigger && !inFlight.has(schedule.id))
+  } catch (e) {
+    console.error('[scheduler] could not read schedules for polling', e)
+    return
+  }
+
+  for (const schedule of triggered) {
+    const events = await pollTrigger(schedule.trigger!, schedule.projectDir)
+
+    // Null is "could not ask", which is not "nothing happened". Advancing the
+    // cursor here would swallow everything that arrived while gh was unhappy.
+    if (!events) continue
+
+    const { fire: firing, cursor, deferred } = selectNew(events, schedule.triggerCursor)
+
+    // Written even when nothing fires: the first poll records a baseline so
+    // that turning a trigger on does not start work on every pull request that
+    // was already open.
+    if (cursor !== schedule.triggerCursor) await setTriggerCursor(schedule.id, cursor)
+
+    if (deferred > 0) {
+      console.log(`[scheduler] "${schedule.title}": ${deferred} more waiting, will fire next poll`)
+    }
+
+    for (const event of firing) {
+      // Claimed the same way a due clock ritual is, so the next poll cannot
+      // start a second run of it while this one is still going.
+      if (inFlight.has(schedule.id)) break
+      inFlight.add(schedule.id)
+      await fire(schedule, promptFor(schedule.input, event))
+    }
+  }
 }
 
 export async function tick(now = Date.now()): Promise<void> {
@@ -53,6 +113,9 @@ export async function tick(now = Date.now()): Promise<void> {
       for (const schedule of schedules) {
         if (!schedule.enabled) continue
         if (inFlight.has(schedule.id)) continue
+        // Waiting for something to happen rather than for a time to arrive.
+        // Its `recurrence` is still on the record and still meaningless here.
+        if (schedule.trigger) continue
 
         // First sight of this schedule, or a corrupted record.
         if (!schedule.nextRunAt) {
@@ -120,7 +183,7 @@ async function historyFor(scheduleId: string): Promise<RitualHistory> {
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 /** Already claimed in `inFlight` by the tick that selected it. */
-async function fire(schedule: Schedule): Promise<void> {
+async function fire(schedule: Schedule, input?: string): Promise<void> {
   try {
     // The case the daily limit exists for: work that spends money at 08:00
     // with nobody watching. Skipped without starting, and said out loud —
@@ -138,7 +201,7 @@ async function fire(schedule: Schedule): Promise<void> {
     // read before the run that is about to join it.
     const before = await historyFor(schedule.id)
 
-    const run = await runOnce(schedule, budget.maxBudgetUsd)
+    const run = await runOnce(schedule, budget.maxBudgetUsd, input)
     await announce(schedule.title, run)
 
     // One more go at a failure that might not repeat. Nobody is awake to press
@@ -156,7 +219,7 @@ async function fire(schedule: Schedule): Promise<void> {
       // the machine has been spending money throughout them.
       const retryBudget = await checkBudget(Date.now(), { unattended: true })
       if (retryBudget.allowed) {
-        const again = await runOnce(schedule, retryBudget.maxBudgetUsd)
+        const again = await runOnce(schedule, retryBudget.maxBudgetUsd, input)
         await announce(schedule.title, again)
       }
     }
@@ -177,8 +240,17 @@ async function fire(schedule: Schedule): Promise<void> {
   }
 }
 
-/** One attempt, start to finish, recorded against the ritual. */
-async function runOnce(schedule: Schedule, maxBudgetUsd: number | undefined): Promise<Run> {
+/**
+ * One attempt, start to finish, recorded against the ritual.
+ *
+ * `input` overrides the ritual's own prompt, which is how an event ritual is
+ * told which pull request it is about.
+ */
+async function runOnce(
+  schedule: Schedule,
+  maxBudgetUsd: number | undefined,
+  input?: string,
+): Promise<Run> {
   const options = await resolveRunOptionsFor({
     projectDir: schedule.projectDir,
     agentSlug: schedule.agentSlug,
@@ -191,7 +263,7 @@ async function runOnce(schedule: Schedule, maxBudgetUsd: number | undefined): Pr
   const run = createRun({
     kind: 'command',
     title: schedule.title,
-    input: schedule.input,
+    input: input ?? schedule.input,
     invocation: schedule.invocation,
     agentSlug: schedule.agentSlug,
     projectDir: options.cwd,

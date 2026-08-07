@@ -1,15 +1,18 @@
 import {
-  describeRecurrence,
+  describeSchedule,
   projectDirForSave,
   upsertSchedule,
   type Schedule,
 } from '../../utils/schedules'
 import { getProjectDir } from '../../utils/scope'
+import type { EventTrigger } from '../../utils/eventTriggers'
 
 export default defineEventHandler(async (event) => {
-  // `projectDir` is nullable on the way in — see projectDirForSave.
+  // `projectDir` and `trigger` are both nullable on the way in: null clears,
+  // absent keeps. See projectDirForSave.
   const body = await readBody<
-    Partial<Omit<Schedule, 'projectDir'>> & { projectDir?: string | null }
+    Partial<Omit<Schedule, 'projectDir' | 'trigger'>>
+    & { projectDir?: string | null; trigger?: EventTrigger | null }
   >(event)
 
   if (!body?.input?.trim()) {
@@ -26,5 +29,5 @@ export default defineEventHandler(async (event) => {
     projectDir: projectDirForSave(body, getProjectDir(event)),
   })
 
-  return { ...schedule, description: describeRecurrence(schedule.recurrence) }
+  return { ...schedule, description: describeSchedule(schedule) }
 })

@@ -164,35 +164,62 @@ normalised rather than assumed.
 
 ---
 
+### Rituals that fire on an event
+
+Shipped, for two events: a pull request opened, and a workflow run failing. Both
+optionally narrowed to a branch. The clock caps a ritual at roughly one a morning; events
+do not, which is the whole point.
+
+Polled through `gh` rather than taking webhooks, and that is a positioning decision
+rather than a shortcut. This app is bound to loopback with no authentication in front of
+it; accepting webhooks would mean opening a port to the internet, which is a different
+product with a different threat model. Polling asks the same question from behind your
+own firewall with the login you already have.
+
+Three things decide whether this is usable, and none of them are the GitHub call:
+
+- **The first poll fires nothing.** It records a baseline. Turning on "when a pull
+  request is opened" against a repository with nine open ones must not start nine agents,
+  and the sentence promises what happens *next*. Verified against a repository with nine
+  real CI failures: cursor recorded, zero runs.
+- **"Could not ask" is not "nothing happened".** A `gh` that is missing, logged out,
+  offline or rate limited returns null, and the cursor does not move — otherwise a
+  transient failure would silently swallow every event that arrived during it.
+- **A burst does not become a stampede.** At most three fire per poll, and the cursor
+  advances only past what actually fired, so the rest arrive next time rather than being
+  dropped.
+
+Changing a trigger clears its cursor. The keys are not comparable across event types —
+switching from pull requests to workflow runs would otherwise fire for every run whose id
+exceeds some pull request number, which is all of them, immediately.
+
+The lookback is 50, raised from 20 after finding that this repository's real failures all
+sat outside a 20-run window. It is still a cap: a laptop shut for long enough can see
+more than that happen.
+
+---
+
 ## Now
 
-### 1. Rituals that fire on an event
-
-A ritual triggers on a GitHub event — PR opened, check run failed, issue labelled — as
-well as on a clock. Poll through `gh` first; webhooks can come later.
-
-The scheduler, run queue and health tracking all already exist, so this is a new trigger
-source feeding a pipeline that is built. It matters because the clock caps a ritual at
-roughly one a morning and events do not, and because event-triggered work is what people
-are actually adopting Routines for.
+Nothing. *Pre-launch* is the list.
 
 ---
 
 ## Next
 
-### 2. Ritual chains
+### 1. Ritual chains
 
 Triage → fix → verify → open a PR, as one ritual with one health record, rather than
 three that do not know about each other. The hard half — deciding what lands in what
 order — is already done in `lander.ts`.
 
-### 3. The PR after the merge
+### 2. The PR after the merge
 
 We can open a pull request; we then forget it. Watch it, react to a CI failure or a
 review comment, land it when it goes green. Desktop does monitoring and auto-merge. The
 differentiated version is the same loop with our verdict system attached to it.
 
-### 4. Configuration that travels through git
+### 3. Configuration that travels through git
 
 Rituals, check commands and setup commands committed to the repository instead of living
 only in `~/.claude`, so a small team shares them by pulling. Today a teammate cloning the
@@ -200,7 +227,7 @@ repo gets none of it and has to be told.
 
 This is the entire team story, and it is a file-format change rather than a server.
 
-### 5. Landing without colliding
+### 4. Landing without colliding
 
 Before landing, look at what is already open against the base — teammates' branches and
 PRs, not just our own sessions. Ordered landing solves this within one machine's sessions

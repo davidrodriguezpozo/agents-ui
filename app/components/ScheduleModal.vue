@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
-import { DAY_LABELS, PERMISSION_CHOICES, WEEKDAYS, type Schedule, type SchedulePermission } from '~/composables/useSchedules'
+import {
+  DAY_LABELS, PERMISSION_CHOICES, WEEKDAYS,
+  type GithubEventKind, type Schedule, type SchedulePermission,
+} from '~/composables/useSchedules'
 
 /** Create or edit a daily ritual. Time and days, not cron. */
 const props = defineProps<{
@@ -116,6 +119,21 @@ const days = ref<number[]>(props.schedule?.recurrence.days?.length ? [...props.s
 const permission = ref<SchedulePermission>(props.schedule?.permission ?? 'edits')
 const saving = ref(false)
 
+/**
+ * A clock is not the only reason to run something. The other one is that
+ * something happened — a pull request appeared, CI went red — and it is what
+ * the clock cannot express at all: a briefing happens once a morning, a review
+ * happens whenever there is something to review.
+ */
+const EVENT_OPTIONS: { value: GithubEventKind; label: string }[] = [
+  { value: 'pr_opened', label: 'A pull request is opened' },
+  { value: 'check_failed', label: 'A workflow run fails' },
+]
+
+const firesOn = ref<'clock' | 'event'>(props.schedule?.trigger ? 'event' : 'clock')
+const eventKind = ref<GithubEventKind>(props.schedule?.trigger?.kind ?? 'pr_opened')
+const eventBranch = ref(props.schedule?.trigger?.branch ?? '')
+
 const isEdit = computed(() => Boolean(props.schedule))
 
 function toggleDay(day: number) {
@@ -125,13 +143,24 @@ function toggleDay(day: number) {
 }
 
 const preview = computed(() => {
+  if (firesOn.value === 'event') {
+    const what = EVENT_OPTIONS.find(o => o.value === eventKind.value)?.label ?? eventKind.value
+    const where = eventBranch.value.trim() ? ` on ${eventBranch.value.trim()}` : ''
+    return `${what}${where}`
+  }
+
   const time = `${String(hour.value).padStart(2, '0')}:${String(minute.value).padStart(2, '0')}`
   if (!days.value.length || days.value.length === 7) return `Every day at ${time}`
   if (days.value.length === 5 && WEEKDAYS.every(d => days.value.includes(d))) return `Weekdays at ${time}`
   return `${days.value.map(d => DAY_LABELS[d]).join(', ')} at ${time}`
 })
 
-const canSave = computed(() => Boolean(title.value.trim() && input.value.trim() && days.value.length))
+const canSave = computed(() => Boolean(
+  title.value.trim()
+  && input.value.trim()
+  // Days only constrain a clock ritual; an event one has no days to pick.
+  && (firesOn.value === 'event' || days.value.length),
+))
 
 async function onSave() {
   if (!canSave.value) return
@@ -143,6 +172,11 @@ async function onSave() {
       input: input.value.trim(),
       invocation: input.value.trim().startsWith('/') ? input.value.trim().split(' ')[0] : undefined,
       recurrence: { hour: hour.value, minute: minute.value, days: days.value },
+      // `null` clears a trigger and puts the ritual back on the clock, which is
+      // the only way to say "no longer an event one" — absent would keep it.
+      trigger: firesOn.value === 'event'
+        ? { kind: eventKind.value, branch: eventBranch.value.trim() || undefined }
+        : null,
       permission: permission.value,
       enabled: props.schedule?.enabled ?? true,
       // Always sent, so the answer is this form's rather than whatever project
@@ -208,7 +242,48 @@ async function onSave() {
 
     <div class="field-group">
       <label class="field-label">When</label>
-      <div class="flex items-center gap-2">
+
+      <!-- Two answers to one question, so they share the label rather than
+           becoming two sections that both look optional. -->
+      <div class="flex gap-1">
+        <button
+          v-for="option in [
+            { value: 'clock' as const, label: 'At a time' },
+            { value: 'event' as const, label: 'When something happens' },
+          ]"
+          :key="option.value"
+          class="flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all"
+          :style="{
+            background: firesOn === option.value ? 'var(--accent-muted)' : 'var(--surface-raised)',
+            color: firesOn === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+            border: '1px solid ' + (firesOn === option.value ? 'var(--accent-glow)' : 'var(--border-subtle)'),
+          }"
+          @click="firesOn = option.value"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+
+      <div v-if="firesOn === 'event'" class="space-y-2 pt-2">
+        <select v-model="eventKind" class="field-select w-full">
+          <option v-for="option in EVENT_OPTIONS" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+        <input
+          v-model="eventBranch"
+          class="field-input font-mono"
+          placeholder="Any branch"
+          spellcheck="false"
+        />
+        <p class="field-hint">
+          Checked every couple of minutes with <span class="font-mono">gh</span>, using the login
+          you already have — nothing is opened to the internet. It starts from now: things that
+          already happened before you saved this are not worked through.
+        </p>
+      </div>
+
+      <div v-else class="flex items-center gap-2 pt-2">
         <select v-model.number="hour" class="field-select w-20">
           <option v-for="h in 24" :key="h - 1" :value="h - 1">{{ String(h - 1).padStart(2, '0') }}</option>
         </select>
@@ -217,7 +292,7 @@ async function onSave() {
           <option v-for="m in [0, 15, 30, 45]" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
         </select>
       </div>
-      <div class="flex gap-1 pt-2">
+      <div v-if="firesOn === 'clock'" class="flex gap-1 pt-2">
         <button
           v-for="(label, day) in DAY_LABELS"
           :key="day"

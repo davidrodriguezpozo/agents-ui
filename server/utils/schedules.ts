@@ -3,6 +3,7 @@ import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
 import { mergeRules } from './permissionRules'
 import { permissionModeFor, type TrustLevel } from './trust'
+import { describeTrigger, type EventTrigger } from './eventTriggers'
 
 /**
  * Deliberately not cron. "Every weekday at 08:00" is the shape a daily ritual
@@ -32,6 +33,22 @@ export interface Schedule {
   agentSlug?: string
   projectDir?: string
   recurrence: Recurrence
+  /**
+   * Fire on something happening instead of on the clock.
+   *
+   * Absent means this is a clock ritual, which is what every ritual written
+   * before this existed is. `recurrence` stays on the record either way rather
+   * than becoming a union — it is what the row falls back to describing if a
+   * trigger is ever removed, and losing somebody's 08:00 because they tried an
+   * event trigger for a day would be a poor trade.
+   */
+  trigger?: EventTrigger
+  /**
+   * Highest event key already seen, so the same pull request is not worked on
+   * twice. Absent means this trigger has never been polled — the first poll
+   * records a baseline and fires nothing.
+   */
+  triggerCursor?: number
   permission: SchedulePermission
   /**
    * Rules this ritual has been granted permanently, e.g. `Bash(gh:*)`.
@@ -120,6 +137,14 @@ export function computeNextRun(recurrence: Recurrence, from: Date = new Date()):
   return from.getTime() + 86_400_000
 }
 
+/**
+ * What this ritual waits for, however it waits. The row asks one question —
+ * "when does this happen" — and a trigger is as much an answer as a time is.
+ */
+export function describeSchedule(schedule: Pick<Schedule, 'recurrence' | 'trigger'>): string {
+  return schedule.trigger ? describeTrigger(schedule.trigger) : describeRecurrence(schedule.recurrence)
+}
+
 export function describeRecurrence(recurrence: Recurrence): string {
   const { hour, minute, days } = normalizeRecurrence(recurrence)
   const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
@@ -165,8 +190,8 @@ export function projectDirForSave(
 }
 
 export async function upsertSchedule(
-  input: Partial<Omit<Schedule, 'projectDir'>>
-    & { input: string; title: string; projectDir?: string | null },
+  input: Partial<Omit<Schedule, 'projectDir' | 'trigger'>>
+    & { input: string; title: string; projectDir?: string | null; trigger?: EventTrigger | null },
 ): Promise<Schedule> {
   const recurrence = normalizeRecurrence(input.recurrence)
 
@@ -197,7 +222,22 @@ export async function upsertSchedule(
       lastRunAt: existing?.lastRunAt,
       lastRunId: existing?.lastRunId,
       nextRunAt: computeNextRun(recurrence),
+      // `null` clears a trigger and returns this to the clock, the same way it
+      // clears a project. Absent keeps whatever is there.
+      trigger: input.trigger === null ? undefined : input.trigger ?? existing?.trigger,
+      triggerCursor: existing?.triggerCursor,
     }
+
+    /**
+     * A trigger that changed has never been polled, so its cursor belongs to a
+     * question nobody is asking any more. Keeping it would mean switching from
+     * pull requests to failed checks and then firing for every workflow run
+     * whose id happens to exceed some pull request number — which is most of
+     * them, immediately.
+     */
+    const triggerChanged = existing?.trigger?.kind !== schedule.trigger?.kind
+      || existing?.trigger?.branch !== schedule.trigger?.branch
+    if (triggerChanged) schedule.triggerCursor = undefined
 
     // A ritual that is on is not paused. Turning it back on is somebody saying
     // they want it to run again; whatever it broke on before is last week's
@@ -261,6 +301,22 @@ export async function pauseRitual(id: string, reason: string): Promise<void> {
     schedule.enabled = false
     schedule.pausedReason = reason
     schedule.pausedAt = Date.now()
+  })
+}
+
+/**
+ * How far a trigger has been caught up.
+ *
+ * Written whether or not anything fired: the first poll records a baseline so
+ * that turning on "when a pull request is opened" does not immediately start
+ * work on every pull request already open.
+ */
+export async function setTriggerCursor(id: string, cursor: number): Promise<void> {
+  await scheduleStore.update((schedules) => {
+    const schedule = schedules.find(s => s.id === id)
+    if (!schedule) return
+
+    schedule.triggerCursor = cursor
   })
 }
 

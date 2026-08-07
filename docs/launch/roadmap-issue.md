@@ -26,7 +26,8 @@ landing several finished sessions in an order that accounts for each other · sc
 rituals that retry and stop once they've broken · sandboxed runs, on by default, that
 say which host they were refused · permission handling for unattended runs · spend
 tracking and hard limits · your rate limit shown beside what it cost, and unattended
-work held back when you're near it ·
+work held back when you're near it · rituals that fire when a PR opens or CI goes red,
+not only on a clock ·
 multi-repository projects · MCP servers added, scoped and signed into from the UI ·
 GitHub skill import · marketplace browsing and plugin install · workflow builder ·
 relationship graph · backups · dark mode · `npm i -g agents-studio`.
@@ -57,8 +58,6 @@ that travels through git rather than about several people sharing a server.
 
 ## Next
 
-- **Rituals that fire on an event** — a PR opened, a check run failed, an issue
-  labelled, as well as on a clock.
 - **Rituals that chain** — triage → fix → verify → open a PR as one ritual with one
   health record, rather than three that don't know about each other.
 - **The PR after the merge** — we can open one, then we forget it. Watch it, react to a

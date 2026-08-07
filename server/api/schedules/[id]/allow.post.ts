@@ -1,4 +1,4 @@
-import { describeRecurrence, readSchedules, upsertSchedule } from '../../../utils/schedules'
+import { describeSchedule, readSchedules, upsertSchedule } from '../../../utils/schedules'
 import { mergeRules, parseRule, removeRule } from '../../../utils/permissionRules'
 
 /**
@@ -35,5 +35,5 @@ export default defineEventHandler(async (event) => {
   }
 
   const saved = await upsertSchedule({ ...schedule, allowRules })
-  return { ...saved, description: describeRecurrence(saved.recurrence) }
+  return { ...saved, description: describeSchedule(saved) }
 })

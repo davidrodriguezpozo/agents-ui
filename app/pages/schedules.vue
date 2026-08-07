@@ -117,6 +117,13 @@ function brokenSince(id: string) {
 
 function nextLabel(schedule: Schedule) {
   if (!schedule.enabled) return 'paused'
+  /**
+   * A triggered ritual has a `nextRunAt` — every ritual does, and it is kept so
+   * that removing the trigger returns it to a time rather than to nothing. It
+   * means nothing while the trigger is set, though, and "next Sat 09:00" beside
+   * "when a workflow run fails" is the row contradicting itself.
+   */
+  if (schedule.trigger) return 'waiting'
   if (!schedule.nextRunAt) return ''
   const date = new Date(schedule.nextRunAt)
   const isToday = date.toDateString() === new Date().toDateString()
