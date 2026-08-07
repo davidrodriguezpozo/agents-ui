@@ -64,6 +64,22 @@ describe('describeIncomplete', () => {
   it('does not claim a refusal it cannot name', () => {
     expect(describeIncomplete({})).toContain('a tool')
   })
+
+  it('names the host the sandbox refused, which is the thing you can fix', () => {
+    const said = describeIncomplete({ refusedHosts: ['registry.npmjs.org'] })
+    expect(said).toContain('registry.npmjs.org')
+    expect(said).not.toContain('Refused a tool')
+  })
+
+  /**
+   * Both at once means the tool refusal is the one worth leading with: it is
+   * the wall the run hit first, and the host may only have been wanted by work
+   * that the missing tool would have done anyway.
+   */
+  it('leads with the tool when it was refused both', () => {
+    expect(describeIncomplete({ deniedTools: ['Bash'], refusedHosts: ['github.com'] }))
+      .toContain('Refused')
+  })
 })
 
 /**

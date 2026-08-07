@@ -1,17 +1,23 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { emit, getActive, persist, setStatus, type Run } from './runStore'
 import { toQueryOptions, type ResolvedRunOptions } from './runOptions'
+import { refusedHostsIn } from './sandboxViolations'
+import { recordQuota } from './quota'
 import { answerPermission, createPermissionBroker } from './permissionBroker'
 import { mergeRules } from './permissionRules'
 import { notify } from './notify'
 import { budgetStoppedMessage } from './budget'
 
-function previewToolResult(content: unknown): string {
-  const text = typeof content === 'string'
+function toolResultText(content: unknown): string {
+  return typeof content === 'string'
     ? content
     : Array.isArray(content)
       ? content.map(c => (c as { text?: string })?.text ?? '').join('')
       : ''
+}
+
+function previewToolResult(content: unknown): string {
+  const text = toolResultText(content)
   return text.length > 600 ? `${text.slice(0, 600)}…` : text
 }
 
@@ -68,6 +74,16 @@ export async function executeRun(
     }),
   })
 
+  /**
+   * What each tool call was asked to do, so a refusal can be traced back to it.
+   *
+   * The sandbox's proxy does not name the host it blocked — `curl` refused
+   * example.com says only that a tunnel failed — so the host often has to come
+   * from the command that produced the failure. Kept for the life of the run
+   * and no longer.
+   */
+  const commandById = new Map<string, string>()
+
   try {
     for await (const message of query({
       prompt: run.input,
@@ -83,6 +99,13 @@ export async function executeRun(
 
       if (message.type === 'system' && message.subtype === 'init') {
         entry.run.sdkSessionId = message.session_id
+      }
+
+      // Arrives during runs that were happening anyway, so collecting it costs
+      // nothing. It is an account-level fact rather than a fact about this run,
+      // which is why it goes to its own store rather than onto the record.
+      if (message.type === 'rate_limit_event') {
+        void recordQuota((message as { rate_limit_info?: Record<string, unknown> }).rate_limit_info ?? {})
       }
 
       if (message.type === 'stream_event' && message.event) {
@@ -103,6 +126,8 @@ export async function executeRun(
         for (const block of message.message?.content ?? []) {
           if ((block as { type?: string }).type === 'tool_use') {
             const toolUse = block as { id: string; name: string; input: unknown }
+            const command = (toolUse.input as { command?: unknown } | null)?.command
+            if (typeof command === 'string') commandById.set(toolUse.id, command)
             emit(run.id, {
               type: 'tool_use',
               id: toolUse.id,
@@ -119,6 +144,26 @@ export async function executeRun(
           for (const block of content) {
             if ((block as { type?: string }).type === 'tool_result') {
               const result = block as { tool_use_id: string; content?: unknown; is_error?: boolean }
+              const text = toolResultText(result.content)
+
+              // Only worth asking when the sandbox is actually on — the DNS
+              // half of a denial reads identically to an offline machine, and
+              // blaming the sandbox for that would be a lie.
+              //
+              // Not keyed on `is_error` either: a command piped through `head`,
+              // or one whose failure was caught, comes back marked fine. Both
+              // were seen in a real blocked run.
+              if (options.sandbox.enabled) {
+                const refused = refusedHostsIn(
+                  commandById.get(result.tool_use_id) ?? '',
+                  text,
+                  { allowed: options.sandbox.allowedDomains },
+                )
+                if (refused.length) {
+                  entry.run.refusedHosts = [...new Set([...(entry.run.refusedHosts ?? []), ...refused])]
+                }
+              }
+
               emit(run.id, {
                 type: 'tool_result',
                 id: result.tool_use_id,

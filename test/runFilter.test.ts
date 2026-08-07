@@ -34,6 +34,15 @@ describe('filtering the log', () => {
     expect(matchesFilter(run(), { outcome: 'completed' })).toBe(true)
   })
 
+  it('sorts a run the sandbox refused in with the ones that need you', () => {
+    // Same reasoning as a denied tool: it reports "completed" while the part
+    // that needed the network did not happen.
+    const refused = run({ refusedHosts: ['registry.npmjs.org'] })
+
+    expect(matchesFilter(refused, { outcome: 'attention' })).toBe(true)
+    expect(matchesFilter(refused, { outcome: 'completed' })).toBe(false)
+  })
+
   it('treats queued work as running, since neither has an outcome yet', () => {
     expect(matchesFilter(run({ status: 'queued' }), { outcome: 'running' })).toBe(true)
     expect(matchesFilter(run({ status: 'running' }), { outcome: 'running' })).toBe(true)

@@ -34,6 +34,21 @@ describe('reading an outcome', () => {
     expect(outcomeOf(run({ deniedTools: ['Bash'] }))).toBe('blocked')
   })
 
+  /**
+   * A briefing that could not reach the API it summarises finished with nothing
+   * in it, exactly like one refused a tool. Counting it as `ok` would let a
+   * ritual that has genuinely stopped working keep its clean record — and would
+   * also hand it the automatic retry, which would produce the identical refusal
+   * a minute later for money.
+   */
+  it('counts a run the sandbox refused as blocked too', () => {
+    expect(outcomeOf(run({ refusedHosts: ['registry.npmjs.org'] }))).toBe('blocked')
+  })
+
+  it('still counts a run that reached everything it wanted as worked', () => {
+    expect(outcomeOf(run({ refusedHosts: [] }))).toBe('ok')
+  })
+
   it('separates a crash from a refusal and from being stopped by hand', () => {
     expect(outcomeOf(run({ status: 'failed' }))).toBe('failed')
     expect(outcomeOf(run({ status: 'cancelled' }))).toBe('stopped')

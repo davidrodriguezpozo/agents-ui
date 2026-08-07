@@ -39,6 +39,14 @@ export interface Run {
   needsAttention?: boolean
   /** Tools refused because the run was unattended — the result is incomplete. */
   deniedTools?: string[]
+  /**
+   * Hosts the sandbox refused this run, so it can be told what to allow.
+   *
+   * The counterpart to `suggestedRules`: same idea, different wall. A run that
+   * needed `registry.npmjs.org` and did not have it produced no more useful
+   * work than one refused a tool.
+   */
+  refusedHosts?: string[]
   /** Set when a limit cut the run short, so the output is not the whole job. */
   stoppedBy?: 'budget' | 'turns'
   /** Rules that would have let this run through, gathered from its prompts. */
@@ -216,6 +224,7 @@ export interface RunSummary {
   error?: string
   needsAttention?: boolean
   deniedTools?: string[]
+  refusedHosts?: string[]
   suggestedRules?: string[]
   /** Why it stopped short, when that was a limit rather than a permission. */
   stoppedBy?: 'budget' | 'turns'
@@ -242,6 +251,7 @@ function summarize(run: Run): RunSummary {
     error: run.error,
     needsAttention: run.needsAttention,
     deniedTools: run.deniedTools,
+    refusedHosts: run.refusedHosts,
     suggestedRules: run.suggestedRules,
     stoppedBy: run.stoppedBy,
     scheduleId: run.scheduleId,

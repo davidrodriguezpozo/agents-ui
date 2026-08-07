@@ -25,6 +25,7 @@ export interface FilterableRun {
   sessionId?: string
   needsAttention?: boolean
   deniedTools?: string[]
+  refusedHosts?: string[]
 }
 
 export interface RunFilter {
@@ -48,9 +49,10 @@ function matchesOutcome(run: FilterableRun, outcome: RunOutcomeFilter): boolean 
     // Its own filter rather than a kind of failure: these runs report success
     // while having skipped the part that needed a permission.
     case 'attention':
-      return Boolean(run.needsAttention || run.deniedTools?.length)
+      return Boolean(run.needsAttention || run.deniedTools?.length || run.refusedHosts?.length)
     case 'completed':
       return run.status === 'completed' && !run.needsAttention && !run.deniedTools?.length
+        && !run.refusedHosts?.length
     default:
       return run.status === outcome
   }

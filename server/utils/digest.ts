@@ -115,10 +115,26 @@ export function stillNeeded(
 export function describeIncomplete(run: {
   stoppedBy?: 'budget' | 'turns'
   deniedTools?: string[]
+  refusedHosts?: string[]
 }): string {
   if (run.stoppedBy === 'turns') return 'It used up every turn it was allowed, so the job is half done.'
   if (run.stoppedBy === 'budget') return 'It reached the spending limit, so the job is half done.'
+
+  // Named before the tool refusal, because it is the more actionable of the
+  // two: the fix is a host to paste, and a run blocked on the sandbox usually
+  // was not refused a tool at all.
+  if (run.refusedHosts?.length && !run.deniedTools?.length) {
+    return `Could not reach ${describeHosts(run.refusedHosts)}, so the job is half done.`
+  }
+
   return `Refused ${describeDenied(run.deniedTools ?? [])}, so the job is half done.`
+}
+
+export function describeHosts(hosts: string[]): string {
+  const names = [...new Set(hosts)]
+  if (!names.length) return 'the network'
+  if (names.length <= 3) return names.join(', ')
+  return `${names.slice(0, 3).join(', ')} and ${names.length - 3} more`
 }
 
 export function describeDenied(tools: string[]): string {

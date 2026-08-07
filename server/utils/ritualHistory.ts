@@ -18,6 +18,8 @@ export interface RitualRun {
   costUsd?: number
   /** Tools it was refused, which is why a `blocked` result is incomplete. */
   deniedTools?: string[]
+  /** Hosts the sandbox refused it, the other way a run comes back incomplete. */
+  refusedHosts?: string[]
   suggestedRules?: string[]
   error?: string
   preview: string
@@ -39,18 +41,25 @@ export interface RunOutcomeFields {
   status: string
   needsAttention?: boolean
   deniedTools?: string[]
+  refusedHosts?: string[]
 }
 
 /**
  * A completed run is not automatically a successful one: an unattended run that
  * was refused a tool it needed finishes "completed" with half the work missing.
  * That is the failure mode rituals actually have, so it gets its own outcome.
+ *
+ * A sandbox refusal counts the same way, and for the same reason — a briefing
+ * that could not reach the API it summarises finished with nothing in it. It
+ * also inherits the useful consequence: `blocked` is excluded from the retry a
+ * failure gets, because running it again produces the identical refusal a
+ * minute later, for money. What it needs is the host, not another attempt.
  */
 export function outcomeOf(run: RunOutcomeFields): RitualOutcome {
   if (run.status === 'running' || run.status === 'queued') return 'running'
   if (run.status === 'cancelled') return 'stopped'
   if (run.status === 'failed') return 'failed'
-  if (run.needsAttention || run.deniedTools?.length) return 'blocked'
+  if (run.needsAttention || run.deniedTools?.length || run.refusedHosts?.length) return 'blocked'
   return 'ok'
 }
 
@@ -63,6 +72,7 @@ export function summarizeRitualRuns(runs: RunSummary[]): RitualHistory {
     durationMs: run.durationMs,
     costUsd: run.costUsd,
     deniedTools: run.deniedTools,
+    refusedHosts: run.refusedHosts,
     suggestedRules: run.suggestedRules,
     error: run.error,
     preview: run.preview,

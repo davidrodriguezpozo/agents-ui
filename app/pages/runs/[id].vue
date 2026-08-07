@@ -24,6 +24,7 @@ const meta = ref<{
   input?: string
   needsAttention?: boolean
   deniedTools?: string[]
+  refusedHosts?: string[]
   suggestedRules?: string[]
   stoppedBy?: 'budget' | 'turns'
   scheduleId?: string
@@ -53,6 +54,45 @@ const blockedKind = computed<'ritual' | 'project' | 'neither'>(() => {
 
 const canLearn = computed(() => blockedKind.value !== 'neither' && !granted.value)
 const isActive = computed(() => run.value?.status === 'running' || run.value?.status === 'queued')
+
+/**
+ * The other wall a run can hit. A sandboxed run refused a host it needed comes
+ * back looking finished, with the part that needed the network missing — the
+ * same shape of half-done as a refused tool, and with a fix that is just as
+ * narrow: this host, in this repository, rather than turning the sandbox off.
+ */
+const refusedHosts = computed(() => meta.value?.refusedHosts ?? [])
+const hostsAllowed = ref(false)
+const allowingHosts = ref(false)
+
+// Filed against the repository rather than a session's worktree, which is the
+// same unit the sandbox setting itself is keyed by.
+const canAllowHosts = computed(() =>
+  refusedHosts.value.length > 0 && Boolean(meta.value?.rulesDir) && !hostsAllowed.value)
+
+async function allowHosts() {
+  const dir = meta.value?.rulesDir
+  if (!dir) return
+
+  allowingHosts.value = true
+  try {
+    const current = await $fetch<{ allowedDomains: string[] }>(
+      `/api/project/sandbox?dir=${encodeURIComponent(dir)}`,
+    )
+    await $fetch('/api/project/sandbox', {
+      method: 'POST',
+      body: {
+        dir,
+        allowedDomains: [...new Set([...(current.allowedDomains ?? []), ...refusedHosts.value])],
+      },
+    })
+    hostsAllowed.value = true
+  } catch (e: unknown) {
+    loadError.value = e instanceof Error ? e.message : 'Could not allow those hosts.'
+  } finally {
+    allowingHosts.value = false
+  }
+}
 
 onMounted(async () => {
   try {
@@ -98,6 +138,9 @@ const statusLabel = computed(() => {
   if (run.value.status !== 'completed') return run.value.status
   if (meta.value?.stoppedBy) return 'ran out'
   if (meta.value?.needsAttention || meta.value?.deniedTools?.length) return 'needed you'
+  // Same contradiction, different wall: a green badge over "could not reach
+  // registry.npmjs.org" is the badge arguing with the page.
+  if (meta.value?.refusedHosts?.length) return 'needed you'
   return 'completed'
 })
 
@@ -241,7 +284,7 @@ function formatCost(usd?: number) {
         <!-- A scheduled run that hit a wall. The result below is incomplete, and
              saying so matters more than presenting it as finished. -->
         <div
-          v-if="meta?.needsAttention"
+          v-if="meta && (meta.needsAttention || refusedHosts.length)"
           class="rounded-lg px-4 py-3 flex items-start gap-3"
           style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
         >
@@ -263,11 +306,32 @@ function formatCost(usd?: number) {
               It reached the spending limit and stopped part-way. Raise the limit in Settings,
               or leave it — the limit is doing exactly what it is for.
             </p>
+            <!--
+              Before the permission wording, because a run stopped by the
+              sandbox usually was not refused a tool at all — and saying "a tool
+              needed permission" about it would send someone looking for a
+              permission that does not exist.
+            -->
+            <p
+              v-else-if="refusedHosts.length && !meta.deniedTools?.length"
+              class="text-[11px] leading-relaxed text-label"
+            >
+              It was sandboxed and could not reach
+              <strong class="font-mono">{{ refusedHosts.join(', ') }}</strong>,
+              so whatever needed that did not happen.
+            </p>
             <p v-else class="text-[11px] leading-relaxed text-label">
               <template v-if="meta.scheduleId">It ran on a schedule, and</template>
               <template v-else>It ran with nobody watching, and</template>
               <strong>{{ (meta.deniedTools || []).join(', ') || 'a tool' }}</strong>
               needed permission that nobody was there to give.
+            </p>
+            <p v-if="hostsAllowed" class="text-[11px] leading-relaxed" style="color: var(--success);">
+              Allowed here from now on. The next run will reach them.
+            </p>
+            <p v-else-if="canAllowHosts" class="text-[11px] leading-relaxed text-label">
+              You can allow just these hosts for this project, rather than turning the
+              sandbox off for it.
             </p>
             <p v-if="granted" class="text-[11px] leading-relaxed" style="color: var(--success);">
               Allowed from now on. The next run will not stop for this.
@@ -282,7 +346,12 @@ function formatCost(usd?: number) {
                 It applies to this whole project, so no session here has to ask again.
               </template>
             </p>
-            <p v-else-if="!meta.stoppedBy" class="text-[11px] leading-relaxed text-label">
+            <!-- The generic fallback, and only when nothing more specific was
+                 said above it — a refused host already names its own fix. -->
+            <p
+              v-else-if="!meta.stoppedBy && !refusedHosts.length"
+              class="text-[11px] leading-relaxed text-label"
+            >
               Run it again yourself, or raise what this is allowed to do.
             </p>
           </div>
@@ -300,6 +369,15 @@ function formatCost(usd?: number) {
               :loading="granting"
               :title="meta.suggestedRules?.join(', ')"
               @click="alwaysAllow"
+            />
+            <UButton
+              v-if="canAllowHosts"
+              label="Allow these hosts"
+              icon="i-lucide-globe"
+              size="xs"
+              :loading="allowingHosts"
+              :title="refusedHosts.join(', ')"
+              @click="allowHosts"
             />
             <UButton
               label="Run it now"
