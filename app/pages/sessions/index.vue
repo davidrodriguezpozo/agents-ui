@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
+import { findSimilar } from '~/utils/similarSession'
 import { isSendKey } from '~/utils/keys'
 import type { Session } from '~/composables/useSessions'
 
@@ -225,6 +226,27 @@ async function useRepoInside(path: string) {
     adoptingRepo.value = null
   }
 }
+
+/**
+ * Whether you have already asked for this.
+ *
+ * Three pairs of near-identical sessions here, each pair twenty-one minutes
+ * apart, the second of each retyped from memory with typos the first does not
+ * have. Somebody came back, could not tell the work was already underway, and
+ * asked again — which costs two agents, two worktrees, and two sets of changes
+ * to the same files that will conflict whenever the second one is merged.
+ *
+ * It never blocks. Asking twice on purpose is legitimate; not knowing is the
+ * only thing being fixed.
+ */
+const duplicateOf = computed(() => findSimilar(prompt.value, sessions.value, workingDir.value))
+
+/** The same question for each line of a batch, which is where this happened. */
+const batchDuplicates = computed(() =>
+  batchPrompts.value
+    .map(line => ({ line, hit: findSimilar(line, sessions.value, workingDir.value) }))
+    .filter((entry): entry is { line: string; hit: NonNullable<typeof entry.hit> } => Boolean(entry.hit)),
+)
 
 const scope = useState<'here' | 'all'>('sessions-scope', () => 'here')
 
@@ -452,6 +474,21 @@ async function switchTo(path: string) {
               Start several at once
             </button>
           </p>
+
+          <!--
+            Not a warning and not a block. A second go at something that went
+            badly is a normal thing to want; not knowing the first one exists
+            is not.
+          -->
+          <p v-if="duplicateOf" class="type-meta flex items-center gap-1.5 flex-wrap">
+            <UIcon name="i-lucide-copy" class="size-3 shrink-0" style="color: var(--warning);" />
+            <span style="color: var(--warning);">You already asked for this.</span>
+            <NuxtLink
+              :to="`/sessions/${duplicateOf.session.id}`"
+              class="underline underline-offset-2 hover:text-label"
+            >{{ duplicateOf.session.title }}</NuxtLink>
+            <span>— {{ relativeTime(duplicateOf.session.updatedAt) }}. Starting another is fine.</span>
+          </p>
         </template>
 
         <!-- Several sessions, one per line, counted before anything happens -->
@@ -489,6 +526,30 @@ async function switchTo(path: string) {
             <span v-else-if="startingBatch" class="type-meta">
               Cutting a workspace each. They start working as they are made.
             </span>
+          </div>
+
+          <!--
+            Where it actually happened: a batch of three, then the same three
+            again twenty minutes later, retyped rather than re-run.
+          -->
+          <div v-if="batchDuplicates.length && !startingBatch" class="space-y-1">
+            <p class="type-meta" style="color: var(--warning);">
+              {{ batchDuplicates.length === 1 ? 'One of these' : `${batchDuplicates.length} of these` }}
+              you have already asked for:
+            </p>
+            <p
+              v-for="entry in batchDuplicates"
+              :key="entry.line"
+              class="type-meta flex items-center gap-1.5 flex-wrap pl-3"
+            >
+              <span class="truncate max-w-[22rem]">{{ entry.line }}</span>
+              <span>→</span>
+              <NuxtLink
+                :to="`/sessions/${entry.hit.session.id}`"
+                class="underline underline-offset-2 hover:text-label"
+              >{{ entry.hit.session.title }}</NuxtLink>
+              <span>{{ relativeTime(entry.hit.session.updatedAt) }}</span>
+            </p>
           </div>
         </template>
 
