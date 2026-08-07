@@ -234,6 +234,39 @@ const groups = computed(() => {
     })
 })
 
+/**
+ * Clearing out what came to nothing.
+ *
+ * Two steps, on purpose: this deletes branches and whole checkouts, and it
+ * does several at once. The server checks each one again before touching it,
+ * so a session that gained changes since this page loaded survives regardless
+ * of what was clicked here.
+ */
+const confirmingClose = ref<string | null>(null)
+const closing = ref(false)
+
+async function closeEmpty(key: string, ids: string[]) {
+  closing.value = true
+  try {
+    const result = await $fetch<{ closed: string[]; message: string }>('/api/sessions/close-empty', {
+      method: 'POST',
+      body: { ids },
+    })
+    confirmingClose.value = null
+    await fetchAll()
+    void fetchWorktrees()
+    toast.add({
+      title: result.closed.length ? 'Cleared' : 'Nothing was closed',
+      description: result.message,
+      color: result.closed.length ? 'success' : 'warning',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not close those', description: errorMessage(e), color: 'error' })
+  } finally {
+    closing.value = false
+  }
+}
+
 /** One project needs no heading to say which project it is. */
 const showProjectHeadings = computed(() => groups.value.length > 1)
 
@@ -475,6 +508,43 @@ async function switchTo(path: string) {
               <span v-if="part.section.hint" class="text-[11px] text-meta truncate">
                 {{ part.section.hint }}
               </span>
+
+              <!--
+                Offered for the whole group, because one at a time is the tax
+                that makes people stop clearing up at all. Nothing here has
+                anything in it — that is what put it in this section.
+              -->
+              <template v-if="part.section.outcome === 'nothing'">
+                <span class="flex-1" />
+                <template v-if="confirmingClose === group.path">
+                  <span class="text-[11px] text-label">
+                    Close {{ part.sessions.length }} and delete their branches?
+                  </span>
+                  <UButton
+                    label="Close them"
+                    size="xs"
+                    color="error"
+                    :loading="closing"
+                    @click="closeEmpty(group.path, part.sessions.map(s => s.id))"
+                  />
+                  <UButton
+                    label="Cancel"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    @click="() => { confirmingClose = null }"
+                  />
+                </template>
+                <UButton
+                  v-else
+                  label="Close these"
+                  icon="i-lucide-trash-2"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  @click="() => { confirmingClose = group.path }"
+                />
+              </template>
             </div>
             <SessionCard
               v-for="session in part.sessions"
