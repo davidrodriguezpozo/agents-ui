@@ -125,7 +125,7 @@ async function fire(schedule: Schedule): Promise<void> {
     // The case the daily limit exists for: work that spends money at 08:00
     // with nobody watching. Skipped without starting, and said out loud —
     // a ritual that silently stopped running would be worse than the bill.
-    const budget = await checkBudget()
+    const budget = await checkBudget(Date.now(), { unattended: true })
     if (!budget.allowed) {
       console.log(`[scheduler] skipping "${schedule.title}": ${budget.reason}`)
       await skipToNextRun(schedule.id)
@@ -154,7 +154,7 @@ async function fire(schedule: Schedule): Promise<void> {
 
       // Re-checked rather than reused: ten minutes have passed, and the rest of
       // the machine has been spending money throughout them.
-      const retryBudget = await checkBudget()
+      const retryBudget = await checkBudget(Date.now(), { unattended: true })
       if (retryBudget.allowed) {
         const again = await runOnce(schedule, retryBudget.maxBudgetUsd)
         await announce(schedule.title, again)

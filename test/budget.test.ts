@@ -140,3 +140,64 @@ describe('budgetStoppedMessage', () => {
     expect(budget.budgetStoppedMessage(undefined)).toContain('unfinished')
   })
 })
+
+/**
+ * The limit denominated in the unit most people are actually billed in, which
+ * is to say not billed at all: a Pro or Max subscription stops for its rate
+ * limit long before any dollar figure means anything.
+ *
+ * The failure to guard against is the same as for the dollar caps — refusing
+ * work over something it could not really tell — plus one specific to this:
+ * holding back a turn somebody typed, which is theirs to spend.
+ */
+describe('leaving room on the subscription', () => {
+  let quota: typeof import('../server/utils/quota')
+
+  beforeAll(async () => {
+    quota = await import('../server/utils/quota')
+  })
+
+  beforeEach(async () => {
+    await preferences.savePreferences({ pauseOnQuotaWarning: true })
+  })
+
+  it('skips unattended work when the limit is nearly gone', async () => {
+    await quota.recordQuota({ status: 'allowed_warning', rateLimitType: 'seven_day' }, NOW)
+
+    const decision = await budget.checkBudget(NOW, { unattended: true })
+    expect(decision.allowed).toBe(false)
+    expect(decision.reason).toContain('weekly')
+  })
+
+  it('never holds back a turn somebody typed', async () => {
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+
+    // You can see the state of your own account. Being refused by your own
+    // tool for something you deliberately started is the wrong side of helpful.
+    await expect(budget.checkBudget(NOW)).resolves.toMatchObject({ allowed: true })
+  })
+
+  it('does nothing at all until somebody turns it on', async () => {
+    await preferences.savePreferences({ pauseOnQuotaWarning: false })
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+
+    await expect(budget.checkBudget(NOW, { unattended: true }))
+      .resolves.toMatchObject({ allowed: true })
+  })
+
+  it('lets unattended work through while there is room', async () => {
+    await quota.recordQuota({ status: 'allowed' }, NOW)
+
+    await expect(budget.checkBudget(NOW, { unattended: true }))
+      .resolves.toMatchObject({ allowed: true })
+  })
+
+  it('ignores a reading too old to be true any more', async () => {
+    // Recorded long enough ago that the window has since reset. Acting on it
+    // would keep skipping rituals for a limit that no longer applies.
+    await quota.recordQuota({ status: 'rejected' }, NOW - quota.QUOTA_STALE_AFTER_MS - 1)
+
+    await expect(budget.checkBudget(NOW, { unattended: true }))
+      .resolves.toMatchObject({ allowed: true })
+  })
+})

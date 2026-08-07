@@ -114,7 +114,12 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
       // Between steps as well as before the first: a workflow is the easiest
       // way there is to spend a day's allowance without noticing, and the
       // limit is worth nothing if it is only consulted once.
-      const budget = await checkBudget()
+      //
+      // Unattended from here on. Pressing Run is a decision about the first
+      // step; by the fourth, nobody is watching and the rate limit is worth
+      // leaving room in. The check before the run starts stays attended, so
+      // starting one is never refused over a limit that is only nearly reached.
+      const budget = await checkBudget(Date.now(), { unattended: index > 0 })
       if (!budget.allowed) {
         await finish(record.id, 'failed', budget.reason)
         await notify('needsYou', `${record.title} stopped`, budget.reason!)

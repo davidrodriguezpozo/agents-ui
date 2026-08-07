@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
     repairAttempts?: number
     maxTurns?: number
     maxConcurrentRuns?: number
+    pauseOnQuotaWarning?: boolean
     dailyCapUsd?: number
     runCapUsd?: number
   }>(event)
@@ -19,6 +20,7 @@ export default defineEventHandler(async (event) => {
     repairAttempts?: number
     maxTurns?: number
     maxConcurrentRuns?: number
+    pauseOnQuotaWarning?: boolean
     dailyCapUsd?: number
     runCapUsd?: number
   } = {}
@@ -29,6 +31,10 @@ export default defineEventHandler(async (event) => {
 
   if (typeof body?.summariseSessions === 'boolean') {
     patch.summariseSessions = body.summariseSessions
+  }
+
+  if (typeof body?.pauseOnQuotaWarning === 'boolean') {
+    patch.pauseOnQuotaWarning = body.pauseOnQuotaWarning
   }
 
   // 0 is meaningful — it is how a limit is turned off — so these are only

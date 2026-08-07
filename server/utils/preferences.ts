@@ -72,6 +72,19 @@ export interface Preferences {
    * due at the same minute started ten agents on a machine nobody was watching.
    */
   maxConcurrentRuns: number
+  /**
+   * Hold unattended work back when Claude says you are near your rate limit.
+   *
+   * The other limits here are denominated in dollars, which is the right unit
+   * for somebody paying per token and the wrong one for everybody on Pro or
+   * Max — they are never billed for a run, and what actually stops them is the
+   * subscription's own limit. This is that limit, expressed in the only signal
+   * that is always present.
+   *
+   * Off by default, like the spending caps and for the same reason: a limit
+   * nobody chose is a limit that stops their work at the worst possible moment.
+   */
+  pauseOnQuotaWarning: boolean
 }
 
 /**
@@ -92,6 +105,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   repairAttempts: 0,
   maxTurns: 0,
   maxConcurrentRuns: 3,
+  pauseOnQuotaWarning: false,
 }
 
 /** A limit is a positive number of dollars or it is not a limit. */
@@ -143,6 +157,8 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Absent means the default, not unlimited — a file written before this
     // existed says nothing about it.
     maxConcurrentRuns: parsed?.preferences?.maxConcurrentRuns ?? DEFAULT_PREFERENCES.maxConcurrentRuns,
+    // Absent means off — a file written before this existed never chose it.
+    pauseOnQuotaWarning: parsed?.preferences?.pauseOnQuotaWarning === true,
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -165,10 +181,12 @@ export async function savePreferences(
     repairAttempts?: number
     maxTurns?: number
     maxConcurrentRuns?: number
+    pauseOnQuotaWarning?: boolean
   },
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
+    pauseOnQuotaWarning,
     ...notifications
   } = patch
 
@@ -183,6 +201,9 @@ export async function savePreferences(
       maxConcurrentRuns: maxConcurrentRuns === undefined
         ? current.maxConcurrentRuns
         : Math.max(0, Math.min(Math.floor(maxConcurrentRuns), 20)),
+      pauseOnQuotaWarning: pauseOnQuotaWarning === undefined
+        ? current.pauseOnQuotaWarning
+        : pauseOnQuotaWarning === true,
     }
     Object.assign(current, next)
     return next

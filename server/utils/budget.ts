@@ -1,6 +1,7 @@
 import { runsSince } from './runStore'
 import { readSessions } from './sessions'
 import { readPreferences } from './preferences'
+import { quotaBlocks, quotaReason, readQuota } from './quota'
 
 /**
  * Spending limits that actually stop things.
@@ -77,16 +78,38 @@ function money(usd: number): string {
  * ritual on the machine. Failing open is right here — the limits are a
  * convenience against runaway spend, not a security boundary.
  */
-export async function checkBudget(now = Date.now()): Promise<BudgetDecision> {
+export async function checkBudget(
+  now = Date.now(),
+  opts: { unattended?: boolean } = {},
+): Promise<BudgetDecision> {
   let dailyCapUsd: number | undefined
   let runCapUsd: number | undefined
+  let pauseOnQuotaWarning = false
 
   try {
     const prefs = await readPreferences()
     dailyCapUsd = prefs.dailyCapUsd || undefined
     runCapUsd = prefs.runCapUsd || undefined
+    pauseOnQuotaWarning = prefs.pauseOnQuotaWarning
   } catch {
     return { allowed: true, spentToday: 0 }
+  }
+
+  /**
+   * The subscription's own limit, which for anyone on Pro or Max is the one
+   * that actually stops their work — the dollar caps below describe money they
+   * are never billed.
+   *
+   * Only ever applied to work nobody asked for right now. A turn you typed is
+   * yours to spend: you can see the state of your own account, and being
+   * refused by your own tool for something you deliberately started is the
+   * wrong side of helpful.
+   */
+  if (opts.unattended && pauseOnQuotaWarning) {
+    const quota = await readQuota()
+    if (quotaBlocks(quota, now)) {
+      return { allowed: false, reason: quotaReason(quota!), spentToday: 0 }
+    }
   }
 
   if (!dailyCapUsd && !runCapUsd) return { allowed: true, spentToday: 0 }
