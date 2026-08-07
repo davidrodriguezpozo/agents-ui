@@ -242,9 +242,28 @@ untouched.
 `git clean -fd` without `-x`, so ignored files survive: a discard must not delete
 `node_modules` and cost a fresh setup run.
 
-### 5. Arranging the panes
+### ~~5. Arranging the panes~~ — shipped, and it was a problem I made
 
-Only once there are three things worth arranging. Not before.
+Fifth on the original list and the weakest of the five by the test I set, since
+arranging things does not remove a reason to leave. It earned its place on
+different grounds: with files, terminal, preview and diff each about five
+hundred pixels tall and all stacking, opening two put one below the fold. The
+other four steps created that.
+
+One pane at a time, chosen from a strip, with the active one closing on a
+second press. Panes stay mounted once opened and are merely hidden — unmounting
+would drop the terminal's connection and reload the preview's iframe every time
+somebody glanced at the diff. Verified by tagging the DOM nodes and bouncing
+through every pane: same iframe, same terminal, scrollback intact.
+
+**It also surfaced a real leak.** Previews are spawned detached so that stopping
+one can signal its process group, and the cost of detached is that it does not
+die with its parent. Nitro's `close` hook covers a graceful shutdown and never
+sees a plain `kill` — so an app killed with a preview running left the dev
+server holding its port. Found by watching `node server.js` outlive the app by
+a minute and a half. Signal handlers now do the cleanup, in one shared place,
+because registering one replaces Node's default action and something then has
+to do the exiting.
 
 ### What this costs
 

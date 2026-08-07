@@ -37,10 +37,36 @@ const sending = ref(false)
 const stopping = ref(false)
 const activeRunId = ref<string | null>(null)
 const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
-const showDiff = ref(false)
-const showFiles = ref(false)
-const showTerminal = ref(false)
-const showPreview = ref(false)
+/**
+ * Which workspace tool is on screen.
+ *
+ * Four independent toggles meant four panels stacking down the page, each about
+ * five hundred pixels tall — so opening two put one of them below the fold and
+ * turned "look at the diff while the preview runs" into scrolling past the
+ * thing you were trying to compare it with.
+ *
+ * One at a time instead, chosen from a strip. `null` is all of them closed,
+ * which is what a session opens as.
+ */
+type Pane = 'changes' | 'files' | 'preview' | 'terminal'
+
+const pane = ref<Pane | null>(null)
+
+/**
+ * Panes that have been opened at least once stay mounted and are merely
+ * hidden. Unmounting would drop the terminal's connection and reload the
+ * preview's iframe every time somebody glanced at the diff — the shell would
+ * survive on the server, but a dev server reloading on every tab change would
+ * not be worth the memory it saved.
+ */
+const opened = ref<Set<Pane>>(new Set())
+
+function showPane(next: Pane) {
+  // Clicking the one already showing closes it, so the strip doubles as the
+  // way back to just the conversation.
+  pane.value = pane.value === next ? null : next
+  if (pane.value) opened.value.add(pane.value)
+}
 /** The terminal conversation this session continues, if it adopted one. */
 const inherited = ref<TranscriptMessage[]>([])
 const showPatch = ref(false)
@@ -115,7 +141,8 @@ async function refreshDiff() {
   try {
     diff.value = await fetchDiff(id)
     // If there is work to review and nothing to read, the diff is the point.
-    if (diff.value.files.length && !session.value?.turns.length) showDiff.value = true
+    // Work to review and nothing to read: the diff is the point, so open on it.
+    if (diff.value.files.length && !session.value?.turns.length) showPane('changes')
   } catch {
     diff.value = null
   }
@@ -726,51 +753,32 @@ const totalChanges = computed(() => {
         </span>
       </template>
       <template #right>
-        <UButton
-          v-if="diff?.files.length"
-          :label="showDiff ? 'Hide changes' : `${diff.files.length} changed`"
-          icon="i-lucide-file-diff"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          @click="() => { showDiff = !showDiff }"
-        />
         <!--
-          The workspace itself, rather than what changed in it. Beside the diff
-          because they are the same question asked two ways, and the answer to
-          "that is nearly right" lives here.
+          One strip rather than four toggles. Each opens its pane and closes
+          whatever was showing; pressing the active one closes it entirely.
         -->
-        <UButton
-          v-if="session"
-          :label="showFiles ? 'Hide files' : 'Files'"
-          icon="i-lucide-folder-open"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          @click="() => { showFiles = !showFiles }"
-        />
-        <!-- The app itself, running. Started on purpose: a dev server is
-             expensive and several sessions would otherwise each hold one. -->
-        <UButton
-          v-if="session"
-          :label="showPreview ? 'Hide preview' : 'Preview'"
-          icon="i-lucide-monitor-play"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          @click="() => { showPreview = !showPreview }"
-        />
-        <!-- A shell in the same workspace. Opened on purpose rather than always
-             running, since each one holds a process and a pty. -->
-        <UButton
-          v-if="session"
-          :label="showTerminal ? 'Hide terminal' : 'Terminal'"
-          icon="i-lucide-square-terminal"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          @click="() => { showTerminal = !showTerminal }"
-        />
+        <div v-if="session" class="flex items-center gap-0.5 p-0.5 rounded-md" style="background: var(--input-bg);">
+          <button
+            v-for="tab in [
+              { id: 'changes' as const, label: diff?.files.length ? `${diff.files.length} changed` : 'Changes', icon: 'i-lucide-file-diff' },
+              { id: 'files' as const, label: 'Files', icon: 'i-lucide-folder-open' },
+              { id: 'preview' as const, label: 'Preview', icon: 'i-lucide-monitor-play' },
+              { id: 'terminal' as const, label: 'Terminal', icon: 'i-lucide-square-terminal' },
+            ]"
+            :key="tab.id"
+            class="flex items-center gap-1.5 px-2 py-1 rounded text-[12px] transition-all"
+            :style="{
+              background: pane === tab.id ? 'var(--surface-raised)' : 'transparent',
+              color: pane === tab.id ? 'var(--accent)' : 'var(--text-disabled)',
+            }"
+            :title="pane === tab.id ? 'Close' : tab.label"
+            @click="showPane(tab.id)"
+          >
+            <UIcon :name="tab.icon" class="size-3.5 shrink-0" />
+            <span>{{ tab.label }}</span>
+          </button>
+        </div>
+
         <UButton
           v-if="session?.prUrl"
           label="View pull request"
@@ -957,26 +965,33 @@ const totalChanges = computed(() => {
           diff above it and the check verdict beside it both go stale — which is
           why refreshing them is what a save asks for.
         -->
-        <WorkspaceEditor
-          v-if="showFiles && session"
-          :session-id="session.id"
-          @saved="onWorkspaceEdited"
-        />
+        <!--
+          Mounted once opened and hidden thereafter, never destroyed: a tab
+          change must not drop the terminal's connection or reload the
+          preview's iframe.
+        -->
+        <div v-if="opened.has('files') && session" v-show="pane === 'files'" class="space-y-4">
+          <WorkspaceEditor :session-id="session.id" @saved="onWorkspaceEdited" />
 
-        <!-- Beside the editor, because they are the same kind of thing: acting
-             on the workspace directly rather than asking the agent to. -->
-        <RewindPanel
-          v-if="showFiles && session"
-          :session-id="session.id"
-          @changed="onWorkspaceEdited"
-        />
+          <!-- Beside the editor, because they are the same kind of thing:
+               acting on the workspace directly rather than asking the agent to. -->
+          <RewindPanel :session-id="session.id" @changed="onWorkspaceEdited" />
+        </div>
 
-        <PreviewPane v-if="showPreview && session" :session-id="session.id" />
+        <div v-if="opened.has('preview') && session" v-show="pane === 'preview'">
+          <PreviewPane :session-id="session.id" />
+        </div>
 
-        <TerminalPane v-if="showTerminal && session" :session-id="session.id" />
+        <div v-if="opened.has('terminal') && session" v-show="pane === 'terminal'">
+          <TerminalPane :session-id="session.id" />
+        </div>
 
         <!-- Changes -->
-        <div v-if="showDiff && diff" class="rounded-md overflow-hidden" style="border: 1px solid var(--border-subtle);">
+        <div
+          v-if="pane === 'changes' && diff"
+          class="rounded-md overflow-hidden"
+          style="border: 1px solid var(--border-subtle);"
+        >
           <div
             class="px-4 py-2.5 flex items-center justify-between"
             style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);"
