@@ -319,6 +319,36 @@ const groups = computed(() => {
  * so a session that gained changes since this page loaded survives regardless
  * of what was clicked here.
  */
+/**
+ * Landing the finished ones.
+ *
+ * Two steps, because this merges into the branch you have checked out. The
+ * confirmation names the branch rather than saying "are you sure" — the branch
+ * is the part worth checking before agreeing.
+ */
+const { run: landingRun, active: landing, starting: startingLanding, start: beginLanding, refresh: refreshLanding, watch: watchLanding }
+  = useLanding()
+const confirmingLand = ref(false)
+
+onMounted(async () => {
+  await refreshLanding()
+  if (landing.value) watchLanding()
+})
+
+async function onLand() {
+  confirmingLand.value = false
+  try {
+    await beginLanding()
+    toast.add({
+      title: 'Landing started',
+      description: 'It runs the checks again for each one. You can leave this page.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not start landing', description: errorMessage(e), color: 'error' })
+  }
+}
+
 const confirmingClose = ref<string | null>(null)
 const closing = ref(false)
 
@@ -444,6 +474,13 @@ async function switchTo(path: string) {
           <span class="font-mono">git init</span> here.
         </p>
       </div>
+
+      <!--
+        Shown whether or not it is still going: the result of a landing is a
+        list rather than a sentence, and the half that did not land is the half
+        worth reading.
+      -->
+      <LandingPanel v-if="landingRun" :run="landingRun" />
 
       <!-- Start a session -->
       <div v-else-if="workingDir" class="space-y-1.5">
@@ -675,6 +712,43 @@ async function switchTo(path: string) {
               <span v-if="part.section.hint" class="text-[11px] text-meta truncate">
                 {{ part.section.hint }}
               </span>
+
+              <!--
+                The ending, offered where the finished work already is. Merging
+                these by hand means six page visits, and the second one onwards
+                is only honest if the base is brought in and the checks re-run
+                first — which is exactly what nobody does.
+              -->
+              <template v-if="part.section.outcome === 'ready' && group.isActive && !landing">
+                <span class="flex-1" />
+                <template v-if="confirmingLand">
+                  <span class="text-[11px] text-label">
+                    Merge what passes into {{ activeProject?.branch || 'your current branch' }}?
+                  </span>
+                  <UButton
+                    label="Land them"
+                    size="xs"
+                    :loading="startingLanding"
+                    @click="onLand"
+                  />
+                  <UButton
+                    label="Cancel"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    @click="() => { confirmingLand = false }"
+                  />
+                </template>
+                <UButton
+                  v-else
+                  label="Land what passes"
+                  icon="i-lucide-git-merge"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  @click="() => { confirmingLand = true }"
+                />
+              </template>
 
               <!--
                 Offered for the whole group, because one at a time is the tax
