@@ -9,6 +9,7 @@ import { notify } from './notify'
 import { outcomeOf, summarizeRitualRuns, type RitualHistory } from './ritualHistory'
 import { RETRY_DELAY_MS, shouldGiveUp, shouldRetry } from './ritualHealth'
 import { checkBudget } from './budget'
+import { describeIncomplete } from './digest'
 import { withRunSlot } from './runQueue'
 
 const TICK_MS = 30_000
@@ -97,8 +98,10 @@ async function announce(title: string, run: Run): Promise<void> {
   if (outcome === 'failed') {
     await notify('failed', `${title} failed`, run.error || 'The run ended early.')
   } else if (outcome === 'blocked') {
-    const tools = (run.deniedTools ?? []).join(', ') || 'a tool'
-    await notify('needsYou', `${title} was blocked`, `It needed ${tools} and stopped. Nothing was applied.`)
+    // Same outcome, two quite different mornings. Told apart here because the
+    // notification is often the only account of it anybody reads.
+    const headline = run.stoppedBy ? `${title} ran out` : `${title} was blocked`
+    await notify('needsYou', headline, describeIncomplete(run))
   } else if (outcome === 'ok') {
     await notify('finished', title, run.output || 'Finished with nothing to report.')
   }

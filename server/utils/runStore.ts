@@ -217,6 +217,8 @@ export interface RunSummary {
   needsAttention?: boolean
   deniedTools?: string[]
   suggestedRules?: string[]
+  /** Why it stopped short, when that was a limit rather than a permission. */
+  stoppedBy?: 'budget' | 'turns'
   scheduleId?: string
   sessionId?: string
   /** What set it going — worked out once here rather than in every view. */
@@ -241,6 +243,7 @@ function summarize(run: Run): RunSummary {
     needsAttention: run.needsAttention,
     deniedTools: run.deniedTools,
     suggestedRules: run.suggestedRules,
+    stoppedBy: run.stoppedBy,
     scheduleId: run.scheduleId,
     sessionId: run.sessionId,
     source: sourceOf(run),

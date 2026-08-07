@@ -25,11 +25,33 @@ const meta = ref<{
   needsAttention?: boolean
   deniedTools?: string[]
   suggestedRules?: string[]
+  stoppedBy?: 'budget' | 'turns'
   scheduleId?: string
+  sessionId?: string
+  /** Where a grant from this run should be filed — the repo, not a worktree. */
+  rulesDir?: string
 } | null>(null)
 let controller: AbortController | null = null
 
 const run = computed(() => live.value[id])
+
+/**
+ * What this run was, in the one place it changes what can be offered.
+ *
+ * The blocked banner used to say "it ran on a schedule" about every run that
+ * hit a wall, including session turns and workflow steps, and offered the one
+ * thing only a ritual could do.
+ */
+const blockedKind = computed<'ritual' | 'project' | 'neither'>(() => {
+  // A run that used up its turns was not refused anything, so there is no
+  // permission to grant and offering one would be nonsense.
+  if (meta.value?.stoppedBy) return 'neither'
+  if (meta.value?.scheduleId) return 'ritual'
+  if (meta.value?.rulesDir && meta.value.suggestedRules?.length) return 'project'
+  return 'neither'
+})
+
+const canLearn = computed(() => blockedKind.value !== 'neither' && !granted.value)
 const isActive = computed(() => run.value?.status === 'running' || run.value?.status === 'queued')
 
 onMounted(async () => {
@@ -63,7 +85,27 @@ async function onCancel() {
   }
 }
 
+/**
+ * The badge, which has to agree with the banner underneath it.
+ *
+ * A run that used up its turns, or was refused a tool it needed, ends
+ * `completed` — the SDK finished cleanly, it just did not finish the work.
+ * Wearing a green "completed" directly above "this result is incomplete" is
+ * the badge contradicting the page, and the badge is the part people read.
+ */
+const statusLabel = computed(() => {
+  if (!run.value) return ''
+  if (run.value.status !== 'completed') return run.value.status
+  if (meta.value?.stoppedBy) return 'ran out'
+  if (meta.value?.needsAttention || meta.value?.deniedTools?.length) return 'needed you'
+  return 'completed'
+})
+
 const statusStyle = computed(() => {
+  if (statusLabel.value === 'ran out' || statusLabel.value === 'needed you') {
+    return { background: 'var(--accent-muted)', color: 'var(--accent)' }
+  }
+
   switch (run.value?.status) {
     case 'running':
     case 'queued':
@@ -101,14 +143,28 @@ async function rerunWithApproval() {
  * ritual's trust level, and it means tomorrow's run just works.
  */
 async function alwaysAllow() {
-  if (!meta.value?.scheduleId || !meta.value.suggestedRules?.length) return
+  const rules = meta.value?.suggestedRules ?? []
+  if (!rules.length) return
+
   granting.value = true
   try {
-    await grantRules(meta.value.scheduleId, meta.value.suggestedRules)
+    if (blockedKind.value === 'ritual') {
+      await grantRules(meta.value!.scheduleId!, rules)
+    } else if (blockedKind.value === 'project') {
+      // Filed against the repository, so every future session here inherits it
+      // — not against this run's worktree, which will not outlive the session.
+      await $fetch('/api/project/rules', {
+        method: 'POST',
+        body: { dir: meta.value!.rulesDir, add: rules },
+      })
+    } else {
+      return
+    }
+
     granted.value = true
     toast.add({ title: 'Allowed from now on', color: 'success' })
   } catch (e: any) {
-    toast.add({ title: 'Could not update the ritual', description: errorMessage(e), color: 'error' })
+    toast.add({ title: 'Could not save that permission', description: errorMessage(e), color: 'error' })
   } finally {
     granting.value = false
   }
@@ -134,7 +190,7 @@ function formatCost(usd?: number) {
           class="text-[10px] font-mono px-1.5 py-px rounded-full"
           :style="statusStyle"
         >
-          {{ run.status }}
+          {{ statusLabel }}
         </span>
         <span v-if="meta?.invocation" class="font-mono text-[12px]" style="color: var(--accent);">
           {{ meta.invocation }}
@@ -192,48 +248,92 @@ function formatCost(usd?: number) {
           <UIcon name="i-lucide-shield-alert" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
           <div class="flex-1 min-w-0 space-y-1">
             <div class="text-[12px] font-medium text-body">This result is incomplete</div>
-            <p class="text-[11px] leading-relaxed text-label">
-              It ran on a schedule, and
+
+            <!--
+              Why, rather than a guess at why. This said "a tool needed
+              permission" about every unfinished run, including ones that
+              simply used up their turns and were refused nothing at all.
+            -->
+            <p v-if="meta.stoppedBy === 'turns'" class="text-[11px] leading-relaxed text-label">
+              It used up every turn it was allowed and stopped part-way. Nothing was refused —
+              it just ran out of room. Raise <strong>most turns in one run</strong> in Settings
+              if this is normal for the work, or start it again and it will carry on from here.
+            </p>
+            <p v-else-if="meta.stoppedBy === 'budget'" class="text-[11px] leading-relaxed text-label">
+              It reached the spending limit and stopped part-way. Raise the limit in Settings,
+              or leave it — the limit is doing exactly what it is for.
+            </p>
+            <p v-else class="text-[11px] leading-relaxed text-label">
+              <template v-if="meta.scheduleId">It ran on a schedule, and</template>
+              <template v-else>It ran with nobody watching, and</template>
               <strong>{{ (meta.deniedTools || []).join(', ') || 'a tool' }}</strong>
               needed permission that nobody was there to give.
             </p>
             <p v-if="granted" class="text-[11px] leading-relaxed" style="color: var(--success);">
               Allowed from now on. The next run will not stop for this.
             </p>
-            <p
-              v-else-if="meta.scheduleId && meta.suggestedRules?.length"
-              class="text-[11px] leading-relaxed text-label"
-            >
+            <p v-else-if="canLearn" class="text-[11px] leading-relaxed text-label">
               You can allow just what it needed —
               <span class="font-mono" style="color: var(--text-primary);">
-                {{ meta.suggestedRules.join(', ') }}
+                {{ meta.suggestedRules?.join(', ') }}
               </span>
               — rather than giving it full access.
+              <template v-if="blockedKind === 'project'">
+                It applies to this whole project, so no session here has to ask again.
+              </template>
             </p>
-            <p v-else class="text-[11px] leading-relaxed text-label">
-              Run it again yourself, or raise what the ritual is allowed to do.
+            <p v-else-if="!meta.stoppedBy" class="text-[11px] leading-relaxed text-label">
+              Run it again yourself, or raise what this is allowed to do.
             </p>
           </div>
           <div class="flex flex-col gap-1.5 shrink-0">
+            <!--
+              Rituals could always be taught this; sessions never could, so the
+              same approval was given by hand every time. The grant goes to
+              whichever thing is able to remember it.
+            -->
             <UButton
-              v-if="meta.scheduleId && meta.suggestedRules?.length && !granted"
-              label="Always allow"
+              v-if="canLearn"
+              :label="blockedKind === 'project' ? 'Always allow here' : 'Always allow'"
               icon="i-lucide-shield-check"
               size="xs"
               :loading="granting"
-              :title="meta.suggestedRules.join(', ')"
+              :title="meta.suggestedRules?.join(', ')"
               @click="alwaysAllow"
             />
             <UButton
               label="Run it now"
               icon="i-lucide-play"
               size="xs"
-              :variant="meta.scheduleId && meta.suggestedRules?.length && !granted ? 'soft' : 'solid'"
-              :color="meta.scheduleId && meta.suggestedRules?.length && !granted ? 'neutral' : 'primary'"
+              :variant="canLearn ? 'soft' : 'solid'"
+              :color="canLearn ? 'neutral' : 'primary'"
               :loading="rerunning"
               @click="rerunWithApproval"
             />
-            <UButton label="Ritual settings" size="xs" variant="ghost" color="neutral" to="/schedules" />
+            <UButton
+              v-if="meta.stoppedBy"
+              label="Change the limits"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              to="/settings"
+            />
+            <UButton
+              v-else-if="meta.scheduleId"
+              label="Ritual settings"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              to="/schedules"
+            />
+            <UButton
+              v-if="meta.sessionId"
+              label="Open the session"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :to="`/sessions/${meta.sessionId}`"
+            />
           </div>
         </div>
 

@@ -111,8 +111,14 @@ function statusStyle(status: string) {
  * green next to a line saying the work did not happen is the badge lying.
  */
 function badge(run: RunSummary) {
+  const attention = { background: 'var(--accent-muted)', color: 'var(--accent)' }
+
+  // "Needed you" is a claim about why it stopped, and a run that used up its
+  // turns or its budget did not need anything from you — it needed more room.
+  if (run.stoppedBy) return { label: 'ran out', style: attention }
+
   if (run.needsAttention || run.deniedTools?.length) {
-    return { label: 'needed you', style: { background: 'var(--accent-muted)', color: 'var(--accent)' } }
+    return { label: 'needed you', style: attention }
   }
   return { label: run.status, style: statusStyle(run.status) }
 }
@@ -259,9 +265,19 @@ function sourceIcon(value: RunSource) {
                   {{ run.invocation }}
                 </span>
               </div>
+              <!-- Why it is incomplete, not a guess. A run that used up its turns
+                   was refused nothing, and saying otherwise sends you looking for
+                   a permission problem that does not exist. -->
               <p v-if="run.needsAttention" class="text-[11px] mt-0.5 flex items-center gap-1" style="color: var(--accent);">
-                <UIcon name="i-lucide-shield-alert" class="size-3 shrink-0" />
-                Incomplete — {{ (run.deniedTools || []).join(', ') || 'a tool' }} needed your approval
+                <UIcon
+                  :name="run.stoppedBy ? 'i-lucide-gauge' : 'i-lucide-shield-alert'"
+                  class="size-3 shrink-0"
+                />
+                <template v-if="run.stoppedBy === 'turns'">Incomplete — it used up every turn it was allowed</template>
+                <template v-else-if="run.stoppedBy === 'budget'">Incomplete — it reached the spending limit</template>
+                <template v-else>
+                  Incomplete — {{ (run.deniedTools || []).join(', ') || 'a tool' }} needed your approval
+                </template>
               </p>
               <p v-else-if="run.preview" class="text-[11px] truncate text-label mt-0.5">{{ run.preview }}</p>
               <p v-else-if="run.error" class="text-[11px] truncate mt-0.5" style="color: var(--error);">{{ run.error }}</p>

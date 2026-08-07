@@ -30,6 +30,7 @@ export interface RunSummary {
   needsAttention?: boolean
   deniedTools?: string[]
   suggestedRules?: string[]
+  stoppedBy?: 'budget' | 'turns'
   scheduleId?: string
   sessionId?: string
   source: RunSource

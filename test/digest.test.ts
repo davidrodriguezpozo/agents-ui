@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeDenied, toolLabel } from '../server/utils/digest'
+import { describeDenied, describeIncomplete, toolLabel } from '../server/utils/digest'
 
 /**
  * Naming a refused tool in a sentence somebody reads at breakfast.
@@ -39,5 +39,29 @@ describe('describeDenied', () => {
 
   it('says something rather than nothing when the list is empty', () => {
     expect(describeDenied([])).toBe('a tool')
+  })
+})
+
+/**
+ * The two ways an unattended run comes back half-done arrive at the same door
+ * — `needsAttention` — and used to leave through it wearing the same sentence.
+ * Being told a tool was refused when nothing was refused sends you looking for
+ * a permission problem that never existed.
+ */
+describe('describeIncomplete', () => {
+  it('names the turn limit rather than inventing a refusal', () => {
+    expect(describeIncomplete({ stoppedBy: 'turns' })).toContain('every turn it was allowed')
+  })
+
+  it('names the spending limit', () => {
+    expect(describeIncomplete({ stoppedBy: 'budget' })).toContain('spending limit')
+  })
+
+  it('still names what was refused when something was', () => {
+    expect(describeIncomplete({ deniedTools: ['Bash'] })).toContain('Refused')
+  })
+
+  it('does not claim a refusal it cannot name', () => {
+    expect(describeIncomplete({})).toContain('a tool')
   })
 })

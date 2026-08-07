@@ -77,6 +77,23 @@ export function toolLabel(name: string): string {
 }
 
 /** Names enough of them to be useful, then stops. */
+/**
+ * Why an unattended run came back with the job half done.
+ *
+ * These arrive at the same door — `needsAttention` — and used to leave through
+ * it wearing the same sentence, so a run that had used up its turns was
+ * reported as having been refused a tool. That sends you looking for a
+ * permission problem that was never there.
+ */
+export function describeIncomplete(run: {
+  stoppedBy?: 'budget' | 'turns'
+  deniedTools?: string[]
+}): string {
+  if (run.stoppedBy === 'turns') return 'It used up every turn it was allowed, so the job is half done.'
+  if (run.stoppedBy === 'budget') return 'It reached the spending limit, so the job is half done.'
+  return `Refused ${describeDenied(run.deniedTools ?? [])}, so the job is half done.`
+}
+
 export function describeDenied(tools: string[]): string {
   const names = [...new Set(tools.map(toolLabel))]
   if (!names.length) return 'a tool'
@@ -128,11 +145,13 @@ export async function buildDigest(since: number): Promise<Digest> {
         at: run.createdAt,
         costUsd: run.costUsd,
         preview: run.preview,
-        suggestedRules: outcome === 'blocked' ? run.suggestedRules : undefined,
+        // Nothing to grant when nothing was refused, so the "always allow"
+        // offer stays off a run that simply ran out of room.
+        suggestedRules: outcome === 'blocked' && !run.stoppedBy ? run.suggestedRules : undefined,
         problem: outcome === 'failed'
           ? run.error || 'It ended early.'
           : outcome === 'blocked'
-            ? `Refused ${describeDenied(run.deniedTools ?? [])}, so the job is half done.`
+            ? describeIncomplete(run)
             : undefined,
       }
     })
