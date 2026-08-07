@@ -49,11 +49,18 @@ const accent = computed(() => {
       <div class="flex-1 min-w-0 space-y-1.5">
         <div class="flex items-center gap-2 flex-wrap">
           <span class="type-strong truncate">{{ session.title }}</span>
+          <!--
+            `check-stale` and `behind` were both missing here, so the row wore
+            plain green while the counters underneath it said the verdict was
+            void. The badge is the part people read.
+          -->
           <SessionStatus
             :activity="session.activity"
             :changed-files="session.worktree.changedFiles"
             :dirty="session.worktree.dirty"
             :check="session.check"
+            :check-stale="session.checkStale"
+            :behind="session.worktree.behind"
           />
         </div>
 

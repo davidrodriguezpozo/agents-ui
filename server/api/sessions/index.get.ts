@@ -1,6 +1,7 @@
 import { getProjectDir } from '../../utils/scope'
 import { readSessions } from '../../utils/sessions'
 import { worktreeStatus } from '../../utils/worktrees'
+import { isStale, worktreeFingerprint } from '../../utils/checks'
 import { getActive, readRun } from '../../utils/runStore'
 import { listPending } from '../../utils/permissionBroker'
 
@@ -30,9 +31,18 @@ export default defineEventHandler(async (event) => {
     else if (lastRun?.status === 'running' || lastRun?.status === 'queued') activity = 'working'
     else if (lastRun?.status === 'failed') activity = 'failed'
 
+    // Only for a session that has a settled verdict to be stale, and never
+    // mid-turn. A fingerprint is a full `git diff HEAD`, so it is paid for
+    // exactly where a misleading green is possible and nowhere else.
+    const settled = session.check && session.check.status !== 'running' && activity === 'idle'
+    const checkStale = settled
+      ? isStale(session.check, await worktreeFingerprint(session.worktreePath))
+      : false
+
     return {
       ...session,
       worktree,
+      checkStale,
       activity,
       pendingPermissions: pending.length,
       lastRunId: lastRunId ?? null,

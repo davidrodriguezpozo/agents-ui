@@ -69,6 +69,8 @@ export interface Session {
   prUrl?: string
   /** Absent means the checks have never run here — not that they passed. */
   check?: SessionCheck
+  /** The recorded verdict predates what is in the workspace now. */
+  checkStale?: boolean
   /** What this session did, in a sentence. Absent until it has done something. */
   summary?: SessionSummary
   /** Absent means it has not tried to fix itself on this instruction. */
