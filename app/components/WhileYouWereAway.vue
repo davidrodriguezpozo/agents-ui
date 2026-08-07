@@ -121,8 +121,19 @@ const money = computed(() => {
             The fix, where the problem is reported. Naming the rules rather than
             counting them, because "allow 3 rules" asks you to trust a number.
           -->
-          <div v-if="item.suggestedRules?.length" class="flex items-center gap-2 flex-wrap mt-1">
-            <template v-if="granted.has(item.scheduleId)">
+          <!--
+            `alreadyAllowed` comes from the server, `granted` from this page.
+            Both are needed: the first survives a reload, the second answers
+            immediately without waiting for the digest to be rebuilt. Before
+            the first existed, granting worked and then offered itself again on
+            every load, for good — the rules were on the ritual and nothing
+            ever compared them against what the report was still asking for.
+          -->
+          <div
+            v-if="item.suggestedRules?.length || item.alreadyAllowed"
+            class="flex items-center gap-2 flex-wrap mt-1"
+          >
+            <template v-if="granted.has(item.scheduleId) || item.alreadyAllowed">
               <UIcon name="i-lucide-shield-check" class="size-3.5" style="color: var(--success);" />
               <span class="type-meta">Allowed. It will not stop for these again.</span>
             </template>
@@ -139,8 +150,10 @@ const money = computed(() => {
               <!-- Two of them, then a count. Five rule descriptions is a wall,
                    and the button is the thing being decided on. -->
               <span class="type-meta truncate">
-                {{ item.suggestedRules.slice(0, 2).map(describeRule).join(' · ')
-                }}{{ item.suggestedRules.length > 2 ? ` · and ${item.suggestedRules.length - 2} more` : '' }}
+                {{ (item.suggestedRules ?? []).slice(0, 2).map(describeRule).join(' · ')
+                }}{{ (item.suggestedRules?.length ?? 0) > 2
+                  ? ` · and ${(item.suggestedRules?.length ?? 0) - 2} more`
+                  : '' }}
               </span>
             </template>
           </div>

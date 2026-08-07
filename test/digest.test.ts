@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { describeDenied, describeIncomplete, toolLabel } from '../server/utils/digest'
+import { describeDenied, describeIncomplete, stillNeeded, toolLabel } from '../server/utils/digest'
 
 /**
  * Naming a refused tool in a sentence somebody reads at breakfast.
@@ -63,5 +63,36 @@ describe('describeIncomplete', () => {
 
   it('does not claim a refusal it cannot name', () => {
     expect(describeIncomplete({})).toContain('a tool')
+  })
+})
+
+/**
+ * A blocked run is a fact about a morning and stays in the record forever. The
+ * permission it needed is not, because you can give it — and once you have,
+ * the report must stop asking.
+ *
+ * Without this, "Allow this from now on" worked, said so, and then offered
+ * itself again on the next page load, for good: the rules were sitting on the
+ * ritual and nothing ever compared them against what the report was still
+ * asking for.
+ */
+describe('a blocked ritual whose rules have since been granted', () => {
+  const RULES = ['Bash(gh api:*)', 'Bash(gh issue:*)']
+
+  it('offers nothing more once every rule is allowed', () => {
+    expect(stillNeeded(RULES, RULES)).toBeUndefined()
+  })
+
+  it('offers only what is actually still missing', () => {
+    expect(stillNeeded(RULES, ['Bash(gh api:*)'])).toEqual(['Bash(gh issue:*)'])
+  })
+
+  it('offers everything when the ritual has been granted nothing', () => {
+    expect(stillNeeded(RULES, [])).toEqual(RULES)
+  })
+
+  it('has nothing to offer when the run suggested nothing', () => {
+    expect(stillNeeded(undefined, RULES)).toBeUndefined()
+    expect(stillNeeded([], RULES)).toBeUndefined()
   })
 })

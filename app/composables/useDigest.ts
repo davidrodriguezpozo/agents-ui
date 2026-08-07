@@ -12,6 +12,8 @@ export interface DigestRitual {
   problem?: string
   /** Rules that would have let a blocked run through. */
   suggestedRules?: string[]
+  /** Blocked at the time, but the rules it needed have since been granted. */
+  alreadyAllowed?: boolean
 }
 
 export interface DigestSession {

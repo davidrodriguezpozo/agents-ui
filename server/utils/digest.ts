@@ -33,6 +33,13 @@ export interface DigestRitual {
    * rather than a trip to the ritual and back.
    */
   suggestedRules?: string[]
+  /**
+   * It was blocked, and the rules it needed have since been granted.
+   *
+   * Distinct from having nothing to suggest: this says the problem is already
+   * solved, which is worth reading in a report about a morning that went wrong.
+   */
+  alreadyAllowed?: boolean
 }
 
 export interface DigestSession {
@@ -85,6 +92,26 @@ export function toolLabel(name: string): string {
  * reported as having been refused a tool. That sends you looking for a
  * permission problem that was never there.
  */
+/**
+ * What is still worth offering to grant.
+ *
+ * A blocked run is a fact about a morning and stays in the record forever; the
+ * permission it needed is not, because you can give it. Without taking the
+ * difference, the report kept offering rules the ritual had already been
+ * granted — you clicked "allow this from now on", it worked, said so, and the
+ * same offer came back on the next page load, for good.
+ */
+export function stillNeeded(
+  suggested: string[] | undefined,
+  allowed: string[],
+): string[] | undefined {
+  if (!suggested?.length) return undefined
+
+  const have = new Set(allowed)
+  const missing = suggested.filter(rule => !have.has(rule))
+  return missing.length ? missing : undefined
+}
+
 export function describeIncomplete(run: {
   stoppedBy?: 'budget' | 'turns'
   deniedTools?: string[]
@@ -131,6 +158,11 @@ export async function buildDigest(since: number): Promise<Digest> {
   ])
 
   const titleFor = new Map(schedules.map(s => [s.id, s.title]))
+  const allowedBy = new Map(schedules.map(s => [s.id, new Set(s.allowRules ?? [])]))
+
+  function stillNeededFor(scheduleId: string, suggested: string[] | undefined): string[] | undefined {
+    return stillNeeded(suggested, [...(allowedBy.get(scheduleId) ?? [])])
+  }
 
   // Scheduled work only. A session turn is somebody typing, which is not news
   // in the morning; a ritual firing at 08:00 is the entire point.
@@ -146,8 +178,16 @@ export async function buildDigest(since: number): Promise<Digest> {
         costUsd: run.costUsd,
         preview: run.preview,
         // Nothing to grant when nothing was refused, so the "always allow"
-        // offer stays off a run that simply ran out of room.
-        suggestedRules: outcome === 'blocked' && !run.stoppedBy ? run.suggestedRules : undefined,
+        // offer stays off a run that simply ran out of room — and nothing to
+        // grant twice, so it comes off once the rules have been given.
+        suggestedRules: outcome === 'blocked' && !run.stoppedBy
+          ? stillNeededFor(run.scheduleId!, run.suggestedRules)
+          : undefined,
+        /** Already granted since this run was blocked, so it will not recur. */
+        alreadyAllowed: outcome === 'blocked'
+          && !run.stoppedBy
+          && Boolean(run.suggestedRules?.length)
+          && !stillNeededFor(run.scheduleId!, run.suggestedRules),
         problem: outcome === 'failed'
           ? run.error || 'It ended early.'
           : outcome === 'blocked'
