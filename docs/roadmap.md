@@ -199,11 +199,28 @@ Shells outlive the tab on purpose, so a long build survives navigating away,
 and are closed when nobody has watched one for half an hour or when the server
 stops. An orphaned pty outlives the process that made it.
 
-### 3. Run it and look at it
+### ~~3. Run it and look at it~~ — shipped
 
-A dev server started in the workspace and shown. The setup and check commands already
-know how to make a workspace runnable, so this is mostly plumbing plus deciding what to
-do about ports.
+The last step out: a diff says what changed and the checks say whether it still
+passes, and neither answers "does it look right". So the project's dev command
+runs in the session's workspace and the result is shown in the page.
+
+Its own port per session, asked of the kernel rather than guessed, because the
+point of worktrees is that several run at once and two dev servers fighting
+over 3000 is the thrash the check queue already exists to prevent. The port
+goes over `PORT`; a project that hardcodes one will collide across sessions,
+and the UI says so rather than pretending otherwise.
+
+The dev command sits beside the check and setup commands in Settings, guessed
+from a `dev` target or a `dev`/`serve`/`start` script, with `dev` preferred
+because `start` is as often "run the built thing".
+
+**Spawned detached, in its own process group, and that is not cosmetic.**
+Stopping means signalling the group — a dev command is nearly always a shell
+running a package manager running the real server, and killing the shell alone
+leaves the server holding the port. Without `detached` the child shares *this*
+process group, so the kill would have taken the app down every time somebody
+pressed Stop. Verified: the preview dies, the app answers, no orphan is left.
 
 ### ~~4. Rewind~~ — shipped, taken out of order
 

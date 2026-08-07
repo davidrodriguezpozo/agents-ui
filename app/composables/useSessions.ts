@@ -569,6 +569,45 @@ export function useProjectSandbox() {
   return { state, saving, load, save, reset }
 }
 
+/**
+ * What this project runs to show itself, alongside the check and setup
+ * commands. Same shape as those, because it is the same kind of answer.
+ */
+export function useProjectDev() {
+  const state = useState<ProjectChecks | null>('project-dev', () => null)
+  const saving = useState('project-dev-saving', () => false)
+
+  async function load() {
+    try {
+      state.value = await $fetch<ProjectChecks>('/api/project/dev')
+    } catch (e) {
+      console.error('[useProjectDev] load:', e)
+    }
+  }
+
+  async function save(command: string) {
+    saving.value = true
+    try {
+      await $fetch('/api/project/dev', { method: 'POST', body: { command } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function reset() {
+    saving.value = true
+    try {
+      await $fetch('/api/project/dev', { method: 'POST', body: { reset: true } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return { state, saving, load, save, reset }
+}
+
 /** Worktrees as git reports them, including ones with no session behind them. */
 export function useWorktrees() {
   const data = useState<{ repoDir: string | null; isRepo: boolean; root: string | null; home: string | null; worktrees: WorktreeEntry[] }>(

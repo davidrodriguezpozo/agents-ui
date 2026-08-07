@@ -30,6 +30,14 @@ const {
 } = useProjectSetup()
 
 const {
+  state: dev,
+  saving: devSaving,
+  load: loadDev,
+  save: saveDevCommand,
+  reset: resetDevCommand,
+} = useProjectDev()
+
+const {
   state: sandbox,
   saving: sandboxSaving,
   load: loadSandbox,
@@ -92,6 +100,24 @@ async function turnOffSetup() {
 
 async function resetSetup() {
   await resetSetupCommand()
+}
+
+/** Seeded with whatever applies, detected guess included — same as the others. */
+const devCommand = ref('')
+watch(dev, (next) => { devCommand.value = next?.command ?? '' }, { immediate: true })
+
+async function saveDev() {
+  try {
+    await saveDevCommand(devCommand.value)
+    toast.add({ title: 'Saved', description: 'Previews in this project will run it.', color: 'success' })
+  } catch (e) {
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
+  }
+}
+
+async function turnOffDev() {
+  await saveDevCommand('')
+  devCommand.value = ''
 }
 
 /**
@@ -206,6 +232,7 @@ onMounted(async () => {
   void loadChecks()
   void loadSetup()
   void loadSandbox()
+  void loadDev()
 
   // Never worth failing the page over — it is a reading, not a setting.
   $fetch<typeof quota.value>('/api/quota')
@@ -845,6 +872,72 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               color="neutral"
               :loading="setupSaving"
               @click="resetSetup"
+            />
+          </div>
+        </template>
+      </div>
+
+      <!-- Running it -->
+      <div class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Running this project</h3>
+        <p class="text-[12px] text-meta">
+          What starts this project so you can look at it. Each session runs it in its own
+          workspace, on a port of its own, so several can be up at once.
+        </p>
+
+        <div v-if="!dev?.dir" class="text-[12px] text-label">
+          Pick a project folder in the sidebar first — this is set per repository.
+        </div>
+
+        <template v-else>
+          <div class="field-group">
+            <label class="field-label">Command</label>
+            <div class="flex gap-2">
+              <input
+                v-model="devCommand"
+                class="field-input flex-1 font-mono"
+                placeholder="npm run dev"
+                spellcheck="false"
+                @keydown.enter="saveDev"
+              />
+              <UButton
+                label="Save"
+                size="sm"
+                :loading="devSaving"
+                :disabled="devCommand === (dev.command ?? '')"
+                @click="saveDev"
+              />
+            </div>
+            <p v-if="dev.source === 'detected' && dev.from" class="field-hint">
+              Nothing chosen yet, so this was inferred from {{ dev.from }}. Saving makes it the answer.
+            </p>
+            <p v-else-if="dev.configured === ''" class="field-hint">
+              Turned off — there is nothing to preview in this project.
+            </p>
+            <p v-else class="field-hint">
+              It is given a free port in <span class="font-mono">PORT</span>. A project that
+              hardcodes one instead will have its sessions collide.
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="dev.configured !== ''"
+              label="Nothing to preview here"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="devSaving"
+              @click="turnOffDev"
+            />
+            <UButton
+              v-if="dev.configured !== null"
+              label="Reset to what's detected"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="devSaving"
+              @click="resetDevCommand"
             />
           </div>
         </template>

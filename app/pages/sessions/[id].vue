@@ -40,6 +40,7 @@ const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
 const showDiff = ref(false)
 const showFiles = ref(false)
 const showTerminal = ref(false)
+const showPreview = ref(false)
 /** The terminal conversation this session continues, if it adopted one. */
 const inherited = ref<TranscriptMessage[]>([])
 const showPatch = ref(false)
@@ -748,6 +749,17 @@ const totalChanges = computed(() => {
           color="neutral"
           @click="() => { showFiles = !showFiles }"
         />
+        <!-- The app itself, running. Started on purpose: a dev server is
+             expensive and several sessions would otherwise each hold one. -->
+        <UButton
+          v-if="session"
+          :label="showPreview ? 'Hide preview' : 'Preview'"
+          icon="i-lucide-monitor-play"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          @click="() => { showPreview = !showPreview }"
+        />
         <!-- A shell in the same workspace. Opened on purpose rather than always
              running, since each one holds a process and a pty. -->
         <UButton
@@ -958,6 +970,8 @@ const totalChanges = computed(() => {
           :session-id="session.id"
           @changed="onWorkspaceEdited"
         />
+
+        <PreviewPane v-if="showPreview && session" :session-id="session.id" />
 
         <TerminalPane v-if="showTerminal && session" :session-id="session.id" />
 
