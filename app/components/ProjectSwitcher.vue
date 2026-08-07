@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
+
 /**
  * Pick which repository you are working in.
  *
@@ -11,6 +13,7 @@
 const { projects, active, home, ensureLoaded, addProject, activate, remove, display }
   = useProjects()
 const { workingDir } = useWorkingDir()
+const toast = useToast()
 
 const open = ref(false)
 const adding = ref(false)
@@ -112,6 +115,10 @@ async function switchTo(path: string | null) {
   try {
     await activate(path)
     open.value = false
+  } catch (e) {
+    // Same silence as removing had: the popover simply stayed open, which
+    // reads as a dead row rather than a failed switch.
+    toast.add({ title: 'Could not switch project', description: errorMessage(e), color: 'error' })
   } finally {
     busy.value = false
   }
@@ -127,8 +134,22 @@ const confirmingRemoval = ref<string | null>(null)
 async function confirmRemove(path: string) {
   busy.value = true
   try {
-    await remove(path)
+    // Every other outcome used to look identical from the outside. A request
+    // that threw, and a server that declined because it did not recognise the
+    // path, both left the row exactly where it was with nothing said — which
+    // is indistinguishable from a button that is not wired up at all.
+    const removed = await remove(path)
     confirmingRemoval.value = null
+
+    if (!removed) {
+      toast.add({
+        title: 'That project was already gone',
+        description: 'The list has been refreshed.',
+        color: 'warning',
+      })
+    }
+  } catch (e) {
+    toast.add({ title: 'Could not remove that project', description: errorMessage(e), color: 'error' })
   } finally {
     busy.value = false
   }

@@ -89,8 +89,15 @@ export function useProjects() {
     await refresh()
   }
 
-  async function remove(path: string) {
-    const result = await $fetch<{ activePath: string | null }>('/api/projects/remove', {
+  /**
+   * Returns whether anything was actually removed.
+   *
+   * The endpoint answers 200 either way — a path it does not recognise is not
+   * an error, it is just nothing to do. Swallowing that distinction is what
+   * turned a decline into "I clicked Remove and nothing happened".
+   */
+  async function remove(path: string): Promise<boolean> {
+    const result = await $fetch<{ removed: boolean; activePath: string | null }>('/api/projects/remove', {
       method: 'POST',
       body: { path },
     })
@@ -98,6 +105,7 @@ export function useProjects() {
     // which the server decided — following it keeps both ends in agreement.
     if (workingDir.value === path) setWorkingDir(result.activePath ?? '', { persist: false })
     await refresh()
+    return result.removed
   }
 
   async function rename(path: string, name: string) {
