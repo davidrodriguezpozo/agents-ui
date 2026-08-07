@@ -1,266 +1,144 @@
 # Roadmap
 
-Written August 2026, against Claude Code 2.1.224 and the Desktop redesign of April 2026.
-This is the internal version — what to build and why. The public one is
-[launch/roadmap-issue.md](launch/roadmap-issue.md), and it should be regenerated from
-this whenever something here moves.
+Second pass, August 2026, written after a build cycle rather than before one. Against
+Claude Code 2.1.224 and the Desktop redesign of April 2026. The public version is
+[launch/roadmap-issue.md](launch/roadmap-issue.md) and should be regenerated from this
+whenever something here moves.
 
-## Who this is for
+## Where this actually is
 
-**Solo developers, working in small teams.** One person, one machine, one instance —
-that is the permanent deployment model, not a stage on the way to a hosted one.
+Four things shipped this cycle: sandboxed runs, saying which host a sandbox refused, the
+rate limit shown and enforced, and rituals that fire on GitHub events. All four were
+worth building and three of them changed shape once a real payload was looked at.
 
-Two decisions follow from that, and they close off a lot of the map:
+**None of them were asked for by a user, because there are no users.** This has not
+launched. Every item was chosen by reasoning about what the product needs, which is a
+legitimate way to build a pre-launch product and also the way you end up with four
+well-made features nobody requested and one missing thing everybody wants.
 
-- **No mobile, no remote access, no auth.** It stays on `127.0.0.1` with same-origin
-  checks in front of it and nothing else. Anything that needs to reach you when you are
-  away from the machine is a desktop notification.
-- **No shared server.** Teammates do not watch one fleet. Each runs their own.
+So the honest reading of the last cycle is: the build is ahead of the evidence. The
+constraint now is not what to build — it is that there is no way to find out. Which
+makes the roadmap short.
 
-Which means the team half of "solo devs in small teams" is not multi-user software. It
-is **configuration that travels through git** — the rituals, checks and agents a team
-shares by committing them — and **not colliding with the branches your teammates already
-have open**. Both are cheap. Neither needs the storage rewrite that a hosted mode would.
+## The thing to settle before launching: laptops sleep
 
-## Where this sits
+The README's first line is *"Leave Claude Code running — work that fires on a schedule
+against your own repositories."* The deployment is one person's laptop.
 
-Claude Code Desktop shipped parallel sessions on worktrees in April 2026, with a diff
-viewer, an integrated terminal, a file editor and PR monitoring. Routines shipped
-scheduled cloud agents in the same month, triggered by cron, API call or GitHub event.
-CLI 2.1.224 lets Team and Enterprise run web, mobile and desktop sessions on their own
-machines.
+A laptop is shut at 08:00. An overdue ritual fires if the lid opens within two hours and
+is **silently skipped** after that — no notification, no record, nothing on the Activity
+page. The most likely first experience of the headline feature is therefore: set a
+morning briefing, open the laptop after lunch, see nothing at all, and conclude it does
+not work.
 
-So *parallel sessions* is table stakes, and *fires against a local repository* is
-contested and will not stay ours. What is not contested:
+Meanwhile Routines run in Anthropic's cloud and genuinely do fire at 08:00. This is the
+one row where the competitor is not merely close but strictly better, on the exact
+promise the README leads with.
 
-- Your own test suite as a merge gate, with the workspace made runnable first
-- A verdict that expires when the base moves under it
-- Sessions that repair their own failing checks
-- Landing several finished sessions in an order that accounts for each other
-- Scheduled work that retries once, then stops once it has clearly broken
-- A spend cap that skips work rather than billing you
-- Sandboxed unattended runs that cannot let themselves out
-- Every repository at once
+Three consequences, in increasing order of how much they change:
 
-Nobody else has any of that. **The pitch is not "local and scheduled". It is that the
-work is verified and lands safely, at fleet scale, without you.** Everything below is
-ordered by how much it serves that sentence.
+1. **The silence is a bug and it is cheap to fix.** See *Now*.
+2. **Events fit the deployment better than the clock does.** They fire whenever the
+   machine is awake, so there is no window to miss. The feature shipped last is arguably
+   the one the pitch should lead with.
+3. **The pitch may be slightly wrong.** Not "work that fires at 08:00" — that invites the
+   comparison we lose — but *work that happens while you are working rather than while
+   you are watching*. Same product, no promise the hardware cannot keep.
 
----
-
-## Pre-launch
-
-The product is ahead of its positioning. Nothing in this section is a feature; all of it
-blocks a post going out, and it is worth more right now than anything in *Now*.
-
-- ~~Fix the README comparison table.~~ Done — the local-repo row is now last, and the
-  paragraph under it concedes that self-hosted environments are closing that gap rather
-  than waiting to be caught claiming otherwise.
-- **Rewrite the launch drafts around the unattended pitch.** Tracked in
-  [launch/CHECKLIST.md](launch/CHECKLIST.md); the drafts still lead with parallel
-  sessions, which is the one thing that now invites the obvious comment.
-- **The hero GIF.** Ritual fires → run → session whose checks passed → merge. The single
-  highest-leverage asset and the only one that shows the pitch rather than asserting it.
+I am not going to rewrite the positioning unilaterally; it is yours and the current one
+is not dishonest. But the launch drafts are being rewritten anyway, and this is the
+decision to make while doing it.
 
 ---
 
-## Shipped since this was written
+## Now — everything here blocks a post going out
 
-**Sandboxed unattended runs.** The SDK's `sandbox` option is set per project beside the
-check command, on by default — including for projects configured before it existed. A run
-cannot let itself out (`allowUnsandboxedCommands: false`); widening the host list stays
-something the owner does on purpose. It was the loudest unanswered objection to the whole
-product: we are the thing that tells people to walk away from a running agent, and we
-were the only one with no isolation story.
+### 1. A skipped ritual has to say so
 
-It turned out to pay twice. `autoAllowBashIfSandboxed` means a sandboxed command need not
-stop and ask, so the failure this codebase spends the most effort on — a ritual back at
-08:00 having been refused a tool, half its job undone — largely stops happening.
-Sandboxed runs are both safer and likelier to finish, which is the line the launch post
-should use.
+`scheduler.ts` skips a ritual that is more than two hours overdue and advances it to the
+next occurrence without a word. Every other way a ritual can fail to produce work is
+reported — refused a tool, blocked by the sandbox, over the spending limit, over the rate
+limit — and each of those was carefully made loud. This one is silent, and it is the most
+common of the lot, because it happens every time the machine was shut.
 
-**Saying what it refused.** Shipped straight after, once a real blocked run had been
-watched rather than guessed at. A run that could not reach a host now records which one,
-counts as `blocked` rather than as a clean success, sorts in with the work that needs
-you, and offers to allow exactly that host in this repository — the same shape as a
-blocked permission offering its narrow rule.
+It should record a skipped run, say why, and appear in *what happened while you were
+away*. Offering to run it now is the obvious follow-up and can wait; being told is the
+part that matters.
 
-The empirical part was the whole job, and it went against expectation twice. The SDK
-reports nothing structured, so the denial only ever exists as text, and that text comes
-in four shapes: `curl` gets a proxy 403 with no host in it, `git` gets the same 403 with
-the URL attached, Node's `fetch` never reaches the proxy at all and fails DNS, and —
-the one that matters — a run through *this app's* own configuration gets none of those.
-It gets a plain connection timeout, because the packets are dropped rather than refused.
-A detector built from the docs, or from the bare-SDK probe alone, would have matched the
-403 and found nothing in the case users actually hit.
+This is the single highest-value thing left, because it is the difference between "it
+works and I was asleep" and "it does not work".
 
-The timeout is the one ambiguous signature, since a slow host says the same thing. It
-counts only for hosts the project has not already allowed: one you allowed and still
-could not reach is the network, and calling that a refusal would mark a ritual `blocked`
-and rob it of the retry a transient failure deserves.
+### 2. The launch drafts
 
-**Warning before it bites.** A project with rituals that have already run — which is
-exactly the population whose unattended work predates the sandbox — is told on the Daily
-page, while everything still works, rather than at 08:00 on the morning one of them
-stops. Three conditions, all of them load-bearing: nothing chosen here yet, scheduled
-work that has actually run, and not already acknowledged. A banner on every project
-would be dismissed unread by the people who most need it.
+Tracked in [launch/CHECKLIST.md](launch/CHECKLIST.md). They still lead with parallel
+sessions, which Desktop shipped in April. Lead with what Desktop does not do: your own
+tests as a merge gate, sandboxed unattended runs, work that reacts to your repository,
+limits that skip work rather than bill you.
 
-Acknowledging is deliberately not choosing. It is recorded in its own file, so a project
-that has read the notice still reads as *unconfigured* and does not lose its "reset to
-the default".
+### 3. The hero GIF
 
-**Leaving room on the subscription.** The quota work below, shipped.
+Ritual fires → run → session whose checks passed → merge. The one asset that shows the
+pitch rather than asserting it, and the only item on this page I cannot produce.
+
+### 4. The rest of the checklist
+
+Cold-machine install test, repo name decision, social preview, repo description and
+topics. All small, all in the checklist, none of them optional.
 
 ---
 
-## Shipped, and what it changed about the plan
+## After launch — bets, and what would settle each
 
-### Quota alongside spend
+Deliberately unordered. There is no telemetry here and there never will be, so the only
+evidence that will ever arrive is what people say in issues and threads. Ordering these
+now would be guessing twice: once about what matters, and once about what people will
+report. Each is written with the signal that promotes it.
 
-Done, but **not as written below** — the design in the original entry was wrong, and a
-single real `rate_limit_event` was enough to show it.
+| Bet | Promote it when somebody says |
+| --- | --- |
+| **More event kinds** — issue labelled, review requested, comment mentioning you | "I want it to fire on X" — the likeliest first request, since events are new and only two exist |
+| **Event runs that are legible** — three identical rows in Activity is what an event ritual produces today | "I can't tell which PR this one was about" |
+| **Ritual chains** — triage → fix → verify → open a PR as one unit with one health record | "I've got three rituals that need to know about each other" |
+| **The PR after the merge** — watch it, react to red CI, land it when green | "It opened the PR and then forgot about it" |
+| **Configuration that travels through git** — rituals and checks committed to the repo | Anyone describing a second person in the same repo. This is the entire team story and it is a file format, not a server |
+| **Landing without colliding** — look at teammates' open branches, not only our own sessions | Same signal as above, arriving later |
+| **Which rituals earn their cost** | "I don't know if this is worth what it spends" |
 
-The plan was "skip work once the week is 80% burned". The SDK does emit rate-limit
-information, and it arrives free during runs that were happening anyway. But the real
-payload disagreed twice:
+Two that need no signal because they are debts rather than bets:
 
-- **`utilization` is usually absent.** It appears only when there is something to
-  report. A limit expressed as a percentage would have had nothing to read most of the
-  time and would have silently never fired — the worst kind of limit, one people believe
-  they have.
-- **`resetsAt` is in seconds**, where everything else in this codebase is milliseconds.
-  Unconverted, it dates the reset to 1970.
-
-What is always present is `status` — `allowed` / `allowed_warning` / `rejected` — which
-is Anthropic's own judgement of how close you are, and better than a number we would
-have to interpret. So the limit is "hold unattended work back while Claude says I am
-close", and it reads the signal rather than second-guessing it.
-
-Applied only to work nobody asked for right now: rituals, and workflow steps after the
-first. A turn you typed is never held back — you can see the state of your own account,
-and being refused by your own tool for something you deliberately started is the wrong
-side of helpful. A reading older than six hours is ignored, since a five-hour window
-turns over completely in that time and a stale warning would keep skipping rituals for a
-limit that had already reset.
-
-Off by default, like the spending caps and for the same reason.
-
-**And on the spend page**, which is where the question is actually asked. The reading
-sits directly under the dollar figure it qualifies — a coloured dot, the window, and when
-it resets — with the expanded panel leading on *Against your limit* before *Where it
-went*, and saying in as many words that the money above is what these runs would have
-cost through the API rather than a bill.
-
-Three states, all of them real and all of them checked: nothing heard yet (normal on a
-fresh install, since this arrives with a run rather than being fetched), a live reading,
-and a stale one. A stale `rejected` is suppressed entirely rather than shown greyed —
-telling somebody their limit is used up on the strength of a six-hour-old reading is
-worse than telling them nothing.
-
-`utilization` gets a bar when it is present and nothing when it is not, which is most of
-the time. It arrives as a fraction or a percentage depending on the window, so both are
-normalised rather than assumed.
+- **The event lookback is a cap.** Fifty runs back covers a weekend; it does not cover a
+  fortnight. A poll that cannot reach its own cursor should say so rather than quietly
+  skip the difference.
+- **Storage that survives concurrency.** Still demoted — flat JSON is the permanent design
+  for one person on one machine. It comes back if the run queue actually corrupts it, and
+  not before.
 
 ---
 
-### Rituals that fire on an event
+## Shipped
 
-Shipped, for two events: a pull request opened, and a workflow run failing. Both
-optionally narrowed to a branch. The clock caps a ritual at roughly one a morning; events
-do not, which is the whole point.
+Parallel sessions on worktrees · project checks gating merges · sessions that repair
+their own failing checks · verdicts that expire when the base moves · ordered landing of
+several finished sessions · rituals that retry once and stop when they have clearly
+broken · **sandboxed runs, on by default, that name the host they were refused** ·
+**rituals that fire when a PR opens or CI goes red** · **the rate limit shown beside the
+spend and enforced against unattended work** · permission handling for unattended runs ·
+spend tracking and hard limits · multi-repository projects · MCP management · GitHub skill
+import · marketplace and plugin install · workflow builder · relationship graph · backups.
 
-Polled through `gh` rather than taking webhooks, and that is a positioning decision
-rather than a shortcut. This app is bound to loopback with no authentication in front of
-it; accepting webhooks would mean opening a port to the internet, which is a different
-product with a different threat model. Polling asks the same question from behind your
-own firewall with the login you already have.
-
-Three things decide whether this is usable, and none of them are the GitHub call:
-
-- **The first poll fires nothing.** It records a baseline. Turning on "when a pull
-  request is opened" against a repository with nine open ones must not start nine agents,
-  and the sentence promises what happens *next*. Verified against a repository with nine
-  real CI failures: cursor recorded, zero runs.
-- **"Could not ask" is not "nothing happened".** A `gh` that is missing, logged out,
-  offline or rate limited returns null, and the cursor does not move — otherwise a
-  transient failure would silently swallow every event that arrived during it.
-- **A burst does not become a stampede.** At most three fire per poll, and the cursor
-  advances only past what actually fired, so the rest arrive next time rather than being
-  dropped.
-
-Changing a trigger clears its cursor. The keys are not comparable across event types —
-switching from pull requests to workflow runs would otherwise fire for every run whose id
-exceeds some pull request number, which is all of them, immediately.
-
-The lookback is 50, raised from 20 after finding that this repository's real failures all
-sat outside a 20-run window. It is still a cap: a laptop shut for long enough can see
-more than that happen.
-
----
-
-## Now
-
-Nothing. *Pre-launch* is the list.
-
----
-
-## Next
-
-### 1. Ritual chains
-
-Triage → fix → verify → open a PR, as one ritual with one health record, rather than
-three that do not know about each other. The hard half — deciding what lands in what
-order — is already done in `lander.ts`.
-
-### 2. The PR after the merge
-
-We can open a pull request; we then forget it. Watch it, react to a CI failure or a
-review comment, land it when it goes green. Desktop does monitoring and auto-merge. The
-differentiated version is the same loop with our verdict system attached to it.
-
-### 3. Configuration that travels through git
-
-Rituals, check commands and setup commands committed to the repository instead of living
-only in `~/.claude`, so a small team shares them by pulling. Today a teammate cloning the
-repo gets none of it and has to be told.
-
-This is the entire team story, and it is a file-format change rather than a server.
-
-### 4. Landing without colliding
-
-Before landing, look at what is already open against the base — teammates' branches and
-PRs, not just our own sessions. Ordered landing solves this within one machine's sessions
-and is blind to everything outside them, which is exactly the case a small team hits.
-
----
-
-## Later
-
-- Which rituals and agents earn their cost, over ninety days
-- Session templates — the same five-way fan-out, saved
-- Reasoning effort per ritual, not just model
-- A read-only view for a second monitor
-- Storage that survives concurrency — demoted, not dropped. It was gating remote and
-  shared modes, and both are now out of scope. It comes back if flat JSON actually
-  corrupts under the run queue, and not before.
+Three of the four things built this cycle changed design once a real payload was
+inspected — the sandbox denial text, the rate-limit payload, and the event lookback
+window. That is worth keeping as a working rule rather than as an anecdote: **for
+anything that reads somebody else's output, look at the real output before designing
+around it.** It cost one cheap probe each time and would have shipped three silent
+no-ops otherwise.
 
 ## Not planned
 
-- **Integrated terminal, file editor, live preview, rewind.** Desktop owns the
-  workbench. Every hour spent here is an hour losing a race we do not need to enter.
-- **Mobile, remote access, authentication, hosted mode.** See *Who this is for*.
-- **Non-Claude model backends.** Everything runs through the Agent SDK and the login you
-  already have.
-- **Telemetry.** Of any kind.
-
----
-
-## What each bet is supposed to move
-
-| Bet | The number it changes |
-| --- | --- |
-| Sandboxing | Share of people who enable a ritual and still have it on in week three |
-| Quota-aware limits | Share of people who set any cap at all |
-| Event triggers | Rituals per person — the clock ceiling is about one a morning |
-| Config through git | Second and third installs inside the same team |
+- **Integrated terminal, file editor, live preview, rewind.** Desktop owns the workbench.
+- **Mobile, remote access, authentication, hosted mode.** One person, one machine.
+- **Webhooks.** Taking them means opening a port to the internet, which is a different
+  product with a different threat model. Polling asks the same question from inside.
+- **Non-Claude model backends.**
+- **Telemetry.** Which is why the table above is written in sentences people might say
+  rather than numbers nobody will ever see.
