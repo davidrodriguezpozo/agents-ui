@@ -420,6 +420,12 @@ function badgeFor(to: string) {
           <div class="font-mono text-[9px] truncate tracking-wide mt-1.5 px-1" style="color: var(--text-disabled);">
             {{ claudeDir || 'No config directory' }}
           </div>
+
+          <!--
+            Always, not only when a checkout has drifted. An npm install — the
+            way most people have this — showed no version anywhere at all.
+          -->
+          <VersionFooter class="mt-1" />
         </div>
       </aside>
 
