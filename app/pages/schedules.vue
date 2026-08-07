@@ -124,6 +124,9 @@ function nextLabel(schedule: Schedule) {
    * "when a workflow run fails" is the row contradicting itself.
    */
   if (schedule.trigger) return 'waiting'
+  // Said on the row as well as in the report, because somebody who comes
+  // straight here is asking exactly this question: why was there nothing?
+  if (schedule.missedAt) return `missed ${relativeTime(schedule.missedAt)}`
   if (!schedule.nextRunAt) return ''
   const date = new Date(schedule.nextRunAt)
   const isToday = date.toDateString() === new Date().toDateString()

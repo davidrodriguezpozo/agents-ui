@@ -25,6 +25,20 @@ const POLL_MS = 2 * 60_000
  */
 const CATCH_UP_WINDOW_MS = 2 * 60 * 60 * 1000
 
+export type DueVerdict = 'wait' | 'fire' | 'missed'
+
+/**
+ * What to do about an occurrence, given the time now.
+ *
+ * Pulled out of the tick because it is the one decision here worth testing on
+ * its own: firing it inside a test starts a real agent, and the boundary
+ * between "a little late" and "gone" is exactly what wants checking.
+ */
+export function dueVerdict(nextRunAt: number | undefined, now: number): DueVerdict {
+  if (!nextRunAt || nextRunAt > now) return 'wait'
+  return now - nextRunAt > CATCH_UP_WINDOW_MS ? 'missed' : 'fire'
+}
+
 let timer: ReturnType<typeof setInterval> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 /** Schedules with a run currently in flight, so a slow run can't stack up. */
@@ -123,10 +137,23 @@ export async function tick(now = Date.now()): Promise<void> {
           continue
         }
 
-        if (schedule.nextRunAt > now) continue
+        const verdict = dueVerdict(schedule.nextRunAt, now)
+        if (verdict === 'wait') continue
 
-        if (now - schedule.nextRunAt > CATCH_UP_WINDOW_MS) {
-          // Too stale to be useful — skip to the next occurrence without running.
+        if (verdict === 'missed') {
+          // Too stale to be useful — skip to the next occurrence without
+          // running. Recorded rather than done quietly: this is what happens
+          // every time the machine was shut at 08:00, and it used to be the
+          // only way a ritual could produce nothing without saying so.
+          //
+          // Written on the schedule rather than as a failed run, because
+          // nothing was attempted. A run here would join the failing streak
+          // and turn the ritual off after three shut laptops.
+          //
+          // Set inside this same locked write rather than through a second
+          // call, so the note and the advanced time land together.
+          schedule.missedAt = schedule.nextRunAt
+          schedule.missedNoticedAt = now
           schedule.nextRunAt = computeNextRun(schedule.recurrence, new Date(now))
           continue
         }

@@ -107,6 +107,23 @@ const money = computed(() => {
         </div>
       </div>
 
+      <!--
+        Not a failure, so not styled as one: nothing was attempted, the machine
+        was simply off. Said out loud all the same, because a morning with no
+        briefing in it and nothing anywhere explaining why is indistinguishable
+        from the thing being broken.
+      -->
+      <div v-for="item in digest.missed" :key="`missed-${item.id}`" class="flex items-start gap-2.5">
+        <UIcon name="i-lucide-moon" class="size-4 shrink-0 mt-0.5" style="color: var(--text-disabled);" />
+        <div class="flex-1 min-w-0">
+          <NuxtLink to="/schedules" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
+          <span class="type-detail">
+            was due {{ relativeTime(item.dueAt) }} and nothing was running, so it was skipped.
+            It goes again at its next turn.
+          </span>
+        </div>
+      </div>
+
       <div v-for="item in troubled" :key="item.scheduleId + item.at" class="flex items-start gap-2.5">
         <UIcon
           :name="RITUAL[item.outcome].icon"

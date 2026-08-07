@@ -51,39 +51,36 @@ decision to make while doing it.
 
 ---
 
-## Now — everything here blocks a post going out
+## Now
 
-### 1. A skipped ritual has to say so
+Nothing. The last item — a missed ritual saying so — shipped; see below.
 
-`scheduler.ts` skips a ritual that is more than two hours overdue and advances it to the
-next occurrence without a word. Every other way a ritual can fail to produce work is
-reported — refused a tool, blocked by the sandbox, over the spending limit, over the rate
-limit — and each of those was carefully made loud. This one is silent, and it is the most
-common of the lot, because it happens every time the machine was shut.
+Launch is off this list by decision, and the checklist in
+[launch/CHECKLIST.md](launch/CHECKLIST.md) is where it lives if it comes back. Worth
+being clear about the consequence: the argument above resolves by launching, so with
+that off the table this stays a roadmap written from reasoning rather than from
+evidence, and it will keep being one. Everything under *After launch* is now waiting on
+a signal that, by this decision, will not arrive — so the next thing built here will be
+chosen the same way the last four were.
 
-It should record a skipped run, say why, and appear in *what happened while you were
-away*. Offering to run it now is the obvious follow-up and can wait; being told is the
-part that matters.
+### Shipped: a skipped ritual says so
 
-This is the single highest-value thing left, because it is the difference between "it
-works and I was asleep" and "it does not work".
+A ritual more than two hours overdue was advanced to its next occurrence without a word.
+Every other way a ritual produces no work is loud — refused a tool, blocked by the
+sandbox, over the spending limit, over the rate limit — and this was the quietest and
+the most common, because it happens every time the machine was shut.
 
-### 2. The launch drafts
+It is now noted on the ritual and reported in *while you were away*, in the muted
+register rather than the alarming one: nothing failed, the machine was off.
 
-Tracked in [launch/CHECKLIST.md](launch/CHECKLIST.md). They still lead with parallel
-sessions, which Desktop shipped in April. Lead with what Desktop does not do: your own
-tests as a merge gate, sandboxed unattended runs, work that reacts to your repository,
-limits that skip work rather than bill you.
-
-### 3. The hero GIF
-
-Ritual fires → run → session whose checks passed → merge. The one asset that shows the
-pitch rather than asserting it, and the only item on this page I cannot produce.
-
-### 4. The rest of the checklist
-
-Cold-machine install test, repo name decision, social preview, repo description and
-topics. All small, all in the checklist, none of them optional.
+The design constraint was the interesting part, and it is the opposite of the obvious
+implementation. **A miss must not be recorded as a run.** `ritualHistory` counts anything
+that is not `ok`, `running` or `stopped` towards the failing streak, and `shouldGiveUp`
+disables a ritual at three — so a skipped run in the log would turn a briefing off for
+good after three shut laptops, which is precisely what somebody returning to a cold
+machine must not find. It lives on the schedule instead, is cleared the moment the ritual
+runs, and is deliberately left out of the *needs you* count: nothing is blocked and there
+is nothing to approve.
 
 ---
 

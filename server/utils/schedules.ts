@@ -74,6 +74,26 @@ export interface Schedule {
    */
   pausedReason?: string
   pausedAt?: number
+  /**
+   * The occurrence that came and went while nothing was running.
+   *
+   * A ritual due at 08:00 on a laptop that was shut is not a ritual that
+   * failed — nothing was attempted, so there is nothing to blame it for. But
+   * until this existed it was also not a ritual that *said* anything: the
+   * scheduler moved it to tomorrow and the morning simply had no briefing in
+   * it, with nothing anywhere to explain why.
+   *
+   * Every other way a ritual produces no work is loud. This was the quietest
+   * and the most common, because it happens every time the machine was asleep.
+   *
+   * Deliberately **not** a run. A skipped run in the log would count against
+   * the failing streak, and three shut laptops in a row would then turn the
+   * ritual off for good — which is the precise opposite of what somebody
+   * whose laptop was shut wants to come back to.
+   */
+  missedAt?: number
+  /** When we noticed, which is when the machine came back. */
+  missedNoticedAt?: number
 }
 
 /**
@@ -328,5 +348,11 @@ export async function markRan(id: string, runId: string): Promise<void> {
     schedule.lastRunAt = Date.now()
     schedule.lastRunId = runId
     schedule.nextRunAt = computeNextRun(schedule.recurrence)
+
+    // It has just run, so whatever it missed before is no longer outstanding.
+    // Leaving it would have the row go on reporting a morning that has since
+    // been made good.
+    schedule.missedAt = undefined
+    schedule.missedNoticedAt = undefined
   })
 }

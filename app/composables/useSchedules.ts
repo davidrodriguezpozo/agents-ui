@@ -27,6 +27,8 @@ export interface Schedule {
   recurrence: Recurrence
   /** Set when this fires on something happening rather than on the clock. */
   trigger?: EventTrigger
+  /** An occurrence that went by while nothing was running. Cleared once it runs. */
+  missedAt?: number
   permission: SchedulePermission
   /** Permanent permission rules, e.g. `Bash(gh:*)`. */
   allowRules?: string[]

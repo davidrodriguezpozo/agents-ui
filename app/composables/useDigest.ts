@@ -31,6 +31,8 @@ export interface Digest {
   rituals: DigestRitual[]
   sessions: DigestSession[]
   stopped: { id: string; title: string; reason: string }[]
+  /** Rituals whose turn came round while nothing was running. */
+  missed: { id: string; title: string; dueAt: number }[]
   costUsd: number
   needsYou: number
 }

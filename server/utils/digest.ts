@@ -61,6 +61,15 @@ export interface Digest {
   sessions: DigestSession[]
   /** Rituals the scheduler turned off in this window. */
   stopped: { id: string; title: string; reason: string }[]
+  /**
+   * Rituals whose turn came round while nothing was running.
+   *
+   * Its own list rather than an outcome on `rituals`, because those are runs
+   * and this is the absence of one. Reported for exactly the reason the report
+   * exists: a morning with no briefing in it and no explanation anywhere is
+   * indistinguishable from the thing being broken.
+   */
+  missed: { id: string; title: string; dueAt: number }[]
   costUsd: number
   needsYou: number
 }
@@ -236,16 +245,27 @@ export async function buildDigest(since: number): Promise<Digest> {
     .filter(s => s.pausedReason && (s.pausedAt ?? 0) >= since)
     .map(s => ({ id: s.id, title: s.title, reason: s.pausedReason! }))
 
+  // Keyed on when it was noticed rather than on when it was due: a laptop shut
+  // for a week comes back with an occurrence days old, and reporting it against
+  // its due time would put it outside the window and say nothing at all.
+  const missed = schedules
+    .filter(s => s.missedAt && (s.missedNoticedAt ?? 0) >= since)
+    .map(s => ({ id: s.id, title: s.title, dueAt: s.missedAt! }))
+
+  // Deliberately not counted in `needsYou`. Nothing is blocked and there is
+  // nothing to approve — the machine was off. It is worth reading, not worth
+  // a number that means "go and do something".
   const needsYou = digestSessions.filter(s => s.state === 'needs-you').length
     + rituals.filter(r => r.problem).length
     + stopped.length
 
   return {
     since,
-    quiet: !rituals.length && !digestSessions.length && !stopped.length,
+    quiet: !rituals.length && !digestSessions.length && !stopped.length && !missed.length,
     rituals,
     sessions: digestSessions,
     stopped,
+    missed,
     costUsd,
     needsYou,
   }
