@@ -165,20 +165,39 @@ Needs a file tree and read/write scoped to the worktree, and the scoping is the 
 job — a path that escapes the workspace is arbitrary file write on the machine, reachable
 from a page.
 
-### 2. A terminal in the workspace
+### ~~2. A terminal in the workspace~~ — shipped
 
-The second exit: trying something by hand. Technically the largest item here, and it
-collides with a property this project protects on purpose.
+The fork was taken as recommended: no native dependency, and the no-compile
+install survives. `node-pty` would have ended it; `mcp.ts` already got a pty out
+of Python, so this does too.
 
-`package.json` has **no runtime dependencies** and says so at length: nothing is compiled
-at install time, an install resolves nothing. `node-pty` is a native module and would end
-that. The alternative is already in the codebase — `mcp.ts` allocates a pseudo-terminal
-through Python's `pty.spawn` to get `claude mcp login` to run at all — but that is a
-one-shot spawn, and a terminal needs bidirectional streaming over the life of a session.
+`pty.spawn` was not enough on its own — it keeps the master descriptor to
+itself, so the child is stuck at 80x24 and a terminal you cannot resize is a
+poor imitation of one. `os.openpty` hands the master back, which makes
+`TIOCSWINSZ` possible and lets the child take `SIGWINCH`. Spiked before a line
+of UI was written: interactive prompt, writes after start, incremental
+streaming, a genuine tty, and 80 → 160 → 60 columns on demand.
 
-So this is a real fork, and it should be taken knowingly rather than discovered halfway:
-either the no-compile install goes, or the terminal is built on the Python pty with
-streaming bolted on. I would take the second.
+**The framing was the part that had to be right.** A line-delimited protocol
+cannot carry a terminal: `ls` with no Enter must stay unsent, Ctrl-C is a bare
+`\x03`, and an arrow key is an escape sequence with no newline in it. The first
+draft was line-based and would have run half-typed commands. Every message is
+now `<kind><base64>\n` — base64 contains no newline, so the framing stays safe
+while the payload reaches the pty byte for byte.
+
+xterm.js does the rendering, because cursor movement, colour and alternate
+screens are escape sequences and anything less turns `top` into a mess. Pure
+JavaScript bundled into `.output` like `marked` and `@nuxt/ui` already are:
+runtime dependencies stay at zero.
+
+**Not sandboxed, deliberately.** The sandbox exists for work nobody is
+watching. A person typing into their own shell, in their own checkout, on their
+own machine is what the sandbox protects *from being impersonated* — not what
+it protects against.
+
+Shells outlive the tab on purpose, so a long build survives navigating away,
+and are closed when nobody has watched one for half an hour or when the server
+stops. An orphaned pty outlives the process that made it.
 
 ### 3. Run it and look at it
 

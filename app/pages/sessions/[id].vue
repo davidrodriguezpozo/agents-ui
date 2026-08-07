@@ -39,6 +39,7 @@ const activeRunId = ref<string | null>(null)
 const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
 const showDiff = ref(false)
 const showFiles = ref(false)
+const showTerminal = ref(false)
 /** The terminal conversation this session continues, if it adopted one. */
 const inherited = ref<TranscriptMessage[]>([])
 const showPatch = ref(false)
@@ -747,6 +748,17 @@ const totalChanges = computed(() => {
           color="neutral"
           @click="() => { showFiles = !showFiles }"
         />
+        <!-- A shell in the same workspace. Opened on purpose rather than always
+             running, since each one holds a process and a pty. -->
+        <UButton
+          v-if="session"
+          :label="showTerminal ? 'Hide terminal' : 'Terminal'"
+          icon="i-lucide-square-terminal"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          @click="() => { showTerminal = !showTerminal }"
+        />
         <UButton
           v-if="session?.prUrl"
           label="View pull request"
@@ -946,6 +958,8 @@ const totalChanges = computed(() => {
           :session-id="session.id"
           @changed="onWorkspaceEdited"
         />
+
+        <TerminalPane v-if="showTerminal && session" :session-id="session.id" />
 
         <!-- Changes -->
         <div v-if="showDiff && diff" class="rounded-md overflow-hidden" style="border: 1px solid var(--border-subtle);">
