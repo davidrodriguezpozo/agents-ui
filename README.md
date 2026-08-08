@@ -4,14 +4,17 @@
 
 **Leave Claude Code running.**
 
-Work that fires on a schedule against your own repositories, checks itself
-with your own tests, and stops when it can't. You come back to what it did,
-what it cost, and what needs you.
+Work that fires on a schedule — or when a pull request opens — against your own
+repositories, checks itself with your own tests, and stops when it can't. You come
+back to what it did, what it cost, and what needs you. Then finish it without
+leaving: edit the files, run a shell, see the app, and land it.
 
 <a href="#quick-start">Quick start</a> ·
 <a href="#daily-rituals">Rituals</a> ·
 <a href="#sessions">Sessions</a> ·
+<a href="#finishing-it-without-leaving">Workspace</a> ·
 <a href="#whether-it-works">Verification</a> ·
+<a href="#what-a-run-may-touch">Sandboxing</a> ·
 <a href="#activity">Activity</a> ·
 <a href="#alongside-claude-code-desktop">vs. Desktop</a> ·
 <a href="CONTRIBUTING.md">Contributing</a>
@@ -35,12 +38,6 @@ trapped inside it.
 
 ## Alongside Claude Code Desktop
 
-Claude Code Desktop is where you sit down and work: parallel sessions in a sidebar,
-worktrees, a diff viewer, panes you can arrange. It is good at that, and this does not
-try to replace it.
-
-This is the other half — the part where nobody is watching.
-
 | | Desktop | Here |
 | --- | --- | --- |
 | Work while you're there | ✅ and better at it | ✅ |
@@ -48,17 +45,26 @@ This is the other half — the part where nobody is watching.
 | Fixes its own failures, up to a limit you set | — | ✅ |
 | Stops a scheduled job that has quietly broken | — | ✅ |
 | Lands several finished branches in an order that accounts for each other | — | ✅ |
+| Sandboxes what an unattended run may reach | — | ✅ |
 | A daily spend cap that skips work rather than billing you | Quota display | ✅ |
+| Holds work back when you're near your rate limit | Quota display | ✅ |
 | Every repository at once, not one window's worth | — | ✅ |
-| Fires at 08:00 against your local repo | Cloud routines | ✅ |
+| Fires at 08:00, or when a PR opens, against your local repo | Cloud routines | ✅ |
 
 That last row is the one narrowing. Routines run in Anthropic's cloud, but self-hosted
 environments now let Team and Enterprise plans run sessions on their own machines, and
 that gap will keep closing. The rows above it are the ones to judge this on: none of
 them are about *where* the work runs.
 
-If you only ever work with Claude while looking at it, use Desktop. This is for when
-you want to leave things running.
+**On the workbench itself, Desktop is better and it is not close.** Panes you can
+arrange, a proper diff viewer, an editor with everything an editor has. What is here is
+enough to finish a piece of work without leaving — a file editor with syntax colouring, a
+real shell, your app running in the page, and one click to put any of it back — and it is
+a young version of all four. No bracket matching, no find-in-file, no debugger.
+
+The argument for it is not that it beats Desktop at editing. It is that the work it
+verifies, sandboxes and lands is already here, and walking across to another app to
+change one line was the thing breaking that loop.
 
 | Section | What it's for |
 | --- | --- |
@@ -395,6 +401,61 @@ lockfile and set in Settings beside it. It runs once per workspace, before the f
 check — lazily, so starting a session stays instant and the minute it costs is paid when
 something actually wants the answer.
 
+### Finishing it without leaving
+
+A diff tells you what changed. The checks tell you whether it still passes. Neither
+answers *that is nearly right, let me change one line* — and the answer to that used to
+be: find the worktree on disk, open your editor, open a terminal, start the dev server,
+go to localhost. Four trips out of an app built so you would not have to make them.
+
+A session opens on its conversation. One strip above it holds four views of the same
+workspace, one at a time, and closing the one you are on gets you back to just the
+conversation.
+
+| | |
+| --- | --- |
+| **Changes** | The diff, per file, against where the session branched |
+| **Files** | Browse and edit the workspace. A save lands in the session's branch exactly like something the agent wrote, so the checks go stale and want running again |
+| **Terminal** | A real shell in the workspace, on the session's branch. It keeps running when you close the tab, because a long build should survive navigating away |
+| **Preview** | Your project's dev command, on a port of its own, shown in the page |
+
+Each one is a *young* version of the thing it replaces — the editor colours nine
+languages and numbers the lines, and that is the whole of it. What they are for is
+finishing, not living in.
+
+**Putting it back** sits beside the editor, because being able to change a file by hand
+is what makes undo matter. Two things, kept apart: throw away what is uncommitted, or
+take a whole turn off. Both name the files rather than counting them, and neither can
+reach past the commit the session branched from — your repository's own history is not
+this session's to undo.
+
+The preview gets a port from the kernel rather than a guess, because several sessions
+running at once is the point of worktrees and two dev servers fighting over 3000 is not.
+It is handed over in `PORT`; a project that hardcodes one instead will have its sessions
+collide, which the page says rather than pretends to have solved.
+
+---
+
+## What a run may touch
+
+Sessions and rituals run shell commands as you. This is the thing that tells you to walk
+away from one at 08:00, so **runs are sandboxed by default** — including in projects that
+were set up before the setting existed. Commands reach only the hosts you list, and a run
+cannot let *itself* out; widening is something you do in Settings, on purpose.
+
+It pays twice. A sandboxed command does not need to stop and ask, so the failure this
+spends the most effort on — a ritual back in the morning having been refused a tool, with
+half its job undone — largely stops happening.
+
+When something is refused, the run says which host it wanted, counts as needing you
+rather than as a clean success, and offers to allow exactly that host in that repository.
+A project with rituals that already ran is told all of this once, before anything breaks.
+
+Your own checks are unaffected either way: those are commands you configured yourself,
+and they run outside the sandbox. So does the terminal — a person typing into their own
+shell is what the sandbox protects *from being impersonated*, not what it protects
+against.
+
 ---
 
 ## Activity
@@ -468,6 +529,7 @@ model it will actually run on, so the cost of the whole thing is visible before 
 - **Graph** — how your agents, commands, skills and plugins actually connect
 - **Explore** — templates and community skills, in one place
 - **Ask Claude** (`⌘J`) — a chat panel that knows about your configuration
+- **Version and updates** — which release you are on, and one click to a newer one
 - **Search** (`⌘K`) — across everything at once
 - **Simple view** — hides the configuration concepts and leads with what you can run today
 - **Dark mode** — from the sidebar, any time
