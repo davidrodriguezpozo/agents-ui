@@ -188,15 +188,62 @@ describe('handing it to the SDK', () => {
     expect(settings.allowUnsandboxedCommands).toBe(false)
   })
 
-  it('stops a sandboxed command having to ask', () => {
+  it('stops an unattended sandboxed command having to ask', () => {
     // The unattended win: fewer rituals coming back refused a tool.
-    const settings = store.toSandboxSettings({ enabled: true, allowedDomains: [] })!
+    const settings = store.toSandboxSettings(
+      { enabled: true, allowedDomains: [] },
+      { unattended: true },
+    )!
     expect(settings.autoAllowBashIfSandboxed).toBe(true)
+  })
+
+  it('leaves the prompt in place for a turn somebody typed', () => {
+    // "Edit files" trust promises it stops if it needs anything riskier.
+    // Approving every shell command because the run is sandboxed made that
+    // description untrue for the person who chose it.
+    const settings = store.toSandboxSettings({ enabled: true, allowedDomains: [] })!
+    expect(settings.autoAllowBashIfSandboxed).toBe(false)
   })
 
   it('omits the host list rather than sending an empty one', () => {
     const settings = store.toSandboxSettings({ enabled: true, allowedDomains: [] })!
     expect(settings.network.allowedDomains).toBeUndefined()
     expect(settings.network.allowLocalBinding).toBe(true)
+  })
+})
+
+/**
+ * Where the setting is filed, which a code review found was not where it was
+ * read.
+ *
+ * A session's working directory is its *worktree* — created per session and
+ * deleted when it closes. The sandbox was resolved from that, while Settings
+ * and the "Allow these hosts" button both wrote against the repository. The
+ * two never met: allowing a host reported success and changed nothing, and
+ * turning the sandbox off left every session run sandboxed with no way back.
+ */
+describe('which directory the setting belongs to', () => {
+  it('reads what the repository was told, not what the worktree was', async () => {
+    const repo = '/repo/a'
+    const worktree = '/repo/a/.worktrees/session-1'
+
+    await store.setProjectSandbox(repo, { enabled: false, allowedDomains: ['registry.npmjs.org'] })
+
+    const { resolveRunOptionsFor } = await import('../server/utils/runOptions')
+    const options = await resolveRunOptionsFor({ projectDir: worktree, repoDir: repo })
+
+    expect(options.sandbox.enabled).toBe(false)
+    expect(options.sandbox.allowedDomains).toEqual(['registry.npmjs.org'])
+  })
+
+  it('falls back to the working directory when no repository is named', async () => {
+    // Rituals run in the repository itself, so the fallback stays correct.
+    // A real directory, because `projectDir` is ignored unless it is on disk.
+    await store.setProjectSandbox(dir, { allowedDomains: ['github.com'] })
+
+    const { resolveRunOptionsFor } = await import('../server/utils/runOptions')
+    const options = await resolveRunOptionsFor({ projectDir: dir })
+
+    expect(options.sandbox.allowedDomains).toEqual(['github.com'])
   })
 })

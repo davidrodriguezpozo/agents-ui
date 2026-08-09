@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { existsSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 
 // Utils reach for Nitro's auto-imported createError; these tests run outside it.
@@ -70,6 +71,42 @@ describe('refusing to leave the workspace', () => {
     await symlink(join(outside, 'id_rsa'), join(workspace, 'key'))
 
     await expect(files.readWorkspaceFile(workspace, 'key')).rejects.toThrow(/outside/i)
+  })
+
+  /**
+   * The escape a code review found, and the one the original check was blind to
+   * by construction.
+   *
+   * `realpath` fails for a file that does not exist yet, so re-checking only
+   * paths that already resolve skipped the check in exactly the case where a
+   * write was about to *create* something. A symlinked directory in the
+   * workspace therefore let a new file be created anywhere this process can
+   * write — which is the single thing this module exists to prevent.
+   */
+  it('refuses creating a NEW file through a symlinked directory', async () => {
+    await symlink(outside, join(workspace, 'link'))
+
+    await expect(files.writeWorkspaceFile(workspace, 'link/planted.txt', 'x'))
+      .rejects.toThrow(/outside/i)
+
+    expect(existsSync(join(outside, 'planted.txt'))).toBe(false)
+  })
+
+  it('refuses a new file several levels under a symlinked directory', async () => {
+    // The ancestor walk has to keep going, not just look at the parent.
+    await mkdir(join(outside, 'deep'), { recursive: true })
+    await symlink(outside, join(workspace, 'link'))
+
+    await expect(files.resolveInWorkspace(workspace, 'link/deep/a/b/c.txt'))
+      .rejects.toThrow(/outside/i)
+  })
+
+  it('still allows a new file in a directory that does not exist yet', async () => {
+    // The fix must not make ordinary new files impossible: nothing here is a
+    // symlink, so a path with missing ancestors is perfectly legitimate.
+    const resolved = await files.resolveInWorkspace(workspace, 'brand/new/file.ts')
+
+    expect(files.isInside(await realpath(workspace), resolved)).toBe(true)
   })
 
   it('refuses writing through it, which is the one that does damage', async () => {

@@ -6,6 +6,7 @@ const base = {
   loadSettings: true, plugins: [], systemAppend: '', agent: null,
   additionalDirectories: [],
   sandbox: { enabled: true, allowedDomains: [] },
+  unattended: false,
 }
 
 describe('toQueryOptions', () => {
@@ -46,7 +47,22 @@ describe('toQueryOptions', () => {
     expect(opts.sandbox.enabled).toBe(true)
     // The whole point: a run nobody is watching cannot decide to leave.
     expect(opts.sandbox.allowUnsandboxedCommands).toBe(false)
+  })
+
+  /**
+   * Skipping the Bash prompt is for work nobody is watching. "Edit files" trust
+   * says in its own words that it stops if it needs anything riskier, and
+   * approving every shell command because the run happens to be sandboxed made
+   * that description untrue for a turn somebody typed.
+   */
+  it('lets an unattended run skip the prompt it cannot answer', () => {
+    const opts = toQueryOptions({ ...base, allowRules: [], unattended: true }) as any
     expect(opts.sandbox.autoAllowBashIfSandboxed).toBe(true)
+  })
+
+  it('keeps the prompt for a turn somebody is sitting in front of', () => {
+    const opts = toQueryOptions({ ...base, allowRules: [] }) as any
+    expect(opts.sandbox.autoAllowBashIfSandboxed).toBe(false)
   })
 
   it('omits the sandbox entirely when a project has turned it off', () => {

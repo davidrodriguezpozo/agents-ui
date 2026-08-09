@@ -120,7 +120,25 @@ const terminals = new Map<string, TerminalSession>()
  */
 function send(session: TerminalSession, kind: 'd' | 'r', payload: string): void {
   if (session.exited !== undefined) return
-  session.child.stdin.write(`${kind}${Buffer.from(payload, 'utf-8').toString('base64')}\n`)
+
+  /**
+   * Guarded, because the `exited` check above is a race it cannot win.
+   *
+   * That flag is only set once Node delivers `'exit'`, and a keystroke — or the
+   * pane's own resize — can arrive in the window between the shell dying and
+   * that event landing. The write then hits a closed pipe and the stream emits
+   * `'error'`. An unhandled `'error'` on a stream *throws*, which would take
+   * down the whole server: every run in flight, every preview, and every other
+   * session's shell, because one shell exited a few milliseconds early.
+   */
+  try {
+    session.child.stdin.write(`${kind}${Buffer.from(payload, 'utf-8').toString('base64')}\n`)
+  } catch {
+    // The shell has gone. The `'exit'` handler will mark it; there is nothing
+    // useful to say about a keystroke that arrived a moment too late.
+    return
+  }
+
   session.lastActivity = Date.now()
 }
 
@@ -159,6 +177,21 @@ export function startTerminal(id: string, cwd: string): TerminalSession {
   // and one with an unusual environment fails inside the script. Both are far
   // more useful shown in the terminal than swallowed.
   child.stderr.on('data', onData)
+
+  /**
+   * The listeners that stop a dead shell taking the server with it.
+   *
+   * `write()` on a broken pipe rarely throws — it emits `'error'` on the stream
+   * asynchronously, and an unhandled `'error'` event throws at the top level.
+   * The try/catch around the write cannot catch that, so these are not
+   * belt-and-braces: they are the part that does the work.
+   */
+  for (const pipe of [child.stdin, child.stdout, child.stderr]) {
+    pipe.on('error', () => {
+      // EPIPE on a shell that has just exited, which is ordinary and already
+      // reported by the `'exit'` handler below.
+    })
+  }
 
   child.on('exit', (code) => {
     session.exited = code ?? 0

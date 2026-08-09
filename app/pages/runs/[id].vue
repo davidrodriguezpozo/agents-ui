@@ -312,11 +312,21 @@ function formatCost(usd?: number) {
               needed permission" about it would send someone looking for a
               permission that does not exist.
             -->
-            <p
-              v-else-if="refusedHosts.length && !meta.deniedTools?.length"
-              class="text-[11px] leading-relaxed text-label"
-            >
-              It was sandboxed and could not reach
+            <p v-else-if="refusedHosts.length" class="text-[11px] leading-relaxed text-label">
+              <!--
+                Said whenever there are hosts, not only when there is nothing
+                else. A run that hit both walls used to show the permission
+                wording alone while still offering "Allow these hosts" — a
+                button granting hosts the page had never named, which is the
+                opposite of the narrow, explicit grant everything here is
+                built on.
+              -->
+              <template v-if="meta.deniedTools?.length">
+                It was also sandboxed and could not reach
+              </template>
+              <template v-else>
+                It was sandboxed and could not reach
+              </template>
               <strong class="font-mono">{{ refusedHosts.join(', ') }}</strong>,
               so whatever needed that did not happen.
             </p>

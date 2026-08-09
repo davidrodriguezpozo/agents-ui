@@ -32,6 +32,29 @@ export interface RunRequest {
    * exists to repair a sandbox problem needs a way to say so.
    */
   sandbox?: ProjectSandbox
+  /**
+   * The repository this run belongs to, for settings keyed by repository
+   * rather than by working directory.
+   *
+   * A session's `projectDir` is its *worktree*, which is created per session
+   * and deleted when it closes. Anything filed against that key is written
+   * where nothing reads and evaporates with the session — which is exactly
+   * what happened to the sandbox: Settings and the "Allow these hosts" button
+   * both write under the repository, the run looked under the worktree, and
+   * the two never met. Allowing a host reported success and changed nothing.
+   *
+   * Permission rules avoided this by being passed in already resolved. This is
+   * the same fact said once, so the next repository-scoped setting cannot
+   * repeat the mistake.
+   */
+  repoDir?: string
+  /**
+   * Nobody is watching this one — a ritual, a repair turn, a workflow step.
+   *
+   * Only affects whether a sandboxed run may skip its Bash prompts. A turn you
+   * typed keeps them, because the trust level you chose promised them.
+   */
+  unattended?: boolean
 }
 
 export interface ResolvedRunOptions {
@@ -48,6 +71,7 @@ export interface ResolvedRunOptions {
   allowRules: string[]
   additionalDirectories: string[]
   sandbox: ProjectSandbox
+  unattended: boolean
 }
 
 export function managerPrompt(claudeDir: string): string {
@@ -121,7 +145,8 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
   const [installed, isEnabled, projectSandbox] = await Promise.all([
     readInstalledPlugins(roots[0]!.dir),
     resolveEnabledPluginsInRoots(roots),
-    sandboxForProject(projectDir ?? undefined),
+    // Keyed by repository, never by the working directory — see `repoDir`.
+    sandboxForProject(body.repoDir ?? projectDir ?? undefined),
   ])
   const plugins = installed
     .filter(p => isEnabled(p.id) && existsSync(p.entry.installPath))
@@ -147,6 +172,7 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     // sandboxed — the default lives in `sandboxForProject`, not here, so there
     // is one place that decides it.
     sandbox: body.sandbox ?? projectSandbox,
+    unattended: body.unattended === true,
   }
 }
 
@@ -186,7 +212,9 @@ export function toQueryOptions(
       : {}),
     // Isolation for the commands this run decides to execute. Absent when the
     // project has turned it off, which is the SDK's own "no sandbox".
-    ...(toSandboxSettings(options.sandbox) ? { sandbox: toSandboxSettings(options.sandbox) } : {}),
+    ...(toSandboxSettings(options.sandbox, { unattended: options.unattended })
+      ? { sandbox: toSandboxSettings(options.sandbox, { unattended: options.unattended }) }
+      : {}),
     includePartialMessages: true,
     systemPrompt: {
       type: 'preset' as const,

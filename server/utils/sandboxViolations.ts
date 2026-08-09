@@ -57,12 +57,16 @@ const DNS_REFUSAL = /getaddrinfo\s+(?:ENOTFOUND|EAI_AGAIN)\s+([A-Za-z0-9._-]+)/g
  * rob it of the retry a transient failure deserves.
  */
 const UNREACHABLE = [
+  // Anchored on the tool that reports it, not on the words alone. A bare
+  // /Connection timed out/ matches a log file being read, a commit message in
+  // `git log`, or a test asserting on that string — and the run was then
+  // reported as sandbox-blocked, which counts against a ritual and skips its
+  // retry. A ritual that fully succeeded was told it had half failed.
+  /curl:\s*\(7\)/i,
   /curl:\s*\(28\)/i,
-  /Connection timed out/i,
-  /Failed to connect to /i,
-  /Could ?n[o']?t connect to server/i,
-  /Network is unreachable/i,
-  /connect\s+(?:ETIMEDOUT|ECONNREFUSED|ENETUNREACH)/i,
+  /fatal:\s+unable to access\b[^\n]*(?:Connection timed out|Could ?n[o']?t connect)/i,
+  /connect\s+(?:ETIMEDOUT|ECONNREFUSED|ENETUNREACH)\s+\d{1,3}(?:\.\d{1,3}){3}/i,
+  /\bnpm error\b[^\n]*network/i,
 ]
 
 /** `https://host/path` and bare `host.tld` inside quotes or whitespace. */
@@ -123,11 +127,19 @@ export function refusedHostsIn(
 
   const hosts = [...dnsHosts]
 
-  // Neither a proxy refusal nor a timeout names the host it was about, so it
-  // comes from the URL in the message and then from the command that produced
-  // it — in that order, since the message is the more specific of the two.
-  if (!hosts.length) hosts.push(...collect(URL_IN_TEXT, text))
+  /**
+   * The host comes from the *command* first, and only then from the message.
+   *
+   * The other way round harvested every URL in the output, so a run whose test
+   * log happened to mention three addresses was reported as having been refused
+   * all three — none of which it had asked for. What the command was pointed at
+   * is the only evidence of what it actually wanted.
+   */
   if (!hosts.length) hosts.push(...collect(URL_IN_TEXT, command ?? ''))
+  // Falling back to the message is worth it for git, which prints the URL it
+  // failed on, but only the first: more than one means the output is being
+  // scraped rather than read.
+  if (!hosts.length) hosts.push(...collect(URL_IN_TEXT, text).slice(0, 1))
 
   const allowed = new Set((opts.allowed ?? []).map(host => host.toLowerCase()))
 

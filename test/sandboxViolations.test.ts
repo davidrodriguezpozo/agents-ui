@@ -149,3 +149,42 @@ describe('being asked the same thing twice', () => {
     expect(refusedHostsIn('npm ci', REAL.nodeFetch)).toEqual(['registry.npmjs.org'])
   })
 })
+
+/**
+ * The false positives a code review found.
+ *
+ * `refusedHostsIn` runs over the text of *every* tool result whenever the
+ * sandbox is on, so a pattern matching ordinary prose reports a run that fully
+ * succeeded as sandbox-blocked. That is not cosmetic: `blocked` counts against
+ * a ritual, skips its retry, and feeds the three-strike auto-disable.
+ */
+describe('not blaming the sandbox for ordinary output', () => {
+  const cases: [string, string][] = [
+    ['a log file being read', 'INFO  Connection timed out talking to the database, retrying'],
+    ['a commit message', 'commit a1b2c3\n\n    fix: handle Connection timed out from upstream'],
+    ['a test asserting on the words', 'ok 4 - retries when the server says Failed to connect to it'],
+    ['prose mentioning a URL', 'See https://docs.example.com for why Connection timed out happens'],
+  ]
+
+  for (const [what, output] of cases) {
+    it(`says nothing about ${what}`, () => {
+      expect(refusedHostsIn('npm test', output)).toEqual([])
+      expect(looksSandboxed(output)).toBe(false)
+    })
+  }
+
+  it('does not harvest every URL in the output of a real failure', () => {
+    // A run refused one host was reported as refused all three, none of which
+    // it had asked for. What the command pointed at is the real evidence.
+    const output = 'curl: (28) Connection timed out\nsee https://a.example.com and https://b.example.com'
+
+    expect(refusedHostsIn('curl -sS https://wanted.example.com', output))
+      .toEqual(['wanted.example.com'])
+  })
+
+  it('still recognises every real denial it was built from', () => {
+    for (const output of Object.values(REAL)) {
+      expect(looksSandboxed(output), output).toBe(true)
+    }
+  })
+})

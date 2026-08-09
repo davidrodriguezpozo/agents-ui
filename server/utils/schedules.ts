@@ -257,6 +257,11 @@ export async function upsertSchedule(
      */
     const triggerChanged = existing?.trigger?.kind !== schedule.trigger?.kind
       || existing?.trigger?.branch !== schedule.trigger?.branch
+      // The repository counts too. Pull request numbers and workflow run ids
+      // are per repository, so a ritual repointed from one where they reached
+      // 400 to one whose PRs are in the tens keeps a high-water mark nothing
+      // can ever exceed — and silently never fires again.
+      || existing?.projectDir !== schedule.projectDir
     if (triggerChanged) schedule.triggerCursor = undefined
 
     // A ritual that is on is not paused. Turning it back on is somebody saying

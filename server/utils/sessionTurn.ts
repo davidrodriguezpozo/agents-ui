@@ -181,6 +181,9 @@ export async function startTurn(
 
   const options = await resolveRunOptionsFor({
     projectDir: session.worktreePath,
+    // Settings keyed by repository — the sandbox — are filed against the repo,
+    // not this session's worktree, which is deleted when the session closes.
+    repoDir: session.repoDir,
     agentSlug: session.agentSlug,
     // How much this session was told it could do without stopping to ask.
     permissionMode: permissionModeFor(session.trust),

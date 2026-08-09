@@ -127,6 +127,8 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
       }
 
       const options = await resolveRunOptionsFor({
+        // A workflow runs to its end unattended; that is the whole point of it.
+        unattended: true,
         projectDir: record.projectDir,
         agentSlug: step.agentSlug,
       })

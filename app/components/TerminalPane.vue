@@ -94,6 +94,18 @@ onMounted(async () => {
     } else if (payload.type === 'exit') {
       status.value = 'ended'
       term!.write(`\r\n\x1b[2m[shell exited${payload.code ? ` with ${payload.code}` : ''}]\x1b[0m\r\n`)
+
+      /**
+       * Closed here, or the browser reconnects.
+       *
+       * EventSource retries automatically when the server ends the stream
+       * without an error status, and the stream endpoint starts a shell if it
+       * finds none. So a shell the user deliberately closed came straight back
+       * a few seconds later — holding a process and a pty that nothing on
+       * screen said was running.
+       */
+      source?.close()
+      source = null
     }
   }
   source.onopen = () => { if (status.value === 'connecting') status.value = 'live' }

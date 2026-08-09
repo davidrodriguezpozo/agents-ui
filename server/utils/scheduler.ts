@@ -69,12 +69,34 @@ export function stopScheduler(): void {
 }
 
 /**
+ * One poll at a time.
+ *
+ * `pollEvents` awaits `fire()`, and a ritual can easily outlast the two-minute
+ * interval — a triage run on a large pull request routinely does. The next tick
+ * then started while the first was still inside its loop, read the cursor as it
+ * had been *before* the first invocation's later events, and fired the same
+ * pull requests a second time. Money spent twice on identical work.
+ */
+let polling = false
+
+export async function pollEvents(): Promise<void> {
+  if (polling) return
+  polling = true
+
+  try {
+    await pollEventsOnce()
+  } finally {
+    polling = false
+  }
+}
+
+/**
  * Ask GitHub what has happened, and fire the rituals waiting on it.
  *
  * Each triggered ritual is polled independently and failures are per-ritual:
  * one repository with no remote must not stop the others being asked.
  */
-export async function pollEvents(): Promise<void> {
+async function pollEventsOnce(): Promise<void> {
   let triggered: Schedule[]
 
   try {
@@ -94,13 +116,20 @@ export async function pollEvents(): Promise<void> {
 
     const { fire: firing, cursor, deferred } = selectNew(events, schedule.triggerCursor)
 
-    // Written even when nothing fires: the first poll records a baseline so
-    // that turning a trigger on does not start work on every pull request that
-    // was already open.
-    if (cursor !== schedule.triggerCursor) await setTriggerCursor(schedule.id, cursor)
-
     if (deferred > 0) {
       console.log(`[scheduler] "${schedule.title}": ${deferred} more waiting, will fire next poll`)
+    }
+
+    /**
+     * Nothing to fire, but a baseline to record.
+     *
+     * The first poll of a trigger writes where things stood so that turning one
+     * on does not start work on every pull request already open. That is the
+     * only case where the cursor moves without something running.
+     */
+    if (!firing.length) {
+      if (cursor !== schedule.triggerCursor) await setTriggerCursor(schedule.id, cursor)
+      continue
     }
 
     for (const event of firing) {
@@ -108,7 +137,25 @@ export async function pollEvents(): Promise<void> {
       // start a second run of it while this one is still going.
       if (inFlight.has(schedule.id)) break
       inFlight.add(schedule.id)
-      await fire(schedule, promptFor(schedule.input, event))
+
+      const ran = await fire(schedule, promptFor(schedule.input, event))
+
+      /**
+       * Advanced per event, and only once that event has actually run.
+       *
+       * It used to move past everything before firing any of it, so an event
+       * whose run was skipped — over the daily cap, or held back near the rate
+       * limit — was stepped over and never seen again. Not fired later, and not
+       * reported either: a trigger has no `missedAt`, so the schedules page and
+       * the morning digest both said nothing at all. The same hole swallowed
+       * anything in flight when the process stopped.
+       *
+       * Leaving the cursor where it is means a skipped event is simply still
+       * new next time, which is what "skipped" should mean.
+       */
+      if (!ran) break
+
+      await setTriggerCursor(schedule.id, event.key)
     }
   }
 }
@@ -209,8 +256,14 @@ async function historyFor(scheduleId: string): Promise<RitualHistory> {
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
-/** Already claimed in `inFlight` by the tick that selected it. */
-async function fire(schedule: Schedule, input?: string): Promise<void> {
+/**
+ * Already claimed in `inFlight` by the tick that selected it.
+ *
+ * Returns whether the work actually ran. A clock ritual does not care — its
+ * next occurrence is computed either way — but a triggered one must not step
+ * its cursor past an event that was skipped, or that event is lost for good.
+ */
+async function fire(schedule: Schedule, input?: string): Promise<boolean> {
   try {
     // The case the daily limit exists for: work that spends money at 08:00
     // with nobody watching. Skipped without starting, and said out loud —
@@ -220,7 +273,7 @@ async function fire(schedule: Schedule, input?: string): Promise<void> {
       console.log(`[scheduler] skipping "${schedule.title}": ${budget.reason}`)
       await skipToNextRun(schedule.id)
       await notify('failed', `${schedule.title} was skipped`, budget.reason!)
-      return
+      return false
     }
 
     // Where this ritual stood *before* today's attempt. It decides whether a
@@ -260,8 +313,13 @@ async function fire(schedule: Schedule, input?: string): Promise<void> {
       await pauseRitual(schedule.id, verdict.reason)
       await notify('needsYou', `${schedule.title} has been turned off`, verdict.reason)
     }
+
+    return true
   } catch (e) {
     console.error(`[scheduler] "${schedule.title}" failed to start`, e)
+    // It got as far as trying, which is enough for a trigger to move past the
+    // event: firing it again would reproduce the same failure, for money.
+    return true
   } finally {
     inFlight.delete(schedule.id)
   }
@@ -279,6 +337,9 @@ async function runOnce(
   input?: string,
 ): Promise<Run> {
   const options = await resolveRunOptionsFor({
+    // Nobody is at the keyboard, which is what lets a sandboxed command skip
+    // the prompt it would otherwise stop on.
+    unattended: true,
     projectDir: schedule.projectDir,
     agentSlug: schedule.agentSlug,
     // The trust level was chosen when the ritual was created, so a run at 8am

@@ -1,5 +1,5 @@
 import { readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
-import { isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 /**
  * Reading and writing files inside a session's workspace.
@@ -71,13 +71,43 @@ export async function resolveInWorkspace(workspace: string, relPath: string): Pr
   // filesystem call at all.
   if (!isInside(root, target)) throw outsideWorkspace()
 
-  // And again after resolving symlinks, which is the check that catches a link
-  // inside the workspace pointing at /etc. A path that does not exist yet is
-  // fine — that is a new file — so only an existing one is re-checked.
-  const real = await realpath(target).catch(() => null)
-  if (real && !isInside(root, real)) throw outsideWorkspace()
+  /**
+   * Then again with the symlinks resolved — and this walks *up* rather than
+   * checking the target alone.
+   *
+   * An earlier version only re-checked a path that already existed, on the
+   * reasoning that one which does not is simply a new file. That is exactly
+   * backwards: `realpath` fails for a file that is not there yet, so the check
+   * was skipped precisely when a write was about to create something. With a
+   * symlinked directory in the workspace — `link -> /Users/you`, checked in or
+   * made by the agent — `link/.ssh/authorized_keys` passed the string test,
+   * failed `realpath` because it did not exist, and was returned unresolved for
+   * `writeFile` to follow. That is arbitrary file creation anywhere this
+   * process can write, which is the one thing this file exists to prevent.
+   *
+   * So the nearest ancestor that *does* exist is resolved and checked, and the
+   * rest of the path is rebuilt onto it. Existing and not-yet-existing paths go
+   * down the same road, which is the only way the second cannot be forgotten.
+   */
+  const trailing: string[] = []
+  let cursor = target
 
-  return real ?? target
+  for (;;) {
+    const real = await realpath(cursor).catch(() => null)
+
+    if (real) {
+      if (!isInside(root, real)) throw outsideWorkspace()
+      return trailing.length ? join(real, ...trailing.reverse()) : real
+    }
+
+    const parent = dirname(cursor)
+    // Walked to the filesystem root without finding anything real: there is no
+    // ancestor to vouch for this path, so it is refused rather than guessed at.
+    if (parent === cursor) throw outsideWorkspace()
+
+    trailing.push(basename(cursor))
+    cursor = parent
+  }
 }
 
 export interface WorkspaceEntry {

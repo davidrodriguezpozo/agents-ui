@@ -191,20 +191,30 @@ export function shouldWarn(opts: {
  *   person is there to see it used and is exactly the wrong default for a run
  *   nobody is watching. Widening the sandbox stays a thing the owner does, in
  *   Settings, on purpose.
- * - `autoAllowBashIfSandboxed: true` is the reason this is worth having beyond
- *   safety. A sandboxed command does not need to stop and ask, so the failure
- *   mode this product spends the most code on — a ritual that came back at 08:00
- *   having been refused a tool, with half its job undone — largely stops
- *   happening. Sandboxed runs are both safer and likelier to finish.
+ * - `autoAllowBashIfSandboxed` is the reason this is worth having beyond
+ *   safety, **for work nobody is watching**. A sandboxed command need not stop
+ *   and ask, so the failure this product spends the most code on — a ritual back
+ *   at 08:00 having been refused a tool, half its job undone — largely stops
+ *   happening.
+ *
+ *   It is off for a run you are sitting in front of. "Edit files" trust says in
+ *   its own words that it "stops if it needs anything riskier", and silently
+ *   approving every shell command because the run happens to be sandboxed makes
+ *   that description untrue. Somebody who wants no prompts already has a setting
+ *   that says so.
  * - `allowLocalBinding: true` because a test suite or a dev server binding a
  *   port on this machine is ordinary work, and not a way out of anything.
  */
-export function toSandboxSettings(sandbox: ProjectSandbox) {
+export function toSandboxSettings(
+  sandbox: ProjectSandbox,
+  opts: { unattended?: boolean } = {},
+) {
   if (!sandbox.enabled) return undefined
 
   return {
     enabled: true,
-    autoAllowBashIfSandboxed: true,
+    // Only where there is nobody to answer a prompt — see above.
+    autoAllowBashIfSandboxed: opts.unattended === true,
     allowUnsandboxedCommands: false,
     network: {
       allowLocalBinding: true,
