@@ -185,12 +185,37 @@ went back to being N things:
 The row says how many steps a ritual has, because one firing of a chain is several agent
 invocations and that is the most expensive fact on the row.
 
-### 3. More event kinds
+### ~~3. More event kinds~~ — two of three shipped
 
-Issue labelled, review requested, a comment mentioning you. Cheap once the first two are
-done, and each one is a concrete answer to "does it fire when X happens". They also fit
-the deployment better than the clock does — an event fires whenever the machine is awake,
-so there is no window to miss and no comparison to lose.
+Issue labelled and review requested. Both fit the deployment better than the clock does:
+an event fires whenever the machine is awake, so there is no window to miss.
+
+**They needed a different source, and that was the whole design.** The first two triggers
+list things that *exist* — open pull requests, finished workflow runs — and key the cursor
+on a number GitHub hands out in order. "Labelled" is not a property of an issue. It is
+something done to one, possibly long after it was opened and possibly more than once, so
+listing issues cannot express it: an old issue labelled today has a low number, and a
+high-water mark on issue numbers steps straight past it. Keying on `updatedAt` instead
+would have fired on every comment and edit as well, which is a trigger that does not do
+what its own sentence says.
+
+`repos/{owner}/{repo}/issues/events` is the event log itself — a monotonically increasing
+`id` per entry, and the kind of thing that happened on each. Both new kinds come from one
+request, and the cursor works unchanged.
+
+**The third one is not built, and the reason is a payload fact.** A `mentioned` event
+exists in that log, and it has **no field saying who was mentioned** — `actor` is whoever
+wrote the comment. Confirmed against a hundred real events from a busy public repository,
+where all three kinds appear. So the endpoint cannot answer "mentions *me*"; a trigger
+built on it would fire on every mention of anybody in the repository, which is a
+different and much noisier feature wearing the wrong name. Doing it properly means the
+search API or the notifications feed, neither of which has a monotonic id, so it needs a
+cursor design of its own rather than a fourth branch in this one. Left undone deliberately
+rather than shipped as something that would look right in a menu and be wrong in use.
+
+The working rule earned its keep for the third cycle running, and this time it changed
+what got built rather than how: **look at the real output before designing around it.**
+An afternoon's assumption would have produced a mentions trigger nobody could rely on.
 
 ### 4. The event lookback is a silent cap
 
@@ -277,7 +302,9 @@ marketplace and plugin install · workflow builder · relationship graph · back
 **running the session's app and looking at it** · **rewind, guarded at the branch point** ·
 **one pane at a time** · **choosing how far a session is trusted before it starts** ·
 **following the pull request after it is opened — fixing red CI and landing it when green** ·
-**rituals that are a chain of steps, counted as one firing**.
+**rituals that are a chain of steps, counted as one firing** · **rituals that fire when an
+issue is labelled or a review is requested** · **picking a branch or pull request from what
+exists, rather than typing it**.
 
 The working rule from last cycle held again and is worth keeping: **for anything that
 reads somebody else's output, look at the real output before designing around it.** Add

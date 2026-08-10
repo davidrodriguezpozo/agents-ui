@@ -78,9 +78,10 @@ failures in a row is what turns a ritual off.
 
 ### Rituals can fire on events, not only on a clock
 
-A pull request opening, or a workflow run failing — optionally narrowed to one branch.
-Checked every couple of minutes with `gh`, using the login you already have; nothing is
-opened to the internet.
+Four of them: a pull request opening, a workflow run failing, an issue labelled, or a
+review requested — each narrowed by the thing that makes sense for it, so a branch, a
+label, or the person or team asked. Checked every couple of minutes with `gh`, using the
+login you already have; nothing is opened to the internet.
 
 It starts from when you save it. Turning on "when a pull request is opened" against a
 repository with nine already open does not start work on all nine — it takes note of
@@ -99,8 +100,13 @@ This list is deliberately not in order. There's no telemetry here and there neve
 be, so the only thing that will ever tell me what to build next is what people say. Each
 of these is written with the thing you'd have to tell me for it to jump the queue.
 
-- **More things a ritual can fire on** — an issue labelled, a review requested, a comment
-  that mentions you. Two exist today, so *"I want it to fire on X"* is the likeliest ask.
+- **A ritual that fires when a comment mentions you.** Wanted, and not built yet for an
+  honest reason: GitHub's repository event log records that *a* mention happened but not
+  *who* was mentioned, so a trigger built on it would fire on every mention of anybody.
+  Doing it properly needs a different source and its own way of tracking what it has
+  already seen. Say so if you'd use it and it moves up.
+- **Other things a ritual could fire on** — four exist today. *"I want it to fire on X"*
+  is still the likeliest ask.
 - **Configuration that travels through git** — rituals, check commands and setup commands
   committed to the repository, so a teammate who clones it gets them too. Promoted by
   anyone describing a second person working in the same repo.

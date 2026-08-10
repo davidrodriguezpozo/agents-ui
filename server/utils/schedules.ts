@@ -291,7 +291,13 @@ export async function upsertSchedule(
      * them, immediately.
      */
     const triggerChanged = existing?.trigger?.kind !== schedule.trigger?.kind
+      // Every narrowing counts, for one reason: a cursor set while a filter was
+      // narrow has already advanced past events the filter excluded. Widening
+      // it would mean those never fire and never appear, so a changed filter
+      // re-baselines instead — nothing fires, and it starts from now.
       || existing?.trigger?.branch !== schedule.trigger?.branch
+      || existing?.trigger?.label !== schedule.trigger?.label
+      || existing?.trigger?.reviewer !== schedule.trigger?.reviewer
       // The repository counts too. Pull request numbers and workflow run ids
       // are per repository, so a ritual repointed from one where they reached
       // 400 to one whose PRs are in the tens keeps a high-water mark nothing

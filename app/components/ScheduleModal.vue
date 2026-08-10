@@ -171,11 +171,27 @@ const saving = ref(false)
 const EVENT_OPTIONS: { value: GithubEventKind; label: string }[] = [
   { value: 'pr_opened', label: 'A pull request is opened' },
   { value: 'check_failed', label: 'A workflow run fails' },
+  { value: 'issue_labelled', label: 'An issue is labelled' },
+  { value: 'review_requested', label: 'A review is requested' },
 ]
 
 const firesOn = ref<'clock' | 'event'>(props.schedule?.trigger ? 'event' : 'clock')
 const eventKind = ref<GithubEventKind>(props.schedule?.trigger?.kind ?? 'pr_opened')
 const eventBranch = ref(props.schedule?.trigger?.branch ?? '')
+const eventLabel = ref(props.schedule?.trigger?.label ?? '')
+const eventReviewer = ref(props.schedule?.trigger?.reviewer ?? '')
+
+/**
+ * Each kind narrows by a different thing, so only one box is ever shown.
+ *
+ * Offering all three would suggest they combine, which they do not — a review
+ * request has no branch and an issue has no reviewer.
+ */
+const narrowsBy = computed<'branch' | 'label' | 'reviewer'>(() => {
+  if (eventKind.value === 'issue_labelled') return 'label'
+  if (eventKind.value === 'review_requested') return 'reviewer'
+  return 'branch'
+})
 
 const isEdit = computed(() => Boolean(props.schedule))
 
@@ -235,8 +251,16 @@ async function onSave() {
       recurrence: { hour: hour.value, minute: minute.value, days: days.value },
       // `null` clears a trigger and puts the ritual back on the clock, which is
       // the only way to say "no longer an event one" — absent would keep it.
+      // Only the narrowing this kind actually uses is sent. Carrying a stale
+      // branch onto a review trigger would leave a filter on the record that
+      // nothing reads and the row does not mention.
       trigger: firesOn.value === 'event'
-        ? { kind: eventKind.value, branch: eventBranch.value.trim() || undefined }
+        ? {
+            kind: eventKind.value,
+            branch: narrowsBy.value === 'branch' ? eventBranch.value.trim() || undefined : undefined,
+            label: narrowsBy.value === 'label' ? eventLabel.value.trim() || undefined : undefined,
+            reviewer: narrowsBy.value === 'reviewer' ? eventReviewer.value.trim() || undefined : undefined,
+          }
         : null,
       permission: permission.value,
       enabled: props.schedule?.enabled ?? true,
@@ -423,15 +447,30 @@ async function onSave() {
           </option>
         </select>
         <!--
-          A branch name typed slightly wrong does not fail here, it just never
-          matches — so a trigger with a typo in it is indistinguishable from one
-          with nothing to do. Still free text: a branch that does not exist yet
-          is a perfectly reasonable thing to wait for.
+          A name typed slightly wrong does not fail here, it just never matches
+          — so a trigger with a typo in it is indistinguishable from one with
+          nothing to do. Still free text: a branch or label that does not exist
+          yet is a perfectly reasonable thing to wait for.
         -->
         <RefPicker
+          v-if="narrowsBy === 'branch'"
           v-model="eventBranch"
           :repo-dir="projectDir || null"
           placeholder="Any branch"
+        />
+        <input
+          v-else-if="narrowsBy === 'label'"
+          v-model="eventLabel"
+          class="field-input font-mono"
+          placeholder="Any label"
+          spellcheck="false"
+        />
+        <input
+          v-else
+          v-model="eventReviewer"
+          class="field-input font-mono"
+          placeholder="Anyone — or a username or team"
+          spellcheck="false"
         />
         <p class="field-hint">
           Checked every couple of minutes with <span class="font-mono">gh</span>, using the login

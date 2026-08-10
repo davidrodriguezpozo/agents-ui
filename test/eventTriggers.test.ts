@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_EVENTS_PER_POLL, describeTrigger, promptFor, selectNew, titleFor, type TriggerEvent,
+  MAX_EVENTS_PER_POLL, describeTrigger, issueEventsFrom, promptFor, selectNew, titleFor,
+  type IssueEventRow, type TriggerEvent,
 } from '../server/utils/eventTriggers'
 
 /**
@@ -137,5 +138,156 @@ describe('naming the run an event produced', () => {
     expect(title.length).toBeLessThan(80)
     expect(title.startsWith('Review it · ')).toBe(true)
     expect(title.endsWith('…')).toBe(true)
+  })
+})
+
+/**
+ * Things that happened *to* an issue, rather than issues that exist.
+ *
+ * The shapes below are taken from real `repos/{owner}/{repo}/issues/events`
+ * responses, because the reason this trigger reads an event log rather than a
+ * list of issues is a payload fact: "labelled" is something done to an issue,
+ * possibly long after it was opened, and nothing on the issue itself records
+ * it in a way a high-water mark could follow.
+ */
+describe('events on issues and pull requests', () => {
+  const labelled = (over: Partial<IssueEventRow> = {}): IssueEventRow => ({
+    id: 29215043072,
+    event: 'labeled',
+    label: { name: 'gh-skill' },
+    issue: {
+      number: 14118,
+      title: '`gh skill` ignores the coding agent dir',
+      html_url: 'https://github.com/cli/cli/issues/14118',
+    },
+    ...over,
+  })
+
+  const reviewRequested = (over: Partial<IssueEventRow> = {}): IssueEventRow => ({
+    id: 29209653834,
+    event: 'review_requested',
+    requested_reviewer: { login: 'Copilot' },
+    issue: {
+      number: 14117,
+      title: 'fix(ssh-key): allow deleting signing keys',
+      html_url: 'https://github.com/cli/cli/pull/14117',
+      pull_request: {},
+    },
+    ...over,
+  })
+
+  it('takes only the kind asked for, out of a log that mixes them all', () => {
+    // A real response is mostly other things — referenced, subscribed, closed,
+    // merged. Firing a triage ritual on a `subscribed` event would be absurd.
+    const rows = [
+      labelled(),
+      reviewRequested(),
+      { id: 1, event: 'subscribed', issue: { number: 1, html_url: 'https://x/1' } },
+      { id: 2, event: 'referenced', issue: { number: 1, html_url: 'https://x/1' } },
+    ]
+
+    expect(issueEventsFrom(rows, { kind: 'issue_labelled' }).map(e => e.key))
+      .toEqual([29215043072])
+    expect(issueEventsFrom(rows, { kind: 'review_requested' }).map(e => e.key))
+      .toEqual([29209653834])
+  })
+
+  it('is keyed by the event, not by the issue', () => {
+    // An issue labelled today can have a lower number than one labelled last
+    // week, so a cursor over issue numbers would step straight past it. The
+    // event id is the thing that only ever increases.
+    expect(issueEventsFrom([labelled()], { kind: 'issue_labelled' })[0]!.key)
+      .toBe(29215043072)
+  })
+
+  it('narrows to one label when asked, and ignores case', () => {
+    const rows = [labelled(), labelled({ id: 2, label: { name: 'bug' } })]
+
+    expect(issueEventsFrom(rows, { kind: 'issue_labelled', label: 'BUG' }).map(e => e.key))
+      .toEqual([2])
+  })
+
+  it('takes every label when none is named', () => {
+    const rows = [labelled(), labelled({ id: 2, label: { name: 'bug' } })]
+
+    expect(issueEventsFrom(rows, { kind: 'issue_labelled' })).toHaveLength(2)
+  })
+
+  it('says which label, and which issue', () => {
+    const [event] = issueEventsFrom([labelled()], { kind: 'issue_labelled' })
+
+    expect(event!.summary).toContain('issue #14118')
+    expect(event!.summary).toContain('gh-skill')
+    expect(event!.url).toBe('https://github.com/cli/cli/issues/14118')
+  })
+
+  it('does not call a labelled pull request an issue', () => {
+    // Pull requests are issues to this endpoint and can be labelled too.
+    // Sending somebody to "issue #14117" points them at the wrong thing.
+    const [event] = issueEventsFrom(
+      [labelled({ issue: { number: 14117, title: 'a fix', html_url: 'https://x/p', pull_request: {} } })],
+      { kind: 'issue_labelled' },
+    )
+
+    expect(event!.summary).toContain('pull request #14117')
+  })
+
+  it('narrows a review request to one person', () => {
+    const rows = [reviewRequested(), reviewRequested({ id: 2, requested_reviewer: { login: 'someone' } })]
+
+    expect(issueEventsFrom(rows, { kind: 'review_requested', reviewer: 'someone' }).map(e => e.key))
+      .toEqual([2])
+  })
+
+  it('counts a request of your team as a request of you', () => {
+    // Filtering by your own login and being told nothing when your team was
+    // asked would be the wrong answer to the question people mean.
+    const rows = [reviewRequested({
+      requested_reviewer: undefined,
+      requested_team: { name: 'reviewers' },
+    })]
+
+    expect(issueEventsFrom(rows, { kind: 'review_requested', reviewer: 'reviewers' }))
+      .toHaveLength(1)
+  })
+
+  it('calls a pull request a pull request, and an issue an issue', () => {
+    // The same endpoint reports both, under a field called `issue` either way.
+    const onPull = issueEventsFrom([reviewRequested()], { kind: 'review_requested' })
+    const onIssue = issueEventsFrom(
+      [reviewRequested({ issue: { number: 9, title: 'a', html_url: 'https://x/9' } })],
+      { kind: 'review_requested' },
+    )
+
+    expect(onPull[0]!.summary).toContain('pull request #14117')
+    expect(onIssue[0]!.summary).toContain('issue #9')
+  })
+
+  it('drops a row with nothing to link to rather than firing at nowhere', () => {
+    expect(issueEventsFrom([labelled({ issue: { number: 1 } })], { kind: 'issue_labelled' }))
+      .toEqual([])
+  })
+
+  it('survives a label event that named no label', () => {
+    const [event] = issueEventsFrom([labelled({ label: undefined })], { kind: 'issue_labelled' })
+
+    expect(event?.summary).toContain('#14118')
+  })
+})
+
+describe('saying what the new kinds wait for', () => {
+  it('names the label rather than pretending it is a branch', () => {
+    expect(describeTrigger({ kind: 'issue_labelled', label: 'bug' }))
+      .toBe('When an issue is labelled bug')
+  })
+
+  it('names the reviewer', () => {
+    expect(describeTrigger({ kind: 'review_requested', reviewer: 'me' }))
+      .toBe('When a review is requested from me')
+  })
+
+  it('reads sensibly with no narrowing at all', () => {
+    expect(describeTrigger({ kind: 'issue_labelled' })).toBe('When an issue is labelled')
+    expect(describeTrigger({ kind: 'review_requested' })).toBe('When a review is requested')
   })
 })

@@ -9,12 +9,21 @@ export interface Recurrence {
 
 export type SchedulePermission = 'readonly' | 'edits' | 'full'
 
-export type GithubEventKind = 'pr_opened' | 'check_failed'
+export type GithubEventKind =
+  | 'pr_opened'
+  | 'check_failed'
+  | 'issue_labelled'
+  | 'review_requested'
 
+/** Each kind narrows by exactly one of these; the others are absent. */
 export interface EventTrigger {
   kind: GithubEventKind
   /** Only fire for this branch. Absent means any. */
   branch?: string
+  /** Only fire for this label. Absent means any. */
+  label?: string
+  /** Only fire when this person or team was asked. Absent means anyone. */
+  reviewer?: string
 }
 
 /** One instruction in a chained ritual. */

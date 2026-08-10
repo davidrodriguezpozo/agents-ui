@@ -23,12 +23,23 @@ const exec = promisify(execFile)
  * it would if you typed it.
  */
 
-export type GithubEventKind = 'pr_opened' | 'check_failed'
+export type GithubEventKind =
+  | 'pr_opened'
+  | 'check_failed'
+  | 'issue_labelled'
+  | 'review_requested'
 
 export interface EventTrigger {
   kind: GithubEventKind
-  /** Only fire for this branch, when set. Empty means any. */
+  /** Only fire for this branch, when set. Empty means any. `pr_opened`, `check_failed`. */
   branch?: string
+  /** Only fire for this label, when set. Empty means any. `issue_labelled`. */
+  label?: string
+  /**
+   * Only fire when this person or team was the one asked, when set. Empty means
+   * anyone. `review_requested`.
+   */
+  reviewer?: string
 }
 
 /**
@@ -69,10 +80,28 @@ const LOOKBACK = 50
 export const EVENT_LABELS: Record<GithubEventKind, string> = {
   pr_opened: 'a pull request is opened',
   check_failed: 'a workflow run fails',
+  issue_labelled: 'an issue is labelled',
+  review_requested: 'a review is requested',
 }
 
+/**
+ * What this trigger waits for, narrowing included.
+ *
+ * Each kind narrows by a different thing, so the sentence has to know which —
+ * "on main" and "labelled bug" are both filters, and reading one as the other
+ * would describe the ritual wrongly on the row that exists to describe it.
+ */
 export function describeTrigger(trigger: EventTrigger): string {
   const what = EVENT_LABELS[trigger.kind] ?? trigger.kind
+
+  if (trigger.kind === 'issue_labelled' && trigger.label?.trim()) {
+    return `When an issue is labelled ${trigger.label.trim()}`
+  }
+
+  if (trigger.kind === 'review_requested' && trigger.reviewer?.trim()) {
+    return `When a review is requested from ${trigger.reviewer.trim()}`
+  }
+
   return trigger.branch ? `When ${what} on ${trigger.branch}` : `When ${what}`
 }
 
@@ -152,7 +181,124 @@ export async function pollTrigger(
       }))
   }
 
+  if (trigger.kind === 'issue_labelled' || trigger.kind === 'review_requested') {
+    return pollIssueEvents(trigger, repoDir)
+  }
+
   return null
+}
+
+/**
+ * One row of `repos/{owner}/{repo}/issues/events`.
+ *
+ * Only the fields actually read, and every one of them was confirmed against a
+ * real response before anything was designed around it — see `pollIssueEvents`
+ * for what that turned up.
+ */
+export interface IssueEventRow {
+  id?: number
+  event?: string
+  label?: { name?: string }
+  requested_reviewer?: { login?: string }
+  requested_team?: { name?: string }
+  issue?: {
+    number?: number
+    title?: string
+    html_url?: string
+    /** Present only when the "issue" is really a pull request. */
+    pull_request?: unknown
+  }
+}
+
+/**
+ * Things that happened *to* an issue or pull request, rather than things that
+ * were opened.
+ *
+ * A different shape of question from the two triggers above, and it needs a
+ * different source. "An issue is labelled" is not a property of the issue — it
+ * is something done to one, possibly long after it was opened and possibly
+ * more than once. Listing issues and watching them change cannot express that:
+ * an old issue labelled today has a low number, so a high-water mark on issue
+ * numbers would never see it, and `updatedAt` moves for every comment and edit
+ * as well, so a trigger built on it would fire on things that are not labels.
+ *
+ * `repos/{owner}/{repo}/issues/events` is the event log itself. Each entry has
+ * a monotonically increasing `id`, which is exactly what the cursor here wants,
+ * and says which kind of thing happened — so both kinds below come from one
+ * request rather than two.
+ *
+ * `{owner}` and `{repo}` are resolved by `gh` from the git remote, the same way
+ * `gh pr list` does, so this stays "the question you would have typed".
+ */
+async function pollIssueEvents(
+  trigger: EventTrigger,
+  repoDir: string,
+): Promise<TriggerEvent[] | null> {
+  const rows = await gh(
+    ['api', `repos/{owner}/{repo}/issues/events?per_page=${LOOKBACK}`],
+    repoDir,
+  )
+  if (!rows) return null
+
+  return issueEventsFrom(rows as IssueEventRow[], trigger)
+}
+
+/**
+ * The events this trigger cares about, from what the log returned.
+ *
+ * Split from the request so the filtering can be tested against the real
+ * payload without a repository — and the filtering is where the mistakes are.
+ */
+export function issueEventsFrom(rows: IssueEventRow[], trigger: EventTrigger): TriggerEvent[] {
+  const wanted = trigger.kind === 'issue_labelled' ? 'labeled' : 'review_requested'
+  const label = trigger.label?.trim().toLowerCase()
+  const reviewer = trigger.reviewer?.trim().toLowerCase()
+
+  return rows
+    .filter(row => row.event === wanted)
+    .filter(row => typeof row.id === 'number' && row.issue?.html_url)
+    .filter((row) => {
+      if (trigger.kind === 'issue_labelled') {
+        return !label || (row.label?.name ?? '').toLowerCase() === label
+      }
+
+      // A review can be asked of a person or of a team, and somebody filtering
+      // by their own login should still be told when their team was asked.
+      if (!reviewer) return true
+      const asked = [row.requested_reviewer?.login, row.requested_team?.name]
+        .filter(Boolean)
+        .map(name => name!.toLowerCase())
+      return asked.includes(reviewer)
+    })
+    .map(row => ({
+      key: row.id!,
+      summary: summarizeIssueEvent(trigger.kind, row),
+      url: row.issue!.html_url!,
+    }))
+}
+
+function summarizeIssueEvent(kind: GithubEventKind, row: IssueEventRow): string {
+  const number = row.issue?.number
+  const title = row.issue?.title ?? '(untitled)'
+
+  /**
+   * A pull request is an issue as far as this endpoint is concerned — both
+   * arrive under a field called `issue`, and both can be labelled. So the
+   * summary asks which it actually was rather than assuming, since telling
+   * somebody "issue #14117" about a pull request sends them looking for the
+   * wrong thing.
+   */
+  const what = row.issue?.pull_request ? 'pull request' : 'issue'
+
+  if (kind === 'issue_labelled') {
+    const name = row.label?.name
+    const labelled = name ? ` ${name}` : ''
+    return `${what} #${number} labelled${labelled}: ${title}`
+  }
+
+  const asked = row.requested_reviewer?.login ?? row.requested_team?.name
+  const from = asked ? ` from ${asked}` : ''
+  return `review requested${from} on ${what} #${number}: ${title}`
 }
 
 /**
