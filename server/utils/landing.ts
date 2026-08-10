@@ -51,6 +51,23 @@ export interface LandingInput {
   check?: { status: string } | null
   checkStale?: boolean
   worktree: { exists: boolean; changedFiles: number; dirty: boolean; ahead: number; behind: number }
+  /**
+   * Commits on this branch that the base branch does not already have.
+   *
+   * Not the same as `worktree.ahead`, and the difference is the whole reason this
+   * field exists. `ahead` is counted from the commit the session branched at,
+   * which is frozen when the session is created — so a session whose work has
+   * *already landed* still reports sixteen commits ahead forever. Measured
+   * against the base branch as it is now, the same session reports zero, which is
+   * the truth: there is nothing left to bring across.
+   *
+   * A partly-finished landing is exactly this case. Two of four merged, the third
+   * failed; press the button again and the two that landed came back into the
+   * queue, had their checks re-run at length, and were then refused for having
+   * "nothing to merge" — which stopped the run before it reached the two that
+   * still needed it.
+   */
+  unmerged: number
 }
 
 function needOf(session: LandingInput): LandingCandidate {
@@ -72,6 +89,16 @@ function needOf(session: LandingInput): LandingCandidate {
   // Nothing to bring forward. Not a problem, just not a merge.
   if (!session.worktree.changedFiles && !session.worktree.dirty && !session.worktree.ahead) {
     return { ...head, need: 'blocked', reason: 'Nothing in it to merge.' }
+  }
+
+  /**
+   * Already in. Checked before anything that costs money, because this is the
+   * session a retry keeps tripping over: it has commits, it looks green, and
+   * every one of its commits is in the base already. Running its checks to find
+   * that out is minutes spent to learn nothing.
+   */
+  if (!session.unmerged) {
+    return { ...head, need: 'blocked', reason: 'Already landed — everything in it is in the base branch.' }
   }
 
   // A known failure is a decision, not a step: re-running it will fail again,
@@ -116,6 +143,8 @@ export function planLanding(sessions: LandingInput[]): LandingShape {
 /** How a single attempt ended, for the record and for the person reading it. */
 export type LandingOutcome =
   | 'merged'
+  /** Its work was already in the base — nothing to do, and not a failure. */
+  | 'already-landed'
   | 'checks-failed'
   | 'conflicts'
   | 'update-failed'
@@ -140,6 +169,12 @@ export interface LandingStepResult {
  * A refusal is different: it means git would not let anything merge here
  * (a dirty checkout, the wrong branch), which will be just as true for
  * everything behind it.
+ *
+ * `already-landed` deliberately does not stop it, and getting that wrong is what
+ * made a partial landing unrecoverable. A session whose work was already in the
+ * base came back as `refused`, the run stopped on it, and the two sessions behind
+ * it that genuinely needed merging were recorded as "not attempted" — every time
+ * the button was pressed.
  */
 export function shouldStopRun(outcome: LandingOutcome): boolean {
   return outcome === 'refused'
@@ -151,6 +186,7 @@ export function describeLanding(results: LandingStepResult[]): string {
   const failed = results.filter(r => r.outcome === 'checks-failed').length
   const conflicted = results.filter(r => r.outcome === 'conflicts').length
   const unchecked = results.filter(r => r.outcome === 'no-checks').length
+  const already = results.filter(r => r.outcome === 'already-landed').length
 
   if (!results.length) return 'Nothing was ready to land.'
 
@@ -159,6 +195,10 @@ export function describeLanding(results: LandingStepResult[]): string {
   if (failed) parts.push(`${failed} failed ${failed === 1 ? 'its' : 'their'} checks after updating.`)
   if (conflicted) parts.push(`${conflicted} would conflict and ${conflicted === 1 ? 'was' : 'were'} left alone.`)
   if (unchecked) parts.push(`${unchecked} had no checks to run, so ${unchecked === 1 ? 'it was' : 'they were'} not merged.`)
+  // Said rather than omitted: a retry after a partial landing is mostly these,
+  // and a summary of "merged 2 sessions" with no mention of the other two reads
+  // as though they were forgotten.
+  if (already) parts.push(`${already} ${already === 1 ? 'was' : 'were'} already in the base.`)
 
   return parts.join(' ')
 }

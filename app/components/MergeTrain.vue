@@ -120,6 +120,33 @@ function outcomeLabel(car: TrainCar): string | null {
   return LANDING_OUTCOMES[step.outcome]?.label ?? step.outcome
 }
 
+/**
+ * The glyph describes the *outcome* once there is one.
+ *
+ * It used to keep showing the need's glyph regardless, so a refused row wore a
+ * green tick and a merged one wore the download arrow of "needs the base". The
+ * label was right and the icon beside it said something else.
+ */
+function glyphFor(car: TrainCar): string {
+  const state = stateOf(car)
+  if (state === 'inflight') return 'i-lucide-loader-2'
+  if (state === 'merged') return 'i-lucide-git-merge'
+  if (state === 'not-attempted') return 'i-lucide-circle-dashed'
+
+  const outcome = stepFor(car)?.outcome
+  if (outcome === 'already-landed') return 'i-lucide-check'
+  if (outcome) return 'i-lucide-circle-alert'
+
+  return NEEDS[car.need].icon
+}
+
+/** Merged and already-in are both good endings; the rest want noticing. */
+function outcomeColor(car: TrainCar): string | null {
+  const outcome = stepFor(car)?.outcome
+  if (!outcome) return null
+  return LANDING_OUTCOMES[outcome]?.good ? 'var(--success)' : 'var(--warning)'
+}
+
 const confirming = ref(false)
 
 /** Reset the confirmation once a landing actually starts. */
@@ -256,9 +283,9 @@ function titleOf(car: TrainCar): string {
           </div>
 
           <!-- The need, in words next to a glyph. Never colour on its own. -->
-          <span class="car-need" :style="{ '--need-color': NEEDS[car.need].color }">
+          <span class="car-need" :style="{ '--need-color': outcomeColor(car) ?? NEEDS[car.need].color }">
             <UIcon
-              :name="stateOf(car) === 'inflight' ? 'i-lucide-loader-2' : NEEDS[car.need].icon"
+              :name="glyphFor(car)"
               class="size-3 shrink-0"
               :class="{ 'animate-spin': stateOf(car) === 'inflight' }"
             />
@@ -455,10 +482,6 @@ function titleOf(car: TrainCar): string {
 .car--merged { opacity: 0.5; }
 .car--merged .car-track,
 .car--merged .car-dot { background: var(--success); }
-.car--merged .car-need { color: var(--success); }
-
-/* Passed over: the landing reached it and left it alone, which is a result. */
-.car--passed-over .car-need { color: var(--warning); }
 
 /* Never reached, because the run stopped first. Not a result about this session,
    so it is stated and then left quiet. */

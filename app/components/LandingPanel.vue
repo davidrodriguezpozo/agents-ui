@@ -35,7 +35,10 @@ function stepStyle(outcome?: string) {
 function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
   if (isCurrent) return 'i-lucide-loader-2'
   if (!step.outcome) return 'i-lucide-circle-dashed'
-  return step.outcome === 'merged' ? 'i-lucide-git-merge' : 'i-lucide-circle-alert'
+  if (step.outcome === 'merged') return 'i-lucide-git-merge'
+  // Already in is not an alarm — it is the same good ending, reached earlier.
+  if (step.outcome === 'already-landed') return 'i-lucide-check'
+  return 'i-lucide-circle-alert'
 }
 </script>
 

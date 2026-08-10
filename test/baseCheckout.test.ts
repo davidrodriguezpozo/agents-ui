@@ -103,3 +103,43 @@ describe('the checkout everything merges into', () => {
     expect((await merge.baseCheckoutState(repo, 'main')).blockedReason).toBeUndefined()
   })
 })
+
+describe('what is left to merge', () => {
+  it('counts the commits the base does not have', async () => {
+    git(['checkout', '-q', '-b', 'sess-1'])
+    await writeFile(join(repo, 'a.txt'), 'work\n')
+    git(['add', '.'])
+    git(['commit', '-qm', 'session work'])
+    git(['checkout', '-q', 'main'])
+
+    expect(await merge.unmergedCommitCount(repo, 'main', 'sess-1')).toBe(1)
+  })
+
+  it('drops to zero once it has landed, while ahead-from-branch-point does not', async () => {
+    // The fact the whole fix rests on. `ahead` is measured from the commit the
+    // session branched at, which never moves — so after merging, that number is
+    // still 1 and this one is 0. Queueing on the first is what re-attempted work
+    // that was already in, and stopped the run doing it.
+    const branchPoint = git(['rev-parse', 'HEAD'])
+
+    git(['checkout', '-q', '-b', 'sess-1'])
+    await writeFile(join(repo, 'a.txt'), 'work\n')
+    git(['add', '.'])
+    git(['commit', '-qm', 'session work'])
+    git(['checkout', '-q', 'main'])
+    git(['merge', '-q', '--no-ff', 'sess-1', '-m', 'Merge session'])
+
+    expect(await merge.unmergedCommitCount(repo, 'main', 'sess-1')).toBe(0)
+    expect(git(['rev-list', '--count', `${branchPoint}..sess-1`])).toBe('1')
+  })
+
+  it('is zero for a branch that never committed', async () => {
+    git(['branch', 'sess-empty'])
+    expect(await merge.unmergedCommitCount(repo, 'main', 'sess-empty')).toBe(0)
+  })
+
+  it('is zero rather than throwing for a branch that is not there', async () => {
+    // A session whose branch was deleted by hand should not take the plan down.
+    expect(await merge.unmergedCommitCount(repo, 'main', 'no-such-branch')).toBe(0)
+  })
+})

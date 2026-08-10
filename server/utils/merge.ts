@@ -13,10 +13,27 @@ const exec = promisify(execFile)
  * wrong is aborted rather than left half-applied.
  */
 
+/**
+ * Which precondition failed, for callers that must act differently per cause.
+ *
+ * The words in `blockedReason` are for a person; this is for the code. Landing
+ * needs the difference because two of these are facts about the repository and
+ * stop everything behind them, while the rest are about one session and must not.
+ */
+export type MergeBlocker =
+  | 'no-commits'
+  | 'already-landed'
+  | 'dirty-base'
+  | 'wrong-branch'
+  | 'conflicts'
+  | 'checks'
+
 export interface MergePreview {
   canMerge: boolean
   /** Why not, in words a person can act on. */
   blockedReason?: string
+  /** Why not, as something to branch on. */
+  blockedBy?: MergeBlocker
   targetBranch: string
   currentBranch: string
   repoClean: boolean
@@ -69,6 +86,24 @@ async function tryGit(cwd: string, args: string[]): Promise<string> {
   } catch {
     return ''
   }
+}
+
+/**
+ * Commits on `branch` that `baseBranch` does not already have.
+ *
+ * The number that tells you whether there is anything left to merge — and
+ * pointedly not `worktree.ahead`, which is counted from the commit the session
+ * branched at and is frozen there. A session whose work has already landed
+ * reports sixteen commits ahead of where it started and zero unmerged, and only
+ * the second of those answers "should this be in the next landing".
+ */
+export async function unmergedCommitCount(
+  repoDir: string,
+  baseBranch: string,
+  branch: string,
+): Promise<number> {
+  const count = await tryGit(repoDir, ['rev-list', '--count', `${baseBranch}..${branch}`])
+  return Number(count) || 0
 }
 
 /**
@@ -174,14 +209,32 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
   }
 
   if (!commits) {
-    preview.blockedReason = 'This session has not committed anything yet, so there is nothing to merge.'
+    /**
+     * No commits the base does not already have. Two very different reasons, and
+     * saying the wrong one is actively misleading: a session showing "16 ahead"
+     * told that it "has not committed anything" reads as a bug in the app, when
+     * what happened is that its work landed earlier and `ahead` is counted from
+     * where it branched rather than from the base as it stands.
+     */
+    const everCommitted = session.baseSha
+      ? (await tryGit(repoDir, ['rev-list', '--count', `${session.baseSha}..${branch}`])) !== '0'
+      : false
+
+    preview.blockedBy = everCommitted ? 'already-landed' : 'no-commits'
+    preview.blockedReason = everCommitted
+      ? `Everything in this session is already in ${baseBranch} — it landed earlier.`
+      : 'This session has not committed anything yet, so there is nothing to merge.'
   } else if (!repoClean) {
+    preview.blockedBy = 'dirty-base'
     preview.blockedReason = `Your ${currentBranch} checkout has uncommitted changes. Commit or stash them first — merging into a dirty checkout is how work gets lost.`
   } else if (currentBranch !== baseBranch) {
+    preview.blockedBy = 'wrong-branch'
     preview.blockedReason = `Your checkout is on ${currentBranch}, but this session branched from ${baseBranch}. Switch to ${baseBranch} first.`
   } else if (conflicts.length) {
+    preview.blockedBy = 'conflicts'
     preview.blockedReason = `${conflicts.length} file${conflicts.length === 1 ? '' : 's'} would conflict. Resolve them in the session before merging.`
   } else if (checkBlocks(check)) {
+    preview.blockedBy = 'checks'
     // Evaluated last on purpose: reaching here means git has no objection, so
     // the checks are the only thing standing in the way — which is what makes
     // overriding them safe to offer at all.

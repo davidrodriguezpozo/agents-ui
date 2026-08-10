@@ -19,6 +19,7 @@ function session(over: Partial<LandingInput> = {}): LandingInput {
     check: { status: 'passing' },
     checkStale: false,
     worktree: { exists: true, changedFiles: 3, dirty: false, ahead: 1, behind: 0 },
+    unmerged: 1,
     ...over,
   }
 }
@@ -145,5 +146,70 @@ describe('describeLanding', () => {
     const said = describeLanding([result('merged'), result('checks-failed')])
     expect(said).toContain('Merged 1 session.')
     expect(said).toContain('its checks')
+  })
+})
+
+describe('a session whose work is already in the base', () => {
+  it('is kept out of the queue', () => {
+    // The retry after a partial landing. `ahead` is counted from where the
+    // session branched and stays put, so this one still looks like sixteen
+    // commits of work — and `unmerged` is what knows better.
+    const landed = session({ id: 'landed', unmerged: 0, worktree: wt({ ahead: 16, behind: 2 }) })
+
+    const plan = planLanding([landed])
+
+    expect(plan.queue).toEqual([])
+    expect(plan.skipped[0]!.reason).toMatch(/already landed/i)
+  })
+
+  it('does not take the sessions behind it down with it', () => {
+    // The whole bug: it came back as `refused`, the run stopped on it, and the
+    // ones that genuinely needed merging were never attempted.
+    const plan = planLanding([
+      session({ id: 'landed', unmerged: 0, worktree: wt({ ahead: 16, behind: 2 }) }),
+      session({ id: 'still-needed' }),
+      session({ id: 'also-needed', worktree: wt({ behind: 3 }) }),
+    ])
+
+    expect(plan.queue.map(c => c.id)).toEqual(['still-needed', 'also-needed'])
+    expect(plan.skipped.map(c => c.id)).toEqual(['landed'])
+  })
+
+  it('is decided before the checks are consulted', () => {
+    // Ordering matters for money, not tidiness: reaching a verdict on an
+    // already-landed session means running its suite to learn nothing.
+    const landed = session({ id: 'landed', unmerged: 0, checkStale: true, check: null })
+
+    expect(planLanding([landed]).skipped[0]!.reason).toMatch(/already landed/i)
+  })
+})
+
+describe('what stops a whole run', () => {
+  it('stops for a refusal, which is about the repository', () => {
+    expect(shouldStopRun('refused')).toBe(true)
+  })
+
+  it('does not stop for work that was already in', () => {
+    expect(shouldStopRun('already-landed')).toBe(false)
+  })
+
+  it('does not stop for one session failing its checks', () => {
+    expect(shouldStopRun('checks-failed')).toBe(false)
+    expect(shouldStopRun('conflicts')).toBe(false)
+  })
+})
+
+describe('describeLanding, with work that was already in', () => {
+  it('says so rather than omitting it', () => {
+    // "Merged 2 sessions." with no mention of the other two reads as though they
+    // were forgotten.
+    const summary = describeLanding([
+      { id: 'a', title: 'a', outcome: 'merged' },
+      { id: 'b', title: 'b', outcome: 'already-landed' },
+      { id: 'c', title: 'c', outcome: 'already-landed' },
+    ])
+
+    expect(summary).toContain('Merged 1 session.')
+    expect(summary).toMatch(/2 were already in the base/i)
   })
 })

@@ -1,5 +1,6 @@
 export type LandingOutcome =
-  | 'merged' | 'checks-failed' | 'conflicts' | 'update-failed' | 'no-checks' | 'refused'
+  | 'merged' | 'already-landed' | 'checks-failed' | 'conflicts'
+  | 'update-failed' | 'no-checks' | 'refused'
 
 export interface LandingStep {
   sessionId: string
@@ -132,6 +133,8 @@ export function useLanding() {
 /** What each ending is called, and whether it is a good one. */
 export const LANDING_OUTCOMES: Record<LandingOutcome, { label: string; good: boolean }> = {
   'merged': { label: 'Merged', good: true },
+  // Good, because the work is in. It is only ever surprising, never a problem.
+  'already-landed': { label: 'Already in', good: true },
   'checks-failed': { label: 'Checks failed', good: false },
   'conflicts': { label: 'Would conflict', good: false },
   'update-failed': { label: 'Could not update', good: false },

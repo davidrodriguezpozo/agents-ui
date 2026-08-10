@@ -1,6 +1,8 @@
 import { findSession, patchSession, readSessions, type Session } from './sessions'
 import { updateFromBase, worktreeStatus } from './worktrees'
-import { baseCheckoutState, commitSessionWork, mergeSession, previewMerge } from './merge'
+import {
+  baseCheckoutState, commitSessionWork, mergeSession, previewMerge, unmergedCommitCount,
+} from './merge'
 import { verifySession } from './sessionChecks'
 import { notify } from './notify'
 import {
@@ -34,13 +36,19 @@ export function isLanding(repoDir: string): boolean {
   return landing.has(repoDir)
 }
 
-function toInput(session: Session & { worktree: Awaited<ReturnType<typeof worktreeStatus>> }): LandingInput {
+function toInput(
+  session: Session & {
+    worktree: Awaited<ReturnType<typeof worktreeStatus>>
+    unmerged: number
+  },
+): LandingInput {
   return {
     id: session.id,
     title: session.title,
     status: session.status,
     check: session.check ?? null,
     worktree: session.worktree,
+    unmerged: session.unmerged,
   }
 }
 
@@ -60,7 +68,13 @@ export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
       session.baseSha || session.baseBranch,
       session.baseBranch,
     )
-    return toInput({ ...session, worktree })
+
+    // Asked of the repository rather than the worktree, and against the base as
+    // it stands now — which is what makes a session that already landed drop out
+    // of the next plan instead of being re-attempted.
+    const unmerged = await unmergedCommitCount(session.repoDir, session.baseBranch, session.branch)
+
+    return toInput({ ...session, worktree, unmerged })
   }))
 }
 
@@ -112,9 +126,19 @@ async function land(sessionId: string): Promise<LandingStepResult> {
   const preview = await previewMerge(ready)
 
   if (!preview.canMerge) {
-    // Told apart because they mean different things for the rest of the queue:
-    // a conflict is this session's problem, a dirty base is everyone's.
-    const outcome: LandingOutcome = preview.conflicts.length ? 'conflicts' : 'refused'
+    /**
+     * Told apart because they mean different things for the rest of the queue: a
+     * conflict is this session's problem, a dirty base is everyone's, and work
+     * that already landed is nobody's.
+     *
+     * That last one used to fall through to `refused`, which stops the whole run
+     * — so one already-merged session left every session behind it unattempted,
+     * on every retry.
+     */
+    const outcome: LandingOutcome = preview.blockedBy === 'already-landed'
+      ? 'already-landed'
+      : preview.conflicts.length ? 'conflicts' : 'refused'
+
     return { ...head, outcome, detail: preview.blockedReason }
   }
 
