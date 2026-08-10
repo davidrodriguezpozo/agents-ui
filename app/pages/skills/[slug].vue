@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
-import type { Skill, SkillFrontmatter } from '~/types'
+import {
+  formatAllowedTools,
+  mergeSkillFrontmatter,
+  normalizeSkillFrontmatter,
+  parseAllowedTools,
+} from '~/utils/skillFrontmatter'
+import type { Skill, SkillFile, SkillFrontmatter } from '~/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -16,28 +22,63 @@ const saving = ref(false)
 
 const frontmatter = ref<SkillFrontmatter>({ name: '', description: '' })
 const body = ref('')
+/** Held as text because that is how people type a list into one field. */
+const allowedTools = ref('')
+
+/**
+ * Supporting files kept apart from `skill`, because saving the instructions
+ * returns the written SKILL.md and knows nothing about the rest of the
+ * directory — folding that response into `skill` would blank the tree.
+ */
+const files = ref<SkillFile[]>([])
+
+/**
+ * What the frontmatter would look like written to disk right now.
+ *
+ * Built by merging over what was read, so keys this editor has no field for —
+ * `license`, `metadata`, anything a future version of the format adds — are
+ * still there afterwards. Rebuilding it from the fields instead is how saving a
+ * typo fix used to delete a skill's `allowed-tools` without saying so.
+ */
+const editedFrontmatter = computed(() => mergeSkillFrontmatter(skill.value?.frontmatter, {
+  ...frontmatter.value,
+  'allowed-tools': parseAllowedTools(allowedTools.value),
+}))
+
+/** The file as it stands on disk, normalised the way a save would write it. */
+const baseline = ref('')
 
 const { hasDraft, draftAge, loadDraft, clearDraft, scheduleSave } = useDraftRecovery(`skill:${slug}`)
 
-watch([frontmatter, body], () => {
-  if (skill.value) scheduleSave(frontmatter.value, body.value)
+watch([frontmatter, body, allowedTools], () => {
+  if (skill.value) scheduleSave(editedFrontmatter.value, body.value)
 }, { deep: true })
 
 function restoreDraft() {
   const draft = loadDraft()
   if (draft) {
-    frontmatter.value = draft.frontmatter as SkillFrontmatter
+    const fm = draft.frontmatter as SkillFrontmatter
+    frontmatter.value = { ...fm }
+    allowedTools.value = formatAllowedTools(fm['allowed-tools'])
     body.value = draft.body
     clearDraft()
     toast.add({ title: 'Draft restored', color: 'success' })
   }
 }
 
+/** Load the editor from a skill as fetched, and reset what "unchanged" means. */
+function adopt(loaded: Skill) {
+  skill.value = loaded
+  frontmatter.value = { ...loaded.frontmatter }
+  allowedTools.value = formatAllowedTools(loaded.frontmatter['allowed-tools'])
+  body.value = loaded.body
+  if (loaded.files) files.value = loaded.files
+  baseline.value = JSON.stringify(normalizeSkillFrontmatter(loaded.frontmatter))
+}
+
 onMounted(async () => {
   try {
-    skill.value = await fetchOne(slug)
-    frontmatter.value = { ...skill.value.frontmatter }
-    body.value = skill.value.body
+    adopt(await fetchOne(slug))
   } catch {
     toast.add({ title: 'Skill not found', color: 'error' })
     router.push('/skills')
@@ -52,16 +93,12 @@ async function save() {
 
   saving.value = true
   try {
-    // Clean empty optional fields
-    const fm: SkillFrontmatter = {
-      name: frontmatter.value.name.trim(),
-      description: frontmatter.value.description.trim(),
-    }
-    if (frontmatter.value.context?.trim()) fm.context = frontmatter.value.context.trim()
-    if (frontmatter.value.agent?.trim()) fm.agent = frontmatter.value.agent.trim()
-
+    const fm = editedFrontmatter.value
     const updated = await update(slug, { frontmatter: fm, body: body.value })
-    skill.value = updated
+
+    // The PUT response carries no file list — the tree on screen is still right,
+    // so it is kept rather than overwritten with nothing.
+    adopt({ ...updated, files: files.value })
     clearDraft()
     toast.add({ title: 'Saved', color: 'success' })
     if (updated.slug !== slug) router.replace(`/skills/${updated.slug}`)
@@ -84,15 +121,44 @@ async function deleteSkill() {
   }
 }
 
+/**
+ * Copy a read-only skill into one you own — supporting files included.
+ *
+ * Copying only SKILL.md produces instructions that refer to `references/api.md`
+ * beside a directory that has no such file, which is a broken skill that looks
+ * like a working one. Binary assets are the exception and are named rather than
+ * silently dropped: they go through a text read that would corrupt them.
+ */
 async function editCopy() {
   if (!skill.value) return
-  const { create } = useSkills()
+  const { create, readFile, saveFile } = useSkills()
+
   try {
     const copy = await create({
       frontmatter: { ...skill.value.frontmatter, name: skill.value.frontmatter.name + ' (copy)' },
       body: skill.value.body,
     })
-    toast.add({ title: 'Copy created', color: 'success' })
+
+    const skipped: string[] = []
+    for (const file of files.value) {
+      if (file.kind !== 'file') continue
+      if (file.binary) {
+        skipped.push(file.path)
+        continue
+      }
+      try {
+        const { content } = await readFile(slug, file.path)
+        await saveFile(copy.slug, file.path, content)
+      } catch {
+        skipped.push(file.path)
+      }
+    }
+
+    toast.add({
+      title: 'Copy created',
+      description: skipped.length ? `Not copied: ${skipped.join(', ')}` : undefined,
+      color: skipped.length ? 'warning' : 'success',
+    })
     router.push(`/skills/${copy.slug}`)
   } catch (e: any) {
     toast.add({ title: 'Failed to create copy', description: errorMessage(e), color: 'error' })
@@ -116,7 +182,7 @@ const lineCount = computed(() => body.value.split('\n').length)
 
 const isDirty = computed(() => {
   if (!skill.value) return false
-  return JSON.stringify(frontmatter.value) !== JSON.stringify(skill.value.frontmatter)
+  return JSON.stringify(editedFrontmatter.value) !== baseline.value
     || body.value !== skill.value.body
 })
 
@@ -284,6 +350,16 @@ const agentOptions = computed(() =>
               </datalist>
               <span class="field-hint">Link this skill to a specific agent. The skill's instructions will be loaded when that agent is active.</span>
             </div>
+            <div class="field-group">
+              <label class="field-label">Allowed tools</label>
+              <input
+                v-model="allowedTools"
+                class="field-input"
+                :disabled="isImported"
+                placeholder="Leave blank for every tool"
+              />
+              <span class="field-hint">Comma separated, e.g. Read, Grep, Bash. Restricts what this skill may do.</span>
+            </div>
           </div>
 
           <div class="field-group">
@@ -310,15 +386,16 @@ const agentOptions = computed(() =>
             </span>
           </div>
         </div>
-        <textarea
-          v-model="body"
-          class="editor-textarea"
-          style="min-height: 500px;"
-          spellcheck="false"
-          :disabled="isImported"
-          placeholder="Skill instructions..."
-        />
+        <CodeEditor v-model="body" path="SKILL.md" :disabled="isImported" />
       </div>
+
+      <!-- The rest of the directory: references/, scripts/, assets/ -->
+      <SkillFilesPanel
+        :slug="slug"
+        :files="files"
+        :read-only="isImported || skill.source === 'plugin'"
+        @update:files="(next) => { files = next }"
+      />
 
       <!-- File location (collapsed) -->
       <details class="group">

@@ -63,13 +63,23 @@ export function isInside(root: string, candidate: string): boolean {
  * that lead out are all refused rather than normalised into something
  * plausible — a request that asked for the wrong thing should hear so.
  */
-export async function resolveInWorkspace(workspace: string, relPath: string): Promise<string> {
+export async function resolveInWorkspace(
+  workspace: string,
+  relPath: string,
+  /**
+   * Named in the refusal. A skill directory is scoped by exactly this function,
+   * and being told a path is outside "the session workspace" when you were
+   * editing a skill's references is a message that sends you looking in the
+   * wrong place.
+   */
+  rootLabel = 'session workspace',
+): Promise<string> {
   const root = await realpath(workspace).catch(() => resolve(workspace))
   const target = resolve(root, relPath)
 
   // Checked before touching the disk, so an obvious escape never becomes a
   // filesystem call at all.
-  if (!isInside(root, target)) throw outsideWorkspace()
+  if (!isInside(root, target)) throw outsideWorkspace(rootLabel)
 
   /**
    * Then again with the symlinks resolved — and this walks *up* rather than
@@ -96,14 +106,14 @@ export async function resolveInWorkspace(workspace: string, relPath: string): Pr
     const real = await realpath(cursor).catch(() => null)
 
     if (real) {
-      if (!isInside(root, real)) throw outsideWorkspace()
+      if (!isInside(root, real)) throw outsideWorkspace(rootLabel)
       return trailing.length ? join(real, ...trailing.reverse()) : real
     }
 
     const parent = dirname(cursor)
     // Walked to the filesystem root without finding anything real: there is no
     // ancestor to vouch for this path, so it is refused rather than guessed at.
-    if (parent === cursor) throw outsideWorkspace()
+    if (parent === cursor) throw outsideWorkspace(rootLabel)
 
     trailing.push(basename(cursor))
     cursor = parent
@@ -214,8 +224,8 @@ export function looksBinary(buffer: Buffer): boolean {
  * like the app broke rather than like the path was refused — and buries the
  * one sentence that explains it.
  */
-function outsideWorkspace(): Error {
-  return createHttpError(403, 'That path is outside the session workspace.')
+function outsideWorkspace(rootLabel = 'session workspace'): Error {
+  return createHttpError(403, `That path is outside the ${rootLabel}.`)
 }
 
 /** h3's `createError` inside the server, a plain error in tests. */

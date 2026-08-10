@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { parseFrontmatter } from '../../utils/frontmatter'
 import { findSkill } from '../../utils/findSkill'
+import { listSkillFiles } from '../../utils/skillFiles'
 import type { SkillFrontmatter } from '~/types'
 
 export default defineEventHandler(async (event) => {
@@ -25,5 +26,8 @@ export default defineEventHandler(async (event) => {
     pluginId: found.pluginId,
     pluginName: found.pluginName,
     githubRepo: found.githubRepo,
+    // Only on the single-skill fetch: the list page shows a hundred of these and
+    // does not need any of them walked.
+    files: await listSkillFiles(found.dir),
   }
 })

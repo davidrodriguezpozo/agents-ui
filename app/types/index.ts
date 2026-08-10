@@ -185,7 +185,31 @@ export interface SkillFrontmatter {
   description: string
   context?: string
   agent?: string
+  /** Tool allowlist, as Claude Code reads it from skill frontmatter. */
+  'allowed-tools'?: string[]
+  /**
+   * Keys this app has no field for are still real. Anything editing a skill
+   * has to carry them back out again — see `mergeSkillFrontmatter`.
+   */
   [key: string]: unknown
+}
+
+/**
+ * A file sitting beside SKILL.md in the skill's directory.
+ *
+ * A skill is a directory, not a file: the instructions live in SKILL.md and
+ * everything it defers to — `references/`, `scripts/`, `assets/` — lives next
+ * to it. Progressive disclosure is the whole point of that layout, so a skill
+ * shown without these is a skill shown with its second half missing.
+ */
+export interface SkillFile {
+  name: string
+  /** Relative to the skill directory, which is the only form a request may use. */
+  path: string
+  kind: 'file' | 'directory'
+  size?: number
+  /** Set when the contents are not text we would open in an editor. */
+  binary?: boolean
 }
 
 export interface Skill {
@@ -200,6 +224,8 @@ export interface Skill {
   pluginName?: string
   projectDir?: string
   readOnly?: boolean
+  /** Supporting files, SKILL.md excluded. Only present on a single-skill fetch. */
+  files?: SkillFile[]
 }
 
 export interface AgentSkill {

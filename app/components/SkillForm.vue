@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
+import { mergeSkillFrontmatter } from '~/utils/skillFrontmatter'
 import type { Skill, SkillFrontmatter } from '~/types'
 
 const props = defineProps<{
@@ -52,13 +53,11 @@ async function save() {
 
   saving.value = true
   try {
-    // Clean empty optional fields
-    const fm: SkillFrontmatter = {
-      name: frontmatter.value.name.trim(),
-      description: frontmatter.value.description.trim(),
-    }
-    if (frontmatter.value.context?.trim()) fm.context = frontmatter.value.context.trim()
-    if (frontmatter.value.agent?.trim()) fm.agent = frontmatter.value.agent.trim()
+    // Merged over what was read rather than rebuilt from these four fields:
+    // editing a skill that carries `allowed-tools` or `license` must not be the
+    // thing that deletes them. `initial` is undefined when creating, and merging
+    // onto nothing is just the fields.
+    const fm = mergeSkillFrontmatter(props.initial?.frontmatter, frontmatter.value)
 
     const isEdit = props.mode === 'edit' && props.initial
     const skill = isEdit
