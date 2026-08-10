@@ -169,7 +169,18 @@ async function closeShell() {
    work out rows and columns, so it has to be the thing with a size. */
 .terminal-host {
   height: clamp(16rem, 45vh, 34rem);
-  padding: 8px;
   background: #1e1e2e;
+}
+
+/* The padding belongs on the xterm element, not on the box above.
+ *
+ * The addon reads this box's `height` for the space available and subtracts
+ * only the padding it finds on `.xterm`. Everything here is `border-box`, so
+ * padding out here is counted as usable and then is not — it asked for 35 rows
+ * where 33 fit, and the last line sat half under the bottom edge for anyone
+ * whose shell had scrolled. Padding on `.xterm` is subtracted, so the rows it
+ * asks for are the rows there is room to draw. */
+.terminal-host :deep(.xterm) {
+  padding: 8px;
 }
 </style>

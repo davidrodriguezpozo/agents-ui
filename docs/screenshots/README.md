@@ -18,7 +18,6 @@ Light mode at 1456×839 unless noted.
 | `07-ritual-needs-permission.jpg` | A ritual that hit a permission prompt with nobody there to answer. Offers the one narrow rule it needed rather than full access |
 | `08-backups.jpg` | Automatic snapshots of sessions and rituals, stored outside the app's own directory so they survive it being deleted |
 | `09-activity.jpg` | Every run — scheduled, agent and session turns — with cost, duration and outcome |
-| `10-session-dark-mode.jpg` | The same conversation in dark mode |
 | `11-agents.jpg` | Subagents with their model tier and tool allowlists |
 | `12-commands-by-origin.jpg` | Commands grouped by where they come from — personal, or a named plugin |
 | `13-workflow-builder.jpg` | Chaining agents into a pipeline, each step resolved to its agent and model |
