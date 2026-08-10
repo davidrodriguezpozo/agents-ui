@@ -258,32 +258,61 @@ body {
   background-color: var(--surface-base);
   background-image: radial-gradient(
     circle,
-    rgba(229, 169, 62, 0.04) 1px,
+    rgba(91, 91, 214, 0.03) 1px,
     transparent 1px
   );
-  background-size: 28px 28px;
+  background-size: 24px 24px;
+}
+
+/* Hide connection handles (needed for edge routing, not for display) */
+.graph-handle {
+  width: 1px !important;
+  height: 1px !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* Node styles */
 .graph-node {
+  position: relative;
   border: 1px solid var(--border-default);
   background: var(--graph-node-bg);
   backdrop-filter: blur(16px);
-  border-radius: 12px;
-  padding: 12px 14px;
+  border-radius: 10px;
+  padding: 10px 14px;
   transition:
     border-color 0.2s,
     box-shadow 0.2s,
     opacity 0.2s,
     transform 0.2s;
   cursor: pointer;
-  width: 220px;
+  width: 240px;
   overflow: hidden;
 }
 
 .graph-node:hover {
   border-color: var(--border-emphasis);
   transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+/* Agent accent line (left edge highlight) */
+.graph-node__accent-line {
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  opacity: 0.7;
+}
+
+.graph-node--agent {
+  padding: 10px 14px 10px 16px;
 }
 
 .graph-node--agent:hover {
@@ -296,26 +325,26 @@ body {
 
 .graph-node--skill {
   padding: 8px 12px;
-  border-color: rgba(251, 191, 36, 0.2);
+  border-color: rgba(251, 191, 36, 0.15);
 }
 
 .graph-node--skill:hover {
-  box-shadow: 0 0 28px rgba(251, 191, 36, 0.12);
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.1);
 }
 
 .graph-node--plugin {
   padding: 10px 12px;
-  border-color: rgba(96, 165, 250, 0.2);
+  border-color: rgba(96, 165, 250, 0.15);
 }
 
 .graph-node--plugin:hover {
-  box-shadow: 0 0 28px rgba(96, 165, 250, 0.12);
+  box-shadow: 0 0 24px rgba(96, 165, 250, 0.1);
 }
 
 /* Orphan nodes (no connections) */
 .graph-node--orphan {
   border-style: dashed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 .graph-node--orphan:hover {
   opacity: 1;
@@ -323,7 +352,7 @@ body {
 
 /* Dimmed state during hover-highlight */
 .graph-dimmed .vue-flow__node {
-  opacity: 0.1;
+  opacity: 0.08;
   transition: opacity 0.25s;
 }
 .graph-dimmed .vue-flow__node.graph-highlighted {
@@ -337,8 +366,8 @@ body {
   opacity: 1 !important;
 }
 
-/* Animated edges */
-.vue-flow__edge path {
+/* Edge styles — only animated (spawns) edges get the dash */
+.vue-flow__edge.animated path {
   stroke-dasharray: 6 4;
   animation: edgeFlow 1.5s linear infinite;
 }
@@ -351,20 +380,29 @@ body {
 
 /* Column headers */
 .graph-col-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--text-disabled);
-  background: var(--graph-node-bg);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 4px 10px;
-  width: 220px;
+  color: var(--text-tertiary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 6px 14px;
+  width: 240px;
   text-align: center;
   pointer-events: none;
+}
+
+.graph-col-header__icon {
+  display: flex;
+  align-items: center;
+  color: var(--text-disabled);
 }
 
 /* Hover tooltip */
