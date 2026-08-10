@@ -656,12 +656,20 @@ async function switchTo(path: string) {
 
         <!-- Or start on something that already exists -->
         <div v-if="!batchMode" class="flex gap-2 pt-1">
-          <input
+          <!--
+            Open pull requests and recent branches, offered rather than
+            remembered. Free text is kept because the useful paste is often a
+            URL from somebody's message, for a pull request on a fork this
+            checkout has no remote for.
+          -->
+          <RefPicker
             v-model="existingRef"
-            class="field-input flex-1"
-            placeholder="…or paste a pull request URL, or a branch name"
+            class="flex-1"
+            input-class="field-input"
+            placeholder="…or pick a pull request or branch, or paste a URL"
+            with-pull-requests
             :disabled="startingFrom"
-            @keydown.enter="onStartFrom"
+            @enter="onStartFrom"
           />
           <UButton
             label="Work on it"

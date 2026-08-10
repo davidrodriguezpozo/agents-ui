@@ -422,11 +422,16 @@ async function onSave() {
             {{ option.label }}
           </option>
         </select>
-        <input
+        <!--
+          A branch name typed slightly wrong does not fail here, it just never
+          matches — so a trigger with a typo in it is indistinguishable from one
+          with nothing to do. Still free text: a branch that does not exist yet
+          is a perfectly reasonable thing to wait for.
+        -->
+        <RefPicker
           v-model="eventBranch"
-          class="field-input font-mono"
+          :repo-dir="projectDir || null"
           placeholder="Any branch"
-          spellcheck="false"
         />
         <p class="field-hint">
           Checked every couple of minutes with <span class="font-mono">gh</span>, using the login
