@@ -1,6 +1,8 @@
 import { getProjectDir } from '../../utils/scope'
 import { candidatesIn } from '../../utils/lander'
 import { planLanding } from '../../utils/landing'
+import { baseCheckoutState } from '../../utils/merge'
+import { readSessions } from '../../utils/sessions'
 
 /**
  * What landing would do, without doing it.
@@ -17,9 +19,27 @@ export default defineEventHandler(async (event) => {
 
   // No project selected means no base branch to land into, so there is no plan
   // rather than an empty one — the difference the page needs to say nothing.
-  if (!repoDir) return { repoDir: null, queue: [], skipped: [] }
+  if (!repoDir) return { repoDir: null, queue: [], skipped: [], base: null }
 
-  const plan = planLanding(await candidatesIn(repoDir))
+  const candidates = await candidatesIn(repoDir)
+  const plan = planLanding(candidates)
 
-  return { repoDir, ...plan }
+  /**
+   * The branch these sessions expect to merge into, taken from the sessions
+   * themselves rather than from the checkout — the whole question being asked is
+   * whether the checkout is on the right one.
+   */
+  const sessions = (await readSessions()).filter(s => s.repoDir === repoDir)
+  const baseBranch = sessions[0]?.baseBranch ?? null
+
+  return {
+    repoDir,
+    ...plan,
+    /**
+     * Why nothing can land, when that is a fact about the repository rather than
+     * about any one session. Surfaced here so the page can say so before
+     * spending a test suite finding out.
+     */
+    base: baseBranch ? { baseBranch, ...(await baseCheckoutState(repoDir, baseBranch)) } : null,
+  }
 })

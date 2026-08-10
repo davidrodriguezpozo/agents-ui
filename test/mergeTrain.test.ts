@@ -40,7 +40,12 @@ function candidate(over: Partial<PlanCandidate> & Pick<PlanCandidate, 'id' | 'ne
 }
 
 function plan(queue: PlanCandidate[], skipped: PlanCandidate[] = []): LandingPlan {
-  return { repoDir: '/repo', queue, skipped }
+  return {
+    repoDir: '/repo',
+    queue,
+    skipped,
+    base: { baseBranch: 'main', currentBranch: 'main', clean: true },
+  }
 }
 
 describe('joining the plan to the sessions', () => {

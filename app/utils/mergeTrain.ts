@@ -31,11 +31,27 @@ export interface PlanCandidate {
   reason?: string
 }
 
+/**
+ * The state of the checkout everything merges into.
+ *
+ * Separate from the per-session queue because it is not about any session: a
+ * dirty checkout, or one on the wrong branch, refuses all of them equally. The
+ * train has to say this *before* the button, because pressing it in this state
+ * used to cost a full test-suite run to be told the same thing.
+ */
+export interface BaseState {
+  baseBranch: string
+  currentBranch: string
+  clean: boolean
+  blockedReason?: string
+}
+
 export interface LandingPlan {
   repoDir: string | null
   /** In the order landing will attempt them. */
   queue: PlanCandidate[]
   skipped: PlanCandidate[]
+  base: BaseState | null
 }
 
 export interface TrainSession {

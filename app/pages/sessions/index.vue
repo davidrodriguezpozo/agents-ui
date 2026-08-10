@@ -356,8 +356,9 @@ const groups = computed(() => {
  * is the part worth checking before agreeing.
  */
 const {
-  run: landingRun, active: landing, starting: startingLanding, plan: landingPlan,
-  start: beginLanding, refresh: refreshLanding, refreshPlan: refreshLandingPlan, watch: watchLanding,
+  showRun: landingRun, active: landing, starting: startingLanding, plan: landingPlan,
+  start: beginLanding, refresh: refreshLanding, refreshPlan: refreshLandingPlan,
+  dismiss: dismissLanding, watch: watchLanding,
 } = useLanding()
 const confirmingLand = ref(false)
 
@@ -394,6 +395,9 @@ async function onLand() {
     })
   } catch (e) {
     toast.add({ title: 'Could not start landing', description: errorMessage(e), color: 'error' })
+    // Usually the base checkout: re-reading the plan puts the reason on the
+    // train, where it stays until it is fixed.
+    await refreshLandingPlan()
   }
 }
 
@@ -541,12 +545,23 @@ async function switchTo(path: string) {
         :landing="landingRun"
         :starting="startingLanding"
         @land="onLand"
+        @recheck="refreshLandingPlan"
       />
 
-      <LandingPanel v-if="landingRun" :run="landingRun" />
+      <!--
+        Above the composer rather than instead of it. It used to take its place,
+        and since the newest run is shown whatever its status and nothing cleared
+        it, one landing removed the way to start a session for good.
+      -->
+      <LandingPanel
+        v-if="landingRun"
+        :run="landingRun"
+        :dismissable="!landing"
+        @dismiss="dismissLanding"
+      />
 
       <!-- Start a session -->
-      <div v-else-if="workingDir" class="space-y-1.5">
+      <div v-if="workingDir" class="space-y-1.5">
         <!-- One session, told what to do in the same breath -->
         <template v-if="!batchMode">
           <div class="flex gap-2 items-start">

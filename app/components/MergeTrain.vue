@@ -39,7 +39,22 @@ const props = defineProps<{
   starting?: boolean
 }>()
 
-const emit = defineEmits<{ land: [] }>()
+const emit = defineEmits<{ land: []; recheck: [] }>()
+
+/** Re-reading the plan is the whole recovery: fix the checkout, press this. */
+const refreshing = ref(false)
+
+async function onRecheck() {
+  refreshing.value = true
+  try {
+    emit('recheck')
+    // Long enough to read as an action having happened. The parent's refresh is
+    // a single request and would otherwise finish before the spinner appeared.
+    await new Promise(resolve => setTimeout(resolve, 350))
+  } finally {
+    refreshing.value = false
+  }
+}
 
 const NEEDS: Record<TrainNeed, { label: string; icon: string; color: string }> = {
   ready: { label: 'Ready', icon: 'i-lucide-check', color: 'var(--success)' },
@@ -73,13 +88,20 @@ function stepFor(car: TrainCar) {
   return props.landing?.steps.find(s => s.sessionId === car.candidate.id) ?? null
 }
 
-function stateOf(car: TrainCar): 'waiting' | 'inflight' | 'merged' | 'passed-over' {
+function stateOf(car: TrainCar): 'waiting' | 'inflight' | 'merged' | 'passed-over' | 'not-attempted' {
   const step = stepFor(car)
   // No step yet means the landing has not reached it — or there is no landing,
   // which looks the same on screen and is the resting state.
   if (!step) return 'waiting'
-  if (!step.outcome) return 'inflight'
-  return step.outcome === 'merged' ? 'merged' : 'passed-over'
+  if (step.outcome) return step.outcome === 'merged' ? 'merged' : 'passed-over'
+
+  /**
+   * A step with no outcome only means "in flight" while the run is actually
+   * going. Once it has stopped, the ones it never reached also have no outcome —
+   * and reading those as in-flight left a finished landing spinning "Landing…"
+   * on three rows for as long as the page was open.
+   */
+  return props.landing?.status === 'running' ? 'inflight' : 'not-attempted'
 }
 
 function outcomeLabel(car: TrainCar): string | null {
@@ -94,6 +116,15 @@ const confirming = ref(false)
 watch(() => props.landing?.status, (status) => {
   if (status === 'running') confirming.value = false
 })
+
+/**
+ * Why nothing can land, when the reason is the repository rather than a session.
+ *
+ * Held apart from the per-row needs because it overrides all of them: every row
+ * can say "Ready" and still nothing will merge, which is exactly the state that
+ * produced a wasted test-suite run and a landing recorded as failed.
+ */
+const baseBlocker = computed(() => props.plan?.base?.blockedReason ?? null)
 
 const commitsLabel = computed(() =>
   `${summary.value.commits} commit${summary.value.commits === 1 ? '' : 's'}`)
@@ -125,7 +156,7 @@ function titleOf(car: TrainCar): string {
         {{ summary.landable }} of {{ summary.total }} could land · {{ commitsLabel }}
       </span>
 
-      <div v-if="!landing && summary.landable > 0" class="flex items-center gap-2 ml-auto">
+      <div v-if="!landing && summary.landable > 0 && !baseBlocker" class="flex items-center gap-2 ml-auto">
         <template v-if="confirming">
           <span class="text-[11px] text-label">Merge what passes into {{ baseBranch }}?</span>
           <UButton label="Land them" size="xs" :loading="starting" @click="emit('land')" />
@@ -143,6 +174,29 @@ function titleOf(car: TrainCar): string {
     </header>
 
     <div class="train">
+      <!--
+        The repository-level refusal, before the button rather than after the
+        bill. Every row below can read "Ready" and still nothing will merge, so
+        this has to come first and the button has to be gone while it stands.
+      -->
+      <div v-if="baseBlocker" class="blocker">
+        <UIcon name="i-lucide-circle-alert" class="size-4 shrink-0 blocker-icon" />
+        <div class="blocker-body">
+          <p class="blocker-text">{{ baseBlocker }}</p>
+          <p class="blocker-hint">
+            Nothing is attempted until it is sorted — the train is waiting rather than failing.
+          </p>
+        </div>
+        <UButton
+          label="Check again"
+          icon="i-lucide-refresh-cw"
+          size="xs"
+          variant="soft"
+          :loading="refreshing"
+          @click="onRecheck"
+        />
+      </div>
+
       <!-- The base branch. Everything below diverges from it and returns to it. -->
       <div class="spine-row">
         <span class="spine-label">{{ baseBranch }}</span>
@@ -199,6 +253,7 @@ function titleOf(car: TrainCar): string {
             />
             <template v-if="outcomeLabel(car)">{{ outcomeLabel(car) }}</template>
             <template v-else-if="stateOf(car) === 'inflight'">Landing…</template>
+            <template v-else-if="stateOf(car) === 'not-attempted'">Not reached</template>
             <template v-else>{{ NEEDS[car.need].label }}</template>
           </span>
 
@@ -394,6 +449,11 @@ function titleOf(car: TrainCar): string {
 /* Passed over: the landing reached it and left it alone, which is a result. */
 .car--passed-over .car-need { color: var(--warning); }
 
+/* Never reached, because the run stopped first. Not a result about this session,
+   so it is stated and then left quiet. */
+.car--not-attempted { opacity: 0.6; }
+.car--not-attempted .car-need { color: var(--text-tertiary); }
+
 .car--blocked .car-title { color: var(--text-secondary); }
 
 /* ── Blocked group ────────────────────────────── */
@@ -412,6 +472,30 @@ function titleOf(car: TrainCar): string {
 }
 
 .cars--blocked { opacity: 0.72; }
+
+.blocker {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: rgba(180, 83, 9, 0.07);
+  border: 1px solid rgba(180, 83, 9, 0.18);
+}
+.blocker-icon { color: var(--warning); margin-top: 1px; }
+.blocker-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.blocker-text {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+.blocker-hint {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+}
 
 .footnote {
   margin: 10px 0 0;

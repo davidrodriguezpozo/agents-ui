@@ -49,6 +49,24 @@ export function useLanding() {
    */
   const plan = useState<LandingPlan | null>('landing-plan', () => null)
 
+  /**
+   * A finished landing you have read and put away.
+   *
+   * The panel showed the newest run whatever its status and nothing ever cleared
+   * it, so one landing — successful or not — replaced the "start a session" box
+   * on this page permanently. There was no way back: the record is history and
+   * deleting it would be wrong, so what was missing was somewhere to say "I have
+   * read this". Keyed by id, so the next landing appears regardless.
+   */
+  const dismissedId = useState<string | null>('landing-dismissed', () => null)
+
+  const showRun = computed(() =>
+    run.value && run.value.id !== dismissedId.value ? run.value : null)
+
+  function dismiss() {
+    if (run.value) dismissedId.value = run.value.id
+  }
+
   async function refreshPlan() {
     try {
       plan.value = await $fetch<LandingPlan>('/api/landing/plan')
@@ -95,6 +113,7 @@ export function useLanding() {
     starting.value = true
     try {
       run.value = await $fetch<LandingRun>('/api/landing', { method: 'POST' })
+      dismissedId.value = null
       watch()
       return run.value
     } finally {
@@ -104,7 +123,10 @@ export function useLanding() {
 
   onScopeDispose(stop)
 
-  return { run, active, starting, plan, start, refresh, refreshPlan, watch, stop }
+  return {
+    run, showRun, active, starting, plan,
+    start, refresh, refreshPlan, dismiss, watch, stop,
+  }
 }
 
 /** What each ending is called, and whether it is a good one. */
