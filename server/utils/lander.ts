@@ -1,6 +1,6 @@
 import { findSession, patchSession, readSessions, type Session } from './sessions'
 import { updateFromBase, worktreeStatus } from './worktrees'
-import { commitSessionWork, mergeSession, previewMerge } from './merge'
+import { baseCheckoutState, commitSessionWork, mergeSession, previewMerge } from './merge'
 import { verifySession } from './sessionChecks'
 import { notify } from './notify'
 import {
@@ -44,8 +44,14 @@ function toInput(session: Session & { worktree: Awaited<ReturnType<typeof worktr
   }
 }
 
-/** Fresh worktree state for every session in this repo, which the plan needs. */
-async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
+/**
+ * Fresh worktree state for every session in this repo, which the plan needs.
+ *
+ * Exported so a page can ask for the plan without starting one. The merge train
+ * draws the order landing *will* run in, and re-deriving that on the client is
+ * how the picture ends up disagreeing with the button underneath it.
+ */
+export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
   const sessions = (await readSessions()).filter(s => s.repoDir === repoDir)
 
   return Promise.all(sessions.map(async (session) => {
@@ -127,6 +133,28 @@ export async function startLanding(repoDir: string, baseBranch: string): Promise
     throw createError({
       statusCode: 409,
       data: { error: 'already_landing', message: 'This project is already landing work.' },
+    })
+  }
+
+  /**
+   * Refused before anything is spent.
+   *
+   * A dirty base checkout, or one on the wrong branch, blocks every session
+   * equally — and this used to be discovered per-session, *after* running that
+   * session's checks. So a landing into an uncommitted `main` paid for a full
+   * test-suite run, refused, and recorded three more sessions as "not attempted".
+   * The condition was knowable for two `git` calls before any of that.
+   *
+   * Thrown rather than recorded as a failed run: nothing was attempted, so there
+   * is no history worth keeping, and a run in the record is a thing the page then
+   * has to be dismissed of.
+   */
+  const base = await baseCheckoutState(repoDir, baseBranch)
+
+  if (base.blockedReason) {
+    throw createError({
+      statusCode: 409,
+      data: { error: 'base_not_ready', message: base.blockedReason },
     })
   }
 
