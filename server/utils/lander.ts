@@ -44,8 +44,14 @@ function toInput(session: Session & { worktree: Awaited<ReturnType<typeof worktr
   }
 }
 
-/** Fresh worktree state for every session in this repo, which the plan needs. */
-async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
+/**
+ * Fresh worktree state for every session in this repo, which the plan needs.
+ *
+ * Exported so a page can ask for the plan without starting one. The merge train
+ * draws the order landing *will* run in, and re-deriving that on the client is
+ * how the picture ends up disagreeing with the button underneath it.
+ */
+export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
   const sessions = (await readSessions()).filter(s => s.repoDir === repoDir)
 
   return Promise.all(sessions.map(async (session) => {
