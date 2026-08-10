@@ -419,6 +419,19 @@ conversation.
 | **Terminal** | A real shell in the workspace, on the session's branch. It keeps running when you close the tab, because a long build should survive navigating away |
 | **Preview** | Your project's dev command, on a port of its own, shown in the page |
 
+![Editing a file in the session's own workspace, beside the tree and the diff](docs/screenshots/14-workspace-editor.jpg)
+
+<table>
+<tr>
+<td width="50%"><img src="docs/screenshots/16-workspace-terminal.jpg" alt="A real shell in the session's workspace, on its own branch" /></td>
+<td width="50%"><img src="docs/screenshots/15-workspace-preview.jpg" alt="The project's dev server running on its own port, shown in the page" /></td>
+</tr>
+<tr>
+<td><b>A shell</b> in the workspace, on the session's branch — the same one the diff is about.</td>
+<td><b>The app itself</b>, from this session's code, on a port of its own.</td>
+</tr>
+</table>
+
 Each one is a *young* version of the thing it replaces — the editor colours nine
 languages and numbers the lines, and that is the whole of it. What they are for is
 finishing, not living in.

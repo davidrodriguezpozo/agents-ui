@@ -200,3 +200,16 @@ export function selectNew(
 export function promptFor(input: string, event: TriggerEvent): string {
   return `${input}\n\nTriggered by ${event.summary}\n${event.url}`
 }
+
+/**
+ * What to call the run this event produced.
+ *
+ * A ritual firing on five pull requests produced five rows in Activity with
+ * the same name on each, so telling them apart meant opening one and reading
+ * its prompt. The ritual's name says what the work *is*; the event says which
+ * one it was about, and a list needs both.
+ */
+export function titleFor(ritualTitle: string, event: TriggerEvent): string {
+  const suffix = event.summary.length > 60 ? `${event.summary.slice(0, 59)}…` : event.summary
+  return `${ritualTitle} · ${suffix}`
+}

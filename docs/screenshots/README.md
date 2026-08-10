@@ -22,3 +22,6 @@ Light mode at 1456×839 unless noted.
 | `11-agents.jpg` | Subagents with their model tier and tool allowlists |
 | `12-commands-by-origin.jpg` | Commands grouped by where they come from — personal, or a named plugin |
 | `13-workflow-builder.jpg` | Chaining agents into a pipeline, each step resolved to its agent and model |
+| `14-workspace-editor.jpg` | Editing a file in the session's own workspace — file tree, syntax colouring, line numbers, and "put it back" below |
+| `15-workspace-preview.jpg` | The project's dev command running in the session's workspace, on a port of its own, shown in the page |
+| `16-workspace-terminal.jpg` | A real shell in the session's workspace, on its branch — the git output is that worktree's actual state |

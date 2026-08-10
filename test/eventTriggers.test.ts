@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_EVENTS_PER_POLL, describeTrigger, promptFor, selectNew, type TriggerEvent,
+  MAX_EVENTS_PER_POLL, describeTrigger, promptFor, selectNew, titleFor, type TriggerEvent,
 } from '../server/utils/eventTriggers'
 
 /**
@@ -102,5 +102,40 @@ describe('saying what it waits for', () => {
     expect(describeTrigger({ kind: 'pr_opened' })).toBe('When a pull request is opened')
     expect(describeTrigger({ kind: 'check_failed', branch: 'main' }))
       .toBe('When a workflow run fails on main')
+  })
+})
+
+/**
+ * Telling one firing from another.
+ *
+ * A ritual that fires on five pull requests produced five rows in Activity
+ * carrying its own name on each, so working out which was which meant opening
+ * one and reading its prompt. The ritual's name says what the work is; the
+ * event says which one it was about.
+ */
+describe('naming the run an event produced', () => {
+  it('keeps the ritual name and adds what set it off', () => {
+    expect(titleFor('Look into red CI', event(42)))
+      .toBe('Look into red CI · pull request #42')
+  })
+
+  it('gives two firings of the same ritual different names', () => {
+    const a = titleFor('Review it', event(1))
+    const b = titleFor('Review it', event(2))
+
+    expect(a).not.toBe(b)
+  })
+
+  it('trims a summary long enough to swamp the row', () => {
+    const long: TriggerEvent = {
+      key: 7,
+      summary: `pull request #7: ${'a very long title '.repeat(10)}`,
+      url: 'https://example.com/7',
+    }
+
+    const title = titleFor('Review it', long)
+    expect(title.length).toBeLessThan(80)
+    expect(title.startsWith('Review it · ')).toBe(true)
+    expect(title.endsWith('…')).toBe(true)
   })
 })

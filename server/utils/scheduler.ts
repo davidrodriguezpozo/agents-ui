@@ -2,7 +2,7 @@ import {
   computeNextRun, markRan, pauseRitual, permissionModeFor, scheduleStore, setTriggerCursor,
   skipToNextRun, type Schedule,
 } from './schedules'
-import { pollTrigger, promptFor, selectNew } from './eventTriggers'
+import { pollTrigger, promptFor, selectNew, titleFor, type TriggerEvent } from './eventTriggers'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, listRunsBySchedule, type Run } from './runStore'
 import { executeRun } from './runner'
@@ -138,7 +138,7 @@ async function pollEventsOnce(): Promise<void> {
       if (inFlight.has(schedule.id)) break
       inFlight.add(schedule.id)
 
-      const ran = await fire(schedule, promptFor(schedule.input, event))
+      const ran = await fire(schedule, event)
 
       /**
        * Advanced per event, and only once that event has actually run.
@@ -263,7 +263,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
  * next occurrence is computed either way — but a triggered one must not step
  * its cursor past an event that was skipped, or that event is lost for good.
  */
-async function fire(schedule: Schedule, input?: string): Promise<boolean> {
+async function fire(schedule: Schedule, event?: TriggerEvent): Promise<boolean> {
   try {
     // The case the daily limit exists for: work that spends money at 08:00
     // with nobody watching. Skipped without starting, and said out loud —
@@ -281,7 +281,7 @@ async function fire(schedule: Schedule, input?: string): Promise<boolean> {
     // read before the run that is about to join it.
     const before = await historyFor(schedule.id)
 
-    const run = await runOnce(schedule, budget.maxBudgetUsd, input)
+    const run = await runOnce(schedule, budget.maxBudgetUsd, event)
     await announce(schedule.title, run)
 
     // One more go at a failure that might not repeat. Nobody is awake to press
@@ -299,7 +299,7 @@ async function fire(schedule: Schedule, input?: string): Promise<boolean> {
       // the machine has been spending money throughout them.
       const retryBudget = await checkBudget(Date.now(), { unattended: true })
       if (retryBudget.allowed) {
-        const again = await runOnce(schedule, retryBudget.maxBudgetUsd, input)
+        const again = await runOnce(schedule, retryBudget.maxBudgetUsd, event)
         await announce(schedule.title, again)
       }
     }
@@ -328,13 +328,15 @@ async function fire(schedule: Schedule, input?: string): Promise<boolean> {
 /**
  * One attempt, start to finish, recorded against the ritual.
  *
- * `input` overrides the ritual's own prompt, which is how an event ritual is
- * told which pull request it is about.
+ * `event` is what set it off, when something did. It decides both the prompt —
+ * which has to say which pull request this is about — and the name on the row,
+ * so a ritual that fired five times is five distinguishable rows rather than
+ * five copies of its own title.
  */
 async function runOnce(
   schedule: Schedule,
   maxBudgetUsd: number | undefined,
-  input?: string,
+  event?: TriggerEvent,
 ): Promise<Run> {
   const options = await resolveRunOptionsFor({
     // Nobody is at the keyboard, which is what lets a sandboxed command skip
@@ -350,8 +352,8 @@ async function runOnce(
 
   const run = createRun({
     kind: 'command',
-    title: schedule.title,
-    input: input ?? schedule.input,
+    title: event ? titleFor(schedule.title, event) : schedule.title,
+    input: event ? promptFor(schedule.input, event) : schedule.input,
     invocation: schedule.invocation,
     agentSlug: schedule.agentSlug,
     projectDir: options.cwd,
