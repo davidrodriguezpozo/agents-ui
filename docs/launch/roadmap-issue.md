@@ -23,31 +23,58 @@ If you're arriving from a launch thread, the
 **Shipped:** parallel sessions on worktrees · project checks gating merges · sessions
 that fix their own failing checks · verdicts that expire when the base moves under them ·
 landing several finished sessions in an order that accounts for each other · scheduled
-rituals that retry and stop once they've broken · sandboxed runs, on by default, that
-say which host they were refused · permission handling for unattended runs · spend
-tracking and hard limits · your rate limit shown beside what it cost, and unattended
-work held back when you're near it · rituals that fire when a PR opens or CI goes red,
-not only on a clock ·
-multi-repository projects · MCP servers added, scoped and signed into from the UI ·
-GitHub skill import · marketplace browsing and plugin install · workflow builder ·
-relationship graph · backups · dark mode · `npm i -g agents-studio`.
+rituals that retry and stop once they've broken · a skipped ritual saying so rather than
+vanishing · sandboxed runs, on by default, that say which host they were refused ·
+permission handling for unattended runs · spend tracking and hard limits · your rate
+limit shown beside what it cost, and unattended work held back when you're near it ·
+rituals that fire when a PR opens or CI goes red, not only on a clock · **rituals that
+are a chain of steps** · **following the PR after you open it** · editing files, a real
+shell, your app running in the page, and rewind — all inside the session's workspace ·
+choosing how far a session is trusted before it starts · multi-repository projects · MCP
+servers added, scoped and signed into from the UI · GitHub skill import · marketplace
+browsing and plugin install · workflow builder · relationship graph · backups · dark
+mode · `npm i -g agents-studio`.
 
-### Sandboxing is on by default
+### What it's actually for
 
-Worth calling out separately, because it changes what already-configured projects do.
-Commands a run decides to execute go through a sandbox: no network beyond the hosts you
-list, and no letting itself back out. That applies to projects set up before the setting
-existed, not only to new ones — the people already leaving rituals running unattended
-are exactly who it is for.
+Starting an agent on a timer is the easy half — `cron` and a shell script get you there,
+and Claude Code Desktop gives you sessions on worktrees. This is the other half: what
+happens *after* it runs, when nobody is watching.
 
-If your project already has rituals that have run before, the Daily page says all this
-before anything breaks, once, and then stops mentioning it.
+A run that fails your test suite doesn't merge, and a pass from before the base moved
+doesn't count. A run that fails fixes itself, up to a limit you set, then stops. A ritual
+that's failed three mornings running turns itself off instead of failing every morning
+forever. Several finished branches land in an order that accounts for each other. A daily
+spend cap skips the work rather than billing you for it. An unattended run reaches only
+the hosts you listed, and says which one it was refused.
 
-If a ritual of yours starts failing on a host it used to reach, it says so: the run is
-marked as needing you rather than quietly reported as finished, names the host it could
-not get to, and offers to allow just that host for that project. The full list, and a
-switch that turns the sandbox off entirely for a project, are in
-**Settings → What a run may touch**.
+That's the part you end up hand-rolling once a scheduled agent has merged something red
+at 3am.
+
+### Following the pull request after you open it
+
+Opening one used to be where it ended. CI runs somewhere else, against a merge with your
+base that never happened locally, so it goes red for reasons your workspace couldn't have
+known — and the branch sits there until you notice.
+
+A session can now keep watching: it reads the checks GitHub actually ran, hands a red
+result back to the session that wrote the code, pushes the fix, and merges when it comes
+good. Bounded at three attempts and checked against your spend cap.
+
+Landing is opted into separately from watching, every time. Fixing red CI pushes to a
+branch that's already yours; merging is the one thing here other people see, and nothing
+in the app can take it back. It also never merges a pull request that reported *no*
+checks at all — passing nothing isn't passing.
+
+### Rituals can be a chain of steps
+
+Triage → fix → verify → open a PR, as one ritual rather than four that don't know about
+each other. Each step is told what the last one produced, and it stops at the first step
+that doesn't work.
+
+The steps get a row each, so you can see what each one did — but the *ritual* counts them
+as one firing. One bad night is one failure, not four, which matters because three
+failures in a row is what turns a ritual off.
 
 ### Rituals can fire on events, not only on a clock
 
@@ -74,13 +101,6 @@ of these is written with the thing you'd have to tell me for it to jump the queu
 
 - **More things a ritual can fire on** — an issue labelled, a review requested, a comment
   that mentions you. Two exist today, so *"I want it to fire on X"* is the likeliest ask.
-- **Telling event runs apart** — a ritual that fires on five pull requests currently
-  produces five identically-named rows. Say so if that's annoying in practice.
-- **Rituals that chain** — triage → fix → verify → open a PR as one ritual with one
-  health record, rather than three that don't know about each other. Promoted by *"I've
-  got three rituals that need to know about each other"*.
-- **The PR after the merge** — we can open one, then we forget it. Watch it, react to a
-  red CI run or a review comment, land it when it goes green.
 - **Configuration that travels through git** — rituals, check commands and setup commands
   committed to the repository, so a teammate who clones it gets them too. Promoted by
   anyone describing a second person working in the same repo.
@@ -88,15 +108,36 @@ of these is written with the thing you'd have to tell me for it to jump the queu
 - **Which agents and rituals are actually earning their cost**, over time.
 - **Session templates** — the same five-way fan-out you run every week, saved.
 
+Two known debts, which need no vote:
+
+- **The event lookback is a cap.** Fifty items back covers a weekend, not a fortnight. A
+  poll that can't reach its own cursor should say so rather than skip the difference.
+- **A laptop that was shut.** An overdue ritual is now reported rather than silently
+  skipped, but whether it should still *run* when you open the lid is an open question —
+  a briefing about this morning is worth less at 14:00 than a triage run is.
+
 ## Not planned
 
 - **Mobile, remote access, authentication, or a hosted mode.** This runs on your machine
   as you, against your repositories, and stays there.
-- **An integrated terminal, file editor, live preview or rewind.** Claude Code Desktop is
-  the workbench and is better at it than this would be.
+- **Webhooks.** Taking them means opening a port to the internet, which is a different
+  product with a different threat model. Polling asks the same question from inside.
 - **Non-Claude model backends.** Everything here runs through the Claude Agent SDK and
   the login you already have; a provider abstraction would be a different project.
 - **Any telemetry.**
+
+### A reversal worth naming
+
+This list used to say an integrated terminal, file editor, live preview and rewind were
+not planned, because Desktop is the workbench and is better at it. All four have since
+shipped, and the reasoning changed rather than being quietly dropped: **people don't run
+two things.** A tool you only open when something is wrong has to be worth opening, and
+the way it becomes worth opening is that you can finish the work in it.
+
+It's deliberately narrow — the goal is that you never have to *leave* a session's
+workspace to finish its work, not that this becomes a better editor than Desktop. It
+isn't one. There's no bracket matching, no find-in-file, no debugger. If the editor is
+the reason you alt-tab away, that's worth telling me.
 
 ---
 
