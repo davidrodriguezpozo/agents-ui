@@ -1,6 +1,6 @@
 {
   "name": "agents-studio",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "type": "module",
   "description": "Leave Claude Code running — work that fires on a schedule against your own repositories, checks itself with your own tests, and stops when it can't.",
   "keywords": [
