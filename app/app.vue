@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
 const route = useRoute()
-const { claudeDir, exists: claudeDirExists, load: loadConfig } = useClaudeDir()
+const { claudeDir, exists: claudeDirExists, configured: claudeConfigured, load: loadConfig } = useClaudeDir()
 const { fetchAll: fetchAgents, agents } = useAgents()
 const { fetchAll: fetchCommands, commands } = useCommands()
 const { fetchAll: fetchPlugins, plugins } = usePlugins()
@@ -431,9 +431,15 @@ function badgeFor(to: string) {
 
       <!-- Main content -->
       <main class="flex-1 min-w-0 h-full overflow-y-auto" style="background: var(--surface-base);">
-        <!-- Setup wizard when directory doesn't exist -->
+        <!--
+          The welcome, shown when there is no Claude Code set-up here — not when
+          the directory is missing. This app creates `~/.claude/agents-ui` for
+          its own storage while it boots, so on a cold machine the directory
+          always existed by the time this rendered and the welcome never fired
+          at the one person it was written for.
+        -->
         <SetupWizard
-          v-if="initialized && !claudeDirExists"
+          v-if="initialized && !claudeConfigured"
           @complete="onSetupComplete"
         />
 

@@ -3,6 +3,13 @@ import type { Scope } from '~/types'
 export interface ProjectConfig {
   claudeDir: string
   exists: boolean
+  /**
+   * Whether there is a Claude Code set-up here, rather than merely a directory.
+   * They differ on a cold machine: this app creates `~/.claude/agents-ui` for
+   * its own storage while it boots, so the directory exists before anyone has
+   * configured anything.
+   */
+  configured: boolean
   projectDir: string | null
   projectClaudeDir: string | null
   projectExists: boolean

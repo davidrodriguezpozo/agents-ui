@@ -276,12 +276,39 @@ overclaiming: the schedule still cannot fire while the machine is off — nothin
 locally can — but the work is no longer silently lost, and for the rituals where late is
 better than never, it is no longer skipped either.
 
-### 6. The cold machine
+### ~~6. The cold machine~~ — done, and it found the worst bug of the cycle
 
-The one blocking checklist item with teeth. A container with no global npm cache, no
-`~/.claude`, and no signed-in Claude Code, checking that the setup wizard says something
-useful rather than dead-ending. Nothing kills a Show HN faster than the install failing in
-the first ten comments, and this cannot be tested on a machine that already works.
+The install itself is in good shape: two to three seconds, 60 MB, binary on PATH, server
+answering in about a second, every endpoint 200 — on a box with no npm cache, no
+`~/.claude`, and no git, `gh` or Claude Code anywhere. The no-compile install claim holds
+where it matters, which is a machine that has nothing.
+
+**The welcome screen could not appear.** It fires when `~/.claude` is missing, and the
+server writes its own storage into `~/.claude/agents-ui` while booting — so the directory
+always existed by the time a browser connected. In the container the entire directory
+contained `agents-ui` and nothing else, and `exists` came back true. The one screen
+written for somebody with nothing set up was unreachable by anybody with nothing set up.
+
+Behind it, a second one that made it worse. `/api/setup` refused whenever the parent
+existed, so even once the welcome appeared, pressing its button created nothing and
+returned "Directory already exists". That is not an error, so the toast reported success —
+and the next read found nothing configured and showed the welcome again. A loop, on the
+first screen, produced by two functions that were each individually reasonable.
+
+The fix is to stop asking the wrong question. "Does `~/.claude` exist" is not "has this
+person got a Claude Code set-up"; the real question is whether there is anything in there
+that is not ours. And setup now asks per directory rather than about the parent, which is
+both idempotent and the only correct behaviour when the parent is half-made — the normal
+case here rather than an edge one.
+
+**This is the argument for the whole item, and it should have been done a cycle earlier.**
+Nothing about it needed a launch. It needed a machine that had nothing on it, which is the
+one machine a person developing the thing never has. Every test in the suite passed
+throughout, and would have gone on passing.
+
+One more thing it turned up in passing: the `Dockerfile` copied `bun.lock`, and this
+repository has `bun.lockb`. It has never had a `bun.lock` in its history, so the container
+build has been broken since the file was written.
 
 ### Then the rest of the checklist, then post
 

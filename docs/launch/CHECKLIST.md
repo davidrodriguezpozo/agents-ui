@@ -8,11 +8,30 @@ Ordered. Everything above the line should be done before a single post goes out.
 - [x] **First run against an empty config directory** — verified with a throwaway
       `CLAUDE_DIR`: the welcome leads with the pitch, and team setup offers the sessions
       route rather than dead-ending someone with no repository to paste.
-- [ ] **The rest of a genuinely cold machine.** Still unverified, because a machine that
-      already has Node, git and a signed-in Claude Code can't test for their absence. In a
-      container: no global npm cache, no `~/.claude`, and check that the setup wizard —
-      which only fires when the directory does not exist at all — says something useful.
-      Nothing kills a Show HN faster than the install failing in the first ten comments.
+- [x] **The rest of a genuinely cold machine.** Done in `node:22-slim` with no npm cache,
+      no `~/.claude`, and no git, gh or Claude Code on the box.
+
+      **The install is fine.** `npm install -g` takes 2–3 seconds, lands 60 MB, puts the
+      binary on PATH, and the server answers in about a second. No compile, no native
+      dependency, nothing to resolve — the no-compile install claim holds on a box with
+      nothing on it. The page renders and every endpoint a cold start hits returns 200,
+      including with git absent.
+
+      **The suspicion in this item was right, and worse than it looks.** The setup wizard
+      could not fire at all. It appears when `~/.claude` is missing, and the server writes
+      its own storage into `~/.claude/agents-ui` while booting — so the directory always
+      existed by the time anyone saw the page. The whole directory contained `agents-ui`
+      and nothing else, and `exists` came back true.
+
+      Behind it sat a second one: `/api/setup` refused when the parent existed, so even
+      once the welcome appeared, pressing the button created nothing and returned
+      "Directory already exists". Not an error, so the toast said it had worked — and the
+      next read found nothing configured and showed the welcome again. A loop, on the
+      first screen, for exactly the person this was written for.
+
+      Both fixed and re-verified in the same container: `configured: false` on a cold box,
+      the setup call creates `agents`, `commands`, `skills` and `workflows`, and
+      `configured: true` afterwards so the welcome does not come back.
 - [ ] **Decide the repo name.** The npm package is `agents-studio`, the app and README now
       say *Agents Studio*, the repo is still `agents-ui`. Rename the repo to match
       (GitHub redirects the old URL and the git remote keeps working), or leave it and

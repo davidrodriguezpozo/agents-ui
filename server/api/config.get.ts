@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { getClaudeDir } from '../utils/claudeDir'
+import { getClaudeDir, isConfigured } from '../utils/claudeDir'
 import { getProjectDir } from '../utils/scope'
 
 export default defineEventHandler((event) => {
@@ -11,6 +11,8 @@ export default defineEventHandler((event) => {
   return {
     claudeDir,
     exists: existsSync(claudeDir),
+    /** Whether there is a Claude Code set-up here, not just a directory. */
+    configured: isConfigured(claudeDir),
     projectDir,
     projectClaudeDir,
     projectExists: projectClaudeDir ? existsSync(projectClaudeDir) : false,

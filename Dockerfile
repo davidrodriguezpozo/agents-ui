@@ -3,7 +3,7 @@ FROM node:22-slim AS build
 WORKDIR /app
 RUN corepack enable
 
-COPY package.json bun.lock ./
+COPY package.json bun.lockb ./
 RUN npx bun install --frozen-lockfile
 
 COPY . .
