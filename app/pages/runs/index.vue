@@ -11,6 +11,14 @@ const spend = ref<SpendData | null>(null)
 /** And what it cost against the limit that will actually stop you. */
 const quota = ref<QuotaReading | null>(null)
 
+/**
+ * Whether this person pays per token. Inferred from whether they have set a
+ * daily or per-run spending cap — someone on Pro or Max has no reason to, and
+ * someone on the API almost certainly will. False means subscription mode:
+ * quota leads, dollars are context.
+ */
+const apiMode = ref(false)
+
 const search = ref('')
 const source = ref<RunSource | null>(null)
 const outcome = ref<RunOutcomeFilter | null>(null)
@@ -52,8 +60,11 @@ watch(query, () => {
 onMounted(async () => {
   // Independent of the filters: the total is about the whole log, not the
   // slice you happen to be looking at.
-  $fetch<{ maxConcurrentRuns: number }>('/api/preferences')
-    .then((prefs) => { concurrencyLimit.value = prefs.maxConcurrentRuns })
+  $fetch<{ maxConcurrentRuns: number; dailyCapUsd: number; runCapUsd: number }>('/api/preferences')
+    .then((prefs) => {
+      concurrencyLimit.value = prefs.maxConcurrentRuns
+      apiMode.value = Boolean(prefs.dailyCapUsd || prefs.runCapUsd)
+    })
     .catch(() => {})
 
   $fetch<SpendData>('/api/spend', { query: { days: 30 } })
@@ -151,7 +162,7 @@ function sourceIcon(value: RunSource) {
         Everything Claude has run for you. Runs keep going if you close the tab — come back any time.
       </p>
 
-      <SpendSummary v-if="spend" :spend="spend" :quota="quota" />
+      <SpendSummary v-if="spend" :spend="spend" :quota="quota" :api-mode="apiMode" />
 
       <!-- Searching the whole log, not the page of it that happens to be loaded -->
       <div class="space-y-2">
