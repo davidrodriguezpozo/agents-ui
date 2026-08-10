@@ -17,11 +17,36 @@ const props = defineProps<{
    * mid-flight would hide the one thing on the page that is still changing.
    */
   dismissable?: boolean
+  /**
+   * Sessions whose work is in the base branch *now*, from git rather than from
+   * this record.
+   *
+   * A run is a record and its details were true when written — except where they
+   * were not. This panel showed "This session has not committed anything yet, so
+   * there is nothing to merge." about a session with sixteen commits that had
+   * already landed: not history, but a wrong conclusion drawn by a bug, kept on
+   * disk and repeated every time the card was read.
+   *
+   * Preserving that is not preserving history. So where the current, checkable
+   * state contradicts what the run concluded, the current state wins and the card
+   * says what is actually so.
+   */
+  landedIds?: string[]
 }>()
 
 const emit = defineEmits<{ dismiss: [] }>()
 
 const done = computed(() => props.run.steps.filter(s => s.outcome).length)
+
+const landed = computed(() => new Set(props.landedIds ?? []))
+
+function isLanded(sessionId: string): boolean {
+  return landed.value.has(sessionId)
+}
+
+/** True when nothing this run worried about is outstanding any more. */
+const allLanded = computed(() =>
+  props.run.steps.length > 0 && props.run.steps.every(s => isLanded(s.sessionId)))
 
 /**
  * A headline for a run that never wrote a usable one.
@@ -51,15 +76,33 @@ const headline = computed(() => {
 /** The one in flight, which is where the minutes are going. */
 const current = computed(() => props.run.steps.find(s => s.startedAt && !s.outcome) ?? null)
 
-function stepStyle(outcome?: string) {
-  if (!outcome) return { color: 'var(--text-disabled)' }
-  return LANDING_OUTCOMES[outcome as keyof typeof LANDING_OUTCOMES]?.good
+function stepStyle(step: LandingRun['steps'][number]) {
+  if (isLanded(step.sessionId)) return { color: 'var(--success)' }
+  if (!step.outcome) return { color: 'var(--text-disabled)' }
+  return LANDING_OUTCOMES[step.outcome]?.good
     ? { color: 'var(--success)' }
     : { color: 'var(--warning)' }
 }
 
+/** What became of it, preferring what is true now over what the run concluded. */
+function stepLabel(step: LandingRun['steps'][number]): string | null {
+  if (isLanded(step.sessionId)) {
+    return step.outcome === 'merged' ? LANDING_OUTCOMES.merged.label : 'In ' + props.run.baseBranch
+  }
+  return step.outcome ? LANDING_OUTCOMES[step.outcome]?.label ?? step.outcome : null
+}
+
+function stepDetail(step: LandingRun['steps'][number]): string | null {
+  // The stored detail is only worth showing while it is still the case. For a
+  // session that has since landed it is at best out of date and at worst — the
+  // "never committed anything" refusal — was never right.
+  if (isLanded(step.sessionId)) return step.outcome === 'merged' ? null : 'Its work is in the base branch now.'
+  return step.detail ?? null
+}
+
 function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
   if (isCurrent) return 'i-lucide-loader-2'
+  if (isLanded(step.sessionId)) return 'i-lucide-git-merge'
   if (!step.outcome) return 'i-lucide-circle-dashed'
   if (step.outcome === 'merged') return 'i-lucide-git-merge'
   // Already in is not an alarm — it is the same good ending, reached earlier.
@@ -123,20 +166,28 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
           :name="stepIcon(step, current?.sessionId === step.sessionId)"
           class="size-3 shrink-0 self-center"
           :class="{ 'animate-spin': current?.sessionId === step.sessionId }"
-          :style="stepStyle(step.outcome)"
+          :style="stepStyle(step)"
         />
         <NuxtLink
           :to="`/sessions/${step.sessionId}`"
           class="truncate hover:underline underline-offset-2 text-body"
         >{{ step.title }}</NuxtLink>
-        <span v-if="step.outcome" class="shrink-0 type-mono-meta" :style="stepStyle(step.outcome)">
-          {{ LANDING_OUTCOMES[step.outcome]?.label ?? step.outcome }}
+        <span v-if="stepLabel(step)" class="shrink-0 type-mono-meta" :style="stepStyle(step)">
+          {{ stepLabel(step) }}
         </span>
-        <span v-if="step.detail" class="truncate text-meta">{{ step.detail }}</span>
+        <span v-if="stepDetail(step)" class="truncate text-meta">{{ stepDetail(step) }}</span>
       </div>
     </div>
 
-    <p v-if="run.error" class="text-[11px]" style="color: var(--error);">{{ run.error }}</p>
+    <!--
+      The run-level reason, while it is still a reason. Once everything this run
+      was worried about is in the base, a red line explaining why one of them
+      could not merge is describing a problem that no longer exists.
+    -->
+    <p v-if="allLanded" class="text-[11px]" style="color: var(--success);">
+      Everything in this run is in {{ run.baseBranch }} now.
+    </p>
+    <p v-else-if="run.error" class="text-[11px]" style="color: var(--error);">{{ run.error }}</p>
 
     <!--
       Named rather than counted. "3 were skipped" is the beginning of a
@@ -149,7 +200,9 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
           :to="`/sessions/${skip.sessionId}`"
           class="truncate hover:underline underline-offset-2 text-label shrink-0 max-w-[16rem]"
         >{{ skip.title }}</NuxtLink>
-        <span class="text-meta truncate">{{ skip.reason }}</span>
+        <span class="text-meta truncate">
+          {{ isLanded(skip.sessionId) ? 'Its work is in the base branch now.' : skip.reason }}
+        </span>
       </p>
     </div>
   </div>

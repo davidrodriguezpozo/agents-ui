@@ -384,6 +384,16 @@ const trainSessions = computed(() =>
 
 const showTrain = computed(() => trainSessions.value.length >= 2)
 
+/**
+ * Which sessions are in their base branch now, for the landing panel.
+ *
+ * Read from git on every sessions fetch, so the panel can prefer what is true
+ * over what an old run concluded — it kept insisting a session with sixteen
+ * commits had never committed anything.
+ */
+const landedSessionIds = computed(() =>
+  sessions.value.filter(s => s.landed).map(s => s.id))
+
 async function onLand() {
   confirmingLand.value = false
   try {
@@ -557,6 +567,7 @@ async function switchTo(path: string) {
         v-if="landingRun"
         :run="landingRun"
         :dismissable="!landing"
+        :landed-ids="landedSessionIds"
         @dismiss="dismissLanding"
       />
 
