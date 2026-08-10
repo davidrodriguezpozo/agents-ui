@@ -22,6 +22,8 @@ export interface RunSummary {
   agentSlug?: string
   status: RunStatus
   createdAt: number
+  /** When it began, which is not when it was asked for — runs queue per repo. */
+  startedAt?: number
   completedAt?: number
   durationMs?: number
   costUsd?: number
@@ -29,6 +31,7 @@ export interface RunSummary {
   error?: string
   needsAttention?: boolean
   deniedTools?: string[]
+  refusedHosts?: string[]
   suggestedRules?: string[]
   stoppedBy?: 'budget' | 'turns'
   scheduleId?: string

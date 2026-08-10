@@ -193,6 +193,15 @@ const statItems = computed(() => [
       -->
       <WhileYouWereAway v-if="hasContent" />
 
+      <!--
+        And then the same night as a picture. The digest above answers "did
+        anything go wrong" in sentences; this answers "when" — which hours the
+        machine was actually working, what overlapped what, and whether the money
+        arrived in one lump or spread across the night. Neither replaces the
+        other, and the sentences come first because they are what you act on.
+      -->
+      <NightShift v-if="hasContent" />
+
       <!-- Hero stat bar. Hidden on first run: a row of zeros is a worse
            opening than the welcome that follows it, and counts only mean
            something once there is something to count. -->
