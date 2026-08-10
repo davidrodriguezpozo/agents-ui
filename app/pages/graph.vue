@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { VueFlow, useVueFlow } from '@vue-flow/core'
+import { VueFlow, Position } from '@vue-flow/core'
+import { Handle } from '@vue-flow/core'
 import type { NodeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
 import { MiniMap } from '@vue-flow/minimap'
@@ -29,10 +30,10 @@ onMounted(async () => {
 })
 
 // --- Layout constants ---
-const NODE_WIDTH = 220
-const COL_GAP = NODE_WIDTH + 60
-const Y_GAP = 80
-const HEADER_Y = -20
+const NODE_WIDTH = 240
+const COL_GAP = NODE_WIDTH + 80
+const Y_GAP = 76
+const HEADER_Y = -30
 
 // --- Column labels ---
 const columnLabels: Record<string, { label: string; icon: string }> = {
@@ -73,7 +74,7 @@ const nodes = computed(() => {
       id: `header-${col.type}`,
       type: 'columnHeader',
       position: { x, y: HEADER_Y },
-      data: { label: columnLabels[col.type]?.label ?? col.type },
+      data: { label: columnLabels[col.type]?.label ?? col.type, icon: columnLabels[col.type]?.icon },
       selectable: false,
       draggable: false,
       connectable: false,
@@ -167,7 +168,7 @@ const edges = computed(() => {
     data: { relType: r.type },
     style: {
       stroke: r.type === 'spawns' ? 'var(--accent)' : r.type === 'agent-frontmatter' ? 'var(--success)' : 'var(--text-disabled)',
-      strokeWidth: r.type === 'spawns' ? 2 : 1,
+      strokeWidth: r.type === 'spawns' ? 2 : 1.5,
       opacity: r.type === 'spawns' ? 0.7 : 0.4,
     },
   }))
@@ -354,28 +355,39 @@ function onNodeClick({ node }: NodeMouseEvent) {
         <!-- Column header (non-interactive label) -->
         <template #node-columnHeader="{ data }">
           <div class="graph-col-header">
+            <span class="graph-col-header__icon">
+              <UIcon v-if="data.icon === 'zap'" name="i-lucide-zap" class="size-3.5" />
+              <UIcon v-else-if="data.icon === 'cpu'" name="i-lucide-cpu" class="size-3.5" />
+              <UIcon v-else-if="data.icon === 'puzzle'" name="i-lucide-puzzle" class="size-3.5" />
+              <span v-else class="font-mono text-[10px] font-bold">&gt;_</span>
+            </span>
             {{ data.label }}
           </div>
         </template>
 
         <!-- Agent node -->
         <template #node-agent="{ data }">
+          <Handle type="target" :position="Position.Left" class="graph-handle" />
+          <Handle type="source" :position="Position.Right" class="graph-handle" />
           <div
             class="graph-node graph-node--agent"
             :class="{ 'graph-node--orphan': data.orphan }"
             :style="{
+              '--node-accent': data.color,
               '--node-glow': `${data.color}25`,
               borderColor: data.orphan ? undefined : `${data.color}30`,
             }"
           >
+            <div class="graph-node__accent-line" :style="{ background: data.color }" />
             <div class="flex items-center gap-2">
-              <div class="size-2 rounded-full shrink-0" :style="{ background: data.color }" />
-              <span class="font-mono text-[11px] font-medium truncate" style="color: var(--text-primary);">
+              <div class="size-2.5 rounded-full shrink-0" :style="{ background: data.color, boxShadow: `0 0 0 2px ${data.color}30` }" />
+              <span class="font-mono text-[11px] font-semibold truncate" style="color: var(--text-primary);">
                 {{ data.label }}
               </span>
+            </div>
+            <div v-if="data.model" class="mt-1.5 flex items-center">
               <span
-                v-if="data.model"
-                class="ml-auto text-[9px] font-mono font-medium px-1.5 py-px rounded-full shrink-0"
+                class="text-[9px] font-mono font-medium px-1.5 py-px rounded-full"
                 :style="{
                   background: data.model === 'opus' ? 'rgba(192,132,252,0.15)' : data.model === 'sonnet' ? 'rgba(96,165,250,0.15)' : 'rgba(251,191,36,0.15)',
                   color: data.model === 'opus' ? 'var(--model-opus)' : data.model === 'sonnet' ? 'var(--model-sonnet)' : 'var(--model-haiku)',
@@ -389,9 +401,11 @@ function onNodeClick({ node }: NodeMouseEvent) {
 
         <!-- Command node -->
         <template #node-command="{ data }">
+          <Handle type="target" :position="Position.Left" class="graph-handle" />
+          <Handle type="source" :position="Position.Right" class="graph-handle" />
           <div class="graph-node graph-node--command" :class="{ 'graph-node--orphan': data.orphan }">
             <div class="flex items-center gap-1.5">
-              <span class="font-mono text-[10px] font-medium shrink-0" style="color: var(--text-disabled);">
+              <span class="font-mono text-[10px] font-bold shrink-0" style="color: var(--text-disabled);">
                 &gt;_
               </span>
               <span class="font-mono text-[11px] truncate" style="color: var(--text-secondary);">
@@ -403,6 +417,8 @@ function onNodeClick({ node }: NodeMouseEvent) {
 
         <!-- Skill node -->
         <template #node-skill="{ data }">
+          <Handle type="target" :position="Position.Left" class="graph-handle" />
+          <Handle type="source" :position="Position.Right" class="graph-handle" />
           <div class="graph-node graph-node--skill" :class="{ 'graph-node--orphan': data.orphan }">
             <div class="flex items-center gap-1.5">
               <UIcon name="i-lucide-zap" class="size-3 shrink-0" style="color: var(--model-haiku);" />
@@ -415,6 +431,8 @@ function onNodeClick({ node }: NodeMouseEvent) {
 
         <!-- Plugin node -->
         <template #node-plugin="{ data }">
+          <Handle type="target" :position="Position.Left" class="graph-handle" />
+          <Handle type="source" :position="Position.Right" class="graph-handle" />
           <div class="graph-node graph-node--plugin" :class="{ 'graph-node--orphan': data.orphan }">
             <div class="flex items-center gap-1.5">
               <UIcon name="i-lucide-puzzle" class="size-3 shrink-0" style="color: var(--model-sonnet);" />
@@ -431,7 +449,7 @@ function onNodeClick({ node }: NodeMouseEvent) {
                 {{ data.enabled ? 'on' : 'off' }}
               </span>
             </div>
-            <div v-if="data.skillCount" class="text-[10px] mt-0.5" style="color: var(--text-tertiary);">
+            <div v-if="data.skillCount" class="text-[10px] mt-1" style="color: var(--text-tertiary);">
               {{ data.skillCount }} skill{{ data.skillCount !== 1 ? 's' : '' }}
             </div>
           </div>
@@ -454,7 +472,7 @@ function onNodeClick({ node }: NodeMouseEvent) {
       <Transition name="page">
         <div
           v-if="showLegend"
-          class="absolute bottom-4 left-4 z-10 rounded-md p-3 text-[11px] space-y-2"
+          class="absolute bottom-4 left-4 z-10 rounded-lg p-3.5 text-[11px] space-y-2"
           style="background: color-mix(in srgb, var(--surface-base) 92%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--border-default);"
         >
           <div class="font-mono font-semibold mb-2" style="color: var(--text-secondary);">Legend</div>
@@ -463,7 +481,7 @@ function onNodeClick({ node }: NodeMouseEvent) {
             <span style="color: var(--text-tertiary);">Agent</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="font-mono text-[9px]" style="color: var(--text-disabled);">&gt;_</span>
+            <span class="font-mono text-[9px] font-bold" style="color: var(--text-disabled);">&gt;_</span>
             <span style="color: var(--text-tertiary);">Command</span>
           </div>
           <div class="flex items-center gap-2">

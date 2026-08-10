@@ -228,6 +228,14 @@ export interface RunSummary {
   agentSlug?: string
   status: RunStatus
   createdAt: number
+  /**
+   * When it actually began, which is not when it was asked for.
+   *
+   * Runs queue per repository, so a ritual created at 08:00 can start at 08:06
+   * behind a check. A timeline placed on `createdAt` would draw it in the wrong
+   * minute and show a gap where the machine was in fact busy.
+   */
+  startedAt?: number
   completedAt?: number
   durationMs?: number
   costUsd?: number
@@ -259,6 +267,7 @@ function summarize(run: Run): RunSummary {
     agentSlug: run.agentSlug,
     status: run.status,
     createdAt: run.createdAt,
+    startedAt: run.startedAt,
     completedAt: run.completedAt,
     durationMs: run.completedAt && run.startedAt ? run.completedAt - run.startedAt : undefined,
     costUsd: run.stats?.costUsd,
@@ -315,10 +324,15 @@ export async function runsSince(sinceMs: number): Promise<RunSummary[]> {
   return (await collectRuns()).filter(run => run.createdAt >= sinceMs).map(summarize)
 }
 
-export async function listRuns(options: RunFilter & { limit?: number } = {}): Promise<RunSummary[]> {
-  const { limit = 50, ...filter } = options
+export async function listRuns(
+  options: RunFilter & { limit?: number; since?: number } = {},
+): Promise<RunSummary[]> {
+  const { limit = 50, since, ...filter } = options
 
   return (await collectRuns())
+    // Bounded by time before by count, so a window asks for "everything in the
+    // last day" rather than "the last fifty, which might only reach lunchtime".
+    .filter(run => (since === undefined ? true : (run.startedAt ?? run.createdAt) >= since))
     .filter(run => matchesFilter(run, filter))
     .slice(0, limit)
     .map(summarize)
