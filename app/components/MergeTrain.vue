@@ -83,6 +83,16 @@ function trackWidth(car: TrainCar): string {
   return `${Math.max(14, spineFraction(car.ahead, widest.value) * 100)}%`
 }
 
+/**
+ * Whether a landing is actually going.
+ *
+ * Not the same as having a `landing` record: the newest run is passed in whatever
+ * its status, so testing the record's presence hid the button for as long as any
+ * finished run was undismissed — which is the same trap as the panel replacing
+ * the composer, one component along.
+ */
+const inFlight = computed(() => props.landing?.status === 'running')
+
 /** What the landing in flight has to say about this session, if anything. */
 function stepFor(car: TrainCar) {
   return props.landing?.steps.find(s => s.sessionId === car.candidate.id) ?? null
@@ -101,7 +111,7 @@ function stateOf(car: TrainCar): 'waiting' | 'inflight' | 'merged' | 'passed-ove
    * and reading those as in-flight left a finished landing spinning "Landing…"
    * on three rows for as long as the page was open.
    */
-  return props.landing?.status === 'running' ? 'inflight' : 'not-attempted'
+  return inFlight.value ? 'inflight' : 'not-attempted'
 }
 
 function outcomeLabel(car: TrainCar): string | null {
@@ -125,6 +135,7 @@ watch(() => props.landing?.status, (status) => {
  * produced a wasted test-suite run and a landing recorded as failed.
  */
 const baseBlocker = computed(() => props.plan?.base?.blockedReason ?? null)
+
 
 const commitsLabel = computed(() =>
   `${summary.value.commits} commit${summary.value.commits === 1 ? '' : 's'}`)
@@ -156,7 +167,7 @@ function titleOf(car: TrainCar): string {
         {{ summary.landable }} of {{ summary.total }} could land · {{ commitsLabel }}
       </span>
 
-      <div v-if="!landing && summary.landable > 0 && !baseBlocker" class="flex items-center gap-2 ml-auto">
+      <div v-if="!inFlight && summary.landable > 0 && !baseBlocker" class="flex items-center gap-2 ml-auto">
         <template v-if="confirming">
           <span class="text-[11px] text-label">Merge what passes into {{ baseBranch }}?</span>
           <UButton label="Land them" size="xs" :loading="starting" @click="emit('land')" />
