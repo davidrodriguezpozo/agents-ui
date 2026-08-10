@@ -113,6 +113,49 @@ function onInputKey(event: KeyboardEvent) {
     palette.value.choose()
   }
 }
+/**
+ * One instruction, or several run in order.
+ *
+ * Written as separate rituals, "triage then fix then verify" is three rows,
+ * three failing streaks and three things to read in a morning where one thing
+ * happened — and none of them knows what the one before it found. A chain is
+ * one ritual with an ordered list, and each step is told what the last produced.
+ */
+const shape = ref<'single' | 'chain'>(props.schedule?.steps?.length ? 'chain' : 'single')
+
+/**
+ * Two empty steps to start, because one is not a chain and an empty list gives
+ * no hint of what the box is for. The names are the sequence this was built
+ * for, and are meant to be typed over.
+ */
+const steps = ref<{ title: string; input: string }[]>(
+  props.schedule?.steps?.length
+    ? props.schedule.steps.map(step => ({ ...step }))
+    : [{ title: 'Triage', input: '' }, { title: 'Fix', input: '' }],
+)
+
+/** Matches MAX_CHAIN_STEPS on the server, which trims anything past it. */
+const MAX_STEPS = 6
+
+const filledSteps = computed(() => steps.value.filter(step => step.input.trim()))
+
+function addStep() {
+  if (steps.value.length >= MAX_STEPS) return
+  steps.value.push({ title: '', input: '' })
+}
+
+function removeStep(index: number) {
+  steps.value.splice(index, 1)
+}
+
+function moveStep(index: number, direction: -1 | 1) {
+  const to = index + direction
+  if (to < 0 || to >= steps.value.length) return
+
+  const [moved] = steps.value.splice(index, 1)
+  steps.value.splice(to, 0, moved!)
+}
+
 const hour = ref(props.schedule?.recurrence.hour ?? 8)
 const minute = ref(props.schedule?.recurrence.minute ?? 0)
 const days = ref<number[]>(props.schedule?.recurrence.days?.length ? [...props.schedule.recurrence.days] : [...WEEKDAYS])
@@ -157,7 +200,10 @@ const preview = computed(() => {
 
 const canSave = computed(() => Boolean(
   title.value.trim()
-  && input.value.trim()
+  // A chain needs two steps with something in them; one step is a plain ritual
+  // and the server normalizes it back to one, so saving it here would silently
+  // not be a chain.
+  && (shape.value === 'chain' ? filledSteps.value.length > 1 : input.value.trim())
   // Days only constrain a clock ritual; an event one has no days to pick.
   && (firesOn.value === 'event' || days.value.length),
 ))
@@ -166,11 +212,26 @@ async function onSave() {
   if (!canSave.value) return
   saving.value = true
   try {
+    const chaining = shape.value === 'chain'
+
+    // A chain's `input` is its first step, so the record still describes what
+    // the ritual does if the steps are ever cleared — the same reason a
+    // triggered ritual keeps its recurrence.
+    const primary = chaining
+      ? filledSteps.value[0]!.input.trim()
+      : input.value.trim()
+
     const saved = await save({
       ...(props.schedule?.id ? { id: props.schedule.id } : {}),
       title: title.value.trim(),
-      input: input.value.trim(),
-      invocation: input.value.trim().startsWith('/') ? input.value.trim().split(' ')[0] : undefined,
+      input: primary,
+      // `null` turns a chain back into a single instruction, which absent
+      // cannot say. Titles are trimmed here so the server's fallback naming
+      // sees an empty box as empty.
+      steps: chaining
+        ? filledSteps.value.map(step => ({ title: step.title.trim(), input: step.input.trim() }))
+        : null,
+      invocation: !chaining && primary.startsWith('/') ? primary.split(' ')[0] : undefined,
       recurrence: { hour: hour.value, minute: minute.value, days: days.value },
       // `null` clears a trigger and puts the ritual back on the clock, which is
       // the only way to say "no longer an event one" — absent would keep it.
@@ -202,7 +263,28 @@ async function onSave() {
 
     <div class="field-group">
       <label class="field-label">What to run</label>
-      <div class="relative">
+
+      <!-- One question with two answers, like When below it, rather than two
+           sections that both look optional. -->
+      <div class="flex gap-1">
+        <button
+          v-for="option in [
+            { value: 'single' as const, label: 'One instruction' },
+            { value: 'chain' as const, label: 'A chain of steps' },
+          ]"
+          :key="option.value"
+          class="flex-1 px-3 py-1.5 rounded-md type-detail transition-all"
+          :style="{
+            background: shape === option.value ? 'var(--accent-muted)' : 'var(--input-bg)',
+            color: shape === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+          }"
+          @click="() => { shape = option.value }"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+
+      <div v-if="shape === 'single'" class="relative">
         <div class="flex gap-2">
           <input
             v-model="input"
@@ -232,7 +314,77 @@ async function onSave() {
           />
         </div>
       </div>
-      <span class="field-hint">A command, or anything you'd normally ask Claude. Type / to see what you have.</span>
+
+      <div v-else class="space-y-2">
+        <div
+          v-for="(step, index) in steps"
+          :key="index"
+          class="rounded-md p-2.5 space-y-2"
+          style="background: var(--input-bg);"
+        >
+          <div class="flex items-center gap-2">
+            <span class="type-detail font-mono shrink-0" style="color: var(--text-disabled);">
+              {{ index + 1 }}
+            </span>
+            <input
+              v-model="step.title"
+              class="field-input flex-1 text-[12px]"
+              :placeholder="`Step ${index + 1}`"
+            />
+            <UButton
+              icon="i-lucide-chevron-up"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :disabled="index === 0"
+              aria-label="Move up"
+              @click="moveStep(index, -1)"
+            />
+            <UButton
+              icon="i-lucide-chevron-down"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :disabled="index === steps.length - 1"
+              aria-label="Move down"
+              @click="moveStep(index, 1)"
+            />
+            <UButton
+              icon="i-lucide-x"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :disabled="steps.length <= 2"
+              aria-label="Remove step"
+              @click="removeStep(index)"
+            />
+          </div>
+          <textarea
+            v-model="step.input"
+            class="field-input font-mono text-[12px] w-full"
+            rows="2"
+            :placeholder="index === 0 ? 'Look at what came in overnight.' : 'Fix what the last step found.'"
+          />
+        </div>
+
+        <UButton
+          label="Add a step"
+          icon="i-lucide-plus"
+          size="xs"
+          variant="ghost"
+          color="neutral"
+          :disabled="steps.length >= MAX_STEPS"
+          @click="addStep"
+        />
+      </div>
+
+      <span v-if="shape === 'single'" class="field-hint">
+        A command, or anything you'd normally ask Claude. Type / to see what you have.
+      </span>
+      <span v-else class="field-hint">
+        Run in order, each one told what the last produced. It stops at the first step
+        that doesn't work, and the whole chain counts as one run in the ritual's history.
+      </span>
     </div>
 
     <div class="field-group">

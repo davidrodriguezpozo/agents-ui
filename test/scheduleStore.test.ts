@@ -172,3 +172,55 @@ describe('the project a ritual is pinned to', () => {
     expect(edited.recurrence.hour).toBe(9)
   })
 })
+
+describe('turning a ritual into a chain and back', () => {
+  const steps = [
+    { title: 'Triage', input: 'Look at what came in.' },
+    { title: 'Fix', input: 'Mend what triage found.' },
+  ]
+
+  it('stores the steps as given', async () => {
+    const saved = await schedules.upsertSchedule({ ...ritual('nightly'), steps })
+
+    expect(saved.steps?.map(s => s.title)).toEqual(['Triage', 'Fix'])
+  })
+
+  it('keeps them through an edit that does not mention them', async () => {
+    const created = await schedules.upsertSchedule({ ...ritual('nightly'), steps })
+
+    const edited = await schedules.upsertSchedule({
+      ...ritual('nightly'),
+      id: created.id,
+      recurrence: { hour: 9, minute: 0, days: [1] },
+    })
+
+    expect(edited.steps).toHaveLength(2)
+  })
+
+  it('clears them on null, putting the ritual back to one instruction', async () => {
+    const created = await schedules.upsertSchedule({ ...ritual('nightly'), steps })
+
+    const edited = await schedules.upsertSchedule({
+      ...ritual('nightly'),
+      id: created.id,
+      steps: null,
+    })
+
+    expect(edited.steps).toBeUndefined()
+  })
+
+  it('clears them when the list sent no longer makes a chain', async () => {
+    // A chain trimmed to one step is not a chain. Falling back to what was
+    // stored would leave the old steps in place and make the saved record
+    // disagree with what was just sent.
+    const created = await schedules.upsertSchedule({ ...ritual('nightly'), steps })
+
+    const edited = await schedules.upsertSchedule({
+      ...ritual('nightly'),
+      id: created.id,
+      steps: [{ title: 'Only', input: 'Just the one.' }],
+    })
+
+    expect(edited.steps).toBeUndefined()
+  })
+})

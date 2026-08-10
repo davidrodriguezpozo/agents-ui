@@ -17,10 +17,21 @@ export interface EventTrigger {
   branch?: string
 }
 
+/** One instruction in a chained ritual. */
+export interface ChainStep {
+  title: string
+  input: string
+}
+
 export interface Schedule {
   id: string
   title: string
   input: string
+  /**
+   * Several instructions run in order, each carrying what the last produced.
+   * Absent means this is a plain ritual and `input` is what runs.
+   */
+  steps?: ChainStep[]
   invocation?: string
   agentSlug?: string
   projectDir?: string
@@ -126,8 +137,8 @@ export function useSchedules() {
     // `projectDir` and `trigger` are both nullable on the way out: null clears
     // what is stored, absent leaves it alone. Neither can be expressed by
     // simply omitting the field.
-    schedule: Partial<Omit<Schedule, 'projectDir' | 'trigger'>>
-      & { projectDir?: string | null; trigger?: EventTrigger | null },
+    schedule: Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps'>>
+      & { projectDir?: string | null; trigger?: EventTrigger | null; steps?: ChainStep[] | null },
   ): Promise<Schedule> {
     const saved = await $fetch<Schedule>('/api/schedules', { method: 'POST', body: schedule })
     const idx = schedules.value.findIndex(s => s.id === saved.id)

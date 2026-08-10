@@ -1,7 +1,7 @@
 import { runsSince } from './runStore'
 import { readSessions, type Session } from './sessions'
 import { readSchedules } from './schedules'
-import { outcomeOf, type RitualOutcome } from './ritualHistory'
+import { collapseChainRuns, outcomeOf, type RitualOutcome } from './ritualHistory'
 import { listPending } from './permissionBroker'
 import { spentSince } from './budget'
 
@@ -191,8 +191,12 @@ export async function buildDigest(since: number): Promise<Digest> {
 
   // Scheduled work only. A session turn is somebody typing, which is not news
   // in the morning; a ritual firing at 08:00 is the entire point.
-  const rituals: DigestRitual[] = runs
-    .filter(run => run.scheduleId)
+  //
+  // Collapsed first, so a chained ritual is one line about the morning rather
+  // than one per step. Being three things to read was half of what chains were
+  // built to fix — the other half is the failing streak, which uses the same
+  // collapse.
+  const rituals: DigestRitual[] = collapseChainRuns(runs.filter(run => run.scheduleId))
     .map((run) => {
       const outcome = outcomeOf(run)
       return {

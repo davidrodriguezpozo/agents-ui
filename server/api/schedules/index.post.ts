@@ -6,13 +6,14 @@ import {
 } from '../../utils/schedules'
 import { getProjectDir } from '../../utils/scope'
 import type { EventTrigger } from '../../utils/eventTriggers'
+import type { ChainStep } from '../../utils/ritualChain'
 
 export default defineEventHandler(async (event) => {
-  // `projectDir` and `trigger` are both nullable on the way in: null clears,
-  // absent keeps. See projectDirForSave.
+  // `projectDir`, `trigger` and `steps` are all nullable on the way in: null
+  // clears, absent keeps. See projectDirForSave.
   const body = await readBody<
-    Partial<Omit<Schedule, 'projectDir' | 'trigger'>>
-    & { projectDir?: string | null; trigger?: EventTrigger | null }
+    Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps'>>
+    & { projectDir?: string | null; trigger?: EventTrigger | null; steps?: ChainStep[] | null }
   >(event)
 
   if (!body?.input?.trim()) {

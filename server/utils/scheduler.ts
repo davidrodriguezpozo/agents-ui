@@ -3,6 +3,7 @@ import {
   skipToNextRun, type Schedule,
 } from './schedules'
 import { pollTrigger, promptFor, selectNew, titleFor, type TriggerEvent } from './eventTriggers'
+import { chainPrompt, shouldContinue, stepTitleFor } from './ritualChain'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, listRunsBySchedule, type Run } from './runStore'
 import { executeRun } from './runner'
@@ -350,9 +351,16 @@ async function runOnce(
     allowRules: schedule.allowRules,
   })
 
+  // The name a row carries, before a step is appended to it.
+  const title = event ? titleFor(schedule.title, event) : schedule.title
+
+  if (schedule.steps?.length) {
+    return runChain(schedule, schedule.steps, title, options, maxBudgetUsd, event)
+  }
+
   const run = createRun({
     kind: 'command',
-    title: event ? titleFor(schedule.title, event) : schedule.title,
+    title,
     input: event ? promptFor(schedule.input, event) : schedule.input,
     invocation: schedule.invocation,
     agentSlug: schedule.agentSlug,
@@ -369,4 +377,102 @@ async function runOnce(
   // not the exception.
   await withRunSlot(() => executeRun(run, options, { unattended: true, maxBudgetUsd }))
   return run
+}
+
+function newChainId(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+}
+
+/**
+ * A chained ritual, run as one firing.
+ *
+ * Each step is its own run — its own transcript, its own cost, its own row —
+ * tied together by a `chainId` that the history collapses back into one entry.
+ * That split is the whole design: separate where the detail is useful, one
+ * thing where the *judgement* is made.
+ *
+ * **Returns the last step that ran**, and that is exactly the run whose outcome
+ * is the chain's. Because the loop stops at the first step that comes back
+ * anything other than `ok`, the last executed step always carries the verdict —
+ * so `announce`, `shouldRetry` and `shouldGiveUp` all keep working on a single
+ * run without knowing chains exist.
+ */
+async function runChain(
+  schedule: Schedule,
+  steps: NonNullable<Schedule['steps']>,
+  title: string,
+  options: Awaited<ReturnType<typeof resolveRunOptionsFor>>,
+  maxBudgetUsd: number | undefined,
+  event?: TriggerEvent,
+): Promise<Run> {
+  const chainId = newChainId()
+  const done: { title: string; output: string }[] = []
+  let last: Run | null = null
+
+  for (const [index, step] of steps.entries()) {
+    /**
+     * Re-checked between steps, never before the first — `fire` has just asked.
+     *
+     * A chain is several agent invocations under one firing, so it is the one
+     * place where the daily limit can be reached partway through the work. The
+     * alternative is a cap that is checked once and then exceeded by however
+     * much the remaining steps cost.
+     */
+    if (index > 0) {
+      const budget = await checkBudget(Date.now(), { unattended: true })
+      if (!budget.allowed) {
+        console.log(`[scheduler] "${schedule.title}" stopped after ${index} of ${steps.length}: ${budget.reason}`)
+        // Announced in its own right. `announce` will describe the last step,
+        // which finished perfectly well and says nothing about the steps that
+        // never started.
+        await notify(
+          'needsYou',
+          `${schedule.title} stopped partway`,
+          `${index} of ${steps.length} steps ran. ${budget.reason}`,
+        )
+        break
+      }
+    }
+
+    const base = chainPrompt(step, done)
+
+    const run = createRun({
+      kind: 'command',
+      title: stepTitleFor(title, step, index, steps.length),
+      input: event ? promptFor(base, event) : base,
+      invocation: schedule.invocation,
+      agentSlug: schedule.agentSlug,
+      projectDir: options.cwd,
+      scheduleId: schedule.id,
+      chainId,
+      stepIndex: index,
+    })
+
+    // Once, on the first step, for the same reason a plain ritual does it
+    // before its run finishes: a chain easily outlasts a tick, and the schedule
+    // has to be past due before the next one looks at it.
+    if (index === 0) await markRan(schedule.id, run.id)
+
+    console.log(`[scheduler] "${schedule.title}" step ${index + 1}/${steps.length} as ${run.id}`)
+    await withRunSlot(() => executeRun(run, options, { unattended: true, maxBudgetUsd }))
+    last = run
+
+    // Verifying a fix that failed is a way to spend money confirming it.
+    if (!shouldContinue(outcomeOf(run))) {
+      console.log(`[scheduler] "${schedule.title}" stopped at step ${index + 1}: ${outcomeOf(run)}`)
+      break
+    }
+
+    done.push({ title: step.title, output: run.output })
+  }
+
+  /**
+   * The first step always runs: `runOnce` only comes here with steps, and the
+   * budget re-check is skipped for `index === 0`. So there is always a last
+   * run, and the alternative — inventing a failed run to return — would put a
+   * fabricated entry in the history for a case that cannot happen.
+   */
+  if (!last) throw new Error(`"${schedule.title}" has a chain with no steps`)
+
+  return last
 }

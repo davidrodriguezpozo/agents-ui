@@ -235,6 +235,20 @@ function nextLabel(schedule: Schedule) {
               </div>
               <div class="flex items-center gap-2 mt-0.5 type-mono-meta">
                 <span v-if="schedule.invocation" style="color: var(--accent);">{{ schedule.invocation }}</span>
+                <!--
+                  A chain and a single instruction are the same row otherwise,
+                  and they are not the same thing: one firing of this is several
+                  agent invocations, which is the row's most expensive fact.
+                -->
+                <span
+                  v-if="schedule.steps?.length"
+                  class="flex items-center gap-1"
+                  style="color: var(--accent);"
+                  :title="schedule.steps.map((s, i) => `${i + 1}. ${s.title}`).join('\n')"
+                >
+                  <UIcon name="i-lucide-list-ordered" class="size-3 shrink-0" />
+                  {{ schedule.steps.length }} steps
+                </span>
                 <span>{{ schedule.description }}</span>
                 <span>·</span>
                 <span>{{ nextLabel(schedule) }}</span>

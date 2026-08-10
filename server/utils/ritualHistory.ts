@@ -1,4 +1,7 @@
 import type { RunSummary } from './runStore'
+// A value import, where `ritualChain` takes only a type back — so the pair is
+// not a cycle at runtime.
+import { chainOutcome } from './ritualChain'
 
 /**
  * What a ritual's runs add up to.
@@ -63,9 +66,8 @@ export function outcomeOf(run: RunOutcomeFields): RitualOutcome {
   return 'ok'
 }
 
-/** `runs` must be newest first, as the run store returns them. */
-export function summarizeRitualRuns(runs: RunSummary[]): RitualHistory {
-  const history: RitualRun[] = runs.map(run => ({
+function toRitualRun(run: RunSummary): RitualRun {
+  return {
     id: run.id,
     at: run.createdAt,
     outcome: outcomeOf(run),
@@ -76,7 +78,105 @@ export function summarizeRitualRuns(runs: RunSummary[]): RitualHistory {
     suggestedRules: run.suggestedRules,
     error: run.error,
     preview: run.preview,
-  }))
+  }
+}
+
+function sum(values: (number | undefined)[]): number | undefined {
+  const present = values.filter((v): v is number => typeof v === 'number')
+  return present.length ? present.reduce((a, b) => a + b, 0) : undefined
+}
+
+/**
+ * One firing of a chained ritual, from the runs its steps produced.
+ *
+ * This is what makes a chain one thing rather than several, and it is needed in
+ * two places for two different reasons — so it happens once, here, and both
+ * take the result.
+ *
+ * In the **history** it is what stops a three-step chain failing once from
+ * contributing three failures to the streak, which would turn the ritual off
+ * after a single bad morning. In the **digest** it is what stops one thing
+ * happening overnight from being three things to read about it. Those are the
+ * two symptoms chains exist to cure, and they are the same collapse.
+ *
+ * The merged run describes the *firing*: it begins when the first step began,
+ * costs what all the steps cost together, and takes its identity from the step
+ * that decided the outcome — a chain that came to nothing came to nothing
+ * somewhere in particular, and that is the run worth opening.
+ *
+ * What was refused is unioned across every step rather than taken from the
+ * deciding one, because the digest offers to grant the rules a blocked run
+ * asked for, and a rule asked for by step one is still the rule that is needed.
+ */
+function mergeFiring(steps: RunSummary[]): RunSummary {
+  const outcome = chainOutcome(steps.map(outcomeOf))
+
+  // Earliest first, so "where did this go wrong" is answered by the first step
+  // that did rather than the last one to report.
+  const inOrder = [...steps].sort((a, b) => a.createdAt - b.createdAt)
+  const deciding = inOrder.find(step => outcomeOf(step) === outcome) ?? inOrder[inOrder.length - 1]!
+
+  const union = (pick: (run: RunSummary) => string[] | undefined) =>
+    [...new Set(steps.flatMap(step => pick(step) ?? []))].slice(0, 20)
+
+  const deniedTools = union(step => step.deniedTools)
+  const refusedHosts = union(step => step.refusedHosts)
+  const suggestedRules = union(step => step.suggestedRules)
+
+  return {
+    ...deciding,
+    createdAt: inOrder[0]!.createdAt,
+    completedAt: steps.reduce<number | undefined>(
+      (latest, step) => Math.max(latest ?? 0, step.completedAt ?? 0) || undefined,
+      undefined,
+    ),
+    durationMs: sum(steps.map(step => step.durationMs)),
+    costUsd: sum(steps.map(step => step.costUsd)),
+    // `status` stays the deciding step's, which is what keeps `outcomeOf` on
+    // the merged run agreeing with `chainOutcome` above.
+    needsAttention: steps.some(step => step.needsAttention),
+    deniedTools: deniedTools.length ? deniedTools : undefined,
+    refusedHosts: refusedHosts.length ? refusedHosts : undefined,
+    suggestedRules: suggestedRules.length ? suggestedRules : undefined,
+  }
+}
+
+/**
+ * Runs with each chain's steps merged into the one firing they were.
+ *
+ * `runs` must be newest first. The order is preserved: a firing takes the
+ * position of its most recent step, and a chain's steps are contiguous in time,
+ * so the result is still newest first.
+ */
+export function collapseChainRuns(runs: RunSummary[]): RunSummary[] {
+  const out: RunSummary[] = []
+  const groups = new Map<string, RunSummary[]>()
+  const at = new Map<string, number>()
+
+  for (const run of runs) {
+    if (!run.chainId) {
+      out.push(run)
+      continue
+    }
+
+    const group = groups.get(run.chainId)
+    if (!group) {
+      groups.set(run.chainId, [run])
+      at.set(run.chainId, out.length)
+      out.push(run)
+      continue
+    }
+
+    group.push(run)
+    out[at.get(run.chainId)!] = mergeFiring(group)
+  }
+
+  return out
+}
+
+/** `runs` must be newest first, as the run store returns them. */
+export function summarizeRitualRuns(runs: RunSummary[]): RitualHistory {
+  const history: RitualRun[] = collapseChainRuns(runs).map(toRitualRun)
 
   let failingStreak = 0
   for (const run of history) {

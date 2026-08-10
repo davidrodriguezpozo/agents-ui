@@ -4,6 +4,7 @@ import { defineJsonStore } from './jsonStore'
 import { mergeRules } from './permissionRules'
 import { permissionModeFor, type TrustLevel } from './trust'
 import { describeTrigger, type EventTrigger } from './eventTriggers'
+import { normalizeSteps, type ChainStep } from './ritualChain'
 
 /**
  * Deliberately not cron. "Every weekday at 08:00" is the shape a daily ritual
@@ -27,8 +28,22 @@ export type SchedulePermission = TrustLevel
 export interface Schedule {
   id: string
   title: string
-  /** The prompt to run, e.g. `/hd:goodmorning`. */
+  /**
+   * The prompt to run, e.g. `/hd:goodmorning`.
+   *
+   * Still the instruction for a plain ritual, and still what a chained one
+   * falls back to if its steps are ever removed — the same reasoning that keeps
+   * `recurrence` on a triggered ritual rather than making the record a union.
+   */
   input: string
+  /**
+   * An ordered list of instructions instead of one, run in sequence, each
+   * carrying what the last one produced.
+   *
+   * Absent means this is a plain ritual, which is what every ritual written
+   * before chains existed is. Present means `input` is not what runs.
+   */
+  steps?: ChainStep[]
   invocation?: string
   agentSlug?: string
   projectDir?: string
@@ -210,8 +225,14 @@ export function projectDirForSave(
 }
 
 export async function upsertSchedule(
-  input: Partial<Omit<Schedule, 'projectDir' | 'trigger'>>
-    & { input: string; title: string; projectDir?: string | null; trigger?: EventTrigger | null },
+  input: Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps'>>
+    & {
+      input: string
+      title: string
+      projectDir?: string | null
+      trigger?: EventTrigger | null
+      steps?: ChainStep[] | null
+    },
 ): Promise<Schedule> {
   const recurrence = normalizeRecurrence(input.recurrence)
 
@@ -246,6 +267,20 @@ export async function upsertSchedule(
       // clears a project. Absent keeps whatever is there.
       trigger: input.trigger === null ? undefined : input.trigger ?? existing?.trigger,
       triggerCursor: existing?.triggerCursor,
+      /**
+       * `null` returns a chain to being a single instruction, the same way it
+       * clears a trigger or a project. Absent keeps whatever is there.
+       *
+       * Anything else is normalized and taken as given — including when it
+       * normalizes to nothing. Falling back to the stored steps in that case
+       * would mean sending a chain trimmed to one step left the old chain in
+       * place, so the record would disagree with what was just saved.
+       */
+      steps: input.steps === null
+        ? undefined
+        : input.steps === undefined
+          ? existing?.steps
+          : normalizeSteps(input.steps),
     }
 
     /**

@@ -53,6 +53,18 @@ export interface Run {
   suggestedRules?: string[]
   /** Set when a ritual started this run, so its allowlist can be updated. */
   scheduleId?: string
+  /**
+   * Which firing of a chained ritual this run was a step of.
+   *
+   * The steps of one chain are separate runs — they are separate agent
+   * invocations and each deserves its own transcript and cost — but they are
+   * one thing that happened. This is what lets the history count them as one:
+   * without it a three-step chain failing once looks like three failures, and
+   * the ritual turns itself off after a single bad morning.
+   */
+  chainId?: string
+  /** Which step, zero-based, for ordering a chain's runs. */
+  stepIndex?: number
   /** Set when the run is a turn in a session, which owns a worktree. */
   sessionId?: string
   events: RunEvent[]
@@ -229,6 +241,9 @@ export interface RunSummary {
   /** Why it stopped short, when that was a limit rather than a permission. */
   stoppedBy?: 'budget' | 'turns'
   scheduleId?: string
+  /** Which firing of a chained ritual this was a step of, when it was one. */
+  chainId?: string
+  stepIndex?: number
   sessionId?: string
   /** What set it going — worked out once here rather than in every view. */
   source: RunSource
@@ -255,6 +270,8 @@ function summarize(run: Run): RunSummary {
     suggestedRules: run.suggestedRules,
     stoppedBy: run.stoppedBy,
     scheduleId: run.scheduleId,
+    chainId: run.chainId,
+    stepIndex: run.stepIndex,
     sessionId: run.sessionId,
     source: sourceOf(run),
   }
@@ -314,13 +331,41 @@ export async function listRuns(options: RunFilter & { limit?: number } = {}): Pr
  * wanted for every row at once, and the whole set has to be read either way.
  * Capped per ritual so a year of a daily briefing doesn't come back in full.
  */
+/**
+ * Recent runs per ritual, newest first.
+ *
+ * `perSchedule` counts **firings, not runs**, and the difference is the whole
+ * reason this is not three lines. A chained ritual produces a run per step, so
+ * counting runs would give a six-step chain barely one firing of history —
+ * and `shouldGiveUp` needs three consecutive bad ones before it turns a broken
+ * ritual off. A chain long enough would therefore never be turned off at all,
+ * which is precisely the failure the give-up rule exists to prevent.
+ *
+ * Every step of an admitted firing is kept, because the caller collapses them
+ * back together and needs all of them to do it.
+ */
 export async function listRunsBySchedule(perSchedule = 10): Promise<Record<string, RunSummary[]>> {
   const grouped: Record<string, RunSummary[]> = {}
+  const firings: Record<string, Set<string>> = {}
 
   for (const run of await collectRuns()) {
     if (!run.scheduleId) continue
+
     const bucket = grouped[run.scheduleId] ??= []
-    if (bucket.length < perSchedule) bucket.push(summarize(run))
+    const seen = firings[run.scheduleId] ??= new Set()
+
+    // A step of a firing already admitted rides in with it, however many
+    // steps that firing turns out to have had.
+    const known = run.chainId ? seen.has(run.chainId) : false
+
+    if (!known) {
+      if (seen.size >= perSchedule) continue
+      // A run with no chain is its own firing, and needs a key that cannot
+      // collide with a real chain id.
+      seen.add(run.chainId ?? `run:${run.id}`)
+    }
+
+    bucket.push(summarize(run))
   }
 
   return grouped
