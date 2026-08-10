@@ -1,6 +1,8 @@
 import { getProjectDir } from '../../utils/scope'
 import { readSessions } from '../../utils/sessions'
 import { worktreeStatus } from '../../utils/worktrees'
+import { mergedBranches } from '../../utils/merge'
+import { hasLanded } from '../../utils/lander'
 import { isStale, worktreeFingerprint } from '../../utils/checks'
 import { getActive, readRun } from '../../utils/runStore'
 import { listPending } from '../../utils/permissionBroker'
@@ -17,6 +19,23 @@ export type SessionActivity = 'idle' | 'working' | 'awaiting-permission' | 'fail
 export default defineEventHandler(async (event) => {
   const projectDir = getProjectDir(event)
   const sessions = await readSessions()
+
+  /**
+   * Which branches the base already contains, one question per repository.
+   *
+   * Needed because "behind" is not the whole story: a session whose work has
+   * landed is still behind the merge commit that landed it, and reporting only
+   * that told four finished sessions they had a base that had moved on — work to
+   * do, when there was none. Asked per repo rather than per session because this
+   * endpoint is polled and somebody can easily have twenty-one of them.
+   */
+  const repos = new Map<string, string>()
+  for (const session of sessions) repos.set(session.repoDir, session.baseBranch)
+
+  const mergedByRepo = new Map<string, Set<string>>(
+    await Promise.all([...repos].map(async ([dir, base]) =>
+      [dir, await mergedBranches(dir, base)] as const)),
+  )
 
   const enriched = await Promise.all(sessions.map(async (session) => {
     const worktree = await worktreeStatus(session.worktreePath, session.baseSha || session.baseBranch, session.baseBranch)
@@ -44,6 +63,8 @@ export default defineEventHandler(async (event) => {
       worktree,
       checkStale,
       activity,
+      /** Its work is in the base branch: finished, whatever else the row says. */
+      landed: hasLanded(session.branch, worktree.ahead, mergedByRepo.get(session.repoDir) ?? new Set()),
       pendingPermissions: pending.length,
       lastRunId: lastRunId ?? null,
       turnCount: session.runIds.length,

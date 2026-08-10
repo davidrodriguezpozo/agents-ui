@@ -21,6 +21,8 @@ const props = defineProps<{
   checkStale?: boolean
   /** Commits on the base branch this session has not got. */
   behind?: number
+  /** Its work is in the base branch already. */
+  landed?: boolean
 }>()
 
 const state = computed(() => sessionBadge({
@@ -29,6 +31,7 @@ const state = computed(() => sessionBadge({
   check: props.check,
   checkStale: props.checkStale,
   behind: props.behind,
+  landed: props.landed,
 }))
 </script>
 

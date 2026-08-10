@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { LANDING_OUTCOMES, type LandingRun } from '~/composables/useLanding'
+import { relativeTime } from '~/utils/time'
 
 /**
  * A landing in progress, or the last one.
@@ -21,6 +22,31 @@ const props = defineProps<{
 const emit = defineEmits<{ dismiss: [] }>()
 
 const done = computed(() => props.run.steps.filter(s => s.outcome).length)
+
+/**
+ * A headline for a run that never wrote a usable one.
+ *
+ * The summary is a sentence cached when the landing finished, so two kinds of run
+ * arrive here without one worth showing. A run the server was killed part-way
+ * through has none at all, and the panel rendered a blank line where its one
+ * sentence should be. And a run from before `describeLanding` was fixed has
+ * "Merged 0 sessions." — a count of nothing standing where the reason belongs,
+ * which is still on disk in every record written back then.
+ *
+ * Both are recoverable from the steps, which are the same thing the summary was
+ * derived from in the first place.
+ */
+const headline = computed(() => {
+  if (props.run.summary && !props.run.summary.startsWith('Merged 0 session')) {
+    return props.run.summary
+  }
+
+  const merged = props.run.steps.filter(s => s.outcome === 'merged').length
+  const stopped = props.run.status === 'stopped'
+
+  if (!merged) return stopped ? 'Landing stopped before merging anything.' : 'Nothing was merged.'
+  return `${merged === 1 ? 'Merged 1 session' : `Merged ${merged} sessions`}${stopped ? ', then stopped.' : '.'}`
+})
 
 /** The one in flight, which is where the minutes are going. */
 const current = computed(() => props.run.steps.find(s => s.startedAt && !s.outcome) ?? null)
@@ -55,8 +81,18 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
         <template v-if="run.status === 'running'">
           Landing into {{ run.baseBranch }} — {{ done }} of {{ run.steps.length }}
         </template>
-        <template v-else>{{ run.summary }}</template>
+        <template v-else>{{ headline }}</template>
       </span>
+      <!--
+        When, because this is a record and not a status. It sits here until it is
+        put away, and its steps describe the repository as it was at the time —
+        so a run from forty minutes ago saying a session could not merge reads as
+        a claim about right now unless it is dated.
+      -->
+      <span v-if="run.status !== 'running'" class="type-meta shrink-0">
+        {{ relativeTime(run.endedAt ?? run.startedAt) }}
+      </span>
+
       <span v-if="run.status === 'running'" class="flex-1" />
       <span v-if="current" class="type-meta truncate">
         running checks on {{ current.title }}

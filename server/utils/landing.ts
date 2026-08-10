@@ -25,6 +25,7 @@ export type LandingNeed =
   | 'ready'      // up to date and green: merge it
   | 'update'     // behind the base: bring it forward, then re-check
   | 'check'      // has changes but no usable verdict
+  | 'landed'     // its work is already in the base: finished, not blocked
   | 'blocked'    // something a person has to decide
 
 export interface LandingCandidate {
@@ -38,6 +39,15 @@ export interface LandingCandidate {
 export interface LandingShape {
   /** Sessions this run will attempt, in the order it will attempt them. */
   queue: LandingCandidate[]
+  /**
+   * Finished: everything in them is in the base already.
+   *
+   * Their own bucket rather than part of `skipped`, because the two are opposite
+   * news wearing the same word. Lumped together, four sessions that had all
+   * landed successfully were reported as "0 of 4 could land · cannot land",
+   * which reads as four failures.
+   */
+  landed: LandingCandidate[]
   /** Left alone, and why. */
   skipped: LandingCandidate[]
 }
@@ -52,14 +62,12 @@ export interface LandingInput {
   checkStale?: boolean
   worktree: { exists: boolean; changedFiles: number; dirty: boolean; ahead: number; behind: number }
   /**
-   * Commits on this branch that the base branch does not already have.
+   * Whether its work is already in the base branch.
    *
-   * Not the same as `worktree.ahead`, and the difference is the whole reason this
-   * field exists. `ahead` is counted from the commit the session branched at,
+   * Not derivable from `worktree.ahead`, and the difference is the whole reason
+   * this field exists. `ahead` is counted from the commit the session branched at,
    * which is frozen when the session is created — so a session whose work has
-   * *already landed* still reports sixteen commits ahead forever. Measured
-   * against the base branch as it is now, the same session reports zero, which is
-   * the truth: there is nothing left to bring across.
+   * *already landed* still reports sixteen commits ahead forever.
    *
    * A partly-finished landing is exactly this case. Two of four merged, the third
    * failed; press the button again and the two that landed came back into the
@@ -67,7 +75,7 @@ export interface LandingInput {
    * "nothing to merge" — which stopped the run before it reached the two that
    * still needed it.
    */
-  unmerged: number
+  landed: boolean
 }
 
 function needOf(session: LandingInput): LandingCandidate {
@@ -92,13 +100,15 @@ function needOf(session: LandingInput): LandingCandidate {
   }
 
   /**
-   * Already in. Checked before anything that costs money, because this is the
-   * session a retry keeps tripping over: it has commits, it looks green, and
-   * every one of its commits is in the base already. Running its checks to find
-   * that out is minutes spent to learn nothing.
+   * Already in, which is the end of the story rather than a problem with it.
+   *
+   * Decided before anything that costs money, because this is the session a retry
+   * keeps tripping over: it has commits, it looks green, and every one of them is
+   * in the base. Running its checks to find that out is minutes spent to learn
+   * nothing.
    */
-  if (!session.unmerged) {
-    return { ...head, need: 'blocked', reason: 'Already landed — everything in it is in the base branch.' }
+  if (session.landed) {
+    return { ...head, need: 'landed', reason: 'Its work is in the base branch.' }
   }
 
   // A known failure is a decision, not a step: re-running it will fail again,
@@ -130,12 +140,13 @@ function needOf(session: LandingInput): LandingCandidate {
  * it rather than one per merge ahead of them.
  */
 export function planLanding(sessions: LandingInput[]): LandingShape {
-  const order: Record<LandingNeed, number> = { ready: 0, check: 1, update: 2, blocked: 3 }
+  const order: Record<LandingNeed, number> = { ready: 0, check: 1, update: 2, landed: 3, blocked: 4 }
 
   const decided = sessions.map(needOf).sort((a, b) => order[a.need] - order[b.need])
 
   return {
-    queue: decided.filter(c => c.need !== 'blocked'),
+    queue: decided.filter(c => c.need !== 'blocked' && c.need !== 'landed'),
+    landed: decided.filter(c => c.need === 'landed'),
     skipped: decided.filter(c => c.need === 'blocked'),
   }
 }
@@ -190,7 +201,19 @@ export function describeLanding(results: LandingStepResult[]): string {
 
   if (!results.length) return 'Nothing was ready to land.'
 
-  const parts = [merged === 1 ? 'Merged 1 session.' : `Merged ${merged} sessions.`]
+  /**
+   * Zero does not get counted at you.
+   *
+   * "Merged 0 sessions." was the headline on a run that was refused before it
+   * merged anything — a count of nothing, standing where the reason should be.
+   * The reason is on the panel directly underneath; what the headline owes the
+   * reader is that nothing came across.
+   */
+  const parts = [
+    merged === 0
+      ? 'Nothing was merged.'
+      : merged === 1 ? 'Merged 1 session.' : `Merged ${merged} sessions.`,
+  ]
 
   if (failed) parts.push(`${failed} failed ${failed === 1 ? 'its' : 'their'} checks after updating.`)
   if (conflicted) parts.push(`${conflicted} would conflict and ${conflicted === 1 ? 'was' : 'were'} left alone.`)

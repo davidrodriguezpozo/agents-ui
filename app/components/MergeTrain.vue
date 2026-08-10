@@ -60,6 +60,9 @@ const NEEDS: Record<TrainNeed, { label: string; icon: string; color: string }> =
   ready: { label: 'Ready', icon: 'i-lucide-check', color: 'var(--success)' },
   check: { label: 'Needs checking', icon: 'i-lucide-flask-conical', color: 'var(--accent)' },
   update: { label: 'Needs the base', icon: 'i-lucide-arrow-down-to-line', color: 'var(--accent)' },
+  // Success, not absence. Four finished sessions reported as "cannot land" is the
+  // right fact wearing entirely the wrong word.
+  landed: { label: 'Landed', icon: 'i-lucide-git-merge', color: 'var(--success)' },
   blocked: { label: 'Cannot land', icon: 'i-lucide-ban', color: 'var(--text-disabled)' },
 }
 
@@ -68,7 +71,8 @@ const summary = computed(() => summarizeTrain(cars.value))
 const widest = computed(() => widestAhead(cars.value))
 
 const landable = computed(() => cars.value.filter(c => c.landable))
-const blocked = computed(() => cars.value.filter(c => !c.landable))
+const landed = computed(() => cars.value.filter(c => c.need === 'landed'))
+const blocked = computed(() => cars.value.filter(c => !c.landable && c.need !== 'landed'))
 
 /** Dots are one per commit up to a point; past it the count carries the number. */
 const MAX_DOTS = 6
@@ -190,9 +194,18 @@ function titleOf(car: TrainCar): string {
     >
       <UIcon name="i-lucide-git-merge" class="size-3.5 shrink-0 text-meta" />
       <h2 id="merge-train-title" class="text-section-label">Merge train</h2>
-      <span class="type-mono-meta">
+      <span v-if="summary.landable" class="type-mono-meta">
         {{ summary.landable }} of {{ summary.total }} could land · {{ commitsLabel }}
       </span>
+      <!--
+        "0 of 4 could land" is technically true of four sessions that all landed
+        successfully, and reads as four failures. When nothing is waiting, the
+        news is what happened rather than what cannot.
+      -->
+      <span v-else-if="summary.landed" class="type-mono-meta" style="color: var(--success);">
+        all {{ summary.landed }} landed
+      </span>
+      <span v-else class="type-mono-meta">nothing waiting to land</span>
 
       <div v-if="!inFlight && summary.landable > 0 && !baseBlocker" class="flex items-center gap-2 ml-auto">
         <template v-if="confirming">
@@ -216,8 +229,12 @@ function titleOf(car: TrainCar): string {
         The repository-level refusal, before the button rather than after the
         bill. Every row below can read "Ready" and still nothing will merge, so
         this has to come first and the button has to be gone while it stands.
+
+        Only when something is actually waiting: warning that a dirty checkout
+        prevents landing, on a train where everything has already landed, is a
+        problem reported about work nobody is asking to do.
       -->
-      <div v-if="baseBlocker" class="blocker">
+      <div v-if="baseBlocker && summary.landable" class="blocker">
         <UIcon name="i-lucide-circle-alert" class="size-4 shrink-0 blocker-icon" />
         <div class="blocker-body">
           <p class="blocker-text">{{ baseBlocker }}</p>
@@ -301,9 +318,42 @@ function titleOf(car: TrainCar): string {
         </li>
       </ol>
 
+      <!--
+        Finished, kept above what is stuck and coloured like the good news it is.
+      -->
+      <template v-if="landed.length">
+        <p class="group-head group-head--good">
+          Already in {{ baseBranch }}
+          <span class="type-mono-meta">{{ landed.length }}</span>
+        </p>
+        <ol class="cars">
+          <li v-for="car in landed" :key="car.candidate.id" class="car car--landed">
+            <span class="car-order" aria-hidden="true">✓</span>
+            <div class="car-branch" style="width: 14%">
+              <span class="car-track" style="--need-color: var(--success)" />
+            </div>
+            <div class="car-body">
+              <NuxtLink
+                v-if="car.session"
+                :to="`/sessions/${car.candidate.id}`"
+                class="car-title focus-ring"
+              >{{ titleOf(car) }}</NuxtLink>
+              <span v-else class="car-title">{{ titleOf(car) }}</span>
+              <span v-if="car.session" class="car-meta">
+                <span class="font-mono">{{ car.session.branch }}</span>
+              </span>
+            </div>
+            <span class="car-need" style="--need-color: var(--success)">
+              <UIcon :name="NEEDS.landed.icon" class="size-3 shrink-0" />
+              {{ NEEDS.landed.label }}
+            </span>
+          </li>
+        </ol>
+      </template>
+
       <!-- What cannot go, kept apart rather than mixed into the order -->
       <template v-if="blocked.length">
-        <p class="blocked-head">
+        <p class="group-head">
           Not in the train
           <span class="type-mono-meta">{{ blocked.length }}</span>
         </p>
@@ -492,7 +542,7 @@ function titleOf(car: TrainCar): string {
 
 /* ── Blocked group ────────────────────────────── */
 
-.blocked-head {
+.group-head {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -506,6 +556,12 @@ function titleOf(car: TrainCar): string {
 }
 
 .cars--blocked { opacity: 0.72; }
+
+/* Good news reads in the ink colour rather than as a warning. */
+.group-head--good { color: var(--success); }
+
+.car--landed { opacity: 0.75; }
+.car--landed .car-order { color: var(--success); }
 
 .blocker {
   display: flex;

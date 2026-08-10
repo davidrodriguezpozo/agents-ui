@@ -34,6 +34,15 @@ export interface BadgeInput {
   checkStale?: boolean
   /** Commits on the base branch this session does not have. */
   behind?: number
+  /**
+   * Its work is in the base branch already.
+   *
+   * Outranks everything below because it is the end of the story. A landed
+   * session is still `behind` — by the very merge commit that landed it — so
+   * without this it was labelled "Base moved on", which asserts there is work to
+   * do about a session that is finished.
+   */
+  landed?: boolean
 }
 
 const ACCENT = { color: 'var(--accent)', background: 'var(--accent-muted)' }
@@ -60,6 +69,15 @@ export function sessionBadge(input: BadgeInput): Badge {
 
   if (check?.status === 'running') {
     return { label: 'Checking', icon: 'i-lucide-loader-2', ...ACCENT, spin: true }
+  }
+
+  /**
+   * Above the verdicts, not below them. Once the work is in the base, a local
+   * pass or failure describes code that has already shipped — the fact worth
+   * putting on the row is that it is in.
+   */
+  if (input.landed) {
+    return { label: 'Landed', icon: 'i-lucide-git-merge', ...SUCCESS }
   }
 
   if (check?.status === 'failing') {

@@ -19,7 +19,7 @@ function session(over: Partial<LandingInput> = {}): LandingInput {
     check: { status: 'passing' },
     checkStale: false,
     worktree: { exists: true, changedFiles: 3, dirty: false, ahead: 1, behind: 0 },
-    unmerged: 1,
+    landed: false,
     ...over,
   }
 }
@@ -154,33 +154,35 @@ describe('a session whose work is already in the base', () => {
     // The retry after a partial landing. `ahead` is counted from where the
     // session branched and stays put, so this one still looks like sixteen
     // commits of work — and `unmerged` is what knows better.
-    const landed = session({ id: 'landed', unmerged: 0, worktree: wt({ ahead: 16, behind: 2 }) })
+    const landed = session({ id: 'landed', landed: true, worktree: wt({ ahead: 16, behind: 2 }) })
 
     const plan = planLanding([landed])
 
     expect(plan.queue).toEqual([])
-    expect(plan.skipped[0]!.reason).toMatch(/already landed/i)
+    expect(plan.skipped).toEqual([])
+    expect(plan.landed[0]!.reason).toMatch(/in the base branch/i)
   })
 
   it('does not take the sessions behind it down with it', () => {
     // The whole bug: it came back as `refused`, the run stopped on it, and the
     // ones that genuinely needed merging were never attempted.
     const plan = planLanding([
-      session({ id: 'landed', unmerged: 0, worktree: wt({ ahead: 16, behind: 2 }) }),
+      session({ id: 'landed', landed: true, worktree: wt({ ahead: 16, behind: 2 }) }),
       session({ id: 'still-needed' }),
       session({ id: 'also-needed', worktree: wt({ behind: 3 }) }),
     ])
 
     expect(plan.queue.map(c => c.id)).toEqual(['still-needed', 'also-needed'])
-    expect(plan.skipped.map(c => c.id)).toEqual(['landed'])
+    expect(plan.landed.map(c => c.id)).toEqual(['landed'])
+    expect(plan.skipped).toEqual([])
   })
 
   it('is decided before the checks are consulted', () => {
     // Ordering matters for money, not tidiness: reaching a verdict on an
     // already-landed session means running its suite to learn nothing.
-    const landed = session({ id: 'landed', unmerged: 0, checkStale: true, check: null })
+    const landed = session({ id: 'landed', landed: true, checkStale: true, check: null })
 
-    expect(planLanding([landed]).skipped[0]!.reason).toMatch(/already landed/i)
+    expect(planLanding([landed]).landed[0]!.need).toBe('landed')
   })
 })
 
@@ -211,5 +213,25 @@ describe('describeLanding, with work that was already in', () => {
 
     expect(summary).toContain('Merged 1 session.')
     expect(summary).toMatch(/2 were already in the base/i)
+  })
+})
+
+describe('describeLanding, when nothing came across', () => {
+  it('does not count zero at you', () => {
+    // "Merged 0 sessions." was the headline on a run refused before it merged
+    // anything: a count of nothing, standing where the reason belongs.
+    const summary = describeLanding([
+      { id: 'a', title: 'a', outcome: 'refused', detail: 'Your main checkout has uncommitted changes.' },
+    ])
+
+    expect(summary).not.toContain('0 sessions')
+    expect(summary).toContain('Nothing was merged.')
+  })
+
+  it('still counts what did come across', () => {
+    expect(describeLanding([
+      { id: 'a', title: 'a', outcome: 'merged' },
+      { id: 'b', title: 'b', outcome: 'checks-failed' },
+    ])).toContain('Merged 1 session.')
   })
 })

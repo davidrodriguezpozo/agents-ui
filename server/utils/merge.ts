@@ -89,21 +89,26 @@ async function tryGit(cwd: string, args: string[]): Promise<string> {
 }
 
 /**
- * Commits on `branch` that `baseBranch` does not already have.
+ * Every local branch whose tip the base branch already contains.
  *
- * The number that tells you whether there is anything left to merge — and
- * pointedly not `worktree.ahead`, which is counted from the commit the session
- * branched at and is frozen there. A session whose work has already landed
- * reports sixteen commits ahead of where it started and zero unmerged, and only
- * the second of those answers "should this be in the next landing".
+ * The question "is there anything left to merge" asked once for the whole
+ * repository instead of once per session. It matters because this is wanted on
+ * every sessions poll, and `rev-list` per branch turns one git call into
+ * twenty-one for somebody with twenty-one sessions.
+ *
+ * Pointedly not `worktree.ahead`, which is counted from the commit a session
+ * branched at and is frozen there — a session whose work has landed reports
+ * sixteen commits ahead of where it started for the rest of its life. Only this
+ * answers "is it in".
+ *
+ * A branch with no commits of its own is in here too, since its tip *is* the base
+ * commit. So on its own this does not mean "landed"; it means "nothing of this is
+ * outstanding". Callers pair it with having committed something at all.
  */
-export async function unmergedCommitCount(
-  repoDir: string,
-  baseBranch: string,
-  branch: string,
-): Promise<number> {
-  const count = await tryGit(repoDir, ['rev-list', '--count', `${baseBranch}..${branch}`])
-  return Number(count) || 0
+export async function mergedBranches(repoDir: string, baseBranch: string): Promise<Set<string>> {
+  const out = await tryGit(repoDir, ['branch', '--format=%(refname:short)', '--merged', baseBranch])
+
+  return new Set(out.split('\n').map(line => line.trim()).filter(Boolean))
 }
 
 /**

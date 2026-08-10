@@ -1,7 +1,7 @@
 import { findSession, patchSession, readSessions, type Session } from './sessions'
 import { updateFromBase, worktreeStatus } from './worktrees'
 import {
-  baseCheckoutState, commitSessionWork, mergeSession, previewMerge, unmergedCommitCount,
+  baseCheckoutState, commitSessionWork, mergedBranches, mergeSession, previewMerge,
 } from './merge'
 import { verifySession } from './sessionChecks'
 import { notify } from './notify'
@@ -39,7 +39,7 @@ export function isLanding(repoDir: string): boolean {
 function toInput(
   session: Session & {
     worktree: Awaited<ReturnType<typeof worktreeStatus>>
-    unmerged: number
+    landed: boolean
   },
 ): LandingInput {
   return {
@@ -48,7 +48,7 @@ function toInput(
     status: session.status,
     check: session.check ?? null,
     worktree: session.worktree,
-    unmerged: session.unmerged,
+    landed: session.landed,
   }
 }
 
@@ -62,6 +62,11 @@ function toInput(
 export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
   const sessions = (await readSessions()).filter(s => s.repoDir === repoDir)
 
+  // One question for the whole repository rather than one per session, asked
+  // against the base as it stands now — which is what makes a session that has
+  // already landed drop out of the next plan instead of being re-attempted.
+  const merged = await mergedBranches(repoDir, sessions[0]?.baseBranch ?? 'HEAD')
+
   return Promise.all(sessions.map(async (session) => {
     const worktree = await worktreeStatus(
       session.worktreePath,
@@ -69,13 +74,20 @@ export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
       session.baseBranch,
     )
 
-    // Asked of the repository rather than the worktree, and against the base as
-    // it stands now — which is what makes a session that already landed drop out
-    // of the next plan instead of being re-attempted.
-    const unmerged = await unmergedCommitCount(session.repoDir, session.baseBranch, session.branch)
-
-    return toInput({ ...session, worktree, unmerged })
+    return toInput({ ...session, worktree, landed: hasLanded(session.branch, worktree.ahead, merged) })
   }))
+}
+
+/**
+ * Whether this session's work is in the base.
+ *
+ * Both halves are needed. `merged` alone is true of a branch that never committed
+ * anything — its tip *is* the base commit — and calling that "landed" would
+ * describe an empty session as a finished one. `ahead` is counted from where it
+ * branched, so it answers the other half: did it ever do anything at all.
+ */
+export function hasLanded(branch: string, ahead: number, merged: Set<string>): boolean {
+  return ahead > 0 && merged.has(branch)
 }
 
 /**

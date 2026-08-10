@@ -61,6 +61,7 @@ const accent = computed(() => {
             :check="session.check"
             :check-stale="session.checkStale"
             :behind="session.worktree.behind"
+            :landed="session.landed"
           />
         </div>
 
@@ -89,14 +90,28 @@ const accent = computed(() => {
             one session and every other one is now judged against a base it does
             not have, while still showing the green it earned beforehand.
           -->
+          <!--
+            Not for a session that has landed. It is behind by the very merge
+            commit that landed it, so saying so in warning amber asserts there is
+            something to do about work that is finished.
+          -->
           <span
-            v-if="session.worktree.behind"
+            v-if="session.worktree.behind && !session.landed"
             class="flex items-center gap-1"
             style="color: var(--warning);"
             :title="`${session.baseBranch} has moved on since this was last checked`"
           >
             <UIcon name="i-lucide-git-pull-request-arrow" class="size-3 shrink-0" />
             {{ session.worktree.behind }} behind
+          </span>
+          <span
+            v-else-if="session.landed"
+            class="flex items-center gap-1"
+            style="color: var(--success);"
+            :title="`Its commits are in ${session.baseBranch}`"
+          >
+            <UIcon name="i-lucide-git-merge" class="size-3 shrink-0" />
+            in {{ session.baseBranch }}
           </span>
           <span v-if="session.turnCount" class="flex items-center gap-1">
             <UIcon name="i-lucide-message-square" class="size-3 shrink-0" />

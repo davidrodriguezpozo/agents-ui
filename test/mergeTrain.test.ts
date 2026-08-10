@@ -39,10 +39,15 @@ function candidate(over: Partial<PlanCandidate> & Pick<PlanCandidate, 'id' | 'ne
   return { title: `session ${over.id}`, ...over }
 }
 
-function plan(queue: PlanCandidate[], skipped: PlanCandidate[] = []): LandingPlan {
+function plan(
+  queue: PlanCandidate[],
+  skipped: PlanCandidate[] = [],
+  landed: PlanCandidate[] = [],
+): LandingPlan {
   return {
     repoDir: '/repo',
     queue,
+    landed,
     skipped,
     base: { baseBranch: 'main', currentBranch: 'main', clean: true },
   }
@@ -192,5 +197,46 @@ describe('drawing the spine', () => {
 
     expect(widestAhead(train)).toBe(7)
     expect(widestAhead([])).toBe(0)
+  })
+})
+
+describe('sessions whose work is already in', () => {
+  it('are neither queued nor counted as blocked', () => {
+    // Four finished sessions reported as "0 of 4 could land · cannot land" is the
+    // right fact wearing entirely the wrong word.
+    const train = buildTrain(
+      plan([], [], [candidate({ id: 'a', need: 'landed' }), candidate({ id: 'b', need: 'landed' })]),
+      [session({ id: 'a' }), session({ id: 'b' })],
+    )
+
+    const summary = summarizeTrain(train)
+    expect(summary).toMatchObject({ total: 2, landable: 0, landed: 2, blocked: 0 })
+  })
+
+  it('sit after the queue and before what is stuck', () => {
+    const train = buildTrain(
+      plan(
+        [candidate({ id: 'waiting', need: 'ready' })],
+        [candidate({ id: 'stuck', need: 'blocked', reason: 'Still working.' })],
+        [candidate({ id: 'done', need: 'landed' })],
+      ),
+      [session({ id: 'waiting' }), session({ id: 'stuck' }), session({ id: 'done' })],
+    )
+
+    expect(train.map(c => c.candidate.id)).toEqual(['waiting', 'done', 'stuck'])
+  })
+
+  it('are not landable, because there is nothing left to do', () => {
+    const train = buildTrain(plan([], [], [candidate({ id: 'done', need: 'landed' })]), [session({ id: 'done' })])
+    expect(train[0]!.landable).toBe(false)
+  })
+
+  it('contribute no commits to the next run', () => {
+    const train = buildTrain(
+      plan([], [], [candidate({ id: 'done', need: 'landed' })]),
+      [session({ id: 'done', worktree: { exists: true, ahead: 16, behind: 2, changedFiles: 33, dirty: false } })],
+    )
+
+    expect(summarizeTrain(train).commits).toBe(0)
   })
 })

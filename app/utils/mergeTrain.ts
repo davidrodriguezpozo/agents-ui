@@ -22,7 +22,7 @@
  */
 
 /** Mirrors `LandingNeed` on the server. Cheapest first, which is also the order. */
-export type TrainNeed = 'ready' | 'check' | 'update' | 'blocked'
+export type TrainNeed = 'ready' | 'check' | 'update' | 'landed' | 'blocked'
 
 export interface PlanCandidate {
   id: string
@@ -50,6 +50,8 @@ export interface LandingPlan {
   repoDir: string | null
   /** In the order landing will attempt them. */
   queue: PlanCandidate[]
+  /** Finished — their work is in the base. Opposite news to `skipped`. */
+  landed: PlanCandidate[]
   skipped: PlanCandidate[]
   base: BaseState | null
 }
@@ -97,6 +99,7 @@ const FALLBACK_REASON: Record<TrainNeed, string> = {
   ready: '',
   check: '',
   update: 'Brought forward first, then checked against the moved base',
+  landed: '',
   blocked: 'Left alone',
 }
 
@@ -124,19 +127,24 @@ export function buildTrain(plan: LandingPlan | null, sessions: TrainSession[]): 
       behind: worktree?.behind ?? 0,
       dirty: Boolean(worktree?.dirty),
       order,
-      landable: candidate.need !== 'blocked',
+      // Neither blocked nor landed is going anywhere on the next run: one because
+      // it cannot, the other because it already has.
+      landable: candidate.need !== 'blocked' && candidate.need !== 'landed',
     }
   }
 
   return [
     ...plan.queue.map((c, i) => car(c, i)),
-    ...plan.skipped.map((c, i) => car(c, plan.queue.length + i)),
+    ...(plan.landed ?? []).map((c, i) => car(c, plan.queue.length + i)),
+    ...plan.skipped.map((c, i) => car(c, plan.queue.length + (plan.landed?.length ?? 0) + i)),
   ]
 }
 
 export interface TrainSummary {
   total: number
   landable: number
+  /** Finished already, counted apart from what is stuck. */
+  landed: number
   blocked: number
   /** Commits that would arrive on the base if the whole queue merged. */
   commits: number
@@ -147,11 +155,13 @@ export interface TrainSummary {
 
 export function summarizeTrain(cars: TrainCar[]): TrainSummary {
   const landable = cars.filter(c => c.landable)
+  const landed = cars.filter(c => c.need === 'landed')
 
   return {
     total: cars.length,
     landable: landable.length,
-    blocked: cars.length - landable.length,
+    landed: landed.length,
+    blocked: cars.length - landable.length - landed.length,
     commits: landable.reduce((sum, c) => sum + c.ahead, 0),
     needUpdate: cars.filter(c => c.need === 'update').length,
     dirty: landable.filter(c => c.dirty).length,

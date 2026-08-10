@@ -20,6 +20,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 let root: string
 let repo: string
 let merge: typeof import('../server/utils/merge')
+let hasLanded: typeof import('../server/utils/lander')['hasLanded']
 
 function git(args: string[], cwd = repo) {
   return execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim()
@@ -27,6 +28,8 @@ function git(args: string[], cwd = repo) {
 
 beforeAll(async () => {
   merge = await import('../server/utils/merge')
+  // Pure, and the pairing rule it encodes is the point of the tests below.
+  ;({ hasLanded } = await import('../server/utils/lander'))
   root = await mkdtemp(join(tmpdir(), 'agents-ui-base-'))
 })
 
@@ -104,42 +107,100 @@ describe('the checkout everything merges into', () => {
   })
 })
 
-describe('what is left to merge', () => {
-  it('counts the commits the base does not have', async () => {
-    git(['checkout', '-q', '-b', 'sess-1'])
-    await writeFile(join(repo, 'a.txt'), 'work\n')
+describe('which branches the base already contains', () => {
+  async function commitOn(branch: string, file: string) {
+    git(['checkout', '-q', '-b', branch])
+    await writeFile(join(repo, file), 'work\n')
     git(['add', '.'])
-    git(['commit', '-qm', 'session work'])
+    git(['commit', '-qm', `work on ${branch}`])
     git(['checkout', '-q', 'main'])
+  }
 
-    expect(await merge.unmergedCommitCount(repo, 'main', 'sess-1')).toBe(1)
+  it('leaves out a branch with work still outstanding', async () => {
+    await commitOn('sess-1', 'a.txt')
+    expect(await merge.mergedBranches(repo, 'main')).not.toContain('sess-1')
   })
 
-  it('drops to zero once it has landed, while ahead-from-branch-point does not', async () => {
+  it('includes it once it has landed, while ahead-from-branch-point does not move', async () => {
     // The fact the whole fix rests on. `ahead` is measured from the commit the
-    // session branched at, which never moves — so after merging, that number is
-    // still 1 and this one is 0. Queueing on the first is what re-attempted work
-    // that was already in, and stopped the run doing it.
+    // session branched at, which never moves — so after merging it still reads 1.
+    // Queueing on that is what re-attempted work already in the base.
     const branchPoint = git(['rev-parse', 'HEAD'])
-
-    git(['checkout', '-q', '-b', 'sess-1'])
-    await writeFile(join(repo, 'a.txt'), 'work\n')
-    git(['add', '.'])
-    git(['commit', '-qm', 'session work'])
-    git(['checkout', '-q', 'main'])
+    await commitOn('sess-1', 'a.txt')
     git(['merge', '-q', '--no-ff', 'sess-1', '-m', 'Merge session'])
 
-    expect(await merge.unmergedCommitCount(repo, 'main', 'sess-1')).toBe(0)
+    expect(await merge.mergedBranches(repo, 'main')).toContain('sess-1')
     expect(git(['rev-list', '--count', `${branchPoint}..sess-1`])).toBe('1')
   })
 
-  it('is zero for a branch that never committed', async () => {
+  it('includes a branch that never committed, which is why "landed" needs both halves', async () => {
+    // Its tip *is* the base commit, so git calls it merged. Calling that landed
+    // would describe an empty session as a finished one.
     git(['branch', 'sess-empty'])
-    expect(await merge.unmergedCommitCount(repo, 'main', 'sess-empty')).toBe(0)
+
+    expect(await merge.mergedBranches(repo, 'main')).toContain('sess-empty')
+    expect(hasLanded('sess-empty', 0, await merge.mergedBranches(repo, 'main'))).toBe(false)
   })
 
-  it('is zero rather than throwing for a branch that is not there', async () => {
-    // A session whose branch was deleted by hand should not take the plan down.
-    expect(await merge.unmergedCommitCount(repo, 'main', 'no-such-branch')).toBe(0)
+  it('calls a branch landed only when it both committed and is contained', async () => {
+    await commitOn('sess-1', 'a.txt')
+    const before = await merge.mergedBranches(repo, 'main')
+    expect(hasLanded('sess-1', 1, before)).toBe(false)
+
+    git(['merge', '-q', '--no-ff', 'sess-1', '-m', 'Merge session'])
+    expect(hasLanded('sess-1', 1, await merge.mergedBranches(repo, 'main'))).toBe(true)
+  })
+
+  it('is empty rather than throwing when the base branch is not there', async () => {
+    // A session whose base branch was renamed should not take the plan down.
+    expect(await merge.mergedBranches(repo, 'no-such-branch')).toEqual(new Set())
+  })
+})
+
+describe('what a session that already landed is told', () => {
+  /** Enough of a Session for `previewMerge`, with a real worktree behind it. */
+  async function sessionOn(branch: string, file: string) {
+    const worktreePath = join(root, `wt-${branch}`)
+    const baseSha = git(['rev-parse', 'HEAD'])
+
+    git(['worktree', 'add', '-q', '-b', branch, worktreePath, 'main'])
+    await writeFile(join(worktreePath, file), 'work\n')
+    git(['add', '.'], worktreePath)
+    git(['commit', '-qm', `work on ${branch}`], worktreePath)
+
+    return {
+      id: branch, title: branch, repoDir: repo, branch, baseBranch: 'main',
+      baseSha, worktreePath, status: 'idle',
+      check: { status: 'passing', command: 'make check', fingerprint: '', exitCode: 0, output: '', durationMs: 1, at: 1 },
+    } as any
+  }
+
+  it('says its work is already in the base, not that it never committed', async () => {
+    // The sentence a real record carries: "This session has not committed
+    // anything yet, so there is nothing to merge." — about a session showing 16
+    // commits. Both halves of that were computed from different baselines.
+    const session = await sessionOn('landed-sess', 'a.txt')
+    git(['merge', '-q', '--no-ff', 'landed-sess', '-m', 'Merge session'])
+
+    const preview = await merge.previewMerge(session)
+
+    expect(preview.canMerge).toBe(false)
+    expect(preview.blockedBy).toBe('already-landed')
+    expect(preview.blockedReason).toMatch(/already in main/i)
+    expect(preview.blockedReason).not.toMatch(/not committed anything/i)
+  })
+
+  it('still says "not committed anything" when that is the truth', async () => {
+    const worktreePath = join(root, 'wt-empty')
+    const baseSha = git(['rev-parse', 'HEAD'])
+    git(['worktree', 'add', '-q', '-b', 'empty-sess', worktreePath, 'main'])
+
+    const preview = await merge.previewMerge({
+      id: 'e', title: 'e', repoDir: repo, branch: 'empty-sess', baseBranch: 'main',
+      baseSha, worktreePath, status: 'idle', check: null,
+    } as any)
+
+    expect(preview.blockedBy).toBe('no-commits')
+    expect(preview.blockedReason).toMatch(/not committed anything/i)
   })
 })

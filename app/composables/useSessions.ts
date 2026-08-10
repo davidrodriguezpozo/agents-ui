@@ -93,6 +93,8 @@ export interface Session {
   /** Absent means it has not tried to fix itself on this instruction. */
   repair?: SessionRepair
   worktree: WorktreeState
+  /** Its work is in the base branch already — see the sessions index endpoint. */
+  landed?: boolean
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity
   pendingPermissions: number

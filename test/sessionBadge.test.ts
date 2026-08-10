@@ -107,3 +107,64 @@ describe('sessionBadge', () => {
     expect(green).toEqual(['Changes ready', 'Checks pass'])
   })
 })
+
+describe('a session whose work is in the base', () => {
+  it('says it landed rather than that the base moved on', () => {
+    // It is behind by the very merge commit that landed it, so the old reading
+    // put an amber "Base moved on" on four sessions that were finished — which
+    // asserts there is something to do about work that is already shipped.
+    const badge = sessionBadge({
+      activity: 'idle',
+      changedFiles: 33,
+      check: { status: 'passing' } as any,
+      behind: 1,
+      landed: true,
+    })
+
+    expect(badge.label).toBe('Landed')
+  })
+
+  it('outranks a stale verdict', () => {
+    const badge = sessionBadge({
+      activity: 'idle',
+      changedFiles: 33,
+      check: { status: 'passing' } as any,
+      checkStale: true,
+      landed: true,
+    })
+
+    expect(badge.label).toBe('Landed')
+  })
+
+  it('outranks a local failure, which now describes shipped code', () => {
+    const badge = sessionBadge({
+      activity: 'idle',
+      changedFiles: 33,
+      check: { status: 'failing' } as any,
+      landed: true,
+    })
+
+    expect(badge.label).toBe('Landed')
+  })
+
+  it('still yields to work happening right now', () => {
+    // Merged once and then given another instruction: what it is doing beats
+    // what it has done.
+    for (const activity of ['working', 'awaiting-permission'] as const) {
+      const badge = sessionBadge({ activity, changedFiles: 33, landed: true })
+      expect(badge.label).not.toBe('Landed')
+    }
+  })
+
+  it('leaves an unlanded session reading exactly as before', () => {
+    const badge = sessionBadge({
+      activity: 'idle',
+      changedFiles: 33,
+      check: { status: 'passing' } as any,
+      behind: 1,
+      landed: false,
+    })
+
+    expect(badge.label).toBe('Base moved on')
+  })
+})
