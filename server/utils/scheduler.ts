@@ -1,8 +1,8 @@
 import {
-  computeNextRun, markRan, pauseRitual, permissionModeFor, scheduleStore, setTriggerCursor,
-  skipToNextRun, type Schedule,
+  computeNextRun, markRan, pauseRitual, permissionModeFor, scheduleStore, setEventGap,
+  setTriggerCursor, skipToNextRun, type Schedule,
 } from './schedules'
-import { pollTrigger, promptFor, selectNew, titleFor, type TriggerEvent } from './eventTriggers'
+import { hasGap, pollTrigger, promptFor, selectNew, titleFor, type TriggerEvent } from './eventTriggers'
 import { chainPrompt, shouldContinue, stepTitleFor } from './ritualChain'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, listRunsBySchedule, type Run } from './runStore'
@@ -144,13 +144,37 @@ async function pollEventsOnce(): Promise<void> {
   }
 
   for (const schedule of triggered) {
-    const events = await pollTrigger(schedule.trigger!, schedule.projectDir)
+    const poll = await pollTrigger(schedule.trigger!, schedule.projectDir)
 
     // Null is "could not ask", which is not "nothing happened". Advancing the
     // cursor here would swallow everything that arrived while gh was unhappy.
-    if (!events) continue
+    if (!poll) continue
 
-    const { fire: firing, cursor, deferred } = selectNew(events, schedule.triggerCursor)
+    /**
+     * More happened than one window can hold, so the cursor is about to step
+     * over things nobody will ever be told about — unless they are told here.
+     *
+     * Said once per gap rather than every two minutes: the flag stays set until
+     * a poll reaches its own cursor again, and the notification only goes out on
+     * the poll that first finds it.
+     */
+    const gap = hasGap(schedule.triggerCursor, poll.reachedBack)
+
+    if (gap !== Boolean(schedule.eventGapAt)) {
+      await setEventGap(schedule.id, gap ? Date.now() : undefined)
+
+      if (gap) {
+        console.log(`[scheduler] "${schedule.title}": more happened than one poll can see`)
+        await notify(
+          'needsYou',
+          `${schedule.title} could not see everything`,
+          'More happened here than one poll can look back over, so some of it was never '
+          + 'picked up. It carries on from what it can see.',
+        )
+      }
+    }
+
+    const { fire: firing, cursor, deferred } = selectNew(poll.events, schedule.triggerCursor)
 
     if (deferred > 0) {
       console.log(`[scheduler] "${schedule.title}": ${deferred} more waiting, will fire next poll`)

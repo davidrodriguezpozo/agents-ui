@@ -72,10 +72,47 @@ export const MAX_EVENTS_PER_POLL = 3
  * and anything past this window is never seen. Fifty is generous for a small
  * team's repository and still one cheap request.
  *
- * It is a cap all the same, so `selectNew` reports when the window did not
- * reach back as far as the cursor rather than quietly losing the difference.
+ * It is a cap all the same. When the window comes back full and every item in
+ * it is newer than the cursor, the poll cannot see back to where it had got to
+ * — so something happened in between that it will never fire on. `reachedBack`
+ * is what makes that sayable instead of silent; see `hasGap`.
  */
 const LOOKBACK = 50
+
+/**
+ * What one poll saw.
+ *
+ * `reachedBack` is the oldest key the window contained, and only when the
+ * window came back *full* — a short window saw everything there was, so there
+ * is nothing to worry about. It is taken from the raw listing rather than from
+ * the filtered events, because how far back we looked is a property of the
+ * request, not of how many rows survived the filter: a window of fifty
+ * workflow runs containing two failures still only reached as far as its
+ * fiftieth run.
+ */
+export interface TriggerPoll {
+  events: TriggerEvent[]
+  reachedBack?: number
+}
+
+/**
+ * Whether this poll skipped over something it will never come back for.
+ *
+ * True when the window was full and its oldest item is *newer* than the cursor:
+ * everything between where we had got to and the bottom of the window happened
+ * unseen, and the cursor is about to move past it.
+ *
+ * A first poll has no cursor and cannot have a gap — it is establishing the
+ * baseline, and deliberately fires nothing.
+ *
+ * This is the same class of bug as a ritual missed while the laptop was shut,
+ * and gets the same treatment: nothing failed, so it must not be recorded as a
+ * failure, but it must not be silent either.
+ */
+export function hasGap(cursor: number | undefined, reachedBack: number | undefined): boolean {
+  if (cursor === undefined || reachedBack === undefined) return false
+  return reachedBack > cursor
+}
 
 export const EVENT_LABELS: Record<GithubEventKind, string> = {
   pr_opened: 'a pull request is opened',
@@ -133,7 +170,7 @@ async function gh(args: string[], cwd: string): Promise<unknown[] | null> {
 export async function pollTrigger(
   trigger: EventTrigger,
   repoDir: string | undefined,
-): Promise<TriggerEvent[] | null> {
+): Promise<TriggerPoll | null> {
   if (!repoDir || !existsSync(repoDir)) return null
 
   const branch = trigger.branch?.trim()
@@ -145,15 +182,20 @@ export async function pollTrigger(
     )
     if (!rows) return null
 
-    return rows
+    const typed = rows
       .map(row => row as { number?: number; title?: string; url?: string; headRefName?: string })
       .filter(row => typeof row.number === 'number' && row.url)
-      .filter(row => !branch || row.headRefName === branch)
-      .map(row => ({
-        key: row.number!,
-        summary: `pull request #${row.number}: ${row.title ?? '(untitled)'}`,
-        url: row.url!,
-      }))
+
+    return {
+      reachedBack: reachedBackOf(rows, typed.map(row => row.number!)),
+      events: typed
+        .filter(row => !branch || row.headRefName === branch)
+        .map(row => ({
+          key: row.number!,
+          summary: `pull request #${row.number}: ${row.title ?? '(untitled)'}`,
+          url: row.url!,
+        })),
+    }
   }
 
   if (trigger.kind === 'check_failed') {
@@ -164,21 +206,29 @@ export async function pollTrigger(
     )
     if (!rows) return null
 
-    return rows
+    const typed = rows
       .map(row => row as {
         databaseId?: number; status?: string; conclusion?: string
         headBranch?: string; workflowName?: string; url?: string
       })
-      // Only a finished run has a verdict. An in-flight one is not yet news,
-      // and firing on it would fire again when it finishes.
-      .filter(row => row.status === 'completed' && row.conclusion === 'failure')
       .filter(row => typeof row.databaseId === 'number' && row.url)
-      .filter(row => !branch || row.headBranch === branch)
-      .map(row => ({
-        key: row.databaseId!,
-        summary: `${row.workflowName ?? 'A workflow'} failed on ${row.headBranch ?? 'a branch'}`,
-        url: row.url!,
-      }))
+
+    return {
+      // Every run in the window, not only the failing ones: how far back we
+      // looked is a property of the request. Fifty runs containing two
+      // failures still only reached as far as the fiftieth run.
+      reachedBack: reachedBackOf(rows, typed.map(row => row.databaseId!)),
+      events: typed
+        // Only a finished run has a verdict. An in-flight one is not yet news,
+        // and firing on it would fire again when it finishes.
+        .filter(row => row.status === 'completed' && row.conclusion === 'failure')
+        .filter(row => !branch || row.headBranch === branch)
+        .map(row => ({
+          key: row.databaseId!,
+          summary: `${row.workflowName ?? 'A workflow'} failed on ${row.headBranch ?? 'a branch'}`,
+          url: row.url!,
+        })),
+    }
   }
 
   if (trigger.kind === 'issue_labelled' || trigger.kind === 'review_requested') {
@@ -186,6 +236,17 @@ export async function pollTrigger(
   }
 
   return null
+}
+
+/**
+ * How far back this window reached, or undefined when it did not need to.
+ *
+ * Only a full window can have cut anything off. A short one returned
+ * everything there was, so there is nothing behind it to have missed.
+ */
+function reachedBackOf(raw: unknown[], keys: number[]): number | undefined {
+  if (raw.length < LOOKBACK || !keys.length) return undefined
+  return Math.min(...keys)
 }
 
 /**
@@ -233,14 +294,26 @@ export interface IssueEventRow {
 async function pollIssueEvents(
   trigger: EventTrigger,
   repoDir: string,
-): Promise<TriggerEvent[] | null> {
+): Promise<TriggerPoll | null> {
   const rows = await gh(
     ['api', `repos/{owner}/{repo}/issues/events?per_page=${LOOKBACK}`],
     repoDir,
   )
   if (!rows) return null
 
-  return issueEventsFrom(rows as IssueEventRow[], trigger)
+  const typed = rows as IssueEventRow[]
+
+  return {
+    // Every event in the log, not only the labels: the window is shared by
+    // every kind of thing that can happen to an issue, so a repository busy
+    // with comments and closures reaches back less far than its label count
+    // suggests.
+    reachedBack: reachedBackOf(
+      rows,
+      typed.map(row => row.id).filter((id): id is number => typeof id === 'number'),
+    ),
+    events: issueEventsFrom(typed, trigger),
+  }
 }
 
 /**

@@ -49,6 +49,11 @@ export interface Schedule {
   trigger?: EventTrigger
   /** An occurrence that went by while nothing was running. Cleared once it runs. */
   missedAt?: number
+  /**
+   * When a poll last could not see back as far as it had already got to, so
+   * some of what happened was never picked up. Cleared once one can again.
+   */
+  eventGapAt?: number
   permission: SchedulePermission
   /** Permanent permission rules, e.g. `Bash(gh:*)`. */
   allowRules?: string[]

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_EVENTS_PER_POLL, describeTrigger, issueEventsFrom, promptFor, selectNew, titleFor,
+  MAX_EVENTS_PER_POLL, describeTrigger, hasGap, issueEventsFrom, promptFor, selectNew, titleFor,
   type IssueEventRow, type TriggerEvent,
 } from '../server/utils/eventTriggers'
 
@@ -289,5 +289,41 @@ describe('saying what the new kinds wait for', () => {
   it('reads sensibly with no narrowing at all', () => {
     expect(describeTrigger({ kind: 'issue_labelled' })).toBe('When an issue is labelled')
     expect(describeTrigger({ kind: 'review_requested' })).toBe('When a review is requested')
+  })
+})
+
+/**
+ * The window is fifty items, which covers a weekend and does not cover a
+ * fortnight. Past it the cursor steps over things that will never fire — so the
+ * one thing that must not happen is that it does so quietly.
+ */
+describe('a poll that could not see far enough back', () => {
+  it('is not a gap when the window was not even full', () => {
+    // A short window returned everything there was, so there is nothing behind
+    // it to have missed. `reachedBack` is undefined in that case.
+    expect(hasGap(10, undefined)).toBe(false)
+  })
+
+  it('is not a gap when the window reached past where we had got to', () => {
+    // Steady state: the oldest thing on screen is older than the cursor, so
+    // everything in between was seen.
+    expect(hasGap(100, 40)).toBe(false)
+  })
+
+  it('is a gap when everything in the window is newer than the cursor', () => {
+    // Fifty things happened while the laptop was shut. The oldest we can see is
+    // #200 and we had got to #100, so #101–#199 went by unseen.
+    expect(hasGap(100, 200)).toBe(true)
+  })
+
+  it('is not a gap on the very first poll', () => {
+    // No cursor means this is establishing the baseline, and it deliberately
+    // fires nothing. There is no "behind" to have missed yet.
+    expect(hasGap(undefined, 200)).toBe(false)
+  })
+
+  it('is not a gap when the window reaches exactly the cursor', () => {
+    // The cursor's own item is still in view, so nothing sits between them.
+    expect(hasGap(100, 100)).toBe(false)
   })
 })

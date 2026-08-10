@@ -109,6 +109,20 @@ export interface Schedule {
   missedAt?: number
   /** When we noticed, which is when the machine came back. */
   missedNoticedAt?: number
+  /**
+   * When a poll last could not see back as far as it had already got to.
+   *
+   * The event window holds fifty items. That covers a weekend and does not
+   * cover a fortnight, so a machine shut for long enough comes back to a
+   * repository where more happened than one poll can see — and the cursor then
+   * steps over the difference, permanently.
+   *
+   * The same shape of problem as `missedAt`, and recorded the same way and for
+   * the same reason. Nothing failed, so this must never become a run: it would
+   * join the failing streak and turn the ritual off for coming back from
+   * holiday. It is cleared by the first poll that reaches its own cursor again.
+   */
+  eventGapAt?: number
 }
 
 /**
@@ -383,6 +397,22 @@ export async function setTriggerCursor(id: string, cursor: number): Promise<void
     if (!schedule) return
 
     schedule.triggerCursor = cursor
+  })
+}
+
+/**
+ * Note that a poll could not see back to its own cursor, or that one since has.
+ *
+ * Written on the schedule rather than as a run, for the reason `missedAt` is:
+ * nothing was attempted and nothing failed, and a record in the run log would
+ * count against the failing streak and eventually turn the ritual off.
+ */
+export async function setEventGap(id: string, at: number | undefined): Promise<void> {
+  await scheduleStore.update((schedules) => {
+    const schedule = schedules.find(s => s.id === id)
+    if (!schedule) return
+
+    schedule.eventGapAt = at
   })
 }
 

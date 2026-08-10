@@ -70,6 +70,15 @@ export interface Digest {
    * indistinguishable from the thing being broken.
    */
   missed: { id: string; title: string; dueAt: number }[]
+  /**
+   * Triggered rituals whose poll could not see back to where it had got to.
+   *
+   * The event equivalent of `missed`, and here for the same reason: something
+   * happened that this was watching for, and it went by unseen. Separate from
+   * `missed` because the answer is different — a missed occurrence comes round
+   * again tomorrow, and these do not come round at all.
+   */
+  gaps: { id: string; title: string; at: number }[]
   costUsd: number
   needsYou: number
 }
@@ -256,6 +265,10 @@ export async function buildDigest(since: number): Promise<Digest> {
     .filter(s => s.missedAt && (s.missedNoticedAt ?? 0) >= since)
     .map(s => ({ id: s.id, title: s.title, dueAt: s.missedAt! }))
 
+  const gaps = schedules
+    .filter(s => s.eventGapAt && s.eventGapAt >= since)
+    .map(s => ({ id: s.id, title: s.title, at: s.eventGapAt! }))
+
   // Deliberately not counted in `needsYou`. Nothing is blocked and there is
   // nothing to approve — the machine was off. It is worth reading, not worth
   // a number that means "go and do something".
@@ -265,11 +278,13 @@ export async function buildDigest(since: number): Promise<Digest> {
 
   return {
     since,
-    quiet: !rituals.length && !digestSessions.length && !stopped.length && !missed.length,
+    quiet: !rituals.length && !digestSessions.length && !stopped.length && !missed.length
+      && !gaps.length,
     rituals,
     sessions: digestSessions,
     stopped,
     missed,
+    gaps,
     costUsd,
     needsYou,
   }

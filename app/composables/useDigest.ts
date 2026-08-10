@@ -33,6 +33,11 @@ export interface Digest {
   stopped: { id: string; title: string; reason: string }[]
   /** Rituals whose turn came round while nothing was running. */
   missed: { id: string; title: string; dueAt: number }[]
+  /**
+   * Triggered rituals whose poll could not see back to where it had got to.
+   * Unlike a missed occurrence, these do not come round again.
+   */
+  gaps: { id: string; title: string; at: number }[]
   costUsd: number
   needsYou: number
 }

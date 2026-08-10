@@ -297,6 +297,23 @@ function nextLabel(schedule: Schedule) {
                 {{ brokenSince(schedule.id) }}
               </div>
 
+              <!--
+                Something this was watching for went by unseen. Muted rather
+                than alarming: nothing failed and nothing is blocked. It clears
+                itself the moment a poll can see its own cursor again.
+              -->
+              <div
+                v-if="schedule.eventGapAt"
+                class="flex items-start gap-1.5 mt-1 type-detail"
+                style="color: var(--text-secondary);"
+              >
+                <UIcon name="i-lucide-eye-off" class="size-3 shrink-0 mt-0.5" />
+                <span>
+                  More happened than one look back could cover, so some of it was never
+                  picked up.
+                </span>
+              </div>
+
               <!-- What this ritual has been allowed to do without asking -->
               <div v-if="schedule.allowRules?.length" class="flex items-center gap-1.5 flex-wrap mt-1.5">
                 <span

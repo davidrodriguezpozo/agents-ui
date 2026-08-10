@@ -217,13 +217,36 @@ The working rule earned its keep for the third cycle running, and this time it c
 what got built rather than how: **look at the real output before designing around it.**
 An afternoon's assumption would have produced a mentions trigger nobody could rely on.
 
-### 4. The event lookback is a silent cap
+### ~~4. The event lookback is a silent cap~~ — shipped
 
-`LOOKBACK = 50` in `eventTriggers.ts` bounds both `pr list` and `run list`. Fifty covers a
-weekend and does not cover a fortnight, and past it the difference is skipped without a
-word. This is the same class of bug as the silently-missed ritual that was fixed last
-cycle, and it deserves the same treatment: a poll that cannot reach its own cursor says so
-rather than pretending it caught up. It is a debt, not a bet — nobody needs to ask for it.
+Fifty items covers a weekend and does not cover a fortnight, and past it the cursor
+stepped over the difference without a word. Same class of bug as the silently-missed
+ritual, and it got the same treatment: recorded on the schedule, reported in *while you
+were away* and on the row, and deliberately **not** a run — a gap in the failing streak
+would turn a ritual off for coming back from holiday.
+
+The detection is one comparison, and getting it right was about where the numbers come
+from rather than the arithmetic. A poll has a gap when the window came back **full** and
+its oldest item is *newer* than the cursor: everything in between happened unseen. A
+window that was not full saw everything there was, so it cannot have missed anything.
+
+**The oldest item has to come from the raw listing, not from the filtered events.** How
+far back a poll looked is a property of the request. A window of fifty workflow runs
+containing two failures still only reached as far as its fiftieth run, and measuring from
+the two would have claimed a reach the poll never had — reporting no gap in exactly the
+busy repository where gaps happen. Same for the issue event log, which is shared by every
+kind of thing that can happen to an issue: a repository busy with comments and closures
+reaches back far less than its label count suggests.
+
+Also worth writing down, since the comment in the file claimed otherwise for a whole
+cycle: `selectNew` did **not** report this. The docstring said it did. A comment
+describing a feature that was never built is worse than no comment, because it stops
+anyone looking.
+
+One limit this does not remove, and cannot: a pull request opened *and closed* between two
+polls is invisible to `pr list --state open` whatever the window size. That is a property
+of polling for things that exist rather than for things that happened — the shape the two
+new event kinds had to leave behind.
 
 ### 5. Laptop sleep, decided rather than deferred
 

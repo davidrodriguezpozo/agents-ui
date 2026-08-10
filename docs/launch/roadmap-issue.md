@@ -87,6 +87,10 @@ It starts from when you save it. Turning on "when a pull request is opened" agai
 repository with nine already open does not start work on all nine — it takes note of
 where things stand and fires on what happens next.
 
+One poll looks back fifty items, which covers a weekend rather than a fortnight. If more
+happened than that while your machine was off, it says so instead of quietly carrying on
+— on the ritual and in the morning report.
+
 ## Who this is for
 
 Solo developers, working in small teams. One person, one machine, one instance — that's
@@ -114,10 +118,8 @@ of these is written with the thing you'd have to tell me for it to jump the queu
 - **Which agents and rituals are actually earning their cost**, over time.
 - **Session templates** — the same five-way fan-out you run every week, saved.
 
-Two known debts, which need no vote:
+One known debt, which needs no vote:
 
-- **The event lookback is a cap.** Fifty items back covers a weekend, not a fortnight. A
-  poll that can't reach its own cursor should say so rather than skip the difference.
 - **A laptop that was shut.** An overdue ritual is now reported rather than silently
   skipped, but whether it should still *run* when you open the lid is an open question —
   a briefing about this morning is worth less at 14:00 than a triage run is.

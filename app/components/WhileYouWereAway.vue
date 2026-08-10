@@ -124,6 +124,22 @@ const money = computed(() => {
         </div>
       </div>
 
+      <!--
+        The same register as a missed occurrence and a different consequence.
+        A missed morning comes round again tomorrow; this does not come round at
+        all, so the sentence says so rather than implying it will be picked up.
+      -->
+      <div v-for="item in digest.gaps" :key="`gap-${item.id}`" class="flex items-start gap-2.5">
+        <UIcon name="i-lucide-eye-off" class="size-4 shrink-0 mt-0.5" style="color: var(--text-disabled);" />
+        <div class="flex-1 min-w-0">
+          <NuxtLink to="/schedules" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
+          <span class="type-detail">
+            found more had happened {{ relativeTime(item.at) }} than one look back could
+            cover, so some of it was never picked up. It carries on from what it can see.
+          </span>
+        </div>
+      </div>
+
       <div v-for="item in troubled" :key="item.scheduleId + item.at" class="flex items-start gap-2.5">
         <UIcon
           :name="RITUAL[item.outcome].icon"
