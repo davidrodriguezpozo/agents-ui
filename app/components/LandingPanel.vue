@@ -9,7 +9,16 @@ import { LANDING_OUTCOMES, type LandingRun } from '~/composables/useLanding'
  * each for a reason you may want to act on. A toast would say "merged 4" and
  * throw away the half that needs you.
  */
-const props = defineProps<{ run: LandingRun }>()
+const props = defineProps<{
+  run: LandingRun
+  /**
+   * Whether it can be put away. Only once it has stopped — dismissing a landing
+   * mid-flight would hide the one thing on the page that is still changing.
+   */
+  dismissable?: boolean
+}>()
+
+const emit = defineEmits<{ dismiss: [] }>()
 
 const done = computed(() => props.run.steps.filter(s => s.outcome).length)
 
@@ -49,6 +58,16 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
       <span v-if="current" class="type-meta truncate">
         running checks on {{ current.title }}
       </span>
+
+      <button
+        v-if="dismissable"
+        class="ml-auto rounded p-1 -m-1 focus-ring text-meta hover-bg"
+        title="Put this away"
+        aria-label="Put this away"
+        @click="emit('dismiss')"
+      >
+        <UIcon name="i-lucide-x" class="size-3.5" />
+      </button>
     </div>
 
     <!--

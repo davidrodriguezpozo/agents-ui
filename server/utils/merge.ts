@@ -88,12 +88,59 @@ export function parseMergeTreeConflicts(stdout: string): string[] {
     .filter(line => !/^(Auto-merging|CONFLICT|warning:|hint:)/.test(line))
 }
 
+export interface BaseCheckout {
+  currentBranch: string
+  clean: boolean
+  /**
+   * Set when nothing can merge here, whatever the session. Absent means git has
+   * no objection to the checkout itself.
+   */
+  blockedReason?: string
+}
+
+/**
+ * The state of the checkout everything merges *into*.
+ *
+ * Two of the conditions that block a merge are facts about the repository rather
+ * than about a session: the checkout has uncommitted changes, or it is on the
+ * wrong branch. Both refuse every session equally, and both are two `git` calls
+ * to establish.
+ *
+ * Landing found this out per-session, and only after running that session's
+ * checks — so a dirty `main` cost a full test-suite run before anything said the
+ * word "uncommitted", and then said it four more times. Asking here first is the
+ * difference between a refusal you are told about and one you pay for.
+ */
+export async function baseCheckoutState(repoDir: string, baseBranch: string): Promise<BaseCheckout> {
+  const currentBranch = await tryGit(repoDir, ['rev-parse', '--abbrev-ref', 'HEAD'])
+  const clean = (await tryGit(repoDir, ['status', '--porcelain'])).length === 0
+
+  if (!clean) {
+    return {
+      currentBranch,
+      clean,
+      blockedReason: `Your ${currentBranch} checkout has uncommitted changes. Commit or stash them first — merging into a dirty checkout is how work gets lost.`,
+    }
+  }
+  if (currentBranch !== baseBranch) {
+    return {
+      currentBranch,
+      clean,
+      blockedReason: `Your checkout is on ${currentBranch}, but these sessions branched from ${baseBranch}. Switch to ${baseBranch} first.`,
+    }
+  }
+
+  return { currentBranch, clean }
+}
+
 export async function previewMerge(session: Session): Promise<MergePreview> {
   const { repoDir, branch, baseBranch, worktreePath } = session
 
-  const currentBranch = await tryGit(repoDir, ['rev-parse', '--abbrev-ref', 'HEAD'])
-  const status = await tryGit(repoDir, ['status', '--porcelain'])
-  const repoClean = status.length === 0
+  // The same two questions as `baseCheckoutState`, asked through it so the
+  // wording of a refusal cannot drift between the two places that report it.
+  const base = await baseCheckoutState(repoDir, baseBranch)
+  const currentBranch = base.currentBranch
+  const repoClean = base.clean
 
   const commitList = await tryGit(repoDir, ['rev-list', '--count', `${baseBranch}..${branch}`])
   const commits = Number(commitList) || 0
