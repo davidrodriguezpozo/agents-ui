@@ -27,7 +27,7 @@ const POLL_MS = 2 * 60_000
  */
 const CATCH_UP_WINDOW_MS = 2 * 60 * 60 * 1000
 
-export type DueVerdict = 'wait' | 'fire' | 'missed'
+export type DueVerdict = 'wait' | 'fire' | 'late' | 'missed'
 
 /**
  * What to do about an occurrence, given the time now.
@@ -35,10 +35,50 @@ export type DueVerdict = 'wait' | 'fire' | 'missed'
  * Pulled out of the tick because it is the one decision here worth testing on
  * its own: firing it inside a test starts a real agent, and the boundary
  * between "a little late" and "gone" is exactly what wants checking.
+ *
+ * `catchUp` is what turns the far side of that boundary from `missed` into
+ * `late`. The window itself does not move — an occurrence inside it is simply
+ * on time, and one outside it is not, whatever the ritual has asked for. What
+ * changes is whether being past it means running anyway or not running at all.
  */
-export function dueVerdict(nextRunAt: number | undefined, now: number): DueVerdict {
+export function dueVerdict(
+  nextRunAt: number | undefined,
+  now: number,
+  catchUp = false,
+): DueVerdict {
   if (!nextRunAt || nextRunAt > now) return 'wait'
-  return now - nextRunAt > CATCH_UP_WINDOW_MS ? 'missed' : 'fire'
+  if (now - nextRunAt <= CATCH_UP_WINDOW_MS) return 'fire'
+  return catchUp ? 'late' : 'missed'
+}
+
+/** How overdue, in the roundest unit that is still true. */
+export function describeLateness(lateBy: number): string {
+  const hours = Math.round(lateBy / (60 * 60_000))
+  if (hours < 1) return 'less than an hour'
+  if (hours < 48) return `${hours} ${hours === 1 ? 'hour' : 'hours'}`
+
+  const days = Math.round(hours / 24)
+  return `${days} days`
+}
+
+/**
+ * The instruction, told that it is arriving late.
+ *
+ * Appended as trailing context rather than woven in, for the reason
+ * `promptFor` gives: the instruction somebody wrote has to still be the one
+ * that arrives. It matters because most of these rituals are written in the
+ * present tense — "what came in overnight", "what is on for today" — and a run
+ * that does not know it is six hours late will answer as though it is not.
+ */
+export function latePrompt(input: string, lateBy: number): string {
+  return `${input}
+
+This run is late: it was due ${describeLateness(lateBy)} ago, and nothing was running then. Anything you would describe as "today" or "this morning" should account for that.`
+}
+
+/** A row that says so, since a late run is not the same as a punctual one. */
+export function lateTitle(title: string, lateBy: number): string {
+  return `${title} · ${describeLateness(lateBy)} late`
 }
 
 let timer: ReturnType<typeof setInterval> | null = null
@@ -220,8 +260,14 @@ async function pollEventsOnce(): Promise<void> {
   }
 }
 
+/** A ritual whose turn has come, and how overdue it was when it did. */
+interface DueRitual {
+  schedule: Schedule
+  lateBy?: number
+}
+
 export async function tick(now = Date.now()): Promise<void> {
-  let due: Schedule[]
+  let due: DueRitual[]
 
   try {
     // Decide and record inside one locked read-modify-write. Doing this as a
@@ -229,7 +275,7 @@ export async function tick(now = Date.now()): Promise<void> {
     // committed in between — leaving `nextRunAt` in the past and firing the
     // ritual a second time on the next tick.
     due = await scheduleStore.update((schedules) => {
-      const firing: Schedule[] = []
+      const firing: DueRitual[] = []
 
       for (const schedule of schedules) {
         if (!schedule.enabled) continue
@@ -244,7 +290,7 @@ export async function tick(now = Date.now()): Promise<void> {
           continue
         }
 
-        const verdict = dueVerdict(schedule.nextRunAt, now)
+        const verdict = dueVerdict(schedule.nextRunAt, now, schedule.catchUp)
         if (verdict === 'wait') continue
 
         if (verdict === 'missed') {
@@ -268,7 +314,13 @@ export async function tick(now = Date.now()): Promise<void> {
         // Claim it here, so a second tick cannot pick it up while the run is
         // still being started.
         inFlight.add(schedule.id)
-        firing.push({ ...schedule })
+        firing.push({
+          // Copied before `markRan` moves `nextRunAt` on, so how overdue this
+          // occurrence was is worked out here and carried rather than
+          // recomputed later against a time that has since changed.
+          schedule: { ...schedule },
+          lateBy: verdict === 'late' ? now - schedule.nextRunAt : undefined,
+        })
       }
 
       return firing
@@ -278,7 +330,9 @@ export async function tick(now = Date.now()): Promise<void> {
     return
   }
 
-  for (const schedule of due) void fire(schedule)
+  // No event: these came round on the clock, which is the only way a run can
+  // be late in the first place.
+  for (const item of due) void fire(item.schedule, undefined, item.lateBy)
 }
 
 /**
@@ -323,7 +377,7 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
  * next occurrence is computed either way — but a triggered one must not step
  * its cursor past an event that was skipped, or that event is lost for good.
  */
-async function fire(schedule: Schedule, event?: TriggerEvent): Promise<boolean> {
+async function fire(schedule: Schedule, event?: TriggerEvent, lateBy?: number): Promise<boolean> {
   try {
     // The case the daily limit exists for: work that spends money at 08:00
     // with nobody watching. Skipped without starting, and said out loud —
@@ -341,7 +395,7 @@ async function fire(schedule: Schedule, event?: TriggerEvent): Promise<boolean> 
     // read before the run that is about to join it.
     const before = await historyFor(schedule.id)
 
-    const run = await runOnce(schedule, budget.maxBudgetUsd, event)
+    const run = await runOnce(schedule, budget.maxBudgetUsd, event, lateBy)
     await announce(schedule.title, run)
 
     // One more go at a failure that might not repeat. Nobody is awake to press
@@ -359,7 +413,7 @@ async function fire(schedule: Schedule, event?: TriggerEvent): Promise<boolean> 
       // the machine has been spending money throughout them.
       const retryBudget = await checkBudget(Date.now(), { unattended: true })
       if (retryBudget.allowed) {
-        const again = await runOnce(schedule, retryBudget.maxBudgetUsd, event)
+        const again = await runOnce(schedule, retryBudget.maxBudgetUsd, event, lateBy)
         await announce(schedule.title, again)
       }
     }
@@ -397,6 +451,7 @@ async function runOnce(
   schedule: Schedule,
   maxBudgetUsd: number | undefined,
   event?: TriggerEvent,
+  lateBy?: number,
 ): Promise<Run> {
   const options = await resolveRunOptionsFor({
     // Nobody is at the keyboard, which is what lets a sandboxed command skip
@@ -410,17 +465,33 @@ async function runOnce(
     allowRules: schedule.allowRules,
   })
 
-  // The name a row carries, before a step is appended to it.
-  const title = event ? titleFor(schedule.title, event) : schedule.title
+  // The name a row carries, before a step is appended to it. An event says
+  // which one this was about; lateness says it did not happen when it should
+  // have. A ritual cannot be both, since only a clock ritual can run late.
+  const title = event
+    ? titleFor(schedule.title, event)
+    : lateBy ? lateTitle(schedule.title, lateBy) : schedule.title
+
+  /**
+   * What the written instruction picks up on its way out.
+   *
+   * One function so the chain and the single-instruction path cannot drift —
+   * a late chain whose steps were not told they were late would answer in the
+   * present tense all the way through.
+   */
+  const decorate = (base: string): string => {
+    const withEvent = event ? promptFor(base, event) : base
+    return lateBy ? latePrompt(withEvent, lateBy) : withEvent
+  }
 
   if (schedule.steps?.length) {
-    return runChain(schedule, schedule.steps, title, options, maxBudgetUsd, event)
+    return runChain(schedule, schedule.steps, title, options, maxBudgetUsd, decorate)
   }
 
   const run = createRun({
     kind: 'command',
     title,
-    input: event ? promptFor(schedule.input, event) : schedule.input,
+    input: decorate(schedule.input),
     invocation: schedule.invocation,
     agentSlug: schedule.agentSlug,
     projectDir: options.cwd,
@@ -462,7 +533,7 @@ async function runChain(
   title: string,
   options: Awaited<ReturnType<typeof resolveRunOptionsFor>>,
   maxBudgetUsd: number | undefined,
-  event?: TriggerEvent,
+  decorate: (base: string) => string,
 ): Promise<Run> {
   const chainId = newChainId()
   const done: { title: string; output: string }[] = []
@@ -498,7 +569,7 @@ async function runChain(
     const run = createRun({
       kind: 'command',
       title: stepTitleFor(title, step, index, steps.length),
-      input: event ? promptFor(base, event) : base,
+      input: decorate(base),
       invocation: schedule.invocation,
       agentSlug: schedule.agentSlug,
       projectDir: options.cwd,

@@ -160,6 +160,15 @@ const hour = ref(props.schedule?.recurrence.hour ?? 8)
 const minute = ref(props.schedule?.recurrence.minute ?? 0)
 const days = ref<number[]>(props.schedule?.recurrence.days?.length ? [...props.schedule.recurrence.days] : [...WEEKDAYS])
 const permission = ref<SchedulePermission>(props.schedule?.permission ?? 'edits')
+/**
+ * Whether an occurrence too late to be on time still runs.
+ *
+ * Off by default, and per ritual because the answer genuinely differs. A
+ * briefing about this morning is worth less at 14:00 than it was at 08:00; a
+ * triage run over what came in overnight is worth having whenever it happens,
+ * and skipping it means the work never gets done at all.
+ */
+const catchUp = ref(props.schedule?.catchUp ?? false)
 const saving = ref(false)
 
 /**
@@ -263,6 +272,9 @@ async function onSave() {
           }
         : null,
       permission: permission.value,
+      // Only meaningful on the clock: an event ritual fires when the thing
+      // happens, so it can never be late for anything.
+      catchUp: firesOn.value === 'clock' ? catchUp.value : false,
       enabled: props.schedule?.enabled ?? true,
       // Always sent, so the answer is this form's rather than whatever project
       // happened to be selected when the request went out.
@@ -504,6 +516,26 @@ async function onSave() {
         </button>
       </div>
       <span class="field-hint">{{ preview }}</span>
+
+      <!--
+        Only on the clock: an event ritual fires when the thing happens, so it
+        cannot be late for anything. Off by default, because arriving at teatime
+        with this morning's briefing is what the catch-up window prevents — and
+        for some rituals that is exactly right.
+      -->
+      <label
+        v-if="firesOn === 'clock'"
+        class="flex items-start gap-2.5 rounded-md px-3 py-2.5 cursor-pointer mt-1"
+        style="background: var(--input-bg);"
+      >
+        <UCheckbox v-model="catchUp" class="mt-0.5" />
+        <span class="type-detail" style="color: var(--text-secondary);">
+          <span style="color: var(--text-primary);">Run it late if the machine was off.</span>
+          Without this, a turn missed by more than two hours is reported and skipped. With
+          it, the run happens whenever the machine comes back and is told how late it is.
+          Worth it for work that still needs doing; not for a briefing that has gone stale.
+        </span>
+      </label>
     </div>
 
     <!-- Where it will run, pinned now because the scheduler can't ask later -->

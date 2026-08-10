@@ -248,18 +248,33 @@ polls is invisible to `pr list --state open` whatever the window size. That is a
 of polling for things that exist rather than for things that happened — the shape the two
 new event kinds had to leave behind.
 
-### 5. Laptop sleep, decided rather than deferred
+### ~~5. Laptop sleep, decided rather than deferred~~ — shipped, as recommended
 
-`CATCH_UP_WINDOW_MS` is two hours. Past that a due ritual is marked missed and reported in
-*while you were away*, which was last cycle's fix and was the right one — the silence was
-the bug. The remaining decision is whether an overdue ritual should *run* on wake rather
-than only be reported, per ritual and opt-in.
+Settled the way this argued for: **opt-in per ritual**, off by default, with the run
+labelled late so nothing pretends it happened on time.
 
-It is a real trade and both sides are defensible: a briefing generated at 14:00 about the
-morning is worse than nothing, while a triage run that is six hours late is still worth
-having. Opt-in per ritual is the answer, with the run labelled late so nothing pretends it
-happened on time. Settle it before the launch drafts are rewritten, because it is the
-difference between conceding the row and answering it.
+Per ritual because the answer genuinely differs by ritual, and that is the whole reason it
+could not be one global setting. A briefing generated at 14:00 about the morning is worse
+than nothing. A triage run over what came in overnight is worth having whenever it
+happens, and skipping it means the work simply never gets done. Neither answer is right
+for the other.
+
+**The window itself does not move.** An occurrence inside two hours is on time and one
+outside it is not, whatever the ritual has asked for — `catchUp` changes only what being
+past it *means*: run anyway, or do not run at all. Keeping that separation is what stops
+the setting from quietly redefining "on time".
+
+The run is told. Most of these instructions are written in the present tense — "what came
+in overnight", "what is on for today" — so a run that does not know it is six hours late
+answers as though it is not. The lateness is appended as trailing context, the way an
+event is, so the instruction somebody wrote is still the instruction that arrives. Chains
+get it on every step, through one shared decorator, so a late chain cannot answer in the
+present tense from step two onward.
+
+This is the row the README's first line was losing, and it is now answerable without
+overclaiming: the schedule still cannot fire while the machine is off — nothing running
+locally can — but the work is no longer silently lost, and for the rituals where late is
+better than never, it is no longer skipped either.
 
 ### 6. The cold machine
 

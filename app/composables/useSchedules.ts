@@ -54,6 +54,11 @@ export interface Schedule {
    * some of what happened was never picked up. Cleared once one can again.
    */
   eventGapAt?: number
+  /**
+   * Whether an occurrence too late to be on time still runs. Absent means no,
+   * which is what every ritual did before the setting existed.
+   */
+  catchUp?: boolean
   permission: SchedulePermission
   /** Permanent permission rules, e.g. `Bash(gh:*)`. */
   allowRules?: string[]

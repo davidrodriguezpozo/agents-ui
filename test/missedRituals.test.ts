@@ -171,3 +171,81 @@ describe('what a missed morning must not do', () => {
     expect((await read(id)).pausedReason).toBeUndefined()
   })
 })
+
+/**
+ * The other answer to the same question.
+ *
+ * Skipping is right for a briefing that has gone stale and wrong for work that
+ * still needs doing — triage over what came in overnight is worth having
+ * whenever it happens, and skipping it means it never happens at all. So it is
+ * a per-ritual choice, and the default stays what it was.
+ */
+describe('a ritual that asked to run late', () => {
+  const NOW = 1_000 * HOUR
+
+  it('still counts an occurrence inside the window as simply on time', () => {
+    // The window does not move. What changes is only what being past it means.
+    expect(scheduler.dueVerdict(NOW - 20 * 60_000, NOW, true)).toBe('fire')
+  })
+
+  it('runs one past the window instead of skipping it', () => {
+    expect(scheduler.dueVerdict(NOW - 9 * HOUR, NOW, true)).toBe('late')
+  })
+
+  it('leaves every other ritual skipping, as before', () => {
+    expect(scheduler.dueVerdict(NOW - 9 * HOUR, NOW, false)).toBe('missed')
+    // The default is the old behaviour, so nothing already saved changes.
+    expect(scheduler.dueVerdict(NOW - 9 * HOUR, NOW)).toBe('missed')
+  })
+
+  it('does not record a late run as a missed one', async () => {
+    // It ran. Saying it was missed as well would report a gap that is not there
+    // and leave the row accusing it of a morning it actually covered.
+    const saved = await schedules.upsertSchedule({
+      title: 'Overnight triage',
+      input: '/triage',
+      recurrence: { hour: 8, minute: 0, days: [] },
+      catchUp: true,
+    })
+
+    expect(saved.catchUp).toBe(true)
+  })
+
+  it('is off unless asked for', async () => {
+    const saved = await schedules.upsertSchedule({
+      title: 'Morning briefing',
+      input: '/brief',
+      recurrence: { hour: 8, minute: 0, days: [] },
+    })
+
+    expect(saved.catchUp).toBe(false)
+  })
+})
+
+describe('telling a run it is late', () => {
+  it('rounds to the unit somebody would say out loud', () => {
+    expect(scheduler.describeLateness(6 * HOUR)).toBe('6 hours')
+    expect(scheduler.describeLateness(HOUR)).toBe('1 hour')
+    expect(scheduler.describeLateness(20 * 60_000)).toBe('less than an hour')
+    expect(scheduler.describeLateness(72 * HOUR)).toBe('3 days')
+  })
+
+  it('leaves the written instruction first and intact', () => {
+    // The instruction somebody wrote has to still be the one that arrives.
+    const prompt = scheduler.latePrompt('Summarise what came in.', 6 * HOUR)
+
+    expect(prompt.startsWith('Summarise what came in.')).toBe(true)
+    expect(prompt).toContain('6 hours ago')
+  })
+
+  it('warns the run off answering in the present tense', () => {
+    // These rituals are written as "what came in overnight". A run that does
+    // not know it is six hours late will answer as though it is not.
+    expect(scheduler.latePrompt('Brief me.', 6 * HOUR)).toContain('this morning')
+  })
+
+  it('says so on the row, since a late run is not a punctual one', () => {
+    expect(scheduler.lateTitle('Morning briefing', 6 * HOUR))
+      .toBe('Morning briefing · 6 hours late')
+  })
+})

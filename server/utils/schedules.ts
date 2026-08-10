@@ -64,6 +64,20 @@ export interface Schedule {
    * records a baseline and fires nothing.
    */
   triggerCursor?: number
+  /**
+   * Whether an occurrence too late to be on time should still run.
+   *
+   * Off by default, which is what every ritual did before this existed, and the
+   * right default: a briefing about this morning is worth less at 14:00 than it
+   * was at 08:00, and dumping yesterday's on somebody at teatime is the thing
+   * the catch-up window was added to prevent.
+   *
+   * It is a per-ritual choice because the answer genuinely differs by ritual. A
+   * morning briefing is stale the moment it is late. A triage run over what came
+   * in overnight is worth having whenever it happens, and skipping it means the
+   * work simply never gets done.
+   */
+  catchUp?: boolean
   permission: SchedulePermission
   /**
    * Rules this ritual has been granted permanently, e.g. `Bash(gh:*)`.
@@ -264,6 +278,7 @@ export async function upsertSchedule(
       // absent is "did not say" and must keep it. See projectDirForSave.
       projectDir: input.projectDir === null ? undefined : input.projectDir ?? existing?.projectDir,
       recurrence,
+      catchUp: input.catchUp ?? existing?.catchUp ?? false,
       permission: input.permission ?? existing?.permission ?? 'edits',
       allowRules: mergeRules(input.allowRules ?? existing?.allowRules ?? []),
       enabled: input.enabled ?? existing?.enabled ?? true,

@@ -118,11 +118,19 @@ of these is written with the thing you'd have to tell me for it to jump the queu
 - **Which agents and rituals are actually earning their cost**, over time.
 - **Session templates** — the same five-way fan-out you run every week, saved.
 
-One known debt, which needs no vote:
+### If your laptop was shut
 
-- **A laptop that was shut.** An overdue ritual is now reported rather than silently
-  skipped, but whether it should still *run* when you open the lid is an open question —
-  a briefing about this morning is worth less at 14:00 than a triage run is.
+It runs on your machine, so a ritual cannot fire at 08:00 if nothing is running at 08:00.
+What it can do is not lose the work silently, and that is now the case both ways.
+
+By default, a turn missed by more than two hours is reported — on the ritual and in the
+morning report — rather than vanishing. Arriving at teatime with this morning's briefing
+is worse than not arriving.
+
+Per ritual, you can say **run it late anyway**. The run happens whenever the machine comes
+back, its row says how late it was, and the instruction itself is told — so a ritual
+written as "what came in overnight" doesn't answer as though it's still the morning. Worth
+it for work that still needs doing; not for a briefing that's gone stale.
 
 ## Not planned
 
