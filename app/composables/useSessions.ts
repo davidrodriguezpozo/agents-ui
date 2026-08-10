@@ -47,6 +47,21 @@ export interface SessionRepair {
   updatedAt: number
 }
 
+/** How the pull request this session opened is being followed, if it is. */
+export interface SessionPrWatch {
+  state: 'watching' | 'fixing' | 'landed' | 'stopped'
+  number: number
+  url: string
+  /** Whether it merges itself once the checks are green. */
+  land: boolean
+  attempts: number
+  max: number
+  reason?: string
+  startedAt: number
+  updatedAt: number
+  lastPolledAt?: number
+}
+
 export interface Session {
   id: string
   title: string
@@ -67,6 +82,8 @@ export interface Session {
   trust?: TrustLevel
   /** Set once this session's branch has a pull request open. */
   prUrl?: string
+  /** Absent means nothing is following that pull request. */
+  prWatch?: SessionPrWatch
   /** Absent means the checks have never run here — not that they passed. */
   check?: SessionCheck
   /** The recorded verdict predates what is in the workspace now. */
@@ -357,6 +374,20 @@ export function useSessions() {
     return result
   }
 
+  /**
+   * Follow the pull request, or stop. `land` is passed every time rather than
+   * remembered, because merging is the one thing here other people see and it
+   * should never be on because it was on last time.
+   */
+  async function watchPullRequest(id: string, opts: { watch: boolean; land?: boolean }) {
+    const result = await $fetch<{ prWatch: SessionPrWatch | null }>(
+      `/api/sessions/${encodeURIComponent(id)}/watch`,
+      { method: 'POST', body: opts },
+    )
+    await fetchAll()
+    return result
+  }
+
   async function previewMerge(id: string) {
     return $fetch<MergePreview>(`/api/sessions/${encodeURIComponent(id)}/merge`)
   }
@@ -420,6 +451,7 @@ export function useSessions() {
     setTrust,
     previewPullRequest,
     openPullRequest,
+    watchPullRequest,
     fetchDiff,
     previewMerge,
     merge,

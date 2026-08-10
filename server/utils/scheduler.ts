@@ -13,6 +13,7 @@ import { RETRY_DELAY_MS, shouldGiveUp, shouldRetry } from './ritualHealth'
 import { checkBudget } from './budget'
 import { describeIncomplete } from './digest'
 import { withRunSlot } from './runQueue'
+import { pollPullRequests } from './prWatchRunner'
 
 const TICK_MS = 30_000
 
@@ -56,8 +57,21 @@ export function startScheduler(): void {
   // asks GitHub, once per triggered ritual. Thirty seconds would be rude to
   // somebody else's rate limit for no gain — nothing here is urgent to the
   // second.
-  setTimeout(() => void pollEvents(), 15_000)
-  pollTimer = setInterval(() => void pollEvents(), POLL_MS)
+  //
+  // Watched pull requests ride the same interval and are deliberately *not*
+  // awaited behind the event poll. `pollEventsOnce` awaits `fire()`, which can
+  // sit for the ten-minute retry delay — long enough that a pull request going
+  // green would not be noticed until the ritual it has nothing to do with had
+  // finished. Separate re-entrancy guards, one timer.
+  setTimeout(() => {
+    void pollEvents()
+    void pollWatchedPullRequests()
+  }, 15_000)
+
+  pollTimer = setInterval(() => {
+    void pollEvents()
+    void pollWatchedPullRequests()
+  }, POLL_MS)
 
   console.log('[scheduler] started')
 }
@@ -88,6 +102,27 @@ export async function pollEvents(): Promise<void> {
     await pollEventsOnce()
   } finally {
     polling = false
+  }
+}
+
+/**
+ * The same protection for the watched pull requests, on its own flag.
+ *
+ * A watch that starts a fix turn returns immediately — the turn is detached —
+ * but reading a dozen pull requests through `gh` on a slow connection can still
+ * outlast two minutes, and overlapping passes would hand the same red commit to
+ * two turns before either had recorded that it was handling it.
+ */
+let watching = false
+
+export async function pollWatchedPullRequests(): Promise<void> {
+  if (watching) return
+  watching = true
+
+  try {
+    await pollPullRequests()
+  } finally {
+    watching = false
   }
 }
 

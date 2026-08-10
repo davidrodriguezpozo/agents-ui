@@ -4,6 +4,7 @@ import { defineJsonStore } from './jsonStore'
 import type { SessionCheck } from './checks'
 import type { SessionSummary } from './sessionSummary'
 import type { SessionRepair } from './sessionRepair'
+import type { SessionPrWatch } from './prWatch'
 import type { TrustLevel } from './trust'
 
 /**
@@ -44,6 +45,13 @@ export interface Session {
   trust?: TrustLevel
   /** Set once this session's branch has a pull request open. */
   prUrl?: string
+  /**
+   * Whether this session is still following the pull request it opened —
+   * reading the checks GitHub ran, fixing them when they go red, and landing it
+   * when they come good. Absent means it is not, which is what opening a pull
+   * request did before this existed.
+   */
+  prWatch?: SessionPrWatch
   /**
    * How the project's own checks last went in this session's workspace.
    * Absent means they have never run here — which is not the same as passing,

@@ -15,7 +15,8 @@ const id = route.params.id as string
 
 const {
   fetchOne, send, fetchTranscript, setTrust, fetchDiff,
-  previewPullRequest, openPullRequest, previewMerge, merge, runCheck, repair, updateFromBase, close,
+  previewPullRequest, openPullRequest, watchPullRequest, previewMerge, merge, runCheck, repair,
+  updateFromBase, close,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
@@ -275,6 +276,70 @@ async function openPrDialog() {
     showPr.value = false
   }
 }
+
+// --- Following the pull request afterwards ----------------------------------
+
+const showWatch = ref(false)
+const watchLand = ref(false)
+const savingWatch = ref(false)
+
+/**
+ * Landing starts off every time this opens, and is never restored from the
+ * last answer. It is the only control on this page whose effect other people
+ * see, and a checkbox that remembers "yes" is how somebody merges something
+ * they did not mean to.
+ */
+function openWatchDialog() {
+  watchLand.value = false
+  showWatch.value = true
+}
+
+async function onWatch() {
+  savingWatch.value = true
+  try {
+    await watchPullRequest(id, { watch: true, land: watchLand.value })
+    toast.add({
+      title: watchLand.value ? 'Watching, and landing it when green' : 'Watching its checks',
+      description: watchLand.value
+        ? 'It will fix failing CI and merge once the checks pass.'
+        : 'It will fix failing CI and tell you when it is green.',
+      color: 'success',
+    })
+    showWatch.value = false
+    await load()
+  } catch (e) {
+    toast.add({ title: 'Could not watch it', description: errorMessage(e), color: 'error' })
+  } finally {
+    savingWatch.value = false
+  }
+}
+
+async function onStopWatch() {
+  savingWatch.value = true
+  try {
+    await watchPullRequest(id, { watch: false })
+    await load()
+  } catch (e) {
+    toast.add({ title: 'Could not stop', description: errorMessage(e), color: 'error' })
+  } finally {
+    savingWatch.value = false
+  }
+}
+
+/** What the watch is doing, in the words the header has room for. */
+const watchLabel = computed(() => {
+  const watch = session.value?.prWatch
+  if (!watch) return null
+
+  if (watch.state === 'fixing') return `Fixing CI — attempt ${watch.attempts} of ${watch.max}`
+  if (watch.state === 'watching') return watch.land ? 'Watching, lands when green' : 'Watching its checks'
+  if (watch.state === 'landed') return 'Merged'
+  return 'Stopped watching'
+})
+
+const watchActive = computed(() =>
+  session.value?.prWatch?.state === 'watching' || session.value?.prWatch?.state === 'fixing'
+)
 
 async function onOpenPr() {
   if (!prTitle.value.trim()) return
@@ -789,6 +854,41 @@ const totalChanges = computed(() => {
           :to="session.prUrl"
           target="_blank"
         />
+        <!--
+          Only offered once there is a pull request to follow. A watch that is
+          running says what it is doing rather than offering the button again —
+          the useful action at that point is stopping it.
+        -->
+        <UButton
+          v-if="session?.prUrl && !watchActive"
+          :label="session.prWatch ? 'Watch again' : 'Watch CI'"
+          icon="i-lucide-radar"
+          size="sm"
+          variant="soft"
+          color="neutral"
+          @click="openWatchDialog"
+        />
+        <div
+          v-else-if="session?.prUrl && watchActive"
+          class="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-md type-detail"
+          style="background: var(--accent-muted); color: var(--text-secondary);"
+        >
+          <UIcon
+            :name="session?.prWatch?.state === 'fixing' ? 'i-lucide-wrench' : 'i-lucide-radar'"
+            class="size-3.5 shrink-0"
+            :class="session?.prWatch?.state === 'fixing' ? 'animate-pulse' : ''"
+          />
+          <span>{{ watchLabel }}</span>
+          <UButton
+            icon="i-lucide-x"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            :loading="savingWatch"
+            title="Stop watching"
+            @click="onStopWatch"
+          />
+        </div>
         <UButton
           v-else-if="session?.worktree.changedFiles || session?.worktree.ahead"
           label="Pull request"
@@ -821,6 +921,25 @@ const totalChanges = computed(() => {
       </div>
 
       <template v-else-if="session">
+        <!--
+          How following the pull request ended. The notification fires at the
+          moment it happens, which is precisely the moment nobody is here — so
+          the reason has to survive on the page as well.
+        -->
+        <div
+          v-if="session.prWatch && !watchActive && session.prWatch.reason"
+          class="flex items-start gap-2.5 rounded-md px-4 py-3 type-detail"
+          :style="session.prWatch.state === 'landed'
+            ? 'background: var(--success-muted, rgba(74,222,128,0.06)); color: var(--text-secondary);'
+            : 'background: var(--accent-muted); color: var(--text-secondary);'"
+        >
+          <UIcon
+            :name="session.prWatch.state === 'landed' ? 'i-lucide-git-merge' : 'i-lucide-radar'"
+            class="size-4 shrink-0 mt-0.5"
+          />
+          <span>{{ session.prWatch.reason }}</span>
+        </div>
+
         <!-- Where this session is working, stated plainly -->
         <div class="rounded-md px-4 py-3 space-y-1" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
           <div class="flex items-center gap-2">
@@ -1564,6 +1683,48 @@ const totalChanges = computed(() => {
     </UModal>
 
     <!-- Closing is where work gets lost, so spell out what happens -->
+    <UModal v-model:open="showWatch">
+      <template #content>
+        <div class="p-6 space-y-4 bg-overlay">
+          <h3 class="text-page-title">Keep watching this pull request?</h3>
+          <p class="type-body">
+            Your checks passed in this workspace. CI runs somewhere else, against a merge
+            with <span class="font-mono type-detail">{{ session?.baseBranch }}</span> that
+            never happened here — so it can still go red for reasons this workspace could
+            not have known.
+          </p>
+          <p class="type-body">
+            While it is watched, a red result comes back to this session with the failing
+            checks attached, and it gets up to
+            {{ session?.prWatch?.max ?? 3 }} goes at fixing them before it stops and tells you.
+          </p>
+
+          <label
+            class="flex items-start gap-2.5 rounded-md px-3 py-2.5 cursor-pointer"
+            style="background: var(--input-bg);"
+          >
+            <UCheckbox v-model="watchLand" class="mt-0.5" />
+            <span class="type-detail" style="color: var(--text-secondary);">
+              <span style="color: var(--text-primary);">Merge it once the checks pass.</span>
+              This is the one thing here everybody else can see, and nothing in this app can
+              undo it. It never merges on a pull request that reported no checks at all.
+            </span>
+          </label>
+
+          <div class="flex justify-end gap-2 pt-1">
+            <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { showWatch = false }" />
+            <UButton
+              :label="watchLand ? 'Watch and land it' : 'Watch it'"
+              icon="i-lucide-radar"
+              size="sm"
+              :loading="savingWatch"
+              @click="onWatch"
+            />
+          </div>
+        </div>
+      </template>
+    </UModal>
+
     <UModal v-model:open="showClose">
       <template #content>
         <div class="p-6 space-y-4 bg-overlay">
