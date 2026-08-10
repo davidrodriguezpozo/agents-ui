@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { renderMarkdown } from '~/utils/markdown'
-import { errorMessage } from '~/utils/errors'
+import { extractInstructionsBlock } from '~/composables/useImproveChat'
+import { isSendKey } from '~/utils/keys'
 
 const props = defineProps<{
   modelValue: string
@@ -13,54 +14,77 @@ const emit = defineEmits<{
 }>()
 
 const mode = ref<'edit' | 'preview'>('edit')
-const isImproving = ref(false)
-const improveError = ref<string | null>(null)
-const suggestion = ref<string | null>(null)
+const improve = useImproveChat()
+const chatInput = ref('')
+const chatInputRef = ref<HTMLTextAreaElement | null>(null)
+const chatContainer = ref<HTMLElement | null>(null)
 
 const wordCount = computed(() => {
   const text = props.modelValue.trim()
   return text ? text.split(/\s+/).length : 0
 })
 
-// NOTE: The spec defines per-suggestion diff UI (original vs suggested).
-// This initial implementation shows the full improved text as accept/dismiss.
-// Per-suggestion granularity is deferred to a follow-up iteration.
-
-async function improveInstructions() {
-  isImproving.value = true
-  improveError.value = null
-  suggestion.value = null
-
-  try {
-    const response = await $fetch<{ suggestions: unknown[]; improvedInstructions: string }>('/api/agents/improve-instructions', {
-      method: 'POST',
-      body: {
-        name: props.agentName,
-        description: props.agentDescription,
-        currentInstructions: props.modelValue,
-      },
-      timeout: 30000,
+function openImproveChat() {
+  improve.open()
+  if (!improve.messages.value.length) {
+    // Auto-send the initial message so Claude starts the conversation
+    improve.sendMessage('Help me improve these instructions.', {
+      name: props.agentName,
+      description: props.agentDescription,
+      currentInstructions: props.modelValue,
     })
-    suggestion.value = response.improvedInstructions
-  } catch (e: unknown) {
-    // `errorMessage` rather than `e.message`: ofetch's own wording is
-    // `[POST] "/api/…": 502 Bad Gateway`, which tells the reader nothing and
-    // hides what the server actually said.
-    improveError.value = errorMessage(e, 'Failed to improve instructions')
-  } finally {
-    isImproving.value = false
+  }
+  nextTick(() => chatInputRef.value?.focus())
+}
+
+function closeImproveChat() {
+  improve.close()
+}
+
+function resetImproveChat() {
+  improve.reset()
+  improve.close()
+}
+
+async function handleChatSend() {
+  const text = chatInput.value.trim()
+  if (!text) return
+  chatInput.value = ''
+  await improve.sendMessage(text, {
+    name: props.agentName,
+    description: props.agentDescription,
+    currentInstructions: props.modelValue,
+  })
+}
+
+function handleChatKeydown(e: KeyboardEvent) {
+  if (isSendKey(e)) {
+    e.preventDefault()
+    handleChatSend()
   }
 }
 
-function acceptSuggestion() {
-  if (suggestion.value) {
-    emit('update:modelValue', suggestion.value)
-    suggestion.value = null
-  }
+function applyInstructions(instructions: string) {
+  emit('update:modelValue', instructions)
 }
 
-function dismissSuggestion() {
-  suggestion.value = null
+// Auto-scroll chat
+watch(
+  () => improve.messages.value[improve.messages.value.length - 1]?.content,
+  () => {
+    nextTick(() => {
+      if (chatContainer.value) {
+        chatContainer.value.scrollTop = chatContainer.value.scrollHeight
+      }
+    })
+  },
+)
+
+function autoResizeChatInput() {
+  const el = chatInputRef.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${Math.min(el.scrollHeight, 80)}px`
 }
 </script>
 
@@ -85,60 +109,194 @@ function dismissSuggestion() {
         <span class="text-[11px] font-mono" style="color: var(--text-disabled);">{{ wordCount }} words</span>
       </div>
       <button
+        v-if="!improve.isOpen.value"
         class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
         :style="{
-          background: isImproving ? 'var(--accent-muted)' : 'var(--surface-raised)',
-          border: '1px solid ' + (isImproving ? 'var(--accent-glow)' : 'var(--border-subtle)'),
-          color: isImproving ? 'var(--accent)' : 'var(--text-secondary)',
+          background: 'var(--surface-raised)',
+          border: '1px solid var(--border-subtle)',
+          color: 'var(--text-secondary)',
         }"
-        :disabled="isImproving"
-        @click="improveInstructions"
+        @click="openImproveChat"
       >
-        <UIcon :name="isImproving ? 'i-lucide-loader-2' : 'i-lucide-wand-2'" class="size-3" :class="{ 'animate-spin': isImproving }" />
-        {{ isImproving ? 'Improving...' : 'Improve with Claude' }}
+        <UIcon name="i-lucide-wand-2" class="size-3" />
+        Improve with Claude
+      </button>
+      <button
+        v-else
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
+        :style="{
+          background: 'var(--accent-muted)',
+          border: '1px solid var(--accent-glow)',
+          color: 'var(--accent)',
+        }"
+        @click="closeImproveChat"
+      >
+        <UIcon name="i-lucide-x" class="size-3" />
+        Close chat
       </button>
     </div>
 
-    <div
-      v-if="suggestion"
-      class="mx-4 mt-3 rounded-lg p-3 space-y-2"
-      style="background: var(--accent-muted); border: 1px solid var(--accent-muted);"
-    >
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-sparkles" class="size-3.5" style="color: var(--accent);" />
-        <span class="text-[12px] font-medium" style="color: var(--text-primary);">Suggested improvement</span>
+    <!-- Main content area: editor + optional chat panel -->
+    <div class="flex-1 min-h-0 flex" :class="improve.isOpen.value ? 'flex-row' : 'flex-col'">
+      <!-- Editor / Preview (takes full width when chat is closed, left half when open) -->
+      <div class="flex-1 min-h-0 min-w-0 flex flex-col" :class="improve.isOpen.value ? 'border-r' : ''" :style="improve.isOpen.value ? 'border-color: var(--border-subtle);' : ''">
+        <!-- Edit mode -->
+        <textarea
+          v-if="mode === 'edit'"
+          :value="modelValue"
+          class="flex-1 w-full resize-none bg-transparent text-[13px] leading-relaxed outline-none p-4"
+          style="color: var(--text-primary); font-family: var(--font-mono);"
+          placeholder="Write instructions for your agent..."
+          @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
+        />
+
+        <!-- Preview mode -->
+        <div
+          v-else
+          class="flex-1 overflow-y-auto p-4 instruction-preview"
+          style="color: var(--text-primary); font-family: var(--font-sans);"
+        >
+          <div
+            v-if="modelValue.trim()"
+            class="text-[13px] leading-[1.7]"
+            v-html="renderMarkdown(modelValue)"
+          />
+          <p v-else class="text-[13px]" style="color: var(--text-disabled);">Nothing to preview yet.</p>
+        </div>
       </div>
-      <pre class="text-[12px] leading-relaxed whitespace-pre-wrap max-h-[150px] overflow-y-auto" style="color: var(--text-secondary); font-family: var(--font-mono);">{{ suggestion }}</pre>
-      <div class="flex gap-2">
-        <button class="px-3 py-1 rounded-md text-[11px] font-medium transition-all" style="background: var(--accent); color: white;" @click="acceptSuggestion">Accept</button>
-        <button class="px-3 py-1 rounded-md text-[11px] font-medium transition-all hover-bg" style="color: var(--text-tertiary);" @click="dismissSuggestion">Dismiss</button>
-      </div>
-    </div>
 
-    <div v-if="improveError" class="mx-4 mt-2 text-[11px] rounded-md px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">{{ improveError }}</div>
-
-    <!-- Edit mode -->
-    <textarea
-      v-if="mode === 'edit'"
-      :value="modelValue"
-      class="flex-1 w-full resize-none bg-transparent text-[13px] leading-relaxed outline-none p-4"
-      style="color: var(--text-primary); font-family: var(--font-mono);"
-      placeholder="Write instructions for your agent..."
-      @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
-    />
-
-    <!-- Preview mode -->
-    <div
-      v-else
-      class="flex-1 overflow-y-auto p-4 instruction-preview"
-      style="color: var(--text-primary); font-family: var(--font-sans);"
-    >
+      <!-- Improve chat panel (right side, visible when open) -->
       <div
-        v-if="modelValue.trim()"
-        class="text-[13px] leading-[1.7]"
-        v-html="renderMarkdown(modelValue)"
-      />
-      <p v-else class="text-[13px]" style="color: var(--text-disabled);">Nothing to preview yet.</p>
+        v-if="improve.isOpen.value"
+        class="flex flex-col"
+        style="width: 340px; min-width: 280px; background: var(--surface-base);"
+      >
+        <!-- Chat header -->
+        <div class="shrink-0 px-3 py-2 flex items-center justify-between border-b" style="border-color: var(--border-subtle);">
+          <div class="flex items-center gap-1.5">
+            <UIcon name="i-lucide-sparkles" class="size-3" style="color: var(--accent);" />
+            <span class="text-[11px] font-medium" style="color: var(--text-primary);">Improve</span>
+            <span
+              v-if="improve.isStreaming.value"
+              class="text-[9px] font-mono tracking-widest uppercase px-1.5 py-px rounded-full"
+              style="background: var(--accent-muted); color: var(--accent);"
+            >
+              Thinking
+            </span>
+          </div>
+          <button
+            class="p-1 rounded-md hover-bg transition-all"
+            style="color: var(--text-disabled);"
+            title="Reset conversation"
+            @click="resetImproveChat"
+          >
+            <UIcon name="i-lucide-rotate-ccw" class="size-3" />
+          </button>
+        </div>
+
+        <!-- Chat messages -->
+        <div ref="chatContainer" class="flex-1 overflow-y-auto px-3 py-3 space-y-3">
+          <template v-for="msg in improve.messages.value" :key="msg.id">
+            <!-- User message -->
+            <div v-if="msg.role === 'user'" class="flex justify-end">
+              <div
+                class="max-w-[90%] rounded-xl rounded-br-md px-3 py-2 text-[12px] leading-relaxed"
+                style="background: var(--accent-muted); border: 1px solid var(--accent-muted); color: var(--text-primary);"
+              >
+                {{ msg.content }}
+              </div>
+            </div>
+
+            <!-- Assistant message -->
+            <div v-else class="space-y-2">
+              <div
+                class="rounded-xl rounded-bl-md px-3 py-2 text-[12px] leading-relaxed improve-msg"
+                :class="{ 'is-streaming': improve.isStreaming.value && msg.id === improve.messages.value[improve.messages.value.length - 1]?.id }"
+                style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-primary);"
+              >
+                <!-- Render the non-instructions parts as markdown, and instructions blocks as apply-able -->
+                <template v-if="extractInstructionsBlock(msg.content)">
+                  <div
+                    class="improve-prose"
+                    v-html="renderMarkdown(msg.content.replace(/```instructions\s*\n[\s\S]*?```/, '').trim())"
+                  />
+                  <div
+                    class="mt-2 rounded-lg p-2.5 space-y-2"
+                    style="background: var(--surface-base); border: 1px solid var(--accent-glow);"
+                  >
+                    <div class="flex items-center gap-1.5">
+                      <UIcon name="i-lucide-file-text" class="size-3" style="color: var(--accent);" />
+                      <span class="text-[10px] font-medium" style="color: var(--accent);">Proposed instructions</span>
+                    </div>
+                    <pre class="text-[11px] leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto" style="color: var(--text-secondary); font-family: var(--font-mono);">{{ extractInstructionsBlock(msg.content) }}</pre>
+                    <button
+                      class="w-full px-3 py-1.5 rounded-md text-[11px] font-medium transition-all"
+                      style="background: var(--accent); color: white;"
+                      @click="applyInstructions(extractInstructionsBlock(msg.content)!)"
+                    >
+                      Apply to instructions
+                    </button>
+                  </div>
+                </template>
+                <div v-else class="improve-prose" v-html="renderMarkdown(msg.content || '...')" />
+              </div>
+            </div>
+          </template>
+
+          <!-- Error -->
+          <div v-if="improve.error.value" class="text-[11px] rounded-md px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">
+            {{ improve.error.value }}
+          </div>
+        </div>
+
+        <!-- Chat input -->
+        <div class="shrink-0 px-3 pb-3 pt-1">
+          <div
+            class="relative rounded-lg"
+            :style="{
+              background: 'var(--surface-raised)',
+              border: improve.isStreaming.value
+                ? '1px solid var(--accent-muted)'
+                : '1px solid var(--border-subtle)',
+            }"
+          >
+            <textarea
+              ref="chatInputRef"
+              v-model="chatInput"
+              rows="1"
+              class="w-full resize-none bg-transparent text-[12px] outline-none px-3 pt-2.5 pb-8"
+              style="color: var(--text-primary); font-family: var(--font-sans); max-height: 80px;"
+              placeholder="Tell Claude what to change..."
+              :disabled="improve.isStreaming.value"
+              @keydown="handleChatKeydown"
+              @input="autoResizeChatInput"
+            />
+            <div class="absolute bottom-2 right-2 flex items-center gap-1">
+              <button
+                v-if="improve.isStreaming.value"
+                class="p-1 rounded-md transition-all"
+                style="background: var(--error); color: white;"
+                title="Stop"
+                @click="improve.stop()"
+              >
+                <UIcon name="i-lucide-square" class="size-2.5" />
+              </button>
+              <button
+                v-else
+                class="p-1 rounded-md transition-all"
+                :style="{
+                  background: chatInput.trim() ? 'var(--accent)' : 'var(--badge-subtle-bg)',
+                  color: chatInput.trim() ? 'white' : 'var(--text-disabled)',
+                }"
+                :disabled="!chatInput.trim()"
+                @click="handleChatSend"
+              >
+                <UIcon name="i-lucide-arrow-up" class="size-2.5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -160,4 +318,18 @@ function dismissSuggestion() {
 .instruction-preview :deep(table) { width: 100%; border-collapse: collapse; font-size: 0.9em; margin: 0.6em 0; }
 .instruction-preview :deep(th), .instruction-preview :deep(td) { border: 1px solid var(--border-subtle); padding: 0.4em 0.6em; text-align: left; }
 .instruction-preview :deep(th) { background: var(--surface-raised); font-weight: 600; }
+
+.improve-prose :deep(p) { margin: 0.3em 0; }
+.improve-prose :deep(ul), .improve-prose :deep(ol) { padding-left: 1.2em; margin: 0.3em 0; }
+.improve-prose :deep(li) { margin: 0.15em 0; }
+.improve-prose :deep(code) { font-family: var(--font-mono); font-size: 0.85em; background: var(--badge-subtle-bg); padding: 0.1em 0.3em; border-radius: 3px; }
+.improve-prose :deep(strong) { color: var(--text-primary); font-weight: 600; }
+
+.is-streaming { position: relative; }
+.is-streaming::after {
+  content: ''; display: inline-block; width: 2px; height: 1em;
+  background: var(--accent); margin-left: 2px; vertical-align: text-bottom;
+  animation: cursorBlink 0.8s step-end infinite;
+}
+@keyframes cursorBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
 </style>
