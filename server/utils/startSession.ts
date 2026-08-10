@@ -1,6 +1,7 @@
 import { basename } from 'node:path'
 import { addProject } from './projects'
 import { newSessionId, saveSession, type Session } from './sessions'
+import type { TrustLevel } from './trust'
 import {
   branchNameFor,
   createWorktree,
@@ -26,6 +27,14 @@ export async function startSession(options: {
   /** Set when continuing an existing conversation rather than beginning one. */
   sdkSessionId?: string
   adoptedAt?: number
+  /**
+   * How much this session may do without asking, chosen before it starts.
+   *
+   * Rituals have always decided this up front. Sessions could only be changed
+   * after the fact, which meant the *first* turn — usually the longest, and the
+   * one somebody most wants to leave running — ignored the intent entirely.
+   */
+  trust?: TrustLevel
 }): Promise<Session> {
   const { repoDir } = options
 
@@ -83,6 +92,9 @@ export async function startSession(options: {
     baseSha,
     status: 'idle',
     agentSlug: options.agentSlug,
+    // Absent means the default, which is what every session had before this
+    // could be chosen up front.
+    trust: options.trust,
     sdkSessionId: options.sdkSessionId,
     runIds: [],
     createdAt: now,

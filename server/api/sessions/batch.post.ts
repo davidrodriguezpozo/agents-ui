@@ -1,5 +1,6 @@
 import { getProjectDir } from '../../utils/scope'
 import { startSession } from '../../utils/startSession'
+import type { TrustLevel } from '../../utils/trust'
 import { titleFromPrompt, type Session } from '../../utils/sessions'
 import { startTurn } from '../../utils/sessionTurn'
 import { checkBudget } from '../../utils/budget'
@@ -26,7 +27,13 @@ export interface BatchResult {
 }
 
 export default defineEventHandler(async (event): Promise<BatchResult> => {
-  const body = await readBody<{ prompts?: string[]; repoDir?: string; agentSlug?: string; baseRef?: string }>(event)
+  const body = await readBody<{
+    prompts?: string[]
+    repoDir?: string
+    agentSlug?: string
+    baseRef?: string
+    trust?: TrustLevel
+  }>(event)
 
   const repoDir = body?.repoDir || getProjectDir(event)
   if (!repoDir) {
@@ -79,6 +86,7 @@ export default defineEventHandler(async (event): Promise<BatchResult> => {
     try {
       const session = await startSession({
         repoDir,
+        trust: body?.trust,
         title: titleFromPrompt(prompt),
         agentSlug: body?.agentSlug,
         baseRef: body?.baseRef,

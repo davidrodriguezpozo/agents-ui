@@ -2,6 +2,7 @@
 import { errorMessage } from '~/utils/errors'
 import { findSimilar } from '~/utils/similarSession'
 import { isSendKey } from '~/utils/keys'
+import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type { Session } from '~/composables/useSessions'
 
 const {
@@ -27,6 +28,34 @@ const startingFrom = ref(false)
  * into eight sessions and eight checkouts, which is not a mistake anyone wants
  * to discover afterwards.
  */
+/**
+ * How much the new session may do, chosen before it starts.
+ *
+ * Trust used to be a thing you set on a session that was already running, so
+ * every session's *first* turn — usually the longest, and the one that does the
+ * bulk of the work — ran at "Edit files" no matter what you meant. Rituals have
+ * always chosen upfront; sessions were the odd ones out.
+ *
+ * Remembered, because somebody who works in Auto works in Auto, and re-picking
+ * it on every session is the kind of small tax that gets a feature ignored.
+ */
+const TRUST_KEY = 'agents-ui:session-trust'
+const startTrust = ref<TrustLevel>('edits')
+
+onMounted(() => {
+  const stored = localStorage.getItem(TRUST_KEY)
+  if (TRUST_CHOICES.some(c => c.value === stored)) startTrust.value = stored as TrustLevel
+})
+
+function chooseTrust(value: TrustLevel) {
+  startTrust.value = value
+  try {
+    localStorage.setItem(TRUST_KEY, value)
+  } catch {
+    // A full or blocked store costs the memory, not the choice.
+  }
+}
+
 const batchMode = ref(false)
 const batchText = ref('')
 const startingBatch = ref(false)
@@ -43,7 +72,7 @@ async function onCreateMany() {
 
   startingBatch.value = true
   try {
-    const result = await createMany(batchPrompts.value)
+    const result = await createMany(batchPrompts.value, undefined, startTrust.value)
     await fetchWorktrees()
 
     if (result.started.length) {
@@ -135,7 +164,7 @@ async function onCreate() {
 
   creating.value = true
   try {
-    const session = await create(value)
+    const session = await create(value, undefined, startTrust.value)
     prompt.value = ''
     await fetchWorktrees()
 
@@ -589,6 +618,41 @@ async function switchTo(path: string) {
             </p>
           </div>
         </template>
+
+        <!--
+          Chosen here rather than after the fact, because the first turn is the
+          one that does the work. Applies to a batch too: twenty sessions is
+          exactly when you do not want to set this twenty times.
+        -->
+        <div class="flex items-center gap-3 flex-wrap pt-0.5">
+          <div class="pill-picker">
+            <button
+              v-for="choice in TRUST_CHOICES"
+              :key="choice.value"
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': startTrust === choice.value }"
+              :title="choice.hint"
+              @click="chooseTrust(choice.value)"
+            >
+              {{ choice.label }}
+            </button>
+          </div>
+          <span
+            v-if="startTrust === 'full'"
+            class="type-detail flex items-center gap-1.5"
+            style="color: var(--accent);"
+          >
+            <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
+            Runs commands without asking, sandboxed, in its own workspace.
+          </span>
+          <span v-else-if="startTrust === 'readonly'" class="type-meta">
+            It will propose changes rather than make them.
+          </span>
+          <span v-else class="type-meta">
+            Writes files freely; stops to ask before anything riskier.
+          </span>
+        </div>
 
         <!-- Or start on something that already exists -->
         <div v-if="!batchMode" class="flex gap-2 pt-1">

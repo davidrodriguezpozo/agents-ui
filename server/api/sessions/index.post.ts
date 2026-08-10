@@ -1,5 +1,6 @@
 import { getProjectDir } from '../../utils/scope'
 import { startSession } from '../../utils/startSession'
+import type { TrustLevel } from '../../utils/trust'
 import { titleFromPrompt } from '../../utils/sessions'
 import { startTurn } from '../../utils/sessionTurn'
 import { checkBudget } from '../../utils/budget'
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
     repoDir?: string
     agentSlug?: string
     baseRef?: string
+    trust?: TrustLevel
   }>(event)
 
   const repoDir = body?.repoDir || getProjectDir(event)
@@ -55,6 +57,7 @@ export default defineEventHandler(async (event) => {
     title: body?.title?.trim() || (prompt ? titleFromPrompt(prompt) : 'Untitled session'),
     agentSlug: body?.agentSlug,
     baseRef: body?.baseRef,
+    trust: body?.trust,
   })
 
   if (!prompt) return session

@@ -91,7 +91,14 @@ export type TrustLevel = 'readonly' | 'edits' | 'full'
 export const TRUST_CHOICES: { value: TrustLevel; label: string; hint: string }[] = [
   { value: 'readonly', label: 'Plan only', hint: 'Reads and proposes. Changes nothing at all.' },
   { value: 'edits', label: 'Edit files', hint: 'Writes files freely. Asks before anything riskier.' },
-  { value: 'full', label: 'Auto', hint: 'Runs commands too, and never stops to ask. Only in a workspace you are happy to throw away.' },
+  {
+    value: 'full',
+    label: 'Auto',
+    // Sandboxing arrived after this vocabulary was written, and "runs commands
+    // too" read as unrestricted when it never was: an Auto run still reaches
+    // only the hosts the project allows, and still cannot let itself out.
+    hint: 'Runs commands too, and never stops to ask. Still sandboxed — it reaches only the hosts this project allows. Only in a workspace you are happy to throw away.',
+  },
 ]
 
 export interface TranscriptMessage {
@@ -214,20 +221,22 @@ export function useSessions() {
    * Start a session. Given a prompt it also starts working, and names itself
    * from what it was asked to do rather than making you type the intent twice.
    */
-  async function create(prompt: string, agentSlug?: string) {
+  async function create(prompt: string, agentSlug?: string, trust?: TrustLevel) {
     const session = await $fetch<StartedSession>('/api/sessions', {
       method: 'POST',
-      body: { prompt, agentSlug },
+      // Chosen before it starts, so the first turn — usually the longest —
+      // honours it rather than running at the default and being changed after.
+      body: { prompt, agentSlug, trust },
     })
     await fetchAll()
     return session
   }
 
   /** One session per instruction, each on its own branch, all working at once. */
-  async function createMany(prompts: string[], agentSlug?: string) {
+  async function createMany(prompts: string[], agentSlug?: string, trust?: TrustLevel) {
     const result = await $fetch<BatchResult>('/api/sessions/batch', {
       method: 'POST',
-      body: { prompts, agentSlug },
+      body: { prompts, agentSlug, trust },
     })
     await fetchAll()
     return result
