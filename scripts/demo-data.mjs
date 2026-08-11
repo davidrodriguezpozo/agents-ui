@@ -20,6 +20,7 @@
  */
 
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -28,6 +29,21 @@ import { promisify } from 'node:util'
 
 const exec = promisify(execFile)
 const git = (cwd, args) => exec('git', args, { cwd, maxBuffer: 10 * 1024 * 1024 })
+
+/**
+ * The same workspace fingerprint the server computes, so a seeded verdict is
+ * believed rather than shown as describing code that has since changed.
+ *
+ * It has to agree with `worktreeFingerprint` in server/utils/checks.ts exactly.
+ * If that changes shape, every seeded check silently becomes stale — which is
+ * visible in the badge, so it fails loudly enough.
+ */
+async function fingerprintOf(worktreePath) {
+  const head = (await git(worktreePath, ['rev-parse', 'HEAD'])).stdout.trim()
+  const porcelain = (await git(worktreePath, ['status', '--porcelain'])).stdout.trim()
+  const dirtyDiff = porcelain ? (await git(worktreePath, ['diff', 'HEAD'])).stdout.trim() : ''
+  return createHash('sha1').update(`${head}\n${porcelain}\n${dirtyDiff}`).digest('hex')
+}
 
 const CLAUDE = process.env.DEMO_CLAUDE_DIR || join(homedir(), '.claude-demo')
 const REPO = process.env.DEMO_REPO || join(homedir(), 'workspaces', 'storefront-demo')
@@ -449,9 +465,30 @@ const MARKETPLACE = {
 
 // ================================================================ sessions
 
+/**
+ * The four verdicts a session row can carry, one each.
+ *
+ * The point of the list is that it answers "does this work", so a demo where
+ * every row says the same thing demonstrates nothing. These are seeded rather
+ * than executed: a bare worktree has no `node_modules`, so really running
+ * vitest here would report "checks did not run" four times over and show the
+ * one state that says nothing about the code.
+ */
 const SESSIONS = [
   {
     title: 'Add faceted search to the product list',
+    nightAgo: 11.5,
+    summary: 'Search now filters by tag and maximum price, with tests for all three facet combinations.',
+    check: {
+      status: 'passing',
+      exitCode: 0,
+      durationMs: 8_420,
+      output: ` ✓ src/lib/catalogue.test.ts (3 tests) 41ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+   Duration  1.24s`,
+    },
     commits: [
       {
         message: 'Add tag and price filters to catalogue search',
@@ -537,7 +574,7 @@ The tag rule is the one worth confirming. \`every\` rather than \`some\` means s
           { toolName: 'Read', input: { file_path: `${REPO}/src/lib/catalogue.ts` }, preview: 'src/lib/catalogue.ts — 14 lines' },
           { toolName: 'Edit', input: { file_path: `${REPO}/src/lib/catalogue.ts` }, preview: 'src/lib/catalogue.ts' },
         ],
-        costUsd: 0.0412, durationMs: 18_400,
+        costUsd: 0.0412, durationMs: 22 * MINUTE,
       },
       {
         input: 'Good, that is what I wanted. Add tests for it.',
@@ -554,12 +591,36 @@ All three pass. Both commits are on the branch and the workspace is clean, so th
           { toolName: 'Write', input: { file_path: `${REPO}/src/lib/catalogue.test.ts` }, preview: 'src/lib/catalogue.test.ts' },
           { toolName: 'Bash', input: { command: 'pnpm vitest run' }, preview: 'pnpm vitest run — 3 passed' },
         ],
-        costUsd: 0.0286, durationMs: 12_900,
+        costUsd: 0.0286, durationMs: 17 * MINUTE,
       },
     ],
   },
   {
     title: 'Fix rounding errors in checkout totals',
+    nightAgo: 11.2,
+    summary: 'Tax is rounded to whole cents. One existing test still expects the old float and now fails.',
+    check: {
+      status: 'failing',
+      exitCode: 1,
+      durationMs: 9_180,
+      output: ` ✓ src/lib/pricing.test.ts (1 test) 12ms
+ ❯ src/lib/checkout.test.ts (4 tests | 1 failed) 63ms
+   × totals a wholesale basket with tax
+
+ FAIL  src/lib/checkout.test.ts > totals a wholesale basket with tax
+AssertionError: expected 2413 to be 2413.2000000000003
+
+- Expected
++ Received
+
+- 2413.2000000000003
++ 2413
+
+ ❯ src/lib/checkout.test.ts:31:38
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 4 passed (5)`,
+    },
     commits: [
       {
         message: 'Round tax to whole cents instead of carrying floats',
@@ -620,12 +681,26 @@ I have left a test uncommitted asserting the integer property — worth a look b
           { toolName: 'Read', input: { file_path: `${REPO}/src/lib/pricing.ts` }, preview: 'src/lib/pricing.ts — 16 lines' },
           { toolName: 'Edit', input: { file_path: `${REPO}/src/lib/pricing.ts` }, preview: 'src/lib/pricing.ts' },
         ],
-        costUsd: 0.0521, durationMs: 22_700,
+        costUsd: 0.0521, durationMs: 39 * MINUTE,
       },
     ],
   },
   {
     title: 'Draft the v2.1 release notes',
+    nightAgo: 8.5,
+    summary: 'Release notes drafted from eleven commits, grouped into Added, Fixed and Internal.',
+    // Deliberately stale: the verdict is a pass, taken before the notes were
+    // edited again. The row has to say so rather than stay green, which is the
+    // distinction the whole shelf-life rule exists for.
+    check: {
+      status: 'passing',
+      exitCode: 0,
+      durationMs: 7_640,
+      staleFingerprint: true,
+      output: ` Test Files  2 passed (2)
+      Tests  9 passed (9)
+   Duration  1.11s`,
+    },
     commits: [],
     uncommitted: {
       'RELEASE-NOTES.md': `# v2.1
@@ -660,12 +735,13 @@ It is uncommitted so you can edit before it lands.`,
           { toolName: 'Bash', input: { command: 'git log v2.0.4..HEAD --oneline' }, preview: 'git log v2.0.4..HEAD --oneline — 11 commits' },
           { toolName: 'Write', input: { file_path: `${REPO}/RELEASE-NOTES.md` }, preview: 'RELEASE-NOTES.md' },
         ],
-        costUsd: 0.0198, durationMs: 9_800,
+        costUsd: 0.0198, durationMs: 13 * MINUTE,
       },
     ],
   },
   {
     title: 'Investigate slow cart API responses',
+    nightAgo: 5.2,
     commits: [],
     uncommitted: {},
     turns: [
@@ -691,7 +767,7 @@ If both hold, pushing onto the existing array is a two-line fix. I have not made
           { toolName: 'Read', input: { file_path: `${REPO}/src/server/cart.ts` }, preview: 'src/server/cart.ts — 12 lines' },
           { toolName: 'Grep', input: { pattern: 'addToCart' }, preview: 'addToCart — 4 matches' },
         ],
-        costUsd: 0.0334, durationMs: 15_200,
+        costUsd: 0.0334, durationMs: 19 * MINUTE,
       },
     ],
   },
@@ -708,7 +784,10 @@ const RITUALS = [
     permission: 'readonly',
     origin: 'user',
     enabled: true,
-    lastRunAgo: 26 * HOUR,
+    // Inside the last 24 hours on purpose: the dashboard draws the night, and a
+    // ritual whose last run is 26 hours old leaves the lane it belongs in empty
+    // — which draws a machine that did nothing while you were asleep.
+    lastRunAgo: 3.6 * HOUR,
     // A ritual that has been quietly working for weeks — the boring case, and
     // the one the failing ones have to look different from.
     history: [
@@ -751,7 +830,10 @@ Nothing is on fire. #423 has a second reporter, which is usually the point at wh
     permission: 'edits',
     origin: 'user',
     enabled: true,
-    lastRunAgo: 25 * HOUR,
+    // Overnight, and still the run that needed a permission — so the timeline
+    // has an `attention` block to draw, which is the one outcome the chart
+    // refuses to fold into either success or failure.
+    lastRunAgo: 8.75 * HOUR,
     // The failure this whole feature exists for: it has been stopped by the
     // same missing permission every morning since Tuesday, and every one of
     // those runs finished "completed" with the work not done.
@@ -856,6 +938,55 @@ Neither is safe during business hours as written.`,
 ]
 
 // ============================================== standalone agent/command runs
+
+/**
+ * The night, filled in.
+ *
+ * The dashboard draws the last day as a timeline, and a timeline is only worth
+ * drawing if there is something in it: four lanes with blocks, outcomes that are
+ * not all the same colour, and spend that arrives in steps rather than one lump.
+ * Without these the chart renders correctly and says nothing.
+ *
+ * Every outcome the chart can classify appears at least once — succeeded,
+ * attention, failed and cancelled — because each has its own glyph and legend
+ * entry, and a legend with one row demonstrates none of it.
+ */
+const OVERNIGHT_RUNS = [
+  {
+    kind: 'command', invocation: '/ship:preflight', title: 'Pre-release checks',
+    input: '/ship:preflight',
+    ago: 7.4 * HOUR, costUsd: 0.0207, durationMs: 96_800,
+    status: 'failed',
+    error: 'Command exited with status 1',
+    output: `Stopped at the second check of six.
+
+\`pnpm build\` fails on \`src/server/reports.ts:88\` — it still reads \`products.price\`, which last night's migration dropped. Nothing after this ran, so the remaining four checks have no verdict.
+
+This is the breakage \`sql-reviewer\` predicted at 06:36. The migration and the code that reads it went out in the wrong order.`,
+  },
+  {
+    kind: 'command', invocation: '/db:migrate-check', title: 'Migration check',
+    input: '/db:migrate-check',
+    ago: 5.7 * HOUR, costUsd: 0.0061, durationMs: 41_300,
+    status: 'cancelled',
+    output: `Reading \`0044_drop_legacy_price.sql\` against the production schema…
+
+Stopped before the lock analysis finished.`,
+  },
+  {
+    kind: 'agent', agentSlug: 'incident-summariser', title: 'incident-summariser',
+    input: 'Summarise what broke on the nightly build',
+    ago: 6.9 * HOUR, costUsd: 0.0198, durationMs: 28_400,
+    needsAttention: true,
+    deniedTools: ['Bash(gh run view:*)'],
+    suggestedRules: ['Bash(gh run view:*)'],
+    output: `Wrote the summary from the local build log, which is the part I could reach.
+
+**What broke** — \`pnpm build\`, on a column that no longer exists.
+**When** — first failure at 03:14, every run since.
+**Still unknown** — whether CI failed for the same reason, because \`gh run view\` is not allowed here. That is the one thing worth confirming before anyone starts fixing it.`,
+  },
+]
 
 const EXTRA_RUNS = [
   {
@@ -1166,6 +1297,20 @@ async function seed() {
     }
     for (const [path, contents] of Object.entries(spec.uncommitted)) await write(join(worktreePath, path), contents)
 
+    /**
+     * When this session's first turn began.
+     *
+     * Placed by hand rather than spread evenly, because the dashboard draws the
+     * night and the fact worth drawing is that two of these ran *at the same
+     * time* — which is what a worktree per session is for, and what a lane of
+     * evenly-spaced blocks cannot show.
+     */
+    const firstTurnAt = NOW - (spec.nightAgo ?? (SESSIONS.length - index) * 3) * HOUR
+    // Wide enough that consecutive turns of one session never overlap: a session
+    // takes one turn at a time, and drawing it otherwise would be a lie about
+    // the model rather than about the data.
+    const turnGap = 45 * MINUTE
+
     const runIds = []
     for (const [turnIndex, turn] of spec.turns.entries()) {
       const runId = `demo-s${index}t${turnIndex}`
@@ -1179,18 +1324,43 @@ async function seed() {
       ))
       runs.push(buildRun({
         id: runId, kind: 'chat', title: spec.title, sessionId: id, projectDir: worktreePath,
-        createdAt: NOW - (SESSIONS.length - index) * 3 * HOUR + turnIndex * 11 * MINUTE, ...turn, toolCalls,
+        createdAt: firstTurnAt + turnIndex * turnGap, ...turn, toolCalls,
       }))
       runIds.push(runId)
     }
 
+    // After the commits and the uncommitted files, so this describes the
+    // workspace as it will actually be found.
+    const fingerprint = await fingerprintOf(worktreePath)
+    const lastTurn = spec.turns[spec.turns.length - 1]
+    const finishedAt = firstTurnAt + (spec.turns.length - 1) * turnGap + (lastTurn?.durationMs ?? 0)
+    // The checks run after the turn that changed files, so the verdict is always
+    // later than the work it is about.
+    const checkedAt = finishedAt + 3 * MINUTE
+
     sessions.push({
       id, title: spec.title, repoDir: REPO, worktreePath, branch,
       baseBranch: 'main', baseSha, status: 'idle', runIds,
-      createdAt: NOW - (SESSIONS.length - index) * 4 * HOUR,
-      updatedAt: NOW - (SESSIONS.length - index) * 3 * HOUR,
+      createdAt: firstTurnAt - 4 * MINUTE,
+      updatedAt: finishedAt,
+      ...(spec.check && {
+        check: {
+          status: spec.check.status,
+          command: 'pnpm vitest run',
+          fingerprint: spec.check.staleFingerprint
+            ? createHash('sha1').update(`${fingerprint}:before the last edit`).digest('hex')
+            : fingerprint,
+          exitCode: spec.check.exitCode,
+          output: spec.check.output,
+          durationMs: spec.check.durationMs,
+          at: checkedAt,
+        },
+      }),
+      ...(spec.summary && {
+        summary: { text: spec.summary, fingerprint, costUsd: 0.0089, at: checkedAt },
+      }),
     })
-    log(`session: ${spec.title}`)
+    log(`session: ${spec.title}${spec.check ? ` — checks ${spec.check.status}` : ''}`)
   }
 
   // ---- rituals
@@ -1237,8 +1407,18 @@ async function seed() {
     }))
   }
 
+  for (const [index, night] of OVERNIGHT_RUNS.entries()) {
+    runs.push(buildRun({
+      id: `demo-n${index}`, projectDir: REPO, createdAt: NOW - night.ago, ...night,
+    }))
+  }
+  log(`${OVERNIGHT_RUNS.length} overnight runs`)
+
   await write(join(APP, 'sessions.json'), json({ version: 1, sessions }))
   await write(join(APP, 'schedules.json'), json({ version: 1, schedules }))
+  // Configured rather than left to detection, so the command on the seeded
+  // verdicts is the same one the merge dialog and Settings name.
+  await write(join(APP, 'project-checks.json'), json({ version: 1, projects: { [REPO]: 'pnpm vitest run' } }))
   for (const run of runs) await write(join(APP, 'runs', `${run.id}.json`), json(run))
   log(`${runs.length} runs`)
 
