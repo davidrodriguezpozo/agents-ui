@@ -93,6 +93,65 @@ describe('knowing a session is behind', () => {
   })
 })
 
+/**
+ * `git status` is asked for the branch as well as the file list, to save a
+ * `rev-parse` per worktree. That puts a `## branch` header on the front of the
+ * output, and counting it as a file would make every clean session claim one
+ * uncommitted change and every worktree read as dirty.
+ */
+describe('what a session has changed', () => {
+  it('is clean, on its own branch, when nothing has been touched', async () => {
+    const a = session('untouched')
+    const status = await worktrees.worktreeStatus(a.path, a.baseSha, 'main')
+
+    expect(status.dirty).toBe(false)
+    expect(status.changedFiles).toBe(0)
+    expect(status.branch).toBe('untouched')
+    expect(status.exists).toBe(true)
+  })
+
+  it('counts an uncommitted file, once', async () => {
+    const a = session('wip')
+    await writeFile(join(a.path, 'scratch.txt'), 'half done\n')
+
+    const status = await worktrees.worktreeStatus(a.path, a.baseSha, 'main')
+    expect(status.dirty).toBe(true)
+    expect(status.changedFiles).toBe(1)
+  })
+
+  it('counts a committed file, and stops calling it dirty', async () => {
+    const a = session('committed')
+    await writeFile(join(a.path, 'done.txt'), 'finished\n')
+    git(a.path, 'add', '-A')
+    git(a.path, 'commit', '-q', '-m', 'done')
+
+    const status = await worktrees.worktreeStatus(a.path, a.baseSha, 'main')
+    expect(status.dirty).toBe(false)
+    expect(status.changedFiles).toBe(1)
+    expect(status.ahead).toBe(1)
+  })
+
+  it('counts a file changed both ways only once', async () => {
+    const a = session('twice')
+    await writeFile(join(a.path, 'both.txt'), 'committed\n')
+    git(a.path, 'add', '-A')
+    git(a.path, 'commit', '-q', '-m', 'both')
+    await writeFile(join(a.path, 'both.txt'), 'and then edited again\n')
+
+    const status = await worktrees.worktreeStatus(a.path, a.baseSha, 'main')
+    expect(status.dirty).toBe(true)
+    expect(status.changedFiles).toBe(1)
+  })
+
+  it('says the worktree is gone rather than guessing at its state', async () => {
+    const status = await worktrees.worktreeStatus(join(repoDir, '.worktrees', 'never'), 'main', 'main')
+
+    expect(status.exists).toBe(false)
+    expect(status.branch).toBeNull()
+    expect(status.changedFiles).toBe(0)
+  })
+})
+
 describe('catching a session up', () => {
   it('brings the base in and stops being behind', async () => {
     const a = session('catch-up')

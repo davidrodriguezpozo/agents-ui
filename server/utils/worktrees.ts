@@ -488,11 +488,39 @@ export async function updateFromBase(
 }
 
 /**
+ * The branch name out of `git status --branch --porcelain`'s header line.
+ *
+ * Asking `status` for the branch as well saves a `rev-parse` per worktree, and
+ * a spawn per worktree is worth having when this is asked about every session
+ * at once. The header has four shapes and three of them are edge cases:
+ *
+ *   `## main...origin/main [ahead 1]`  tracking a remote
+ *   `## some-branch`                   no upstream, which sessions never have
+ *   `## HEAD (no branch)`              detached, so there is no branch to name
+ *   `## No commits yet on main`        a fresh repository, branch not yet real
+ *
+ * Returns null for detached, matching what `rev-parse` reported as "HEAD".
+ */
+export function parseStatusBranch(header: string): string | null {
+  const line = header.startsWith('## ') ? header.slice(3) : header
+  if (!line || line.startsWith('HEAD (no branch)')) return null
+
+  const fresh = /^No commits yet on (.+)$/.exec(line)
+  const name = fresh ? fresh[1]! : line.split('...')[0]!.replace(/ \[.*$/, '')
+
+  return name === 'HEAD' ? null : name.trim() || null
+}
+
+/**
  * `baseRef` is what this session branched from — usually the sha, so the diff
  * is against the code as it was. `baseBranch` is where that branch has got to
  * since, which is a different question and the only one that can tell you a
  * green check has gone out of date. Passing the sha for both would always
  * report zero, because a sha does not move.
+ *
+ * The four questions are asked concurrently, and the caller is expected to
+ * bound how many worktrees it asks about at once — see `mapLimit`. Firing every
+ * session's git at the process table simultaneously is what took the app down.
  */
 export async function worktreeStatus(
   worktreePath: string,
@@ -503,38 +531,41 @@ export async function worktreeStatus(
     return { path: worktreePath, exists: false, branch: null, changedFiles: 0, dirty: false, ahead: 0, behind: 0 }
   }
 
-  const branch = await currentBranch(worktreePath)
-  const porcelain = await git(worktreePath, ['status', '--porcelain']).catch(() => '')
-  const dirty = porcelain.length > 0
+  const count = (range: string) =>
+    git(worktreePath, ['rev-list', '--count', range])
+      .then(out => Number(out) || 0)
+      .catch(() => 0)
 
-  const nameOnly = await git(worktreePath, ['diff', '--name-only', `${baseRef}...HEAD`]).catch(() => '')
+  const [status, nameOnly, ahead, behind] = await Promise.all([
+    git(worktreePath, ['status', '--porcelain', '--branch']).catch(() => ''),
+    git(worktreePath, ['diff', '--name-only', `${baseRef}...HEAD`]).catch(() => ''),
+    count(`${baseRef}..HEAD`),
+    // Zero when there is no branch to ask about, which is honest: without one
+    // there is nothing this session could be out of date with respect to.
+    baseBranch ? count(`HEAD..${baseBranch}`) : Promise.resolve(0),
+  ])
+
+  // `--branch` prepends a `## ` header, so it is not part of the file list and
+  // must not be counted as a change — with it included, every worktree read as
+  // dirty and every clean session claimed one changed file.
+  const lines = status.split('\n').filter(Boolean)
+  const header = lines[0]?.startsWith('## ') ? lines[0]! : ''
+  const entries = header ? lines.slice(1) : lines
+
   const committed = nameOnly ? nameOnly.split('\n').filter(Boolean) : []
-  const uncommitted = porcelain
-    ? porcelain.split('\n').filter(Boolean).map(l => l.slice(3).trim())
-    : []
-
-  const ahead = Number(
-    await git(worktreePath, ['rev-list', '--count', `${baseRef}..HEAD`]).catch(() => '0')
-  ) || 0
-
-  // Zero when there is no branch to ask about, which is honest: without one
-  // there is nothing this session could be out of date with respect to.
-  const behind = baseBranch
-    ? Number(
-        await git(worktreePath, ['rev-list', '--count', `HEAD..${baseBranch}`]).catch(() => '0')
-      ) || 0
-    : 0
+  const uncommitted = entries.map(l => l.slice(3).trim())
 
   return {
     path: worktreePath,
     exists: true,
-    branch: branch === 'HEAD' ? null : branch,
+    branch: header ? parseStatusBranch(header) : await currentBranch(worktreePath).then(b => (b === 'HEAD' ? null : b)),
     changedFiles: new Set([...committed, ...uncommitted]).size,
-    dirty,
+    dirty: entries.length > 0,
     ahead,
     behind,
   }
 }
+
 
 export interface DiffFile {
   path: string

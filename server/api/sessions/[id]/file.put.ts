@@ -1,4 +1,4 @@
-import { findSession } from '../../../utils/sessions'
+import { findSession, patchSession } from '../../../utils/sessions'
 import { writeWorkspaceFile } from '../../../utils/workspaceFiles'
 
 /**
@@ -27,5 +27,12 @@ export default defineEventHandler(async (event) => {
   }
 
   await writeWorkspaceFile(session.worktreePath, body.path, body.content)
+
+  // The sessions list reads a worktree's state on a schedule rather than on
+  // every poll, and takes a change to the session record as its cue to look
+  // again. Without this an edit made here is real on disk and in the diff, but
+  // the list goes on reporting the file count it last saw.
+  await patchSession(id, { updatedAt: Date.now() })
+
   return { path: body.path, saved: true }
 })

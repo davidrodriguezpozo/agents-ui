@@ -1,5 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import { branchNameFor, looksLikeSessionWorktree, parseWorktreeList } from '../server/utils/worktrees'
+import { branchNameFor, looksLikeSessionWorktree, parseStatusBranch, parseWorktreeList } from '../server/utils/worktrees'
+
+/**
+ * The branch comes out of `git status --branch --porcelain`'s header rather than
+ * a `rev-parse` of its own, which is one fewer subprocess per worktree — worth
+ * having when the sessions list asks about every worktree at once.
+ */
+describe('parseStatusBranch', () => {
+  it('reads a branch tracking a remote, without the upstream or the counts', () => {
+    expect(parseStatusBranch('## main...origin/main')).toBe('main')
+    expect(parseStatusBranch('## main...origin/main [ahead 1]')).toBe('main')
+    expect(parseStatusBranch('## main...origin/main [ahead 2, behind 3]')).toBe('main')
+  })
+
+  it('reads a branch with no upstream, which is what every session has', () => {
+    expect(parseStatusBranch('## the-idea-of-the-videos-mspykj0hu4uh'))
+      .toBe('the-idea-of-the-videos-mspykj0hu4uh')
+  })
+
+  it('has no branch to name when HEAD is detached', () => {
+    expect(parseStatusBranch('## HEAD (no branch)')).toBeNull()
+  })
+
+  it('names the branch a fresh repository is on before it exists', () => {
+    expect(parseStatusBranch('## No commits yet on main')).toBe('main')
+  })
+
+  it('survives a header it cannot make sense of', () => {
+    expect(parseStatusBranch('')).toBeNull()
+    expect(parseStatusBranch('## ')).toBeNull()
+  })
+
+  it('keeps a slash in the name, since branches are routinely namespaced', () => {
+    expect(parseStatusBranch('## refactor/wa-dead-files-expenses'))
+      .toBe('refactor/wa-dead-files-expenses')
+  })
+})
 
 describe('branchNameFor', () => {
   it('builds a readable branch from the session title', () => {

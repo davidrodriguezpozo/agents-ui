@@ -148,11 +148,30 @@ async function onAdopt(sdkSessionId: string) {
   }
 }
 
+/**
+ * Set while a poll is in the air, so the next tick skips rather than stacking.
+ *
+ * The list costs a few `git` invocations per session, and with enough sessions
+ * open it can take longer to build than the gap between polls. Firing anyway
+ * meant each tick started before the last had answered, which is self-
+ * sustaining: the overlap is what made it slow. A skipped tick costs four
+ * seconds of freshness; not skipping cost the whole app.
+ */
+let polling = false
+
 onMounted(async () => {
   await Promise.all([fetchAll(), fetchWorktrees(), fetchTranscripts(), ensureProjectsLoaded()])
   // Only poll while something could change on its own.
-  poll = setInterval(() => {
-    if (sessions.value.some(s => s.activity === 'working')) fetchAll()
+  poll = setInterval(async () => {
+    if (polling) return
+    if (!sessions.value.some(s => s.activity === 'working')) return
+
+    polling = true
+    try {
+      await fetchAll()
+    } finally {
+      polling = false
+    }
   }, 4000)
 })
 
