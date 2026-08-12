@@ -210,6 +210,7 @@ async function pollEventsOnce(): Promise<void> {
           `${schedule.title} could not see everything`,
           'More happened here than one poll can look back over, so some of it was never '
           + 'picked up. It carries on from what it can see.',
+          '/schedules',
         )
       }
     }
@@ -347,14 +348,14 @@ async function announce(title: string, run: Run): Promise<void> {
   const outcome = outcomeOf(run)
 
   if (outcome === 'failed') {
-    await notify('failed', `${title} failed`, run.error || 'The run ended early.')
+    await notify('failed', `${title} failed`, run.error || 'The run ended early.', runPath(run))
   } else if (outcome === 'blocked') {
     // Same outcome, two quite different mornings. Told apart here because the
     // notification is often the only account of it anybody reads.
     const headline = run.stoppedBy ? `${title} ran out` : `${title} was blocked`
-    await notify('needsYou', headline, describeIncomplete(run))
+    await notify('needsYou', headline, describeIncomplete(run), runPath(run))
   } else if (outcome === 'ok') {
-    await notify('finished', title, run.output || 'Finished with nothing to report.')
+    await notify('finished', title, run.output || 'Finished with nothing to report.', runPath(run))
   }
 }
 
@@ -386,7 +387,7 @@ async function fire(schedule: Schedule, event?: TriggerEvent, lateBy?: number): 
     if (!budget.allowed) {
       console.log(`[scheduler] skipping "${schedule.title}": ${budget.reason}`)
       await skipToNextRun(schedule.id)
-      await notify('failed', `${schedule.title} was skipped`, budget.reason!)
+      await notify('failed', `${schedule.title} was skipped`, budget.reason!, '/schedules')
       return false
     }
 
@@ -425,7 +426,7 @@ async function fire(schedule: Schedule, event?: TriggerEvent, lateBy?: number): 
     const verdict = shouldGiveUp(await historyFor(schedule.id))
     if (verdict) {
       await pauseRitual(schedule.id, verdict.reason)
-      await notify('needsYou', `${schedule.title} has been turned off`, verdict.reason)
+      await notify('needsYou', `${schedule.title} has been turned off`, verdict.reason, '/schedules')
     }
 
     return true
@@ -559,6 +560,7 @@ async function runChain(
           'needsYou',
           `${schedule.title} stopped partway`,
           `${index} of ${steps.length} steps ran. ${budget.reason}`,
+          '/schedules',
         )
         break
       }

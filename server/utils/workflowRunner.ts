@@ -108,6 +108,8 @@ export async function startWorkflowRun(
 async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
   const steps: WorkflowStepRun[] = []
   let previous: string | null = null
+  /** Where a banner about this workflow takes you: the workflow's own page. */
+  const workflowLink = `/workflows/${record.workflowSlug}`
 
   try {
     for (const [index, step] of workflow.steps.entries()) {
@@ -122,7 +124,7 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
       const budget = await checkBudget(Date.now(), { unattended: index > 0 })
       if (!budget.allowed) {
         await finish(record.id, 'failed', budget.reason)
-        await notify('needsYou', `${record.title} stopped`, budget.reason!)
+        await notify('needsYou', `${record.title} stopped`, budget.reason!, workflowLink)
         return
       }
 
@@ -156,7 +158,7 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
       if (finished?.status !== 'completed') {
         const why = finished?.error || 'The step ended without finishing.'
         await finish(record.id, 'failed', `${step.label}: ${why}`)
-        await notify('failed', `${record.title} failed`, `${step.label}: ${why}`)
+        await notify('failed', `${record.title} failed`, `${step.label}: ${why}`, workflowLink)
         return
       }
 
@@ -166,7 +168,7 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
     }
 
     await finish(record.id, 'completed')
-    await notify('finished', record.title, previous ?? 'Finished.')
+    await notify('finished', record.title, previous ?? 'Finished.', workflowLink)
   } catch (e: any) {
     await finish(record.id, 'failed', e?.message || 'The workflow stopped unexpectedly.')
   }

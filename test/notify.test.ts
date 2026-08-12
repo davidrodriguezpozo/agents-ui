@@ -1,13 +1,15 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { appleScriptString, bannerText } from '../server/utils/notify'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { appleScriptString, bannerText, runPath, studioUrl } from '../server/utils/notify'
+import { NOTIFIER_BUNDLE_ID, notifierEntry, notifierPlist, stalePendingNames } from '../server/utils/notifier'
 
 /**
- * Notifications are the half of running-as-a-service that reaches you. Two
+ * Notifications are the half of running-as-a-service that reaches you. Three
  * things have to hold: the text can never become part of the AppleScript
- * program, and the preferences that silence it are honoured.
+ * program, the preferences that silence it are honoured, and clicking one
+ * arrives somewhere — which is what the app bundle in `notifier.ts` is for.
  */
 
 let dir: string
@@ -65,6 +67,115 @@ describe('what the banner says', () => {
 
   it('leaves a short line alone', () => {
     expect(bannerText('Nothing needs you.')).toBe('Nothing needs you.')
+  })
+})
+
+describe('where a banner takes you', () => {
+  const port = process.env.PORT
+  const host = process.env.HOST
+
+  afterEach(() => {
+    if (port === undefined) delete process.env.PORT
+    else process.env.PORT = port
+    if (host === undefined) delete process.env.HOST
+    else process.env.HOST = host
+  })
+
+  it('uses the port this server was actually started on', () => {
+    // A service installed on 3001 and notifying about 3000 sends you to
+    // whatever else is listening there, or to nothing at all.
+    process.env.PORT = '3001'
+
+    expect(studioUrl('/sessions/abc')).toBe('http://127.0.0.1:3001/sessions/abc')
+  })
+
+  it('sends you to loopback when the server is bound to everything', () => {
+    // `0.0.0.0` is where it listens, not an address a browser can open.
+    process.env.HOST = '0.0.0.0'
+    process.env.PORT = '3000'
+
+    expect(studioUrl()).toBe('http://127.0.0.1:3000/')
+  })
+
+  it('keeps a real host, which is how a phone reaches it', () => {
+    process.env.HOST = '192.168.1.20'
+    process.env.PORT = '3000'
+
+    expect(studioUrl('/schedules')).toBe('http://192.168.1.20:3000/schedules')
+  })
+
+  it('reads a turn in its session and anything else on its own page', () => {
+    expect(runPath({ id: 'run-1', sessionId: 'sess-9' })).toBe('/sessions/sess-9')
+    expect(runPath({ id: 'run-1' })).toBe('/runs/run-1')
+  })
+})
+
+describe('what the applet is handed', () => {
+  it('keeps the title and the link to a line each, so it can be read back', () => {
+    // The applet takes line 1 as the title, line 2 as the link and the rest as
+    // the body: a newline in either of the first two would shift the others.
+    const entry = notifierEntry('One\ntitle', 'http://127.0.0.1:3000/runs/x', 'The body.')
+
+    expect(entry.split('\n').slice(0, 3)).toEqual([
+      'One title',
+      'http://127.0.0.1:3000/runs/x',
+      'The body.',
+    ])
+  })
+
+  it('needs no escaping, because the text is never part of the program', () => {
+    const entry = notifierEntry('the "big" one', '/', 'C:\\path & "quotes"')
+
+    expect(entry).toContain('the "big" one')
+    expect(entry).toContain('C:\\path & "quotes"')
+  })
+})
+
+describe('the notifier bundle', () => {
+  const plist = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<plist version="1.0">',
+    '<dict>',
+    '\t<key>CFBundleExecutable</key>',
+    '\t<string>applet</string>',
+    '</dict>',
+    '</plist>',
+    '',
+  ].join('\n')
+
+  it('gives the applet an identity of its own', () => {
+    // Without this key the banner is Script Editor's: its icon, its settings,
+    // and a click that opens an empty script window.
+    const patched = notifierPlist(plist)
+
+    expect(patched).toContain(`<key>CFBundleIdentifier</key>`)
+    expect(patched).toContain(`<string>${NOTIFIER_BUNDLE_ID}</string>`)
+    expect(patched).toContain('<key>LSUIElement</key>')
+    expect(patched.indexOf('CFBundleIdentifier')).toBeLessThan(patched.indexOf('</dict>'))
+  })
+
+  it('does not state a key twice, which would not be a plist at all', () => {
+    const once = notifierPlist(plist)
+    const twice = notifierPlist(once)
+
+    expect(twice).toBe(once)
+  })
+
+  it('sweeps a queue nothing ever came to read', () => {
+    // Where there is no desktop the launch succeeds and the applet never runs.
+    // Without the sweep, a machine that got its desktop back would show every
+    // banner it had ever missed, all at once.
+    const now = 1_700_000_000_000
+    const names = [
+      `${now - 6 * 60_000}-11-0`,
+      `${now - 1000}-11-1`,
+      'written-by-something-else',
+    ]
+
+    expect(stalePendingNames(names, now)).toEqual([
+      `${now - 6 * 60_000}-11-0`,
+      'written-by-something-else',
+    ])
   })
 })
 

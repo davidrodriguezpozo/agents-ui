@@ -51,7 +51,7 @@ async function conclude(
   await patchSession(session.id, {
     prWatch: { ...watch, state, reason, updatedAt: Date.now() },
   })
-  await notify(kind, `${session.title} — #${watch.number}`, reason)
+  await notify(kind, `${session.title} — #${watch.number}`, reason, `/sessions/${session.id}`)
 }
 
 /**

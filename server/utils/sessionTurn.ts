@@ -33,18 +33,25 @@ import type { SessionCheck } from './checks'
  */
 const WORTH_INTERRUPTING_MS = 30_000
 
-async function announceTurn(title: string, run: Run | null, elapsedMs: number): Promise<void> {
+async function announceTurn(
+  sessionId: string,
+  title: string,
+  run: Run | null,
+  elapsedMs: number,
+): Promise<void> {
   if (!run) return
 
+  const link = `/sessions/${sessionId}`
+
   if (run.status === 'failed') {
-    await notify('failed', `${title} failed`, run.error || 'The turn ended early.')
+    await notify('failed', `${title} failed`, run.error || 'The turn ended early.', link)
     return
   }
 
   // A stopped turn was stopped by you, a moment ago, on purpose.
   if (run.status === 'cancelled' || elapsedMs < WORTH_INTERRUPTING_MS) return
 
-  await notify('finished', title, run.output || 'Finished with nothing to report.')
+  await notify('finished', title, run.output || 'Finished with nothing to report.', link)
 }
 
 /**
@@ -95,6 +102,7 @@ async function actOnVerdict(sessionId: string, check: SessionCheck | null): Prom
           'failed',
           `${session.title} — checks failed`,
           `\`${check.command}\` did not pass in this session's workspace.`,
+          `/sessions/${session.id}`,
         )
       }
       return
@@ -237,7 +245,7 @@ export async function startTurn(
         sdkSessionId: finished?.sdkSessionId ?? session.sdkSessionId,
       })
 
-      await announceTurn(session.title, finished, Date.now() - startedAt)
+      await announceTurn(session.id, session.title, finished, Date.now() - startedAt)
 
       // Detached: the checks outlast the turn by minutes, and the session is
       // idle and usable throughout. The verdict lands on the record when it

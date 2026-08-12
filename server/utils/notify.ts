@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { platform } from 'node:os'
+import { postViaNotifier } from './notifier'
 import { readPreferences } from './preferences'
 
 /**
@@ -12,6 +13,10 @@ import { readPreferences } from './preferences'
  *
  * The notification goes to the operating system rather than the browser on
  * purpose: the browser is usually shut, which is the case this exists for.
+ *
+ * A banner is also a thing you click, and clicking it should land you on the
+ * session or run it is about — see `notifier.ts` for the small app bundle that
+ * makes that possible.
  */
 
 export type NotifyKind = 'needsYou' | 'failed' | 'finished'
@@ -42,10 +47,48 @@ export function bannerText(text: string, limit = 120): string {
   return `${flat.slice(0, limit - 1).trimEnd()}…`
 }
 
-function send(title: string, body: string): void {
+/**
+ * Where a banner should take you, as this server's own address.
+ *
+ * The browser is on the same machine — that is the only place this app is ever
+ * reachable from by default — so the loopback address is the right one, and the
+ * port has to come from the environment the service was started with rather
+ * than a guess at 3000.
+ *
+ * A host bound to every interface, or an IPv6 literal, is not an address a
+ * browser can be sent to as-is; loopback is, and it reaches the same server.
+ */
+export function studioUrl(path = '/'): string {
+  const port = Number(process.env.PORT) || 3000
+  const host = process.env.HOST
+  const reachable = host && host !== '0.0.0.0' && !host.includes(':') ? host : '127.0.0.1'
+
+  return `http://${reachable}:${port}${path.startsWith('/') ? path : `/${path}`}`
+}
+
+/**
+ * The page that answers a banner about a run.
+ *
+ * A turn belongs to a session and is read there, in the conversation it is part
+ * of; anything else — a ritual firing, a workflow step — has only its own run
+ * page, which is where its transcript is.
+ */
+export function runPath(run: { id: string; sessionId?: string }): string {
+  return run.sessionId ? `/sessions/${run.sessionId}` : `/runs/${run.id}`
+}
+
+async function send(title: string, body: string, link: string): Promise<void> {
   const os = platform()
 
   if (os === 'darwin') {
+    try {
+      await postViaNotifier(title, body, link)
+      return
+    } catch {
+      // No bundle, so no icon of our own and nowhere for a click to go. Still
+      // worth saying — the fallback is what this always used to do.
+    }
+
     const script = `display notification "${appleScriptString(body)}" with title "${appleScriptString(title)}"`
     execFile('osascript', ['-e', script], () => {})
     return
@@ -61,13 +104,17 @@ function send(title: string, body: string): void {
 /**
  * Best-effort by design: a run must never fail, stall or log noise because the
  * desktop could not show a banner.
+ *
+ * `link` is a path within this app — `/sessions/abc` — and is where clicking the
+ * banner goes. Left out, a click opens the app on its landing page, which is
+ * still an answer to "what was that about".
  */
-export async function notify(kind: NotifyKind, title: string, body: string): Promise<void> {
+export async function notify(kind: NotifyKind, title: string, body: string, link = '/'): Promise<void> {
   try {
     const { notifications } = await readPreferences()
     if (!notifications.enabled || !notifications[kind]) return
 
-    send(title, bannerText(body))
+    await send(title, bannerText(body), studioUrl(link))
   } catch {
     // Deliberately swallowed.
   }

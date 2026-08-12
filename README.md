@@ -277,6 +277,11 @@ able to carry on. A blocked permission, a failure, or a turn that ran long enoug
 looked away each raise a **desktop** notification — not a browser one, because the browser
 is usually shut, which is the case this exists for. Each kind can be turned off in Settings.
 
+Clicking one opens the session, ritual or workflow it is about. On macOS that takes a small
+app bundle of our own, built into `~/.claude/agents-ui/notifier` the first time anything is
+sent: notifications belong to an application, and posting them through `osascript` made them
+Script Editor's — its icon, and a click that opened an empty script window.
+
 Meanwhile the sidebar counts what is stuck rather than what you own, and the tab title
 carries that count too, so it's readable from another window.
 

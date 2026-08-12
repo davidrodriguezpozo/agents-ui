@@ -65,7 +65,12 @@ export async function executeRun(
       // Attended, but "attended" only means someone could answer — they are
       // probably in another window. A prompt nobody sees stalls until it times
       // out, so this is exactly what a notification is for.
-      void notify('needsYou', `${run.title} needs you`, `Waiting for approval to use ${request.toolName}.`)
+      void notify(
+        'needsYou',
+        `${run.title} needs you`,
+        `Waiting for approval to use ${request.toolName}.`,
+        runPath(run),
+      )
     },
     onSettled: (request, decision) => emit(run.id, {
       type: 'permission_resolved',
@@ -230,6 +235,7 @@ export async function executeRun(
             entry.run.stoppedBy === 'budget'
               ? 'It reached its spending limit.'
               : 'It reached its turn limit.',
+            runPath(run),
           )
         }
       }

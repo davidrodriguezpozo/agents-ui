@@ -279,5 +279,7 @@ async function execute(record: LandingRun): Promise<void> {
     stoppedBy || merged < results.length ? 'needsYou' : 'finished',
     merged ? `Landed ${merged}` : 'Nothing landed',
     stoppedBy ? `${summary} ${stoppedBy}` : summary,
+    // The landing panel, which is where the run it is about is written down.
+    '/sessions',
   )
 }

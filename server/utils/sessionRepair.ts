@@ -110,6 +110,7 @@ async function conclude(
       'finished',
       `${session.title} — fixed itself`,
       `Checks pass after ${repair.attempts} ${repair.attempts === 1 ? 'attempt' : 'attempts'}.`,
+      `/sessions/${session.id}`,
     )
     return
   }
@@ -118,6 +119,7 @@ async function conclude(
     'needsYou',
     `${session.title} — still failing`,
     reason || `Gave up after ${repair.attempts} ${repair.attempts === 1 ? 'attempt' : 'attempts'}.`,
+    `/sessions/${session.id}`,
   )
 }
 
