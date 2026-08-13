@@ -1,7 +1,11 @@
 <script setup lang="ts">
+import type { Workflow } from '~/types'
 import { errorMessage } from '~/utils/errors'
 import { workflowTemplates } from '~/utils/workflowTemplates'
 import { agentTemplates } from '~/utils/templates'
+import { getAgentColor } from '~/utils/colors'
+import { groupByOrigin, filterGroups } from '~/utils/entityGroups'
+import { relativeTime } from '~/utils/time'
 
 const { workflows, loading, error, create, fetchAll } = useWorkflows()
 const { agents, create: createAgent } = useAgents()
@@ -14,14 +18,16 @@ const newName = ref('')
 const newDescription = ref('')
 const creating = ref(false)
 
-const filteredWorkflows = computed(() => {
-  if (!searchQuery.value) return workflows.value
-  const q = searchQuery.value.toLowerCase()
-  return workflows.value.filter(w =>
-    w.name.toLowerCase().includes(q) ||
-    w.description?.toLowerCase().includes(q)
-  )
-})
+const groups = computed(() => filterGroups(
+  groupByOrigin(workflows.value),
+  searchQuery.value,
+  w => [w.name, w.description],
+))
+
+/** The agents a workflow's steps point at, in order; `undefined` where one was deleted. */
+function stepAgents(workflow: Workflow) {
+  return workflow.steps.map(s => agents.value.find(a => a.slug === s.agentSlug))
+}
 
 async function useWorkflowTemplate(templateId: string) {
   const template = workflowTemplates.find(t => t.id === templateId)
@@ -105,23 +111,63 @@ async function createBlank() {
       </div>
 
       <!-- Loading -->
-      <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        <SkeletonCard v-for="i in 3" :key="i" />
+      <div v-if="loading" class="space-y-1">
+        <SkeletonRow v-for="i in 3" :key="i" />
       </div>
 
-      <!-- Workflow grid -->
-      <div v-else-if="filteredWorkflows.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        <WorkflowCard
-          v-for="workflow in filteredWorkflows"
-          :key="workflow.slug"
-          :workflow="workflow"
-        />
-      </div>
+      <EntityList v-else-if="groups.length" :groups="groups">
+        <template #row="{ item: workflow }">
+          <EntityRow
+            accent
+            icon="i-lucide-git-branch"
+            :to="`/workflows/${workflow.slug}`"
+            :name="workflow.name"
+            :description="workflow.description"
+          >
+            <!--
+              The step chain, which the card carried and is the one thing that
+              says what a workflow actually is. A card that showed only a name
+              and "0 steps" told you nothing about the concept.
+            -->
+            <template #badges>
+              <div v-if="workflow.steps.length" class="flex -space-x-1 shrink-0">
+                <div
+                  v-for="(agent, idx) in stepAgents(workflow).slice(0, 4)"
+                  :key="idx"
+                  class="size-5 rounded-full flex items-center justify-center fs-micro font-bold"
+                  :style="{
+                    background: agent ? getAgentColor(agent.frontmatter.color) + '30' : 'var(--badge-subtle-bg)',
+                    color: agent ? getAgentColor(agent.frontmatter.color) : 'var(--text-disabled)',
+                    border: '2px solid var(--surface-base)',
+                    zIndex: 10 - idx,
+                  }"
+                  :title="agent?.frontmatter.name ?? 'Agent no longer exists'"
+                >
+                  {{ idx + 1 }}
+                </div>
+              </div>
+            </template>
+
+            <template #meta>
+              <span class="fs-micro text-meta">
+                {{ workflow.steps.length }} step{{ workflow.steps.length === 1 ? '' : 's' }}
+              </span>
+              <span v-if="workflow.lastRunAt" class="fs-micro text-meta">
+                ran {{ relativeTime(new Date(workflow.lastRunAt).getTime()) }}
+              </span>
+              <span v-else class="fs-micro text-meta">never run</span>
+            </template>
+          </EntityRow>
+        </template>
+      </EntityList>
 
       <!-- Empty state: search miss -->
-      <div v-else-if="searchQuery" class="flex flex-col items-center justify-center py-16 space-y-3">
-        <p class="type-body">No workflows match your search.</p>
-      </div>
+      <EmptyState
+        v-else-if="searchQuery"
+        icon="i-lucide-search-x"
+        title="No workflows match your search"
+        description="Try a shorter search."
+      />
 
       <!-- Empty state: no workflows — show templates -->
       <div v-else class="space-y-5">

@@ -1,36 +1,22 @@
 <script setup lang="ts">
-const { commands, loading, error, groupedBySource } = useCommands()
+import { groupByOrigin, filterGroups } from '~/utils/entityGroups'
+
+const { commands, loading, error } = useCommands()
 const router = useRouter()
 
 const showCreateModal = ref(false)
 const searchQuery = ref('')
-const collapsedGroups = ref<Record<string, boolean>>({})
 
-function toggleGroup(key: string) {
-  collapsedGroups.value[key] = !collapsedGroups.value[key]
-}
-
-function isExpanded(key: string) {
-  return !collapsedGroups.value[key]
-}
-
-const filteredGroups = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return groupedBySource.value
-
-  return groupedBySource.value
-    .map(group => ({
-      ...group,
-      commands: group.commands.filter(c =>
-        c.invocation.toLowerCase().includes(q)
-        || c.frontmatter.description?.toLowerCase().includes(q)
-        || (c.pluginName || '').toLowerCase().includes(q)
-      ),
-    }))
-    .filter(group => group.commands.length > 0)
-})
-
-
+/**
+ * This page had the grouping right before the others did; it now shares the
+ * implementation rather than owning a private one, which is what let agents,
+ * skills and workflows have it too.
+ */
+const groups = computed(() => filterGroups(
+  groupByOrigin(commands.value),
+  searchQuery.value,
+  c => [c.invocation, c.frontmatter.description, c.pluginName],
+))
 </script>
 
 <template>
@@ -71,78 +57,31 @@ const filteredGroups = computed(() => {
         <SkeletonRow v-for="i in 5" :key="i" />
       </div>
 
-      <div v-else-if="filteredGroups.length" class="space-y-3">
-        <div v-for="group in filteredGroups" :key="group.key">
-          <!-- Group header -->
-          <div class="flex items-center gap-2">
-            <button
-              class="flex items-center gap-2 flex-1 text-left py-2.5 px-3 -mx-2 rounded-md hover-bg focus-ring text-body"
-              @click="toggleGroup(group.key)"
-            >
-              <UIcon
-                :name="isExpanded(group.key) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
-                class="size-3.5 text-meta"
-              />
-              <UIcon
-                :name="group.icon"
-                class="size-3.5"
-                :style="{ color: group.kind === 'plugin' ? 'var(--plugin)' : group.kind === 'project' ? 'var(--success)' : 'var(--text-tertiary)' }"
-              />
-              <span class="type-strong">{{ group.label }}</span>
-              <span class="font-mono fs-sm text-meta">{{ group.commands.length }}</span>
-            </button>
-
-            <NuxtLink
-              v-if="group.pluginId"
-              :to="`/plugins/${encodeURIComponent(group.pluginId)}`"
-              class="fs-mono px-2 py-1 rounded focus-ring text-meta hover-bg shrink-0"
-            >
-              View plugin
-            </NuxtLink>
-          </div>
-
-          <!-- Commands in group -->
-          <div v-if="isExpanded(group.key)" class="ml-5 border-l space-y-px pl-3" style="border-color: var(--border-subtle);">
-            <NuxtLink
-              v-for="cmd in group.commands"
-              :key="cmd.slug"
-              :to="`/commands/${cmd.slug}`"
-              class="flex items-center gap-3 px-3 py-2 rounded-md group focus-ring hover-row"
-            >
-              <span class="font-mono fs-micro font-medium shrink-0 text-meta">&gt;_</span>
-
-              <!-- Real invocation, e.g. /defender:pickup -->
-              <span class="font-mono fs-sm font-medium w-52 shrink-0 truncate ink-accent">
-                {{ cmd.invocation }}
-              </span>
-
+      <EntityList
+        v-else-if="groups.length"
+        :groups="groups"
+        :plugin-route="id => `/plugins/${encodeURIComponent(id)}`"
+      >
+        <template #row="{ item: cmd }">
+          <EntityRow
+            mono
+            accent
+            icon="i-lucide-terminal"
+            :to="`/commands/${cmd.slug}`"
+            :name="cmd.invocation"
+            :description="cmd.frontmatter.description"
+          >
+            <template #badges>
               <span
                 v-if="cmd.frontmatter['argument-hint']"
                 class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle max-w-[160px] truncate"
               >
                 {{ cmd.frontmatter['argument-hint'] }}
               </span>
-
-              <span class="flex-1 fs-sm truncate text-label">
-                {{ cmd.frontmatter.description }}
-              </span>
-
-              <div class="flex items-center gap-2 shrink-0">
-                <SourceBadge
-                  :scope="cmd.scope"
-                  :source="cmd.source"
-                  :plugin-name="cmd.pluginName"
-                  :project-dir="cmd.projectDir"
-                />
-                <UIcon
-                  name="i-lucide-chevron-right"
-                  class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-meta"
-                />
-              </div>
-            </NuxtLink>
-          </div>
-        </div>
-      </div>
+            </template>
+          </EntityRow>
+        </template>
+      </EntityList>
 
       <!-- Empty state: search miss -->
       <EmptyState

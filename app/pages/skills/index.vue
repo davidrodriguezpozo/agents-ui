@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { groupByOrigin, filterGroups } from '~/utils/entityGroups'
+
 const { skills, loading, error, fetchAll: fetchSkills } = useSkills()
 const router = useRouter()
 
@@ -11,36 +13,21 @@ onMounted(() => { if (route.query.new) showCreateModal.value = true })
 const showImportModal = ref(false)
 const searchQuery = ref('')
 
-const sourceFilter = ref<'all' | 'user' | 'project' | 'plugin'>('all')
+/**
+ * Grouped by origin rather than listed flat. 198 of these 199 skills came from
+ * plugins, so alphabetical order buried the one that is actually yours between
+ * `choosing-trend-or-slope` and `cleaning-up-stale-flags`.
+ *
+ * The source filter that used to sit above the list is now the grouping itself,
+ * which does the same job without asking first.
+ */
+const groups = computed(() => filterGroups(
+  groupByOrigin(skills.value),
+  searchQuery.value,
+  s => [s.frontmatter.name, s.frontmatter.description, s.frontmatter.agent, s.pluginName],
+))
 
-const sourceFilters = computed(() => {
-  const counts = { all: skills.value.length, user: 0, project: 0, plugin: 0 }
-  for (const s of skills.value) {
-    if (s.source === 'plugin') counts.plugin++
-    else if (s.scope === 'project') counts.project++
-    else counts.user++
-  }
-  return [
-    { key: 'all' as const, label: 'All', count: counts.all },
-    { key: 'user' as const, label: 'Personal', count: counts.user },
-    { key: 'project' as const, label: 'Project', count: counts.project },
-    { key: 'plugin' as const, label: 'Plugins', count: counts.plugin },
-  ].filter(f => f.key === 'all' || f.count > 0)
-})
-
-const filteredSkills = computed(() => {
-  const q = searchQuery.value.toLowerCase()
-  return skills.value.filter((s) => {
-    if (sourceFilter.value === 'plugin' && s.source !== 'plugin') return false
-    if (sourceFilter.value === 'project' && (s.source === 'plugin' || s.scope !== 'project')) return false
-    if (sourceFilter.value === 'user' && (s.source === 'plugin' || s.scope === 'project')) return false
-    if (!q) return true
-    return s.frontmatter.name.toLowerCase().includes(q)
-      || s.frontmatter.description?.toLowerCase().includes(q)
-      || s.frontmatter.agent?.toLowerCase().includes(q)
-      || (s.pluginName || '').toLowerCase().includes(q)
-  })
-})
+const matchCount = computed(() => groups.value.reduce((n, g) => n + g.items.length, 0))
 </script>
 
 <template>
@@ -65,28 +52,15 @@ const filteredSkills = computed(() => {
         Specific capabilities that can be added to agents and invoked as slash commands.
       </p>
 
-      <!-- Search + source filter -->
       <div class="mb-4 flex items-center gap-3 flex-wrap">
         <input
           v-model="searchQuery"
           placeholder="Search skills..."
           class="field-search max-w-xs"
         />
-        <div v-if="sourceFilters.length > 2" class="flex items-center gap-1">
-          <button
-            v-for="filter in sourceFilters"
-            :key="filter.key"
-            class="px-2.5 py-1 rounded-md fs-mono font-medium transition-all focus-ring"
-            :style="{
-              background: sourceFilter === filter.key ? 'var(--accent-muted)' : 'transparent',
-              color: sourceFilter === filter.key ? 'var(--accent)' : 'var(--text-tertiary)',
-            }"
-            @click="sourceFilter = filter.key"
-          >
-            {{ filter.label }}
-            <span class="font-mono fs-micro ml-1 opacity-70">{{ filter.count }}</span>
-          </button>
-        </div>
+        <span v-if="searchQuery" class="type-detail">
+          {{ matchCount }} of {{ skills.length }}
+        </span>
       </div>
 
       <div
@@ -102,72 +76,47 @@ const filteredSkills = computed(() => {
         <SkeletonRow v-for="i in 5" :key="i" />
       </div>
 
-      <!-- Skill list -->
-      <div v-else-if="filteredSkills.length" class="space-y-1">
-        <NuxtLink
-          v-for="skill in filteredSkills"
-          :key="skill.slug"
-          :to="`/skills/${skill.slug}`"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-md group focus-ring hover-row"
-        >
-          <!-- Icon -->
-          <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0 ink-accent" />
-
-          <!-- Name -->
-          <span class="type-strong w-64 shrink-0 truncate">
-            {{ skill.frontmatter.name }}
-          </span>
-
-          <!-- Context badge -->
-          <span
-            v-if="skill.frontmatter.context"
-            class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
+      <EntityList
+        v-else-if="groups.length"
+        :groups="groups"
+        :plugin-route="id => `/plugins/${encodeURIComponent(id)}`"
+      >
+        <template #row="{ item: skill }">
+          <EntityRow
+            accent
+            icon="i-lucide-sparkles"
+            :to="`/skills/${skill.slug}`"
+            :name="skill.frontmatter.name"
+            :description="skill.frontmatter.description"
           >
-            {{ skill.frontmatter.context }}
-          </span>
-
-          <!-- Agent badge -->
-          <span
-            v-if="skill.frontmatter.agent"
-            class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-agent"
-          >
-            agent: {{ skill.frontmatter.agent }}
-          </span>
-
-          <!-- GitHub badge -->
-          <ImportBadge
-            v-if="skill.source === 'github' && skill.githubRepo"
-            :repo="skill.githubRepo"
-          />
-
-          <!-- Description -->
-          <span class="flex-1 fs-sm truncate text-label">
-            {{ skill.frontmatter.description }}
-          </span>
-
-          <!-- Metadata -->
-          <div class="flex items-center gap-2 shrink-0">
-            <SourceBadge
-              v-if="skill.source !== 'github'"
-              :scope="skill.scope"
-              :source="skill.source === 'plugin' ? 'plugin' : 'local'"
-              :plugin-name="skill.pluginName"
-              :project-dir="skill.projectDir"
-            />
-            <UIcon
-              name="i-lucide-chevron-right"
-              class="size-3.5 opacity-0 group-hover:opacity-100 transition-opacity text-meta"
-            />
-          </div>
-        </NuxtLink>
-      </div>
+            <template #badges>
+              <span
+                v-if="skill.frontmatter.context"
+                class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
+              >
+                {{ skill.frontmatter.context }}
+              </span>
+              <span
+                v-if="skill.frontmatter.agent"
+                class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-agent"
+              >
+                agent: {{ skill.frontmatter.agent }}
+              </span>
+              <ImportBadge
+                v-if="skill.source === 'github' && skill.githubRepo"
+                :repo="skill.githubRepo"
+              />
+            </template>
+          </EntityRow>
+        </template>
+      </EntityList>
 
       <!-- Empty state: search miss -->
       <EmptyState
         v-else-if="searchQuery"
         icon="i-lucide-search-x"
         title="No skills match your search"
-        description="Try a shorter search, or switch the filter above."
+        description="Try a shorter search — this looks through names, descriptions and plugin names."
       />
 
       <!-- Empty state: no skills -->
