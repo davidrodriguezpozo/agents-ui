@@ -1080,6 +1080,33 @@ body {
   backdrop-filter: blur(12px);
 }
 
+/**
+ * The divider between a workbench's two panes. A hairline at rest with a wider
+ * invisible grab area, because a 1px target is a 1px target however good the
+ * cursor is.
+ */
+.session-divider {
+  width: 1px;
+  background: var(--border-subtle);
+  position: relative;
+  cursor: col-resize;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.session-divider::after {
+  content: "";
+  position: absolute;
+  inset-block: 0;
+  inset-inline: -3px;
+}
+
+.session-divider:hover,
+.session-divider:focus-visible,
+.session-divider--active {
+  background: var(--accent);
+  outline: none;
+}
+
 /* ============================================
    Semantic Surfaces
    ============================================ */

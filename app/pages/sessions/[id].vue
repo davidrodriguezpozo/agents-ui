@@ -68,6 +68,59 @@ function showPane(next: Pane) {
   pane.value = pane.value === next ? null : next
   if (pane.value) opened.value.add(pane.value)
 }
+
+/**
+ * How wide the conversation is when a pane is open, as a percentage.
+ *
+ * The pane used to open *inside* the conversation's scroll column, above the
+ * transcript — so clicking "Files" from the bottom of a long session moved the
+ * page by nothing visible and put the editor about nine hundred pixels above
+ * where you were looking. It reads as a dead button.
+ *
+ * Side by side instead, each half with its own scroll, which is also what makes
+ * "watch the preview while you read the diff" possible at all.
+ */
+const conversationWidth = ref(52)
+const MIN_WIDTH = 28
+const MAX_WIDTH = 72
+
+const dragging = ref(false)
+
+function startDrag() {
+  dragging.value = true
+}
+
+function onDrag(e: MouseEvent) {
+  if (!dragging.value) return
+  // Measured against the split's own box, not the window, so the sidebar and
+  // any future left-hand chrome do not offset every drag.
+  const host = document.getElementById('session-split')
+  if (!host) return
+  const { left, width } = host.getBoundingClientRect()
+  if (!width) return
+  const pct = ((e.clientX - left) / width) * 100
+  conversationWidth.value = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, pct))
+}
+
+function endDrag() {
+  dragging.value = false
+}
+
+/** Keyboard equivalent, so the divider is not mouse-only. */
+function nudgeDivider(delta: number) {
+  conversationWidth.value = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, conversationWidth.value + delta))
+}
+
+if (import.meta.client) {
+  onMounted(() => {
+    window.addEventListener('mousemove', onDrag)
+    window.addEventListener('mouseup', endDrag)
+  })
+  onUnmounted(() => {
+    window.removeEventListener('mousemove', onDrag)
+    window.removeEventListener('mouseup', endDrag)
+  })
+}
 /** The terminal conversation this session continues, if it adopted one. */
 const inherited = ref<TranscriptMessage[]>([])
 const showPatch = ref(false)
@@ -340,6 +393,40 @@ const watchLabel = computed(() => {
 const watchActive = computed(() =>
   session.value?.prWatch?.state === 'watching' || session.value?.prWatch?.state === 'fixing'
 )
+
+/**
+ * The header's overflow. Everything here is real but occasional — opening the
+ * request on github.com, starting a CI watch, closing the session down. Left on
+ * the bar they made Merge look like one option among six.
+ */
+const overflowActions = computed(() => {
+  const groups: { label: string; icon: string; to?: string; target?: string; onSelect?: () => void }[][] = []
+
+  if (session.value?.prUrl) {
+    groups.push([
+      {
+        label: 'View pull request',
+        icon: 'i-lucide-external-link',
+        to: session.value.prUrl,
+        target: '_blank',
+      },
+      ...(watchActive.value ? [] : [{
+        label: session.value.prWatch ? 'Watch CI again' : 'Watch CI',
+        icon: 'i-lucide-radar',
+        onSelect: openWatchDialog,
+      }]),
+    ])
+  } else if (session.value?.worktree.changedFiles || session.value?.worktree.ahead) {
+    // The button is already on the bar in this case; the menu repeats nothing.
+    groups.push([])
+  }
+
+  groups.push([
+    { label: 'Close session', icon: 'i-lucide-x-circle', onSelect: () => { showClose.value = true } },
+  ])
+
+  return groups.filter(group => group.length)
+})
 
 async function onOpenPr() {
   if (!prTitle.value.trim()) return
@@ -805,8 +892,8 @@ const totalChanges = computed(() => {
 </script>
 
 <template>
-  <div>
-    <PageHeader :title="session?.title || 'Session'">
+  <div class="h-screen flex flex-col">
+    <PageHeader bleed :title="session?.title || 'Session'">
       <template #leading>
         <NuxtLink to="/sessions" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to sessions">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
@@ -844,32 +931,15 @@ const totalChanges = computed(() => {
           </button>
         </div>
 
-        <UButton
-          v-if="session?.prUrl"
-          label="View pull request"
-          icon="i-lucide-git-pull-request"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          :to="session.prUrl"
-          target="_blank"
-        />
         <!--
-          Only offered once there is a pull request to follow. A watch that is
-          running says what it is doing rather than offering the button again —
-          the useful action at that point is stopping it.
+          A watch in flight is status, not an action, so it stays on the bar
+          where you can see it. Everything that is merely *available* moved into
+          the overflow: this header was carrying up to six controls at once
+          beside the pane strip, and none of them looked more important than
+          any other.
         -->
-        <UButton
-          v-if="session?.prUrl && !watchActive"
-          :label="session.prWatch ? 'Watch again' : 'Watch CI'"
-          icon="i-lucide-radar"
-          size="sm"
-          variant="soft"
-          color="neutral"
-          @click="openWatchDialog"
-        />
         <div
-          v-else-if="session?.prUrl && watchActive"
+          v-if="session?.prUrl && watchActive"
           class="flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-md type-detail"
           style="background: var(--accent-muted); color: var(--text-secondary);"
         >
@@ -889,8 +959,10 @@ const totalChanges = computed(() => {
             @click="onStopWatch"
           />
         </div>
+
+        <!-- Both ways to land it stay visible; only Merge is accented. -->
         <UButton
-          v-else-if="session?.worktree.changedFiles || session?.worktree.ahead"
+          v-if="!session?.prUrl && (session?.worktree.changedFiles || session?.worktree.ahead)"
           label="Pull request"
           icon="i-lucide-git-pull-request"
           size="sm"
@@ -905,574 +977,621 @@ const totalChanges = computed(() => {
           size="sm"
           @click="openMerge"
         />
-        <UButton
-          label="Close session"
-          size="sm"
-          variant="ghost"
-          color="neutral"
-          @click="() => { showClose = true }"
-        />
+
+        <UDropdownMenu :items="overflowActions" :popper="{ placement: 'bottom-end' }">
+          <UButton
+            icon="i-lucide-more-horizontal"
+            size="sm"
+            variant="ghost"
+            color="neutral"
+            aria-label="More actions"
+          />
+        </UDropdownMenu>
       </template>
     </PageHeader>
 
-    <div class="page-container py-5 space-y-5">
-      <div v-if="loadError" class="rounded-md px-4 py-3 type-detail" style="background: var(--error-wash); color: var(--error);">
-        {{ loadError }}
-      </div>
-
-      <template v-else-if="session">
-        <!--
-          How following the pull request ended. The notification fires at the
-          moment it happens, which is precisely the moment nobody is here — so
-          the reason has to survive on the page as well.
-        -->
-        <div
-          v-if="session.prWatch && !watchActive && session.prWatch.reason"
-          class="flex items-start gap-2.5 rounded-md px-4 py-3 type-detail"
-          :style="session.prWatch.state === 'landed'
-            ? 'background: var(--success-wash); color: var(--text-secondary);'
-            : 'background: var(--accent-muted); color: var(--text-secondary);'"
-        >
-          <UIcon
-            :name="session.prWatch.state === 'landed' ? 'i-lucide-git-merge' : 'i-lucide-radar'"
-            class="size-4 shrink-0 mt-0.5"
-          />
-          <span>{{ session.prWatch.reason }}</span>
-        </div>
-
-        <!-- Where this session is working, stated plainly -->
-        <div class="rounded-md px-4 py-3 space-y-1" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0 ink-4" />
-            <span class="type-detail ink-2">
-              Working on <span class="font-mono ink-accent">{{ session.branch }}</span>,
-              branched from <span class="font-mono">{{ session.baseBranch }}</span>
-            </span>
-          </div>
-          <div class="type-mono-meta pl-6 truncate">{{ session.worktreePath }}</div>
-          <div v-if="!session.worktree.exists" class="type-meta pl-6 ink-error">
-            This workspace is missing from disk — it was removed outside the app.
-          </div>
-
-          <!-- What it will not stop to ask about, and how to take that back -->
-          <div v-if="projectRules.length" class="flex items-center gap-1.5 flex-wrap pl-6 pt-0.5">
-            <span class="type-meta">Always allowed here</span>
-            <span
-              v-for="rule in projectRules"
-              :key="rule"
-              class="inline-flex items-center gap-1 fs-micro px-1.5 py-px rounded-md group/rule"
-              style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
-              :title="rule"
-            >
-              <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0 ink-ok" />
-              {{ describeRule(rule) }}
-              <button
-                class="opacity-0 group-hover/rule:opacity-100 transition-opacity focus-ring rounded"
-                style="color: var(--text-disabled);"
-                :aria-label="`Stop allowing ${rule}`"
-                @click="revokeRule(rule)"
-              >
-                <UIcon name="i-lucide-x" class="size-2.5" />
-              </button>
-            </span>
-          </div>
-        </div>
-
-        <!--
-          Whether it works, above what changed. The diff answers "what did it
-          do"; this answers the question most people were actually asking, and
-          is the only one someone who cannot read a diff can act on.
-        -->
-        <div
-          v-if="session.checkCommand && (session.worktree.changedFiles || session.check)"
-          class="rounded-md px-4 py-3 space-y-2"
-          :style="checkPanel.frame"
-        >
-          <div class="flex items-center gap-2">
-            <UIcon
-              :name="checkPanel.icon"
-              class="size-4 shrink-0"
-              :class="{ 'animate-spin': checkPanel.spin }"
-              :style="{ color: checkPanel.color }"
-            />
-            <div class="flex-1 min-w-0">
-              <div class="type-strong" :style="{ color: checkPanel.color }">{{ checkPanel.title }}</div>
-              <div class="type-meta truncate">{{ checkPanel.detail }}</div>
+    <div id="session-split" class="flex-1 flex min-h-0" :class="{ 'select-none': dragging }">
+      <!-- The conversation, with its own scroll so the composer stays put -->
+      <section
+        class="flex flex-col min-h-0"
+        :class="pane ? 'shrink-0' : 'flex-1'"
+        :style="pane ? { width: `${conversationWidth}%` } : undefined"
+      >
+        <div class="flex-1 overflow-y-auto">
+          <div class="py-5 space-y-5" :class="pane ? 'px-8' : 'page-container'">
+            <div v-if="loadError" class="rounded-md px-4 py-3 type-detail" style="background: var(--error-wash); color: var(--error);">
+              {{ loadError }}
             </div>
 
-            <UButton
-              v-if="session.check?.output"
-              :label="showCheckOutput ? 'Hide output' : 'Output'"
-              size="xs"
-              variant="ghost"
-              color="neutral"
-              @click="() => { showCheckOutput = !showCheckOutput }"
-            />
+            <template v-else-if="session">
             <!--
-              The whole point of knowing it is broken. The thing that wrote the
-              code is still here and the failure is right there, so offer the
-              obvious next move rather than leaving it as homework.
+              How following the pull request ended. The notification fires at the
+              moment it happens, which is precisely the moment nobody is here — so
+              the reason has to survive on the page as well.
             -->
-            <!--
-              The fix for a verdict taken against a base that has moved. Offered
-              whether or not the checks passed: behind is behind.
-            -->
-            <UButton
-              v-if="behind"
-              :label="`Bring in ${session.baseBranch}`"
-              icon="i-lucide-git-merge"
-              size="xs"
-              variant="soft"
-              :loading="updatingBase"
-              :disabled="isBusy || checking"
-              @click="onUpdateBase"
-            />
-            <UButton
-              v-if="session.check?.status === 'failing'"
-              label="Fix it"
-              icon="i-lucide-wrench"
-              size="xs"
-              variant="soft"
-              :loading="repairing"
-              :disabled="isBusy || checking"
-              @click="onRepair"
-            />
-            <UButton
-              :label="session.check ? 'Run again' : 'Run checks'"
-              icon="i-lucide-play"
-              size="xs"
-              variant="soft"
-              color="neutral"
-              :loading="checking || session.check?.status === 'running'"
-              :disabled="isBusy"
-              @click="onRunCheck"
-            />
-          </div>
-
-          <!--
-            Being behind matters whatever the verdict is, and it was only said
-            in the passing case — so a session 17 commits adrift with no checks
-            read as "Not checked yet" and nothing else, with the only clue
-            buried in a button label.
-          -->
-          <div v-if="behind && session.check?.status !== 'passing'" class="flex items-center gap-2 pt-0.5">
-            <UIcon name="i-lucide-git-pull-request-arrow" class="size-3.5 shrink-0 ink-warn" />
-            <span class="type-meta">
-              {{ behindWord }} since this workspace was cut — bring them in before trusting anything here.
-            </span>
-          </div>
-
-          <div v-if="repairNote" class="flex items-center gap-2 pt-0.5">
-            <UIcon
-              :name="repairNote.icon"
-              class="size-3.5 shrink-0"
-              :class="{ 'animate-spin': repairNote.spin }"
-              :style="{ color: repairNote.color }"
-            />
-            <span class="type-meta">{{ repairNote.text }}</span>
-          </div>
-
-          <pre
-            v-if="showCheckOutput && session.check?.output"
-            class="font-mono fs-micro leading-relaxed overflow-x-auto max-h-64 p-2.5 rounded"
-            style="background: var(--surface-inset); color: var(--text-secondary);"
-          >{{ session.check.output }}</pre>
-        </div>
-
-        <!--
-          The workspace. Saving here writes into the session's branch, so the
-          diff above it and the check verdict beside it both go stale — which is
-          why refreshing them is what a save asks for.
-        -->
-        <!--
-          Mounted once opened and hidden thereafter, never destroyed: a tab
-          change must not drop the terminal's connection or reload the
-          preview's iframe.
-        -->
-        <div v-if="opened.has('files') && session" v-show="pane === 'files'" class="space-y-4">
-          <WorkspaceEditor :session-id="session.id" @saved="onWorkspaceEdited" />
-
-          <!-- Beside the editor, because they are the same kind of thing:
-               acting on the workspace directly rather than asking the agent to. -->
-          <RewindPanel :session-id="session.id" @changed="onWorkspaceEdited" />
-        </div>
-
-        <div v-if="opened.has('preview') && session" v-show="pane === 'preview'">
-          <PreviewPane :session-id="session.id" />
-        </div>
-
-        <div v-if="opened.has('terminal') && session" v-show="pane === 'terminal'">
-          <TerminalPane :session-id="session.id" />
-        </div>
-
-        <!-- Changes -->
-        <div
-          v-if="pane === 'changes' && diff"
-          class="rounded-md overflow-hidden"
-          style="border: 1px solid var(--border-subtle);"
-        >
-          <div
-            class="px-4 py-2.5 flex items-center justify-between"
-            style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);"
-          >
-            <span class="text-section-label">Changes</span>
-            <span class="type-mono-meta">
-              <span style="color: var(--success);">+{{ totalChanges.added }}</span>
-              <span style="color: var(--error);" class="ml-2">−{{ totalChanges.removed }}</span>
-            </span>
-          </div>
-          <div class="divide-y" style="border-color: var(--border-subtle);">
             <div
-              v-for="file in diff.files"
-              :key="`${file.path}-${file.staged}`"
-              class="flex items-center gap-3 px-4 py-2"
-            >
-              <span class="font-mono type-detail flex-1 truncate">{{ file.path }}</span>
-              <span
-                v-if="!file.staged"
-                class="type-mono-meta px-1.5 py-px rounded-full"
-                style="background: var(--accent-muted); color: var(--accent);"
-              >
-                uncommitted
-              </span>
-              <span class="type-mono-meta ink-ok">+{{ file.added }}</span>
-              <span class="type-mono-meta ink-error">−{{ file.removed }}</span>
-            </div>
-          </div>
-
-          <div v-if="diff.patch" style="border-top: 1px solid var(--border-subtle);">
-            <button
-              class="w-full flex items-center gap-2 px-4 py-2 text-left hover-bg transition-all"
-              @click="showPatch = !showPatch"
+              v-if="session.prWatch && !watchActive && session.prWatch.reason"
+              class="flex items-start gap-2.5 rounded-md px-4 py-3 type-detail"
+              :style="session.prWatch.state === 'landed'
+                ? 'background: var(--success-wash); color: var(--text-secondary);'
+                : 'background: var(--accent-muted); color: var(--text-secondary);'"
             >
               <UIcon
-                :name="showPatch ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
-                class="size-3"
-                style="color: var(--text-disabled);"
+                :name="session.prWatch.state === 'landed' ? 'i-lucide-git-merge' : 'i-lucide-radar'"
+                class="size-4 shrink-0 mt-0.5"
               />
-              <span class="type-meta">{{ showPatch ? 'Hide' : 'Show' }} the actual changes</span>
-            </button>
-            <div
-              v-if="showPatch"
-              class="px-4 py-3 overflow-x-auto font-mono fs-mono leading-[1.6] diff-patch"
-              style="background: var(--surface-inset); border-top: 1px solid var(--border-subtle);"
-            >
-              <template v-for="(line, i) in patchLines" :key="i">
-                <!-- Any line that belongs to a file can be pointed at -->
-                <div
-                  class="group/line flex items-start gap-2 -mx-1 px-1 rounded"
-                  :class="line.file ? 'hover-bg cursor-text' : ''"
-                  :style="{ color: lineColour(line) }"
-                  @click="line.file && startComment(line)"
-                >
-                  <UIcon
-                    v-if="line.file"
-                    name="i-lucide-message-square-plus"
-                    class="size-3 shrink-0 mt-0.5 opacity-0 group-hover/line:opacity-100 transition-opacity"
-                    style="color: var(--accent);"
-                  />
-                  <span v-else class="size-3 shrink-0" />
-                  <span class="whitespace-pre flex-1">{{ line.text || ' ' }}</span>
-                </div>
-
-                <!-- Where the note is written, in place, next to what it is about -->
-                <div v-if="commentingOn === i" class="my-1.5 ml-5 space-y-1.5">
-                  <textarea
-                    ref="commentBox"
-                    v-model="commentDraft"
-                    rows="2"
-                    class="field-textarea w-full"
-                    placeholder="What should change about this line?"
-                    @keydown="e => { if (isSendKey(e)) { e.preventDefault(); addComment(line) } }"
-                    @keydown.esc="cancelComment"
-                  />
-                  <div class="flex items-center gap-2">
-                    <UButton label="Add comment" size="xs" :disabled="!commentDraft.trim()" @click="addComment(line)" />
-                    <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="cancelComment" />
-                    <span class="type-meta">↵ to add · ⇧↵ for a new line</span>
-                  </div>
-                </div>
-              </template>
+              <span>{{ session.prWatch.reason }}</span>
             </div>
-          </div>
-        </div>
 
-        <!-- Blocked on you: the session cannot continue until these are answered -->
-        <div v-if="prompts.length" class="space-y-2">
-          <PermissionPrompt
-            v-for="request in prompts"
-            :key="request.id"
-            :request="request"
-            :busy="isAnsweringPermission(request.id)"
-            @answer="answerPermission(request.id, $event)"
-            @remember="onRemember(request.id, $event)"
-          />
-        </div>
-
-        <!-- What was said in the terminal, before this session existed -->
-        <div v-if="inherited.length" class="space-y-3">
-          <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-terminal" class="size-3.5 shrink-0 ink-4" />
-            <span class="text-section-label">From your terminal</span>
-            <span class="type-meta">
-              {{ inherited.length }} message{{ inherited.length === 1 ? '' : 's' }} — history, already said
-            </span>
-          </div>
-
-          <div class="space-y-3 pl-3" style="border-left: 2px solid var(--border-subtle);">
-            <div v-for="(message, index) in inherited" :key="index">
-              <div v-if="message.role === 'user'" class="flex justify-end">
-                <div
-                  class="rounded-md px-3.5 py-2 max-w-[80%] type-body"
-                  style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
-                >
-                  {{ message.text }}
-                </div>
+            <!-- Where this session is working, stated plainly -->
+            <div class="rounded-md px-4 py-3 space-y-1" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
+              <div class="flex items-center gap-2">
+                <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0 ink-4" />
+                <span class="type-detail ink-2">
+                  Working on <span class="font-mono ink-accent">{{ session.branch }}</span>,
+                  branched from <span class="font-mono">{{ session.baseBranch }}</span>
+                </span>
               </div>
-              <div
-                v-else
-                class="markdown type-body"
-                style="color: var(--text-secondary);"
-                v-html="renderMarkdown(message.text)"
-              />
-            </div>
-          </div>
-
-          <div class="type-meta pl-3">
-            Anything from here on happens in this workspace.
-          </div>
-        </div>
-
-        <!-- Conversation -->
-        <div v-if="session.turns.length" class="space-y-4">
-          <div v-for="turn in session.turns" :key="turn.id" class="space-y-2">
-            <div class="flex justify-end">
-              <div
-                class="rounded-md px-3.5 py-2 max-w-[80%] type-body"
-                style="background: var(--accent-muted); color: var(--text-primary);"
-              >
-                {{ turn.input }}
-              </div>
-            </div>
-            <!-- What it is doing, which is most of what there is to watch -->
-            <div v-if="stepsFor(turn).length" class="space-y-1">
-              <button
-                v-if="!isLive(turn)"
-                class="flex items-center gap-1.5 type-meta hover-bg rounded px-1.5 py-0.5 -ml-1.5 focus-ring"
-                @click="toggleSteps(turn.id)"
-              >
-                <UIcon
-                  :name="showSteps(turn) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
-                  class="size-3"
-                />
-                {{ stepsFor(turn).length }} step{{ stepsFor(turn).length === 1 ? '' : 's' }}
-              </button>
-
-              <div v-if="showSteps(turn)" class="space-y-px">
-                <div
-                  v-for="(step, index) in stepsFor(turn)"
-                  :key="step.id ?? index"
-                  class="flex items-center gap-2 px-2 py-1 rounded type-mono-meta"
-                  :style="{ background: index === stepsFor(turn).length - 1 && isLive(turn) ? 'var(--surface-raised)' : undefined }"
-                >
-                  <UIcon
-                    v-if="isLive(turn) && index === stepsFor(turn).length - 1 && !step.result"
-                    name="i-lucide-loader-2"
-                    class="size-3 shrink-0 animate-spin"
-                    style="color: var(--accent);"
-                  />
-                  <UIcon
-                    v-else
-                    :name="step.isError ? 'i-lucide-circle-alert' : describe(step).icon"
-                    class="size-3 shrink-0"
-                    :style="{ color: step.isError ? 'var(--error)' : 'var(--text-disabled)' }"
-                  />
-                  <span class="shrink-0 ink-2">{{ describe(step).verb }}</span>
-                  <!-- Falls back to what came back, for a tool whose arguments
-                       we have no rule for — better than a bare verb -->
-                  <span class="truncate" :style="{ color: describe(step).writes ? 'var(--accent)' : undefined }">
-                    {{ describe(step).target || step.result }}
-                  </span>
-                </div>
+              <div class="type-mono-meta pl-6 truncate">{{ session.worktreePath }}</div>
+              <div v-if="!session.worktree.exists" class="type-meta pl-6 ink-error">
+                This workspace is missing from disk — it was removed outside the app.
               </div>
 
-              <!-- The answer to "what is different now", without reading the diff -->
-              <div v-if="touched(turn).length" class="flex items-center gap-1.5 flex-wrap pt-0.5">
-                <span class="type-meta">Changed</span>
+              <!-- What it will not stop to ask about, and how to take that back -->
+              <div v-if="projectRules.length" class="flex items-center gap-1.5 flex-wrap pl-6 pt-0.5">
+                <span class="type-meta">Always allowed here</span>
                 <span
-                  v-for="file in touched(turn)"
-                  :key="file"
-                  class="type-mono-meta px-1.5 py-px rounded"
-                  style="background: var(--accent-muted); color: var(--accent);"
+                  v-for="rule in projectRules"
+                  :key="rule"
+                  class="inline-flex items-center gap-1 fs-micro px-1.5 py-px rounded-md group/rule"
+                  style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+                  :title="rule"
                 >
-                  {{ file }}
+                  <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0 ink-ok" />
+                  {{ describeRule(rule) }}
+                  <button
+                    class="opacity-0 group-hover/rule:opacity-100 transition-opacity focus-ring rounded"
+                    style="color: var(--text-disabled);"
+                    :aria-label="`Stop allowing ${rule}`"
+                    @click="revokeRule(rule)"
+                  >
+                    <UIcon name="i-lucide-x" class="size-2.5" />
+                  </button>
                 </span>
               </div>
             </div>
 
+            <!--
+              Whether it works, above what changed. The diff answers "what did it
+              do"; this answers the question most people were actually asking, and
+              is the only one someone who cannot read a diff can act on.
+            -->
             <div
-              v-if="turn.output"
-              class="markdown type-body"
-              v-html="renderMarkdown(turn.id === activeRunId && liveRun?.output ? liveRun.output : turn.output)"
+              v-if="session.checkCommand && (session.worktree.changedFiles || session.check)"
+              class="rounded-md px-4 py-3 space-y-2"
+              :style="checkPanel.frame"
+            >
+              <div class="flex items-center gap-2">
+                <UIcon
+                  :name="checkPanel.icon"
+                  class="size-4 shrink-0"
+                  :class="{ 'animate-spin': checkPanel.spin }"
+                  :style="{ color: checkPanel.color }"
+                />
+                <div class="flex-1 min-w-0">
+                  <div class="type-strong" :style="{ color: checkPanel.color }">{{ checkPanel.title }}</div>
+                  <div class="type-meta truncate">{{ checkPanel.detail }}</div>
+                </div>
+
+                <UButton
+                  v-if="session.check?.output"
+                  :label="showCheckOutput ? 'Hide output' : 'Output'"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  @click="() => { showCheckOutput = !showCheckOutput }"
+                />
+                <!--
+                  The whole point of knowing it is broken. The thing that wrote the
+                  code is still here and the failure is right there, so offer the
+                  obvious next move rather than leaving it as homework.
+                -->
+                <!--
+                  The fix for a verdict taken against a base that has moved. Offered
+                  whether or not the checks passed: behind is behind.
+                -->
+                <UButton
+                  v-if="behind"
+                  :label="`Bring in ${session.baseBranch}`"
+                  icon="i-lucide-git-merge"
+                  size="xs"
+                  variant="soft"
+                  :loading="updatingBase"
+                  :disabled="isBusy || checking"
+                  @click="onUpdateBase"
+                />
+                <UButton
+                  v-if="session.check?.status === 'failing'"
+                  label="Fix it"
+                  icon="i-lucide-wrench"
+                  size="xs"
+                  variant="soft"
+                  :loading="repairing"
+                  :disabled="isBusy || checking"
+                  @click="onRepair"
+                />
+                <UButton
+                  :label="session.check ? 'Run again' : 'Run checks'"
+                  icon="i-lucide-play"
+                  size="xs"
+                  variant="soft"
+                  color="neutral"
+                  :loading="checking || session.check?.status === 'running'"
+                  :disabled="isBusy"
+                  @click="onRunCheck"
+                />
+              </div>
+
+              <!--
+                Being behind matters whatever the verdict is, and it was only said
+                in the passing case — so a session 17 commits adrift with no checks
+                read as "Not checked yet" and nothing else, with the only clue
+                buried in a button label.
+              -->
+              <div v-if="behind && session.check?.status !== 'passing'" class="flex items-center gap-2 pt-0.5">
+                <UIcon name="i-lucide-git-pull-request-arrow" class="size-3.5 shrink-0 ink-warn" />
+                <span class="type-meta">
+                  {{ behindWord }} since this workspace was cut — bring them in before trusting anything here.
+                </span>
+              </div>
+
+              <div v-if="repairNote" class="flex items-center gap-2 pt-0.5">
+                <UIcon
+                  :name="repairNote.icon"
+                  class="size-3.5 shrink-0"
+                  :class="{ 'animate-spin': repairNote.spin }"
+                  :style="{ color: repairNote.color }"
+                />
+                <span class="type-meta">{{ repairNote.text }}</span>
+              </div>
+
+              <pre
+                v-if="showCheckOutput && session.check?.output"
+                class="font-mono fs-micro leading-relaxed overflow-x-auto max-h-64 p-2.5 rounded"
+                style="background: var(--surface-inset); color: var(--text-secondary);"
+              >{{ session.check.output }}</pre>
+            </div>
+
+            <!-- Blocked on you: the session cannot continue until these are answered -->
+            <div v-if="prompts.length" class="space-y-2">
+              <PermissionPrompt
+                v-for="request in prompts"
+                :key="request.id"
+                :request="request"
+                :busy="isAnsweringPermission(request.id)"
+                @answer="answerPermission(request.id, $event)"
+                @remember="onRemember(request.id, $event)"
+              />
+            </div>
+
+            <!-- What was said in the terminal, before this session existed -->
+            <div v-if="inherited.length" class="space-y-3">
+              <div class="flex items-center gap-2">
+                <UIcon name="i-lucide-terminal" class="size-3.5 shrink-0 ink-4" />
+                <span class="text-section-label">From your terminal</span>
+                <span class="type-meta">
+                  {{ inherited.length }} message{{ inherited.length === 1 ? '' : 's' }} — history, already said
+                </span>
+              </div>
+
+              <div class="space-y-3 pl-3" style="border-left: 2px solid var(--border-subtle);">
+                <div v-for="(message, index) in inherited" :key="index">
+                  <div v-if="message.role === 'user'" class="flex justify-end">
+                    <div
+                      class="rounded-md px-3.5 py-2 max-w-[80%] type-body"
+                      style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+                    >
+                      {{ message.text }}
+                    </div>
+                  </div>
+                  <div
+                    v-else
+                    class="markdown type-body"
+                    style="color: var(--text-secondary);"
+                    v-html="renderMarkdown(message.text)"
+                  />
+                </div>
+              </div>
+
+              <div class="type-meta pl-3">
+                Anything from here on happens in this workspace.
+              </div>
+            </div>
+
+            <!-- Conversation -->
+            <div v-if="session.turns.length" class="space-y-4">
+              <div v-for="turn in session.turns" :key="turn.id" class="space-y-2">
+                <div class="flex justify-end">
+                  <div
+                    class="rounded-md px-3.5 py-2 max-w-[80%] type-body"
+                    style="background: var(--accent-muted); color: var(--text-primary);"
+                  >
+                    {{ turn.input }}
+                  </div>
+                </div>
+                <!-- What it is doing, which is most of what there is to watch -->
+                <div v-if="stepsFor(turn).length" class="space-y-1">
+                  <button
+                    v-if="!isLive(turn)"
+                    class="flex items-center gap-1.5 type-meta hover-bg rounded px-1.5 py-0.5 -ml-1.5 focus-ring"
+                    @click="toggleSteps(turn.id)"
+                  >
+                    <UIcon
+                      :name="showSteps(turn) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                      class="size-3"
+                    />
+                    {{ stepsFor(turn).length }} step{{ stepsFor(turn).length === 1 ? '' : 's' }}
+                  </button>
+
+                  <div v-if="showSteps(turn)" class="space-y-px">
+                    <div
+                      v-for="(step, index) in stepsFor(turn)"
+                      :key="step.id ?? index"
+                      class="flex items-center gap-2 px-2 py-1 rounded type-mono-meta"
+                      :style="{ background: index === stepsFor(turn).length - 1 && isLive(turn) ? 'var(--surface-raised)' : undefined }"
+                    >
+                      <UIcon
+                        v-if="isLive(turn) && index === stepsFor(turn).length - 1 && !step.result"
+                        name="i-lucide-loader-2"
+                        class="size-3 shrink-0 animate-spin"
+                        style="color: var(--accent);"
+                      />
+                      <UIcon
+                        v-else
+                        :name="step.isError ? 'i-lucide-circle-alert' : describe(step).icon"
+                        class="size-3 shrink-0"
+                        :style="{ color: step.isError ? 'var(--error)' : 'var(--text-disabled)' }"
+                      />
+                      <span class="shrink-0 ink-2">{{ describe(step).verb }}</span>
+                      <!-- Falls back to what came back, for a tool whose arguments
+                           we have no rule for — better than a bare verb -->
+                      <span class="truncate" :style="{ color: describe(step).writes ? 'var(--accent)' : undefined }">
+                        {{ describe(step).target || step.result }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- The answer to "what is different now", without reading the diff -->
+                  <div v-if="touched(turn).length" class="flex items-center gap-1.5 flex-wrap pt-0.5">
+                    <span class="type-meta">Changed</span>
+                    <span
+                      v-for="file in touched(turn)"
+                      :key="file"
+                      class="type-mono-meta px-1.5 py-px rounded"
+                      style="background: var(--accent-muted); color: var(--accent);"
+                    >
+                      {{ file }}
+                    </span>
+                  </div>
+                </div>
+
+                <div
+                  v-if="turn.output"
+                  class="markdown type-body"
+                  v-html="renderMarkdown(turn.id === activeRunId && liveRun?.output ? liveRun.output : turn.output)"
+                />
+                <div v-else-if="turn.status === 'running'" class="flex items-center gap-2 type-meta">
+                  <UIcon name="i-lucide-loader-2" class="size-3 animate-spin ink-accent" />
+                  Working — you can close this tab and come back.
+                </div>
+                <!-- A stopped turn is not a failure, and its half-finished work is still real -->
+                <div v-if="turn.status === 'cancelled'" class="flex items-center gap-2 type-meta">
+                  <UIcon name="i-lucide-square" class="size-3" />
+                  {{ turn.output ? 'Stopped part-way through.' : 'Stopped before it said anything.' }}
+                </div>
+                <div v-if="turn.error" class="type-detail ink-error">{{ turn.error }}</div>
+              </div>
+            </div>
+
+            <EmptyState
+              v-else-if="!inherited.length"
+              variant="inset"
+              icon="i-lucide-message-square"
+              title="Nothing yet"
+              description="Tell Claude what to do in this workspace. It can change files freely — they're isolated from your project until you decide to keep them."
             />
-            <div v-else-if="turn.status === 'running'" class="flex items-center gap-2 type-meta">
-              <UIcon name="i-lucide-loader-2" class="size-3 animate-spin ink-accent" />
-              Working — you can close this tab and come back.
+
+            <!-- What you have written so far, and the one action that uses it -->
+            <div
+              v-if="comments.length"
+              class="rounded-md px-4 py-3 space-y-2"
+              style="background: var(--surface-raised); border: 1px solid var(--accent-glow);"
+            >
+              <div class="flex items-center justify-between gap-3">
+                <span class="type-strong text-body">
+                  {{ comments.length }} comment{{ comments.length === 1 ? '' : 's' }} to send
+                </span>
+                <div class="flex items-center gap-2">
+                  <UButton
+                    label="Discard"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    @click="() => { comments = [] }"
+                  />
+                  <UButton
+                    label="Send as the next turn"
+                    icon="i-lucide-message-square-reply"
+                    size="xs"
+                    :loading="sending"
+                    :disabled="isBusy"
+                    @click="sendReview"
+                  />
+                </div>
+              </div>
+              <div
+                v-for="(comment, index) in comments"
+                :key="index"
+                class="flex items-start gap-2 group/comment"
+              >
+                <span class="type-mono-meta shrink-0 ink-accent">
+                  {{ comment.file }}:{{ comment.line }}
+                </span>
+                <span class="type-detail flex-1 min-w-0">{{ comment.body }}</span>
+                <button
+                  class="opacity-0 group-hover/comment:opacity-100 transition-opacity focus-ring rounded shrink-0"
+                  style="color: var(--text-disabled);"
+                  aria-label="Remove this comment"
+                  @click="dropComment(index)"
+                >
+                  <UIcon name="i-lucide-x" class="size-3" />
+                </button>
+              </div>
             </div>
-            <!-- A stopped turn is not a failure, and its half-finished work is still real -->
-            <div v-if="turn.status === 'cancelled'" class="flex items-center gap-2 type-meta">
-              <UIcon name="i-lucide-square" class="size-3" />
-              {{ turn.output ? 'Stopped part-way through.' : 'Stopped before it said anything.' }}
+
+            </template>
+
+            <div v-else class="flex justify-center py-16">
+              <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-meta" />
             </div>
-            <div v-if="turn.error" class="type-detail ink-error">{{ turn.error }}</div>
           </div>
         </div>
 
-        <EmptyState
-          v-else-if="!inherited.length"
-          variant="inset"
-          icon="i-lucide-message-square"
-          title="Nothing yet"
-          description="Tell Claude what to do in this workspace. It can change files freely — they're isolated from your project until you decide to keep them."
-        />
-
-        <!-- What you have written so far, and the one action that uses it -->
+        <!--
+          Pinned, rather than the last thing in a long scroll. The box you type
+          into is the one control you reach for at any point in a conversation,
+          and it used to be reachable only from the bottom of it.
+        -->
         <div
-          v-if="comments.length"
-          class="rounded-md px-4 py-3 space-y-2"
-          style="background: var(--surface-raised); border: 1px solid var(--accent-glow);"
+          v-if="session"
+          class="shrink-0"
+          style="border-top: 1px solid var(--border-subtle); background: var(--surface-base);"
         >
-          <div class="flex items-center justify-between gap-3">
-            <span class="type-strong text-body">
-              {{ comments.length }} comment{{ comments.length === 1 ? '' : 's' }} to send
-            </span>
-            <div class="flex items-center gap-2">
+          <div class="py-3 space-y-2" :class="pane ? 'px-8' : 'page-container'">
+            <!-- How much it may do on its own, next to the box that sets it going -->
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div class="pill-picker">
+                <button
+                  v-for="choice in TRUST_CHOICES"
+                  :key="choice.value"
+                  type="button"
+                  class="pill-picker__option"
+                  :class="{ 'pill-picker__option--active': trust === choice.value }"
+                  :title="choice.hint"
+                  @click="onTrust(choice.value)"
+                >
+                  {{ choice.label }}
+                </button>
+              </div>
+              <span
+                v-if="trust === 'full'"
+                class="type-detail flex items-center gap-1.5"
+                style="color: var(--accent);"
+              >
+                <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
+                It will run commands without asking, in this workspace only.
+              </span>
+              <span v-else-if="trust === 'readonly'" class="type-meta">
+                It will propose changes rather than make them.
+              </span>
+            </div>
+
+            <!-- Composer -->
+            <div class="flex gap-2 relative">
+              <!-- Sits above the box, where what you are typing still shows -->
+              <div v-if="paletteOpen" class="absolute bottom-full left-0 right-0 mb-2 z-10">
+                <CommandPalette
+                  ref="palette"
+                  :commands="commands"
+                  :query="commandQuery"
+                  @select="insertCommand"
+                  @close="() => { paletteOpen = false }"
+                />
+              </div>
+
+              <textarea
+                v-model="input"
+                rows="2"
+                class="field-textarea flex-1"
+                :placeholder="isBusy ? 'Working…' : 'What should it do next? Type / for commands'"
+                :disabled="isBusy || !session.worktree.exists"
+                @keydown="onComposerKey"
+              />
+              <!-- While it is working, the useful button is the one that stops it -->
               <UButton
-                label="Discard"
-                size="xs"
+                v-if="isBusy"
+                label="Stop"
+                icon="i-lucide-square"
+                size="sm"
+                variant="soft"
+                color="error"
+                :loading="stopping"
+                :disabled="!activeRunId"
+                @click="onStop"
+              />
+              <UButton
+                v-else
+                label="Send"
+                icon="i-lucide-arrow-up"
+                size="sm"
+                :loading="sending"
+                :disabled="!input.trim() || !session.worktree.exists"
+                @click="onSend"
+              />
+              <UButton
+                icon="i-lucide-slash"
+                size="sm"
                 variant="ghost"
                 color="neutral"
-                @click="() => { comments = [] }"
-              />
-              <UButton
-                label="Send as the next turn"
-                icon="i-lucide-message-square-reply"
-                size="xs"
-                :loading="sending"
+                :title="`${commands.length} commands available`"
+                aria-label="Show commands"
                 :disabled="isBusy"
-                @click="sendReview"
+                @click="() => { paletteOpen = !paletteOpen }"
               />
             </div>
+
+            <!-- Said out loud, because the shortcut changed and muscle memory has not -->
+            <p v-if="!isBusy" class="type-meta pt-1.5">↵ Send · ⇧↵ New line</p>
           </div>
+        </div>
+      </section>
+
+      <!-- Drag to rebalance; arrow keys do the same once it has focus. -->
+      <div
+        v-if="pane"
+        class="session-divider shrink-0"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize the conversation"
+        tabindex="0"
+        :class="{ 'session-divider--active': dragging }"
+        @mousedown.prevent="startDrag"
+        @keydown.left.prevent="nudgeDivider(-4)"
+        @keydown.right.prevent="nudgeDivider(4)"
+      />
+
+      <!-- The workspace: one pane at a time, its own scroll, full height. -->
+      <aside v-if="pane" class="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <div class="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          <!--
+            The workspace. Saving here writes into the session's branch, so the
+            diff above it and the check verdict beside it both go stale — which is
+            why refreshing them is what a save asks for.
+          -->
+          <!--
+            Mounted once opened and hidden thereafter, never destroyed: a tab
+            change must not drop the terminal's connection or reload the
+            preview's iframe.
+          -->
+          <div v-if="opened.has('files') && session" v-show="pane === 'files'" class="space-y-4">
+            <WorkspaceEditor :session-id="session.id" @saved="onWorkspaceEdited" />
+
+            <!-- Beside the editor, because they are the same kind of thing:
+                 acting on the workspace directly rather than asking the agent to. -->
+            <RewindPanel :session-id="session.id" @changed="onWorkspaceEdited" />
+          </div>
+
+          <div v-if="opened.has('preview') && session" v-show="pane === 'preview'">
+            <PreviewPane :session-id="session.id" />
+          </div>
+
+          <div v-if="opened.has('terminal') && session" v-show="pane === 'terminal'">
+            <TerminalPane :session-id="session.id" />
+          </div>
+
+          <!-- Changes -->
           <div
-            v-for="(comment, index) in comments"
-            :key="index"
-            class="flex items-start gap-2 group/comment"
+            v-if="pane === 'changes' && diff"
+            class="rounded-md overflow-hidden"
+            style="border: 1px solid var(--border-subtle);"
           >
-            <span class="type-mono-meta shrink-0 ink-accent">
-              {{ comment.file }}:{{ comment.line }}
-            </span>
-            <span class="type-detail flex-1 min-w-0">{{ comment.body }}</span>
-            <button
-              class="opacity-0 group-hover/comment:opacity-100 transition-opacity focus-ring rounded shrink-0"
-              style="color: var(--text-disabled);"
-              aria-label="Remove this comment"
-              @click="dropComment(index)"
+            <div
+              class="px-4 py-2.5 flex items-center justify-between"
+              style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);"
             >
-              <UIcon name="i-lucide-x" class="size-3" />
-            </button>
+              <span class="text-section-label">Changes</span>
+              <span class="type-mono-meta">
+                <span style="color: var(--success);">+{{ totalChanges.added }}</span>
+                <span style="color: var(--error);" class="ml-2">−{{ totalChanges.removed }}</span>
+              </span>
+            </div>
+            <div class="divide-y" style="border-color: var(--border-subtle);">
+              <div
+                v-for="file in diff.files"
+                :key="`${file.path}-${file.staged}`"
+                class="flex items-center gap-3 px-4 py-2"
+              >
+                <span class="font-mono type-detail flex-1 truncate">{{ file.path }}</span>
+                <span
+                  v-if="!file.staged"
+                  class="type-mono-meta px-1.5 py-px rounded-full"
+                  style="background: var(--accent-muted); color: var(--accent);"
+                >
+                  uncommitted
+                </span>
+                <span class="type-mono-meta ink-ok">+{{ file.added }}</span>
+                <span class="type-mono-meta ink-error">−{{ file.removed }}</span>
+              </div>
+            </div>
+
+            <div v-if="diff.patch" style="border-top: 1px solid var(--border-subtle);">
+              <button
+                class="w-full flex items-center gap-2 px-4 py-2 text-left hover-bg transition-all"
+                @click="showPatch = !showPatch"
+              >
+                <UIcon
+                  :name="showPatch ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+                  class="size-3"
+                  style="color: var(--text-disabled);"
+                />
+                <span class="type-meta">{{ showPatch ? 'Hide' : 'Show' }} the actual changes</span>
+              </button>
+              <div
+                v-if="showPatch"
+                class="px-4 py-3 overflow-x-auto font-mono fs-mono leading-[1.6] diff-patch"
+                style="background: var(--surface-inset); border-top: 1px solid var(--border-subtle);"
+              >
+                <template v-for="(line, i) in patchLines" :key="i">
+                  <!-- Any line that belongs to a file can be pointed at -->
+                  <div
+                    class="group/line flex items-start gap-2 -mx-1 px-1 rounded"
+                    :class="line.file ? 'hover-bg cursor-text' : ''"
+                    :style="{ color: lineColour(line) }"
+                    @click="line.file && startComment(line)"
+                  >
+                    <UIcon
+                      v-if="line.file"
+                      name="i-lucide-message-square-plus"
+                      class="size-3 shrink-0 mt-0.5 opacity-0 group-hover/line:opacity-100 transition-opacity"
+                      style="color: var(--accent);"
+                    />
+                    <span v-else class="size-3 shrink-0" />
+                    <span class="whitespace-pre flex-1">{{ line.text || ' ' }}</span>
+                  </div>
+
+                  <!-- Where the note is written, in place, next to what it is about -->
+                  <div v-if="commentingOn === i" class="my-1.5 ml-5 space-y-1.5">
+                    <textarea
+                      ref="commentBox"
+                      v-model="commentDraft"
+                      rows="2"
+                      class="field-textarea w-full"
+                      placeholder="What should change about this line?"
+                      @keydown="e => { if (isSendKey(e)) { e.preventDefault(); addComment(line) } }"
+                      @keydown.esc="cancelComment"
+                    />
+                    <div class="flex items-center gap-2">
+                      <UButton label="Add comment" size="xs" :disabled="!commentDraft.trim()" @click="addComment(line)" />
+                      <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="cancelComment" />
+                      <span class="type-meta">↵ to add · ⇧↵ for a new line</span>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </div>
           </div>
         </div>
-
-        <!-- How much it may do on its own, next to the box that sets it going -->
-        <div class="flex items-center justify-between gap-3 flex-wrap">
-          <div class="pill-picker">
-            <button
-              v-for="choice in TRUST_CHOICES"
-              :key="choice.value"
-              type="button"
-              class="pill-picker__option"
-              :class="{ 'pill-picker__option--active': trust === choice.value }"
-              :title="choice.hint"
-              @click="onTrust(choice.value)"
-            >
-              {{ choice.label }}
-            </button>
-          </div>
-          <span
-            v-if="trust === 'full'"
-            class="type-detail flex items-center gap-1.5"
-            style="color: var(--accent);"
-          >
-            <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
-            It will run commands without asking, in this workspace only.
-          </span>
-          <span v-else-if="trust === 'readonly'" class="type-meta">
-            It will propose changes rather than make them.
-          </span>
-        </div>
-
-        <!-- Composer -->
-        <div class="flex gap-2 relative">
-          <!-- Sits above the box, where what you are typing still shows -->
-          <div v-if="paletteOpen" class="absolute bottom-full left-0 right-0 mb-2 z-10">
-            <CommandPalette
-              ref="palette"
-              :commands="commands"
-              :query="commandQuery"
-              @select="insertCommand"
-              @close="() => { paletteOpen = false }"
-            />
-          </div>
-
-          <textarea
-            v-model="input"
-            rows="2"
-            class="field-textarea flex-1"
-            :placeholder="isBusy ? 'Working…' : 'What should it do next? Type / for commands'"
-            :disabled="isBusy || !session.worktree.exists"
-            @keydown="onComposerKey"
-          />
-          <!-- While it is working, the useful button is the one that stops it -->
-          <UButton
-            v-if="isBusy"
-            label="Stop"
-            icon="i-lucide-square"
-            size="sm"
-            variant="soft"
-            color="error"
-            :loading="stopping"
-            :disabled="!activeRunId"
-            @click="onStop"
-          />
-          <UButton
-            v-else
-            label="Send"
-            icon="i-lucide-arrow-up"
-            size="sm"
-            :loading="sending"
-            :disabled="!input.trim() || !session.worktree.exists"
-            @click="onSend"
-          />
-          <UButton
-            icon="i-lucide-slash"
-            size="sm"
-            variant="ghost"
-            color="neutral"
-            :title="`${commands.length} commands available`"
-            aria-label="Show commands"
-            :disabled="isBusy"
-            @click="() => { paletteOpen = !paletteOpen }"
-          />
-        </div>
-
-        <!-- Said out loud, because the shortcut changed and muscle memory has not -->
-        <p v-if="!isBusy" class="type-meta pt-1.5">↵ Send · ⇧↵ New line</p>
-      </template>
-
-      <div v-else class="flex justify-center py-16">
-        <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-meta" />
-      </div>
+      </aside>
     </div>
 
     <!-- Pushing is the moment this leaves your machine, so spell it out -->
