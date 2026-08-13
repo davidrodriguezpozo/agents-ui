@@ -50,6 +50,64 @@ const saving = ref(false)
 const viewMode = ref<'structured' | 'raw'>('structured')
 
 /**
+ * The section rail, in the order the sections appear. Naming them in a
+ * different order to the page would be its own small lie — Backups moved to
+ * the end of the document instead, which is where a thing you touch twice a
+ * year belongs, and was the actual complaint about it being first.
+ */
+const sectionNav = [
+  { id: 'general', label: 'General' },
+  { id: 'limits', label: 'Limits' },
+  { id: 'checks', label: 'Checks' },
+  { id: 'setup', label: 'Workspace setup' },
+  { id: 'dev', label: 'Running it' },
+  { id: 'sandbox', label: 'Sandbox' },
+  { id: 'statusline', label: 'Status line' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'marketplaces', label: 'Marketplaces' },
+  { id: 'imports', label: 'GitHub imports' },
+  { id: 'automations', label: 'Automations' },
+  { id: 'backups', label: 'Backups' },
+] as const
+
+const activeSection = ref<string>('general')
+
+/**
+ * Scroll-spy, so the rail says where you are rather than where you last
+ * clicked.
+ *
+ * Done on scroll rather than with an IntersectionObserver band: a section
+ * taller than the band leaves it with nothing inside, and the observer only
+ * reports entries whose state *changed*, so the rail would go blank mid-section
+ * and stay wherever it was. Asking "which heading is the last one above the
+ * fold" cannot have that gap.
+ */
+if (import.meta.client) {
+  let scroller: HTMLElement | null = null
+
+  function syncActiveSection() {
+    const cutoff = 140
+    let current: string = sectionNav[0].id
+    for (const item of sectionNav) {
+      const el = document.getElementById(`settings-${item.id}`)
+      if (!el) continue
+      if (el.getBoundingClientRect().top <= cutoff) current = item.id
+    }
+    activeSection.value = current
+  }
+
+  onMounted(async () => {
+    await nextTick()
+    // The page scrolls inside <main>, not the document.
+    scroller = document.querySelector('main')
+    scroller?.addEventListener('scroll', syncActiveSection, { passive: true })
+    syncActiveSection()
+  })
+
+  onUnmounted(() => scroller?.removeEventListener('scroll', syncActiveSection))
+}
+
+/**
  * Seeded with whatever currently applies — including a detected guess, so the
  * box shows what will actually run rather than being blank while a command is
  * quietly in force.
@@ -419,6 +477,41 @@ const hooks = computed(() => {
   }))
 })
 
+/**
+ * What one automation entry actually runs.
+ *
+ * These were rendered as `cmd.command || JSON.stringify(cmd)`, and the real
+ * shape from Claude Code is `{ matcher?, hooks: [{ type, command }] }` — which
+ * has no top-level `command`, so every entry fell through to the fallback and
+ * the page printed `{"hooks":[{"type":"command","command":"[ -n \"$SUPER…`
+ * at the reader. Six times.
+ */
+interface HookEntry {
+  command?: string
+  matcher?: string
+  hooks?: { type?: string; command?: string }[]
+}
+
+function hookCommands(entry: unknown): string[] {
+  if (typeof entry === 'string') return [entry]
+  if (!entry || typeof entry !== 'object') return []
+
+  const e = entry as HookEntry
+  const nested = (e.hooks ?? [])
+    .map(h => h.command)
+    .filter((c): c is string => typeof c === 'string' && c.length > 0)
+
+  if (nested.length) return nested
+  return e.command ? [e.command] : []
+}
+
+function hookMatcher(entry: unknown): string | null {
+  if (!entry || typeof entry !== 'object') return null
+  const matcher = (entry as HookEntry).matcher
+  // `*` is "anything", which is the default and not worth a line of its own.
+  return matcher && matcher !== '*' ? matcher : null
+}
+
 const showAddHookModal = ref(false)
 const newHookEvent = ref('')
 const newHookCommand = ref('')
@@ -534,12 +627,32 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
     </div>
 
     <!-- Structured view -->
-    <div v-else-if="viewMode === 'structured'" class="page-container py-6 space-y-6">
+    <div v-else-if="viewMode === 'structured'" class="page-container py-6 flex gap-8 items-start">
+      <!--
+        A dozen unrelated sections used to sit in one continuous scroll with no
+        way to navigate them, and Backups was the first thing on the page —
+        before the project's own test and run commands. The rail names what is
+        here and jumps to it; Backups moved to the end, where a thing you touch
+        twice a year belongs.
+      -->
+      <nav class="hidden lg:block w-40 shrink-0 sticky space-y-0.5" :style="{ top: 'calc(var(--header-h) + 1.5rem)' }">
+        <a
+          v-for="item in sectionNav"
+          :key="item.id"
+          :href="`#settings-${item.id}`"
+          class="block px-2.5 py-1.5 rounded-md fs-sm transition-colors focus-ring"
+          :class="activeSection === item.id ? 'ink-accent' : 'text-label hover-bg'"
+          :style="activeSection === item.id ? 'background: var(--accent-muted);' : undefined"
+        >
+          {{ item.label }}
+        </a>
+      </nav>
 
-      <BackupPanel />
+      <div class="flex-1 min-w-0 space-y-6">
 
       <!-- General -->
       <div
+        id="settings-general"
         class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-title">General</h3>
@@ -629,7 +742,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- Spending limits -->
-      <div class="rounded-lg p-5 space-y-4 bg-card">
+      <div id="settings-limits" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Limits</h3>
         <p class="fs-sm text-meta">
           These stop work rather than report on it. Leave any of them blank for no limit.
@@ -743,7 +856,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- Checks -->
-      <div class="rounded-lg p-5 space-y-4 bg-card">
+      <div id="settings-checks" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Checks for this project</h3>
         <p class="fs-sm text-meta">
           The command that tells you whether this project works. It runs in a session's own
@@ -811,7 +924,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- Preparing a workspace -->
-      <div class="rounded-lg p-5 space-y-4 bg-card">
+      <div id="settings-setup" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Making a workspace runnable</h3>
         <p class="fs-sm text-meta">
           A session works in its own checkout of your repository, and a fresh checkout is only
@@ -878,7 +991,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- Running it -->
-      <div class="rounded-lg p-5 space-y-4 bg-card">
+      <div id="settings-dev" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Running this project</h3>
         <p class="fs-sm text-meta">
           What starts this project so you can look at it. Each session runs it in its own
@@ -944,7 +1057,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- What a run may touch -->
-      <div class="rounded-lg p-5 space-y-4 bg-card">
+      <div id="settings-sandbox" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title flex items-center gap-2">
           What a run may touch
           <HelpTip
@@ -1037,6 +1150,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- Status Line -->
       <div
+        id="settings-statusline"
         class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-title">Status Line</h3>
@@ -1064,7 +1178,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- Notifications -->
-      <div class="rounded-lg p-5 space-y-4 bg-card">
+      <div id="settings-notifications" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-label flex items-center gap-2">
           Notifications
           <HelpTip
@@ -1106,6 +1220,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- Plugins -->
       <div
+        id="settings-marketplaces"
         class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-label flex items-center gap-2">
@@ -1147,7 +1262,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       </div>
 
       <!-- GitHub Imports -->
-      <div class="rounded-lg p-5 space-y-4 bg-card">
+      <div id="settings-imports" class="rounded-lg p-5 space-y-4 bg-card">
         <div class="flex items-center justify-between">
           <h3 class="text-section-title">GitHub Imports</h3>
           <UButton
@@ -1207,6 +1322,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
       <!-- Hooks -->
       <div
+        id="settings-automations"
         class="rounded-lg p-5 space-y-4 bg-card"
       >
         <div class="flex items-center justify-between">
@@ -1236,14 +1352,19 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                 style="background: var(--input-bg);"
               >
                 <div class="flex-1 min-w-0">
-                  <span class="font-mono fs-sm truncate block text-label">
-                    {{ typeof cmd === 'string' ? cmd : (cmd as any).command || JSON.stringify(cmd) }}
-                  </span>
                   <span
-                    v-if="typeof cmd === 'object' && (cmd as any).matcher"
-                    class="font-mono fs-micro block mt-0.5 text-meta"
+                    v-for="(command, ci) in hookCommands(cmd)"
+                    :key="ci"
+                    class="font-mono fs-sm truncate block text-label"
+                    :title="command"
                   >
-                    matcher: {{ (cmd as any).matcher }}
+                    {{ command }}
+                  </span>
+                  <span v-if="!hookCommands(cmd).length" class="fs-sm block text-meta">
+                    Nothing to run — this entry has no command.
+                  </span>
+                  <span v-if="hookMatcher(cmd)" class="font-mono fs-micro block mt-0.5 text-meta">
+                    only for {{ hookMatcher(cmd) }}
                   </span>
                 </div>
                 <button
@@ -1258,6 +1379,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Last, because it is a thing you touch twice a year -->
+      <div id="settings-backups">
+        <BackupPanel />
+      </div>
       </div>
     </div>
 

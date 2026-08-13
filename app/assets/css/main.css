@@ -1081,6 +1081,14 @@ body {
 }
 
 /**
+ * Anchor targets clear the sticky header. Without this, jumping to a settings
+ * section puts its heading underneath the header rather than below it.
+ */
+[id^="settings-"] {
+  scroll-margin-top: calc(var(--header-h) + 16px);
+}
+
+/**
  * The divider between a workbench's two panes. A hairline at rest with a wider
  * invisible grab area, because a 1px target is a 1px target however good the
  * cursor is.

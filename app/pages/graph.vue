@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { VueFlow, Position } from '@vue-flow/core'
+import { VueFlow, Position, useVueFlow } from '@vue-flow/core'
 import { Handle } from '@vue-flow/core'
 import type { NodeMouseEvent } from '@vue-flow/core'
 import { Controls } from '@vue-flow/controls'
@@ -53,14 +53,50 @@ const connectedNodeIds = computed(() => {
   return ids
 })
 
+/**
+ * Whether every skill and command a plugin brought gets its own node.
+ *
+ * Off by default, and this is the difference between a graph and a smear. With
+ * it on there are 255 nodes, and the skills column alone is 199 × 76px ≈
+ * 15,000px tall against a ~750px viewport. Fitting that needs a zoom of about
+ * 0.05; `min-zoom` is 0.3. So `fit-view-on-init` was clamped an order of
+ * magnitude short and the graph opened as an illegible column of slivers —
+ * mathematically, not incidentally.
+ *
+ * A plugin is already a node. Its contents are a count on that node until
+ * somebody asks for them.
+ */
+const showPluginContents = ref(false)
+
+function fromPlugin(item: { source?: string }) {
+  return item.source === 'plugin'
+}
+
 // --- Build columns dynamically ---
 const columns = computed(() => {
   const cols: { type: string; items: any[] }[] = []
-  if (commands.value.length > 0) cols.push({ type: 'command', items: commands.value })
-  if (skills.value.length > 0) cols.push({ type: 'skill', items: skills.value })
+
+  const cmds = showPluginContents.value ? commands.value : commands.value.filter(c => !fromPlugin(c))
+  const skls = showPluginContents.value ? skills.value : skills.value.filter(s => !fromPlugin(s))
+
+  if (cmds.length > 0) cols.push({ type: 'command', items: cmds })
+  if (skls.length > 0) cols.push({ type: 'skill', items: skls })
   if (agents.value.length > 0) cols.push({ type: 'agent', items: agents.value })
   if (plugins.value.length > 0) cols.push({ type: 'plugin', items: plugins.value })
   return cols
+})
+
+/** How much a plugin is hiding, for the label on its node. */
+const hiddenCounts = computed(() => {
+  const counts = new Map<string, number>()
+  if (showPluginContents.value) return counts
+  for (const list of [commands.value, skills.value]) {
+    for (const item of list) {
+      if (!fromPlugin(item) || !item.pluginId) continue
+      counts.set(item.pluginId, (counts.get(item.pluginId) ?? 0) + 1)
+    }
+  }
+  return counts
 })
 
 const nodes = computed(() => {
@@ -139,6 +175,8 @@ const nodes = computed(() => {
             id: item.id,
             enabled: item.enabled,
             skillCount: item.skills.length,
+            // What it is standing in for while its contents are folded away.
+            hiddenCount: hiddenCounts.value.get(item.id) ?? 0,
             orphan: isOrphan,
           },
         })
@@ -147,6 +185,20 @@ const nodes = computed(() => {
   })
 
   return result
+})
+
+/**
+ * `fit-view-on-init` fires once, when VueFlow mounts. The node set comes from
+ * agents/commands/skills/plugins, which app.vue fetches — so on a cold load the
+ * fit ran against an empty graph and never ran again. Folding the plugin
+ * contents in or out changes the extent just as much.
+ */
+const { fitView } = useVueFlow()
+
+watch(() => nodes.value.length, async (count, previous) => {
+  if (!count || count === previous) return
+  await nextTick()
+  fitView({ padding: 0.15, duration: 200 })
 })
 
 const edgeRelationshipLabels: Record<string, string> = {
@@ -327,6 +379,19 @@ function onNodeClick({ node }: NodeMouseEvent) {
         <button
           class="type-mono px-2 py-1 rounded focus-ring"
           style="background: var(--surface-raised); border: 1px solid var(--border-default);"
+          :style="showPluginContents
+            ? 'background: var(--accent-muted); border: 1px solid var(--accent-glow); color: var(--accent);'
+            : 'background: var(--surface-raised); border: 1px solid var(--border-default);'"
+          :title="showPluginContents
+            ? 'Fold each plugin back down to one node'
+            : 'Give every skill and command a plugin brought its own node — there are a lot of them'"
+          @click="showPluginContents = !showPluginContents"
+        >
+          Plugin contents
+        </button>
+        <button
+          class="type-mono px-2 py-1 rounded focus-ring"
+          style="background: var(--surface-raised); border: 1px solid var(--border-default);"
           @click="showLegend = !showLegend"
         >
           {{ showLegend ? 'Hide' : 'Show' }} legend
@@ -344,7 +409,7 @@ function onNodeClick({ node }: NodeMouseEvent) {
         :edges="edges"
         fit-view-on-init
         :default-edge-options="{ type: 'smoothstep' }"
-        :min-zoom="0.3"
+        :min-zoom="0.05"
         :max-zoom="2"
         @node-click="onNodeClick"
         @node-mouse-enter="handleNodeMouseEnter"
