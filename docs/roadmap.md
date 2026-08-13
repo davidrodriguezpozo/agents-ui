@@ -310,6 +310,50 @@ One more thing it turned up in passing: the `Dockerfile` copied `bun.lock`, and 
 repository has `bun.lockb`. It has never had a `bun.lock` in its history, so the container
 build has been broken since the file was written.
 
+### ~~7. Reviews — the other end of the pull request~~ — shipped
+
+Item 1 followed the pull request *a session opened*. This is the rest of them: what is
+waiting on your review, and where your own work has got to. Two `gh` list calls and one
+GraphQL query, in the project you are already in.
+
+**It is not a GitHub client and declining to be one is the design.** Everything that is
+neither "waiting on me" nor "mine" is absent — no activity feed, no repository browser, no
+team queue. A worse GitHub in a smaller window is not worth building. What is worth
+building is the row that turns into a session, and everything on the page exists to make
+that row's *one* button the right one.
+
+**The verdict is computed once, on the server, and drawn as given.** This is the lesson
+from `mergeTrain` applied ahead of the bug rather than after it: the page could perfectly
+well work out "ready to merge" from four fields, and a second implementation of the same
+judgement is how two numbers on one screen start disagreeing. `verdictFor` is pure and
+tested, and the page renders what it is handed.
+
+Two ordering calls worth naming, because both could reasonably go the other way:
+
+- **A person outranks a robot.** `changes-requested` and `unanswered` are read before the
+  check rollup, so a pull request that is both red and criticised reads as criticised.
+  Somebody is sitting at the other end of one of those, and you fix the build on your way
+  to answering them either way.
+- **Approved-with-nothing-reporting is shown as ready, and says so.** Item 1 refuses to
+  land on an empty rollup, and that rule is about acting *unattended*. A person reading a
+  page and pressing the button themselves is owed the distinction, not a refusal.
+
+**The working rule paid again, and again from real output rather than from thinking about
+it.** Pointed at a real repository for the first time, the page showed a conflicted pull
+request of mine marked as needing me — and it was the only row with no button on it, which
+is the one state where an agent is unambiguously useful. `update` exists because of that
+run. The same probe settled two field choices: `gh pr list --json comments` returns every
+comment body, megabytes to count a number, and `latestReviews` carries the full text of
+each review to count how many said yes. Both are one aliased GraphQL query instead, which
+degrades to null — and null is drawn as nothing rather than as zero, because "we did not
+ask" and "there are none" are different answers.
+
+**Nothing is posted to GitHub by any of it.** A session started from here has `gh` and a
+shell, so leaving a review is one tool call away — and a review under your name that you
+have not read is the worst thing this feature could do. All four prompts end by saying so.
+Merging is the single exception, and is treated like one: only on your own pull request,
+only when a *fresh* read still says ready, and asked twice.
+
 ### Then the rest of the checklist, then post
 
 Hero GIF, screenshots, social preview, repo name, rewritten drafts. Mechanical once the
@@ -369,7 +413,8 @@ marketplace and plugin install · workflow builder · relationship graph · back
 **following the pull request after it is opened — fixing red CI and landing it when green** ·
 **rituals that are a chain of steps, counted as one firing** · **rituals that fire when an
 issue is labelled or a review is requested** · **picking a branch or pull request from what
-exists, rather than typing it**.
+exists, rather than typing it** · **the pull requests waiting on you and the ones you
+opened, each one press from a session that knows why it is there**.
 
 The working rule from last cycle held again and is worth keeping: **for anything that
 reads somebody else's output, look at the real output before designing around it.** Add

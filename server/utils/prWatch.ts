@@ -74,7 +74,7 @@ export interface PrStatus {
  * in the same array on the same pull request, so both are read here rather than
  * assuming a repository only has one kind.
  */
-interface RollupRow {
+export interface RollupRow {
   __typename?: string
   // CheckRun
   name?: string

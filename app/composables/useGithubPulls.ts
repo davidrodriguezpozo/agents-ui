@@ -1,0 +1,169 @@
+/** Mirrors `PullState` on the server. */
+export type PullState =
+  | 'draft' | 'conflicted' | 'changes-requested' | 'unanswered'
+  | 'checks-failing' | 'checks-running' | 'ready' | 'awaiting-review'
+
+export type WorkIntent = 'review' | 'address' | 'fix' | 'update'
+
+export interface Reviewer {
+  name: string
+  team: boolean
+}
+
+export interface Pull {
+  number: number
+  title: string
+  url: string
+  author: string
+  mine: boolean
+  draft: boolean
+  headBranch: string
+  baseBranch: string
+  headSha: string
+  createdAt: number
+  updatedAt: number
+  additions: number
+  deletions: number
+  changedFiles: number
+  reviewDecision: 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | 'NONE'
+  mergeable: string
+  checks: 'pending' | 'passing' | 'failing' | 'none'
+  failing: { name: string; url: string }[]
+  awaiting: Reviewer[]
+  labels: { name: string; color: string }[]
+  /** Null means GitHub could not be asked, which is not the same as none. */
+  unresolved: number | null
+  approvals: number | null
+  changesRequested: number | null
+  /**
+   * Worked out on the server and drawn here as given. Deciding it a second time
+   * in the page is how two numbers on one screen start disagreeing.
+   */
+  verdict: {
+    state: PullState
+    label: string
+    detail: string
+    /** Whether this does not move until you do something. */
+    onYou: boolean
+  }
+  /** What the row's button does, or null when it has none. */
+  intent: WorkIntent | null
+}
+
+export interface PullsSummary {
+  onYou: number
+  toReview: number
+  toMerge: number
+  waiting: number
+}
+
+export interface PullsReading {
+  ok: boolean
+  reason?: string
+  repo: string | null
+  viewer: string | null
+  reviewing: Pull[]
+  mine: Pull[]
+  summary: PullsSummary
+  readAt: number
+}
+
+const EMPTY: PullsReading = {
+  ok: true, repo: null, viewer: null, reviewing: [], mine: [],
+  summary: { onYou: 0, toReview: 0, toMerge: 0, waiting: 0 },
+  readAt: 0,
+}
+
+/**
+ * The pull requests with your name on them, shared app-wide.
+ *
+ * Shared rather than owned by the page because the sidebar needs the count as
+ * well, and two components asking GitHub the same question independently would
+ * double a request that is not free — this one leaves the machine, and on a
+ * repository with thirty open pull requests it is the better part of a second.
+ *
+ * Refreshed far more slowly than `useAttention`, and deliberately. That polls a
+ * local file every eight seconds; this asks github.com. A review request that
+ * arrives while you are looking at something else can wait two minutes, and a
+ * background tab hammering somebody's rate limit for a badge is not a trade
+ * this app should be making on your behalf.
+ */
+export function useGithubPulls() {
+  const reading = useState<PullsReading>('githubPulls', () => ({ ...EMPTY }))
+  const loading = useState('githubPullsLoading', () => false)
+  /** Whether it has ever come back, so the page can tell empty from unasked. */
+  const loaded = useState('githubPullsLoaded', () => false)
+  const poll = useState<ReturnType<typeof setInterval> | null>('githubPullsPoll', () => null)
+  /** The pull request a button on it is busy with, so only that row spins. */
+  const busy = useState<number | null>('githubPullsBusy', () => null)
+
+  async function refresh() {
+    loading.value = true
+    try {
+      reading.value = await $fetch<PullsReading>('/api/github/pulls')
+      loaded.value = true
+    } catch (e: any) {
+      reading.value = {
+        ...EMPTY,
+        ok: false,
+        reason: e?.data?.data?.message ?? e?.data?.message ?? 'Could not read pull requests.',
+        readAt: Date.now(),
+      }
+      loaded.value = true
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function watchContinuously(everyMs = 120_000) {
+    if (poll.value) return
+    void refresh()
+    poll.value = setInterval(refresh, everyMs)
+  }
+
+  function stopWatching() {
+    if (!poll.value) return
+    clearInterval(poll.value)
+    poll.value = null
+  }
+
+  /**
+   * Start a session on one, already working.
+   *
+   * The intent is left to the server when it is not given: it re-reads the pull
+   * request anyway, and the row's suggestion should come from the same reading
+   * the prompt is built from rather than from whatever this page loaded with.
+   */
+  async function work(number: number, intent?: WorkIntent) {
+    busy.value = number
+    try {
+      const session = await $fetch<{ id: string; startError?: string }>('/api/github/pulls/work', {
+        method: 'POST',
+        body: { number, intent },
+      })
+      void refresh()
+      return session
+    } finally {
+      busy.value = null
+    }
+  }
+
+  async function merge(number: number) {
+    busy.value = number
+    try {
+      const result = await $fetch<{ merged: boolean; number: number }>('/api/github/pulls/merge', {
+        method: 'POST',
+        body: { number },
+      })
+      await refresh()
+      return result
+    } finally {
+      busy.value = null
+    }
+  }
+
+  const summary = computed(() => reading.value.summary)
+  const all = computed(() => [...reading.value.reviewing, ...reading.value.mine])
+
+  return { reading, summary, all, loading, loaded, busy, refresh, watchContinuously, stopWatching, work, merge }
+}

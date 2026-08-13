@@ -75,6 +75,16 @@ if (import.meta.client) {
 const { attention, watchContinuously, stopWatching } = useAttention()
 const { build, isStale, load: loadBuildStatus } = useBuildStatus()
 
+/**
+ * Pull requests, polled far more slowly than everything else beside it.
+ *
+ * `useAttention` reads local files every eight seconds; this leaves the machine
+ * and asks github.com. Two minutes is often enough that a review requested from
+ * you turns up while you are still in the app, and rare enough that a window
+ * left open all day is not spending somebody's rate limit on a badge.
+ */
+const { summary: pullSummary, watchContinuously: watchPulls, stopWatching: stopWatchingPulls } = useGithubPulls()
+
 // The tab title is the only part of this app visible from another window, so
 // it carries the count of things that are stuck.
 useHead({
@@ -89,10 +99,14 @@ onMounted(async () => {
   await refreshAll()
   initialized.value = true
   watchContinuously()
+  watchPulls()
   await loadBuildStatus()
 })
 
-onUnmounted(stopWatching)
+onUnmounted(() => {
+  stopWatching()
+  stopWatchingPulls()
+})
 
 // Simple mode leads with what someone can do and what they own; the authoring
 // surface (agents, commands, workflows, graph) is advanced-only.
@@ -100,6 +114,7 @@ const navLinks = computed(() => isSimple.value
   ? [
       { label: 'Home', icon: 'i-lucide-house', to: '/' },
       { label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions' },
+      { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
       { label: 'My skills', icon: 'i-lucide-sparkles', to: '/skills' },
@@ -107,6 +122,7 @@ const navLinks = computed(() => isSimple.value
   : [
       { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
       { label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions' },
+      { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
       { label: 'Agents', icon: 'i-lucide-cpu', to: '/agents' },
@@ -157,6 +173,16 @@ function attentionFor(to: string) {
         title: `${working} working right now`,
         style: { background: 'var(--accent-muted)', color: 'var(--accent)' },
       }
+    }
+  }
+
+  // A review asked of you is somebody waiting, which is the same kind of news
+  // as a blocked session — but it is not stuck, so it is the accent and not red.
+  if (to === '/pulls' && pullSummary.value.onYou) {
+    return {
+      count: pullSummary.value.onYou,
+      title: `${pullSummary.value.onYou} pull ${pullSummary.value.onYou === 1 ? 'request' : 'requests'} will not move until you do something`,
+      style: { background: 'var(--accent-muted)', color: 'var(--accent)' },
     }
   }
 

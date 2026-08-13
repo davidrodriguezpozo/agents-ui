@@ -14,6 +14,7 @@ leaving: edit the files, run a shell, see the app, and land it.
 <a href="#sessions">Sessions</a> ·
 <a href="#finishing-it-without-leaving">Workspace</a> ·
 <a href="#whether-it-works">Verification</a> ·
+<a href="#reviews">Reviews</a> ·
 <a href="#what-a-run-may-touch">Sandboxing</a> ·
 <a href="#activity">Activity</a> ·
 <a href="#alongside-claude-code-desktop">vs. Desktop</a> ·
@@ -451,6 +452,47 @@ The preview gets a port from the kernel rather than a guess, because several ses
 running at once is the point of worktrees and two dev servers fighting over 3000 is not.
 It is handed over in `PORT`; a project that hardcodes one instead will have its sessions
 collide, which the page says rather than pretends to have solved.
+
+---
+
+## Reviews
+
+A session ends at a pull request, and that used to be where this app stopped looking. It
+is not where the work stops. Somebody asks for a change on Tuesday, CI goes red on the
+third push, a review is requested from you while you are inside something else — all of
+it on github.com, which is a tab you have to remember to open.
+
+**Reviews** asks the two questions you open that tab for, in the project you are already
+in: *what is waiting on me*, and *where has my own work got to*. Read through `gh`, with
+the sign-in you already have — no token to paste, nothing stored, nothing listening on a
+port.
+
+Each pull request gets one verdict rather than eight fields to assemble yourself, and the
+list is sorted by whether the next move is actually yours:
+
+| | |
+| --- | --- |
+| **Conflicts** | It collides with its base, so nothing downstream of that means much |
+| **Changes requested** | Somebody reviewed it and wants something — with how many threads are still open |
+| **Unanswered** | Comments left on the diff that nobody has resolved |
+| **CI red** | Which checks failed, by name, linked to the run |
+| **Ready to merge** | Approved, green, mergeable — and it says so when nothing reported |
+| **In review** | Waiting on a named reviewer. Not your problem this minute |
+
+A person outranks a robot: a pull request that is both red *and* has a reviewer waiting
+reads as the second, because only one of those is somebody sitting at the other end.
+
+**Then the row turns into a session.** That is the part a list of links cannot do. One
+press cuts a worktree with the branch checked out and starts a turn that knows why it is
+there — read this diff and tell me what is wrong with it; work out why CI went red and
+fix the failure rather than the check; do what the reviewer asked, and say so where you
+think they are wrong. Nothing is posted to GitHub by any of them. The review comes back
+into the session for you to read, because a review left under your name that you have not
+read is the worst thing this could possibly do for you.
+
+Merging is the exception and is treated like one: it only appears on your own pull
+request, only when it is genuinely ready, and the page re-reads GitHub at the moment you
+press it rather than trusting what it drew ten minutes ago.
 
 ---
 
