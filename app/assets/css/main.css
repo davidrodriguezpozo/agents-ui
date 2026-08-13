@@ -78,15 +78,27 @@
   --measure-max: 900px;
 
   /* Every page header is this tall, including the ones over a canvas. */
-  --header-h: 72px;
+  --header-h: 64px;
 
-  /* The type scale. Six steps — see the Type Scale block for what each means. */
-  --fs-title: 30px;
-  --fs-lg:    18px;
-  --fs-base:  15px;
-  --fs-sm:    13px;
-  --fs-mono:  12px;
-  --fs-micro: 11px;
+  /**
+   * The type scale. Six steps — see the Type Scale block for what each means.
+   *
+   * Tuned down one notch from the first pass, which ran 30/18/15/13/12/11 and
+   * read as too big for a tool you keep open all day. The point of the six
+   * steps was never the absolute sizes; it was having six distinguishable ones
+   * instead of eight with four of them a pixel apart. Half-pixel steps at the
+   * bottom keep them distinguishable at this size, and match the half-pixel
+   * sizes the charts already use.
+   *
+   * Every font size in the app resolves through these, including form fields,
+   * badges and graph labels — so this block is the only place to tune it.
+   */
+  --fs-title: 26px;
+  --fs-lg:    16px;
+  --fs-base:  14px;
+  --fs-sm:    12.5px;
+  --fs-mono:  11.5px;
+  --fs-micro: 10.5px;
 
   /* Model tiers */
   --model-opus: #7c5cd6;
@@ -435,7 +447,7 @@ body {
   justify-content: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -466,7 +478,7 @@ body {
   backdrop-filter: blur(12px);
   border: 1px solid var(--border-default);
   pointer-events: none;
-  font-size: 11px;
+  font-size: var(--fs-mono);
   line-height: 1.5;
   color: var(--text-secondary);
 }
@@ -474,7 +486,7 @@ body {
 /* Edge labels */
 .vue-flow__edge-text {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: var(--fs-micro);
   fill: var(--text-tertiary);
   transition: opacity 0.15s;
 }
@@ -531,7 +543,7 @@ body {
 /* Label */
 .field-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-micro);
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -559,7 +571,7 @@ body {
   border-radius: 10px;
   padding: 9px 13px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   letter-spacing: -0.01em;
   color: var(--text-primary);
   outline: none;
@@ -573,7 +585,7 @@ body {
 .field-textarea::placeholder {
   color: var(--text-disabled);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-sm);
 }
 
 .field-input:hover,
@@ -619,7 +631,7 @@ body {
   border-radius: 10px;
   padding: 9px 13px 9px 38px;
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--fs-sm);
   color: var(--text-primary);
   outline: none;
   transition:
@@ -651,7 +663,7 @@ body {
 
 /* Hint text below fields */
 .field-hint {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--text-disabled);
   font-family: var(--font-sans);
 }
@@ -669,7 +681,7 @@ body {
 }
 
 .field-error {
-  font-size: 11px;
+  font-size: var(--fs-micro);
   color: var(--error);
   font-family: var(--font-sans);
 }
@@ -679,7 +691,7 @@ body {
   width: 100%;
   resize: none;
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.75;
   padding: 20px 20px 20px 56px;
   background: var(--editor-bg);
@@ -731,7 +743,7 @@ body {
   padding: 5px 14px;
   border-radius: 8px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--fs-mono);
   letter-spacing: 0.02em;
   color: var(--text-disabled);
   cursor: pointer;
@@ -1136,7 +1148,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-weight: 500;
   padding: 1px 8px;
   border-radius: 9999px;
@@ -1519,9 +1531,14 @@ details summary::-webkit-details-marker {
    Hero Stat Number
    ============================================ */
 
+/**
+ * The one size above the scale: a figure meant to be read across the room, on
+ * the Reviews summary. Derived from the title step rather than declared, so it
+ * moves when the scale does.
+ */
 .stat-number {
   font-family: var(--font-display);
-  font-size: 40px;
+  font-size: calc(var(--fs-title) * 1.2);
   font-weight: 700;
   letter-spacing: -0.04em;
   line-height: 1;
@@ -1530,7 +1547,7 @@ details summary::-webkit-details-marker {
 
 .stat-label {
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--fs-mono);
   font-weight: 500;
   color: var(--text-tertiary);
   margin-top: 4px;
@@ -1883,7 +1900,7 @@ details summary::-webkit-details-marker {
 .code-editor__gutter,
 .code-editor__layer {
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: var(--fs-base);
   line-height: 1.75;
   tab-size: 2;
   letter-spacing: normal;

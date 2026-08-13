@@ -54,13 +54,41 @@ describe('type scale', () => {
     expect(hits(/\btext-\[\d+px\]/)).toEqual([])
   })
 
-  it('defines exactly the six steps it claims to', () => {
+  it('defines exactly the six steps it claims to, and they stay distinct', () => {
     const css = readFileSync(cssPath, 'utf8')
-    for (const token of ['--fs-title', '--fs-lg', '--fs-base', '--fs-sm', '--fs-mono', '--fs-micro']) {
-      expect(css, `${token} should be defined`).toContain(`${token}:`)
+    const steps = ['--fs-title', '--fs-lg', '--fs-base', '--fs-sm', '--fs-mono', '--fs-micro']
+
+    const sizes = steps.map((token) => {
+      const match = css.match(new RegExp(`${token}:\\s*([0-9.]+)px`))
+      expect(match, `${token} should be defined in px`).toBeTruthy()
+      return Number(match![1])
+    })
+
+    // Descending, and no two steps closer than half a pixel — the original
+    // scale had 13/13/12/11/11/10, which is why nothing read as emphatic.
+    for (let i = 1; i < sizes.length; i++) {
+      expect(sizes[i], `${steps[i]} should be smaller than ${steps[i - 1]}`).toBeLessThan(sizes[i - 1]!)
+      expect(sizes[i - 1]! - sizes[i]!, `${steps[i]} is too close to ${steps[i - 1]}`).toBeGreaterThanOrEqual(0.5)
     }
-    // 10px and 9px were removed deliberately. A 9px label is not restraint.
-    expect(css).not.toMatch(/--fs-[a-z]+:\s*(9|10)px/)
+
+    // A 9px label is not restraint, it is unreadable. 10.5 is the floor.
+    expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10.5)
+  })
+
+  it('resolves every font size through the scale', () => {
+    // Form fields, badges and graph labels were declared in CSS rather than as
+    // utility classes, so the codemod never reached them and they sat at fixed
+    // px while the scale moved around them.
+    const css = readFileSync(cssPath, 'utf8')
+    const hardCoded = css
+      .split('\n')
+      .map((line, i) => ({ line: line.trim(), n: i + 1 }))
+      .filter(({ line }) => /font-size:\s*[0-9]/.test(line))
+      // Relative sizes inside rendered markdown scale with their container,
+      // which is the point of them.
+      .filter(({ line }) => !/font-size:\s*[0-9.]+em/.test(line))
+      .map(({ line, n }) => `main.css:${n}  ${line}`)
+    expect(hardCoded).toEqual([])
   })
 })
 

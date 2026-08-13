@@ -404,7 +404,7 @@ function titleOf(car: TrainCar): string {
   flex: 0 0 auto;
   min-width: 62px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 600;
   color: var(--text-secondary);
   text-align: right;
@@ -438,7 +438,7 @@ function titleOf(car: TrainCar): string {
 }
 
 .car-order {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   font-variant-numeric: tabular-nums;
   color: var(--text-disabled);
   text-align: right;
@@ -483,7 +483,7 @@ function titleOf(car: TrainCar): string {
 .car-body { min-width: 0; display: flex; flex-direction: column; gap: 0; }
 
 .car-title {
-  font-size: 12px;
+  font-size: var(--fs-sm);
   font-weight: 500;
   color: var(--text-primary);
   text-decoration: none;
@@ -495,7 +495,7 @@ function titleOf(car: TrainCar): string {
 .car-title:hover { color: var(--accent); }
 
 .car-meta {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -506,7 +506,7 @@ function titleOf(car: TrainCar): string {
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   font-weight: 500;
   color: var(--need-color);
   white-space: nowrap;
@@ -515,7 +515,7 @@ function titleOf(car: TrainCar): string {
 /* The reason drops to its own line on narrow screens rather than being cut. */
 .car-reason {
   grid-column: 3 / -1;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -549,7 +549,7 @@ function titleOf(car: TrainCar): string {
   margin: 10px 0 2px;
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -577,13 +577,13 @@ function titleOf(car: TrainCar): string {
 .blocker-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .blocker-text {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--fs-sm);
   line-height: 1.45;
   color: var(--text-primary);
 }
 .blocker-hint {
   margin: 0;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--text-tertiary);
 }
 
@@ -591,7 +591,7 @@ function titleOf(car: TrainCar): string {
   margin: 10px 0 0;
   padding-top: 8px;
   border-top: 1px solid var(--border-subtle);
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   line-height: 1.5;
   color: var(--text-tertiary);
   max-width: 68ch;

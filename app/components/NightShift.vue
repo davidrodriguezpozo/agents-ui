@@ -418,14 +418,14 @@ const tableRows = computed(() =>
 }
 .stats div { display: flex; flex-direction: column; gap: 1px; }
 .stats dt {
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-tertiary);
 }
 .stats dd {
   margin: 0;
-  font-size: 19px;
+  font-size: calc(var(--fs-title) * 0.68);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.15;
@@ -496,7 +496,7 @@ const tableRows = computed(() =>
 .lane-label {
   flex: 0 0 58px;
   padding-top: 4px;
-  font-size: 10px;
+  font-size: var(--fs-micro);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -506,7 +506,7 @@ const tableRows = computed(() =>
    thing on that line would push the 58px gutter out and drag every lane with it. */
 .lane-label-value {
   display: block;
-  font-size: 11px;
+  font-size: var(--fs-mono);
   letter-spacing: 0;
   text-transform: none;
   font-weight: 600;
@@ -637,7 +637,7 @@ const tableRows = computed(() =>
   pointer-events: none;
 }
 .tip-title {
-  font-size: 11.5px;
+  font-size: var(--fs-mono);
   font-weight: 600;
   line-height: 1.3;
   color: var(--text-primary);
@@ -647,11 +647,11 @@ const tableRows = computed(() =>
   display: flex;
   align-items: center;
   gap: 4px;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
-.tip-note { font-size: 10px; color: var(--text-tertiary); }
+.tip-note { font-size: var(--fs-micro); color: var(--text-tertiary); }
 
 /* ── Legend ───────────────────────────────────── */
 
@@ -668,7 +668,7 @@ const tableRows = computed(() =>
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--text-secondary);
 }
 .legend-item b {
@@ -692,7 +692,7 @@ const tableRows = computed(() =>
   border: 0;
   border-radius: var(--radius-sm);
   background: transparent;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--text-tertiary);
   cursor: pointer;
 }
@@ -700,14 +700,14 @@ const tableRows = computed(() =>
 
 .truncated {
   margin: 8px 0 0;
-  font-size: 10.5px;
+  font-size: var(--fs-micro);
   color: var(--warning);
 }
 
 /* ── Table twin ───────────────────────────────── */
 
 .table-wrap { margin-top: 12px; overflow-x: auto; }
-.table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.table { width: 100%; border-collapse: collapse; font-size: var(--fs-micro); }
 .table th {
   text-align: left;
   font-size: 9.5px;
@@ -761,6 +761,6 @@ const tableRows = computed(() =>
   .plot { --gutter: 54px; }
   .lane-label { flex-basis: 44px; font-size: 9px; }
   .stats { gap: 0 18px; }
-  .stats dd { font-size: 16px; }
+  .stats dd { font-size: calc(var(--fs-title) * 0.6); }
 }
 </style>
