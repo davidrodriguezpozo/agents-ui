@@ -331,8 +331,18 @@ function formatCost(usd?: number) {
               so whatever needed that did not happen.
             </p>
             <p v-else class="text-[11px] leading-relaxed text-label">
-              <template v-if="meta.scheduleId">It ran on a schedule, and</template>
-              <template v-else>It ran with nobody watching, and</template>
+              <!--
+                Each on its own line on purpose: with the text hugging the tags,
+                Vue's whitespace condensing drops the newline before <strong>
+                entirely and the banner reads "and Bash(gh issue edit:*)" with no
+                space at all.
+              -->
+              <template v-if="meta.scheduleId">
+                It ran on a schedule, and
+              </template>
+              <template v-else>
+                It ran with nobody watching, and
+              </template>
               <strong>{{ (meta.deniedTools || []).join(', ') || 'a tool' }}</strong>
               needed permission that nobody was there to give.
             </p>
