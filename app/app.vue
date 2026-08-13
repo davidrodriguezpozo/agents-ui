@@ -133,10 +133,9 @@ onUnmounted(() => {
 const navLinks = computed(() => isSimple.value
   ? [
       { label: 'Home', icon: 'i-lucide-house', to: '/' },
-      { label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions' },
+      { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
       { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
-      { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
       // Was "My skills", which stopped being true when the Library merged
       // agents and commands in beside them. Its Personal group is first and
       // open, so what you wrote is still the first thing on the screen.
@@ -144,10 +143,12 @@ const navLinks = computed(() => isSimple.value
     ]
   : [
       { label: 'Now', icon: 'i-lucide-target', to: '/' },
-      { label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions' },
+      // Sessions and Activity were two lists over one event stream, split by
+      // what *started* the work — a distinction the system cares about and
+      // nobody else does.
+      { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
       { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
-      { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
       // Agents, commands and skills were three nav items for one question.
       { label: 'Library', icon: 'i-lucide-library', to: '/library' },
       { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },

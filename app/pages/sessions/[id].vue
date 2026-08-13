@@ -698,7 +698,7 @@ async function onClose(opts: { force?: boolean; keepBranch?: boolean }) {
       title: result.branchKept ? `Closed — branch ${result.branchKept} kept` : 'Session closed',
       color: 'success',
     })
-    router.push('/sessions')
+    router.push('/work')
   } catch (e) {
     toast.add({ title: 'Could not close', description: errorMessage(e), color: 'error' })
   } finally {
@@ -895,7 +895,7 @@ const totalChanges = computed(() => {
   <div class="h-screen flex flex-col">
     <PageHeader bleed :title="session?.title || 'Session'">
       <template #leading>
-        <NuxtLink to="/sessions" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to sessions">
+        <NuxtLink to="/work" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to work">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
         </NuxtLink>
       </template>

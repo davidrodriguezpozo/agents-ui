@@ -223,7 +223,7 @@ function formatCost(usd?: number) {
   <div>
     <PageHeader :title="meta?.title || 'Run'">
       <template #leading>
-        <NuxtLink to="/runs" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to activity">
+        <NuxtLink to="/work" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to work">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
         </NuxtLink>
       </template>

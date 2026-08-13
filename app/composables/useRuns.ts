@@ -12,6 +12,8 @@ export interface RunQuery {
   q?: string
   source?: RunSource
   outcome?: RunOutcomeFilter
+  /** Sources to leave out, so the limit is spent on rows that will be shown. */
+  exclude?: RunSource[]
 }
 
 export interface RunSummary {
@@ -88,7 +90,13 @@ export function useRuns() {
     loading.value = true
     try {
       runs.value = await $fetch<RunSummary[]>('/api/runs', {
-        query: { limit: query.limit ?? 50, q: query.q || undefined, source: query.source, outcome: query.outcome },
+        query: {
+          limit: query.limit ?? 50,
+          q: query.q || undefined,
+          source: query.source,
+          outcome: query.outcome,
+          exclude: query.exclude?.length ? query.exclude.join(',') : undefined,
+        },
       })
     } catch (e) {
       console.error('[useRuns] fetchRuns:', e)

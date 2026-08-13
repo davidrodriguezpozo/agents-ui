@@ -80,3 +80,37 @@ describe('filtering the log', () => {
     expect(matchesFilter(ritual, { source: 'ritual', q: 'nowhere' })).toBe(false)
   })
 })
+
+describe('leaving sources out', () => {
+  /**
+   * Work lists a session as one row however many turns it took, so it discards
+   * runs a session owns. On a real machine 49 of the 50 most recent runs were
+   * exactly those, so doing it in the page spent the whole cap on rows that were
+   * then thrown away — and a ritual run from the day before was invisible behind
+   * fifty turns of one session. This has to happen before the limit.
+   */
+  it('drops the excluded sources', () => {
+    expect(matchesFilter(run({ sessionId: 'x1', kind: 'chat' }), { exclude: ['session'] })).toBe(false)
+    expect(matchesFilter(run({ scheduleId: 's1' }), { exclude: ['session'] })).toBe(true)
+    expect(matchesFilter(run(), { exclude: ['session'] })).toBe(true)
+  })
+
+  it('excludes several at once', () => {
+    const filter = { exclude: ['session', 'agent'] as ('session' | 'agent')[] }
+    expect(matchesFilter(run({ sessionId: 'x' , kind: 'chat' }), filter)).toBe(false)
+    expect(matchesFilter(run({ kind: 'agent' }), filter)).toBe(false)
+    expect(matchesFilter(run({ scheduleId: 's' }), filter)).toBe(true)
+    expect(matchesFilter(run(), filter)).toBe(true)
+  })
+
+  it('keeps everything when nothing is excluded', () => {
+    expect(matchesFilter(run({ sessionId: 'x', kind: 'chat' }), {})).toBe(true)
+    expect(matchesFilter(run({ sessionId: 'x', kind: 'chat' }), { exclude: [] })).toBe(true)
+  })
+
+  it('still applies the other filters alongside it', () => {
+    const filter = { exclude: ['session'] as ('session')[], outcome: 'failed' as const }
+    expect(matchesFilter(run({ scheduleId: 's', status: 'failed' }), filter)).toBe(true)
+    expect(matchesFilter(run({ scheduleId: 's', status: 'completed' }), filter)).toBe(false)
+  })
+})

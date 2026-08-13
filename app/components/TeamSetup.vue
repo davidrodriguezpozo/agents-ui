@@ -219,7 +219,7 @@ async function onInstall(marketplace: string, plugin: string) {
     <div class="pt-2 text-center" style="border-top: 1px solid var(--border-subtle);">
       <p class="type-detail pt-4">
         Here to run Claude on your own code instead?
-        <NuxtLink to="/sessions" class="font-medium hover:underline ink-accent">
+        <NuxtLink to="/work" class="font-medium hover:underline ink-accent">
           Start a session
         </NuxtLink>
         — it gets its own branch and checkout, and nothing here needs setting up first.

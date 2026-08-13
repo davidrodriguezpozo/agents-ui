@@ -1,0 +1,1049 @@
+<script setup lang="ts">
+import { errorMessage } from '~/utils/errors'
+import { findSimilar } from '~/utils/similarSession'
+import { isSendKey } from '~/utils/keys'
+import type { RunQuery } from '~/composables/useRuns'
+import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
+import type { Session } from '~/composables/useSessions'
+import {
+  buildWorkList, statusCounts, WORK_ORIGIN, WORK_STATUS,
+  type WorkItem, type WorkOrigin, type WorkStatus,
+} from '~/utils/workList'
+
+const {
+  sessions, here, elsewhere, workingCount, needsYouCount, loading,
+  fetchAll, create, createMany, startFrom,
+} = useSessions()
+const { fetchAll: fetchWorktrees } = useWorktrees()
+const { runs, fetchRuns } = useRuns()
+const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
+const { workingDir, displayPath } = useWorkingDir()
+const { projects, nameFor, activate, addProject, ensureLoaded: ensureProjectsLoaded } = useProjects()
+const router = useRouter()
+const toast = useToast()
+
+const prompt = ref('')
+const creating = ref(false)
+const existingRef = ref('')
+const startingFrom = ref(false)
+
+/**
+ * Starting several at once is its own mode rather than a clever reading of the
+ * main box. One instruction per line is only obvious once you have been told;
+ * inferred from a multi-line paste it would turn one carefully written prompt
+ * into eight sessions and eight checkouts, which is not a mistake anyone wants
+ * to discover afterwards.
+ */
+/**
+ * How much the new session may do, chosen before it starts.
+ *
+ * Trust used to be a thing you set on a session that was already running, so
+ * every session's *first* turn — usually the longest, and the one that does the
+ * bulk of the work — ran at "Edit files" no matter what you meant. Rituals have
+ * always chosen upfront; sessions were the odd ones out.
+ *
+ * Remembered, because somebody who works in Auto works in Auto, and re-picking
+ * it on every session is the kind of small tax that gets a feature ignored.
+ */
+const TRUST_KEY = 'agents-ui:session-trust'
+const startTrust = ref<TrustLevel>('edits')
+
+onMounted(() => {
+  const stored = localStorage.getItem(TRUST_KEY)
+  if (TRUST_CHOICES.some(c => c.value === stored)) startTrust.value = stored as TrustLevel
+})
+
+function chooseTrust(value: TrustLevel) {
+  startTrust.value = value
+  try {
+    localStorage.setItem(TRUST_KEY, value)
+  } catch {
+    // A full or blocked store costs the memory, not the choice.
+  }
+}
+
+const batchMode = ref(false)
+const batchText = ref('')
+const startingBatch = ref(false)
+
+const batchPrompts = computed(() =>
+  batchText.value.split('\n').map(line => line.trim()).filter(Boolean)
+)
+
+const MAX_AT_ONCE = 20
+const tooMany = computed(() => batchPrompts.value.length > MAX_AT_ONCE)
+
+async function onCreateMany() {
+  if (!batchPrompts.value.length || startingBatch.value || tooMany.value) return
+
+  startingBatch.value = true
+  try {
+    const result = await createMany(batchPrompts.value, undefined, startTrust.value)
+    await fetchWorktrees()
+
+    if (result.started.length) {
+      const stalled = result.started.filter(s => s.startError).length
+      toast.add({
+        title: `${result.started.length} session${result.started.length === 1 ? '' : 's'} started`,
+        description: stalled
+          ? `${stalled} got a workspace but did not start working — open them to see why.`
+          : 'They are working now. Nothing touches your files until you merge.',
+        color: stalled ? 'warning' : 'success',
+      })
+    }
+
+    // Named individually: "3 failed" tells you nothing you can act on.
+    for (const failure of result.failed) {
+      toast.add({
+        title: `Could not start "${failure.prompt.slice(0, 40)}"`,
+        description: failure.reason,
+        color: 'error',
+      })
+    }
+
+    if (result.started.length) {
+      batchText.value = ''
+      batchMode.value = false
+    }
+  } catch (e) {
+    toast.add({ title: 'Could not start those', description: errorMessage(e), color: 'error' })
+  } finally {
+    startingBatch.value = false
+  }
+}
+
+/**
+ * Not all work starts from nothing. Continuing a colleague's branch, picking
+ * up a pull request or fixing a failing check all begin from something that
+ * already exists, and until now that meant doing it by hand first.
+ */
+async function onStartFrom() {
+  const value = existingRef.value.trim()
+  if (!value || startingFrom.value) return
+
+  startingFrom.value = true
+  try {
+    const session = await startFrom(value)
+    existingRef.value = ''
+    await fetchWorktrees()
+    router.push(`/sessions/${session.id}`)
+  } catch (e) {
+    toast.add({ title: 'Could not start there', description: errorMessage(e), color: 'error' })
+  } finally {
+    startingFrom.value = false
+  }
+}
+let poll: ReturnType<typeof setInterval> | null = null
+
+const adopting = ref<string | null>(null)
+
+/**
+ * Continue a terminal conversation here. It resumes exactly where it left off,
+ * but in a worktree — which is the part the terminal cannot give you.
+ */
+async function onAdopt(sdkSessionId: string) {
+  adopting.value = sdkSessionId
+  try {
+    const session = await adopt(sdkSessionId)
+    await fetchWorktrees()
+    router.push(`/sessions/${session.id}`)
+  } catch (e) {
+    toast.add({ title: 'Could not continue that', description: errorMessage(e), color: 'error' })
+  } finally {
+    adopting.value = null
+  }
+}
+
+/**
+ * Set while a poll is in the air, so the next tick skips rather than stacking.
+ *
+ * The list costs a few `git` invocations per session, and with enough sessions
+ * open it can take longer to build than the gap between polls. Firing anyway
+ * meant each tick started before the last had answered, which is self-
+ * sustaining: the overlap is what made it slow. A skipped tick costs four
+ * seconds of freshness; not skipping cost the whole app.
+ */
+let polling = false
+
+onMounted(async () => {
+  await Promise.all([
+    fetchAll(), fetchWorktrees(), fetchTranscripts(), ensureProjectsLoaded(), fetchRuns(RUNS_QUERY),
+  ])
+
+  // Only poll while something could change on its own — but that now includes a
+  // ritual firing, which no session on this page would report.
+  poll = setInterval(async () => {
+    if (polling) return
+    const live = sessions.value.some(s => s.activity === 'working')
+      || runs.value.some(r => r.status === 'running' || r.status === 'queued')
+    if (!live) return
+
+    polling = true
+    try {
+      await Promise.all([fetchAll(), fetchRuns({ ...RUNS_QUERY, q: search.value.trim() })])
+    } finally {
+      polling = false
+    }
+  }, 4000)
+})
+
+onUnmounted(() => { if (poll) clearInterval(poll) })
+
+async function onCreate() {
+  const value = prompt.value.trim()
+  if (!value || creating.value) return
+
+  creating.value = true
+  try {
+    const session = await create(value, undefined, startTrust.value)
+    prompt.value = ''
+    await fetchWorktrees()
+
+    // The session exists either way, so go to it — a workspace that could not
+    // take its first turn is still somewhere you can see why and try again.
+    if (session.startError) {
+      toast.add({
+        title: 'Started, but it is not working yet',
+        description: session.startError,
+        color: 'warning',
+      })
+    }
+
+    router.push(`/sessions/${session.id}`)
+  } catch (e) {
+    toast.add({ title: 'Could not start a session', description: errorMessage(e), color: 'error' })
+  } finally {
+    creating.value = false
+  }
+}
+
+function relative(ts: number) {
+  const seconds = Math.floor((Date.now() - ts) / 1000)
+  if (seconds < 60) return 'just now'
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
+  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
+/**
+ * Which projects the list covers.
+ *
+ * Kept in shared state rather than in the component, so going into a session
+ * and coming back does not quietly narrow the view again — a person who asked
+ * to see everything meant it for longer than one navigation.
+ */
+/**
+ * A project that is not a git repository.
+ *
+ *   project/          picked, because the specs are half the work
+ *     app/            the repository
+ *     specs/
+ *
+ * Every session here is refused — a worktree has to be a worktree of
+ * something — but the page said "branches from project/ and starts work
+ * straight away" right up until you pressed the button. The repository it
+ * wants is one directory down and plainly visible, so it offers that instead,
+ * and remembers the folder it came out of so the specs stay readable.
+ */
+const activeProject = computed(() => projects.value.find(p => p.path === workingDir.value) ?? null)
+const notARepo = computed(() => Boolean(activeProject.value && !activeProject.value.isRepo))
+
+const nestedRepos = ref<{ path: string; name: string; depth: number }[]>([])
+const lookingInside = ref(false)
+const adoptingRepo = ref<string | null>(null)
+
+watch([notARepo, workingDir], async () => {
+  nestedRepos.value = []
+  if (!notARepo.value || !workingDir.value) return
+
+  lookingInside.value = true
+  try {
+    const result = await $fetch<{ repos: { path: string; name: string; depth: number }[] }>(
+      '/api/projects/nested',
+      { query: { dir: workingDir.value } },
+    )
+    nestedRepos.value = result.repos
+  } catch {
+    // No suggestion is a worse page, not a broken one.
+  } finally {
+    lookingInside.value = false
+  }
+}, { immediate: true })
+
+/** Switch to the repository inside, keeping its parent readable from sessions. */
+async function useRepoInside(path: string) {
+  adoptingRepo.value = path
+  try {
+    await addProject(path, { contextDir: workingDir.value ?? undefined })
+    toast.add({
+      title: 'Switched to the repository inside',
+      description: 'Sessions branch from here, and the folder around it stays readable.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not switch to it', description: errorMessage(e), color: 'error' })
+  } finally {
+    adoptingRepo.value = null
+  }
+}
+
+/**
+ * Whether you have already asked for this.
+ *
+ * Three pairs of near-identical sessions here, each pair twenty-one minutes
+ * apart, the second of each retyped from memory with typos the first does not
+ * have. Somebody came back, could not tell the work was already underway, and
+ * asked again — which costs two agents, two worktrees, and two sets of changes
+ * to the same files that will conflict whenever the second one is merged.
+ *
+ * It never blocks. Asking twice on purpose is legitimate; not knowing is the
+ * only thing being fixed.
+ */
+const duplicateOf = computed(() => findSimilar(prompt.value, sessions.value, workingDir.value))
+
+/** The same question for each line of a batch, which is where this happened. */
+const batchDuplicates = computed(() =>
+  batchPrompts.value
+    .map(line => ({ line, hit: findSimilar(line, sessions.value, workingDir.value) }))
+    .filter((entry): entry is { line: string; hit: NonNullable<typeof entry.hit> } => Boolean(entry.hit)),
+)
+
+const scope = useState<'here' | 'all'>('sessions-scope', () => 'here')
+
+// With no project selected there is no "here" to narrow to, and the toggle
+// would be a control with one working position.
+watchEffect(() => { if (!workingDir.value) scope.value = 'all' })
+
+/** A session nobody has answered is the reason to look at another project. */
+function needsYou(list: Session[]) {
+  return list.filter(
+    s => s.activity === 'awaiting-permission'
+      || (s.activity === 'idle' && s.check?.status === 'failing'),
+  ).length
+}
+
+const elsewhereNeedsYou = computed(() => needsYou(elsewhere.value))
+
+/**
+ * The work list: sessions and runs, filtered together.
+ *
+ * Runs whose source is a session are dropped by `buildWorkList` — that session
+ * is its own row. `useRuns` is asked for the rest, and the search reaches the
+ * server because that list is capped there; searching one loaded page of it
+ * would silently miss everything past the cap.
+ */
+/**
+ * Runs a session owns are excluded on the server, not here.
+ *
+ * On a real machine 49 of the 50 most recent runs were turns of a session that
+ * is already its own row, so filtering client-side spent the whole cap on rows
+ * that were then discarded — and a ritual run from yesterday was invisible
+ * behind fifty turns of one session.
+ */
+const RUNS_QUERY: RunQuery = { exclude: ['session'], limit: 50 }
+
+const status = ref<WorkStatus | null>(null)
+const origin = ref<WorkOrigin | null>(null)
+const search = ref('')
+
+const hasFilters = computed(() => Boolean(status.value || origin.value || search.value.trim()))
+
+function clearFilters() {
+  status.value = null
+  origin.value = null
+  search.value = ''
+}
+
+const visibleSessions = computed(() => (scope.value === 'here' ? here.value : sessions.value))
+
+/** Unfiltered, so the chip counts describe the pile rather than the slice. */
+const allWork = computed(() => buildWorkList({
+  sessions: visibleSessions.value,
+  runs: runs.value,
+}))
+
+const work = computed(() => buildWorkList(
+  { sessions: visibleSessions.value, runs: runs.value },
+  { status: status.value, origin: origin.value, query: search.value },
+))
+
+const statusChips = computed(() => {
+  const counts = statusCounts(allWork.value)
+  return WORK_STATUS
+    .map(s => ({ ...s, count: counts[s.value] }))
+    // A chip with nothing behind it is a dead end, unless it is the one you have
+    // already pressed — removing that under your cursor is worse.
+    .filter(s => s.count > 0 || status.value === s.value)
+})
+
+/** The session behind a row, when the row is one. `null` means it is a run. */
+function sessionFor(item: WorkItem): Session | null {
+  if (item.origin !== 'session') return null
+  const id = item.key.slice('session:'.length)
+  return sessions.value.find(s => s.id === id) ?? null
+}
+
+/**
+ * Which of the rows on screen produced nothing, for the bulk clear-up. Taken
+ * from what is visible rather than from a whole project, so the button never
+ * closes something you cannot see.
+ */
+const emptySessionIds = computed(() =>
+  work.value
+    .filter(item => item.outcome === 'Nothing came of it')
+    .map(item => item.key.slice('session:'.length)),
+)
+
+// Typing is not a request per keystroke, but the query has to reach the server.
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
+watch(search, () => {
+  if (searchDebounce) clearTimeout(searchDebounce)
+  searchDebounce = setTimeout(() => { void fetchRuns({ ...RUNS_QUERY, q: search.value.trim() }) }, 200)
+})
+onUnmounted(() => { if (searchDebounce) clearTimeout(searchDebounce) })
+
+/**
+ * Clearing out what came to nothing.
+ *
+ * Two steps, on purpose: this deletes branches and whole checkouts, and it
+ * does several at once. The server checks each one again before touching it,
+ * so a session that gained changes since this page loaded survives regardless
+ * of what was clicked here.
+ */
+/**
+ * Landing the finished ones.
+ *
+ * Two steps, because this merges into the branch you have checked out. The
+ * confirmation names the branch rather than saying "are you sure" — the branch
+ * is the part worth checking before agreeing.
+ */
+const {
+  showRun: landingRun, active: landing, starting: startingLanding, plan: landingPlan,
+  start: beginLanding, refresh: refreshLanding, refreshPlan: refreshLandingPlan,
+  dismiss: dismissLanding, watch: watchLanding,
+} = useLanding()
+const confirmingLand = ref(false)
+
+onMounted(async () => {
+  await Promise.all([refreshLanding(), refreshLandingPlan()])
+  if (landing.value) watchLanding()
+})
+
+// The plan is read from the repository's worktrees, so it goes stale whenever a
+// session does — a turn finishing, a merge landing, a project switch.
+watch(workingDir, () => { refreshLandingPlan() })
+
+/**
+ * The train is only worth drawing when there is an order to show.
+ *
+ * One session has no order — the picture would be a single track beside a spine,
+ * explaining a design decision that has not come up yet. It earns its space from
+ * two upwards, which is also the point at which merging by hand starts being
+ * wrong rather than merely tedious.
+ */
+const trainSessions = computed(() =>
+  sessions.value.filter(s => s.inCurrentProject && s.status !== 'archived'))
+
+const showTrain = computed(() => trainSessions.value.length >= 2)
+
+/**
+ * Which sessions are in their base branch now, for the landing panel.
+ *
+ * Read from git on every sessions fetch, so the panel can prefer what is true
+ * over what an old run concluded — it kept insisting a session with sixteen
+ * commits had never committed anything.
+ */
+const landedSessionIds = computed(() =>
+  sessions.value.filter(s => s.landed).map(s => s.id))
+
+/**
+ * Whether the merge train is the news, rather than a tool sitting at the bottom.
+ *
+ * It normally lives below the sessions — you start work, you see what happened,
+ * then you land what is finished. But while a landing is running or has just
+ * reported, that *is* what is happening on this page, so it hoists above the
+ * composer. Done with flex order rather than two copies of the markup, and it
+ * stays late in the DOM so the reading order is composer, sessions, train
+ * whichever way it is drawn.
+ */
+const landingIsHappening = computed(() => Boolean(landingRun.value) || landing.value)
+
+async function onLand() {
+  confirmingLand.value = false
+  try {
+    await beginLanding()
+    toast.add({
+      title: 'Landing started',
+      description: 'It runs the checks again for each one. You can leave this page.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not start landing', description: errorMessage(e), color: 'error' })
+    // Usually the base checkout: re-reading the plan puts the reason on the
+    // train, where it stays until it is fixed.
+    await refreshLandingPlan()
+  }
+}
+
+const confirmingClose = ref<string | null>(null)
+const closing = ref(false)
+
+async function closeEmpty(key: string, ids: string[]) {
+  closing.value = true
+  try {
+    const result = await $fetch<{ closed: string[]; message: string }>('/api/sessions/close-empty', {
+      method: 'POST',
+      body: { ids },
+    })
+    confirmingClose.value = null
+    await fetchAll()
+    void fetchWorktrees()
+    toast.add({
+      title: result.closed.length ? 'Cleared' : 'Nothing was closed',
+      description: result.message,
+      color: result.closed.length ? 'success' : 'warning',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not close those', description: errorMessage(e), color: 'error' })
+  } finally {
+    closing.value = false
+  }
+}
+
+/**
+ * Switching to the project a row belongs to.
+ *
+ * The list is no longer grouped by repository — a run has no repository to group
+ * under, so grouping by one would have applied to half the rows. Sessions carry
+ * their repo name on the card instead, and this is still how you go there.
+ */
+async function switchTo(path: string) {
+  await activate(path)
+  scope.value = 'here'
+}
+</script>
+
+<template>
+  <div>
+    <PageHeader title="Work">
+      <template #trailing>
+        <!--
+          Only worth a control when there is somewhere else to look. One project
+          means one possible answer, and a toggle with one position is furniture.
+        -->
+        <div
+          v-if="workingDir && elsewhere.length"
+          class="flex items-center gap-0.5 p-0.5 rounded-md"
+          style="background: var(--input-bg); border: 1px solid var(--border-subtle);"
+        >
+          <button
+            v-for="option in [{ value: 'here' as const, label: 'This project' }, { value: 'all' as const, label: 'All projects' }]"
+            :key="option.value"
+            class="px-2 py-0.5 rounded fs-micro font-medium transition-all"
+            :style="{
+              background: scope === option.value ? 'var(--accent-muted)' : 'transparent',
+              color: scope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+            }"
+            @click="scope = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+        <span v-if="allWork.length" class="type-mono-meta">{{ allWork.length }}</span>
+        <SessionStatus
+          v-if="needsYouCount"
+          activity="awaiting-permission"
+          compact
+        />
+      </template>
+    </PageHeader>
+
+    <!--
+      Ordered by what you came to do: start something, see what happened to what
+      is already going, then land the finished ones.
+
+      The merge train used to be first and is nine rows tall, so on a 1512×810
+      window both the box you start work in and every session were below the
+      fold. It sits after the list now, folded, and hoists itself back above the
+      composer only while a landing is actually running — at which point it is
+      the thing that is happening.
+
+      The paragraph explaining what a session is went with it. Permanent
+      onboarding text on a page you open several times a day is a sign the labels
+      are not trusted; "Branches from …, its own workspace, its own branch" is
+      already said under the composer, where it is doing something.
+    -->
+    <div class="page-container page-container--measure py-4 flex flex-col gap-5">
+      <!--
+        Said before the button, not after it. Pressing "Start session" here
+        used to be the first anyone heard that this folder cannot be branched,
+        having just been told it would be — and the repository it needs is
+        usually sitting one directory down.
+      -->
+      <div
+        v-if="notARepo"
+        class="order-1 rounded-lg p-4 space-y-3"
+        style="background: var(--warning-wash); border: 1px solid var(--warning-edge);"
+      >
+        <div class="flex items-start gap-2.5">
+          <UIcon name="i-lucide-folder-git-2" class="size-4 shrink-0 mt-0.5 ink-warn" />
+          <div class="space-y-1">
+            <div class="fs-sm font-medium text-body">
+              <span class="font-mono">{{ displayPath }}</span> is not a git repository
+            </div>
+            <p class="fs-mono leading-relaxed text-label">
+              Sessions work on their own copy of a repository, so there has to be one to copy.
+            </p>
+          </div>
+        </div>
+
+        <div v-if="lookingInside" class="fs-mono text-meta">Looking for one inside…</div>
+
+        <div v-else-if="nestedRepos.length" class="space-y-2">
+          <p class="fs-mono leading-relaxed text-label">
+            {{ nestedRepos.length === 1 ? 'There is one inside' : 'There are some inside' }}.
+            Sessions branch from the repository, and everything around it stays readable —
+            so notes and specs beside it are still there to work from.
+          </p>
+          <div class="flex flex-wrap gap-2">
+            <UButton
+              v-for="repo in nestedRepos"
+              :key="repo.path"
+              :label="`Use ${repo.name}`"
+              icon="i-lucide-corner-down-right"
+              size="xs"
+              :loading="adoptingRepo === repo.path"
+              :disabled="Boolean(adoptingRepo)"
+              @click="useRepoInside(repo.path)"
+            />
+          </div>
+        </div>
+
+        <p v-else class="fs-mono leading-relaxed text-label">
+          Nothing inside it is one either. Pick a repository in the sidebar, or run
+          <span class="font-mono">git init</span> here.
+        </p>
+      </div>
+
+      <!--
+        Shown whether or not it is still going: the result of a landing is a
+        list rather than a sentence, and the half that did not land is the half
+        worth reading.
+      -->
+      <!--
+        The order, before the ending. Kept above the panel rather than instead of
+        it: while a landing runs the train shows which one the minutes are going
+        into, and the panel below carries the list of what each came to.
+      -->
+      <div
+        v-if="(showTrain && workingDir) || landingRun"
+        class="flex flex-col gap-5"
+        :class="landingIsHappening ? 'order-2' : 'order-6'"
+      >
+      <MergeTrain
+        v-if="showTrain && workingDir"
+        collapsible
+        :plan="landingPlan"
+        :sessions="trainSessions"
+        :base-branch="activeProject?.branch || 'your current branch'"
+        :landing="landingRun"
+        :starting="startingLanding"
+        @land="onLand"
+        @recheck="refreshLandingPlan"
+      />
+
+      <!--
+        Above the composer rather than instead of it. It used to take its place,
+        and since the newest run is shown whatever its status and nothing cleared
+        it, one landing removed the way to start a session for good.
+      -->
+      <LandingPanel
+        v-if="landingRun"
+        :run="landingRun"
+        :dismissable="!landing"
+        :landed-ids="landedSessionIds"
+        @dismiss="dismissLanding"
+      />
+      </div>
+
+      <!-- Start a session -->
+      <div v-if="workingDir" class="order-3 space-y-1.5">
+        <!-- One session, told what to do in the same breath -->
+        <template v-if="!batchMode">
+          <div class="flex gap-2 items-start">
+            <textarea
+              v-model="prompt"
+              rows="2"
+              class="field-input flex-1 resize-y"
+              placeholder="What should this session do? Enter to start, Shift+Enter for a new line."
+              :disabled="creating"
+              @keydown="e => { if (isSendKey(e)) { e.preventDefault(); onCreate() } }"
+            />
+            <UButton
+              label="Start session"
+              icon="i-lucide-plus"
+              size="sm"
+              :loading="creating"
+              :disabled="!prompt.trim()"
+              @click="onCreate"
+            />
+          </div>
+          <p class="type-meta">
+            Branches from <span class="font-mono">{{ displayPath }}</span> — its own workspace, its own
+            branch — and starts work straight away.
+            <button class="underline underline-offset-2 hover:text-label" @click="batchMode = true">
+              Start several at once
+            </button>
+          </p>
+
+          <!--
+            Not a warning and not a block. A second go at something that went
+            badly is a normal thing to want; not knowing the first one exists
+            is not.
+          -->
+          <p v-if="duplicateOf" class="type-meta flex items-center gap-1.5 flex-wrap">
+            <UIcon name="i-lucide-copy" class="size-3 shrink-0 ink-warn" />
+            <span style="color: var(--warning);">You already asked for this.</span>
+            <NuxtLink
+              :to="`/sessions/${duplicateOf.session.id}`"
+              class="underline underline-offset-2 hover:text-label"
+            >{{ duplicateOf.session.title }}</NuxtLink>
+            <span>— {{ relativeTime(duplicateOf.session.updatedAt) }}. Starting another is fine.</span>
+          </p>
+        </template>
+
+        <!-- Several sessions, one per line, counted before anything happens -->
+        <template v-else>
+          <textarea
+            v-model="batchText"
+            rows="5"
+            class="field-input w-full resize-y font-mono fs-sm"
+            placeholder="One instruction per line — each becomes its own session:&#10;&#10;Fix the flaky upload test&#10;Update the README for the new install flow&#10;Bump the linter and fix what it finds"
+            :disabled="startingBatch"
+          />
+          <div class="flex items-center gap-2 flex-wrap">
+            <UButton
+              :label="batchPrompts.length
+                ? `Start ${batchPrompts.length} session${batchPrompts.length === 1 ? '' : 's'}`
+                : 'Start sessions'"
+              icon="i-lucide-layers"
+              size="sm"
+              :loading="startingBatch"
+              :disabled="!batchPrompts.length || tooMany"
+              @click="onCreateMany"
+            />
+            <UButton
+              label="Cancel"
+              size="sm"
+              variant="ghost"
+              color="neutral"
+              :disabled="startingBatch"
+              @click="() => { batchMode = false; batchText = '' }"
+            />
+            <span v-if="tooMany" class="type-meta ink-error">
+              {{ batchPrompts.length }} is too many — {{ MAX_AT_ONCE }} at once is the limit.
+              Each one is a full checkout.
+            </span>
+            <span v-else-if="startingBatch" class="type-meta">
+              Cutting a workspace each. They start working as they are made.
+            </span>
+          </div>
+
+          <!--
+            Where it actually happened: a batch of three, then the same three
+            again twenty minutes later, retyped rather than re-run.
+          -->
+          <div v-if="batchDuplicates.length && !startingBatch" class="space-y-1">
+            <p class="type-meta ink-warn">
+              {{ batchDuplicates.length === 1 ? 'One of these' : `${batchDuplicates.length} of these` }}
+              you have already asked for:
+            </p>
+            <p
+              v-for="entry in batchDuplicates"
+              :key="entry.line"
+              class="type-meta flex items-center gap-1.5 flex-wrap pl-3"
+            >
+              <span class="truncate max-w-[22rem]">{{ entry.line }}</span>
+              <span>→</span>
+              <NuxtLink
+                :to="`/sessions/${entry.hit.session.id}`"
+                class="underline underline-offset-2 hover:text-label"
+              >{{ entry.hit.session.title }}</NuxtLink>
+              <span>{{ relativeTime(entry.hit.session.updatedAt) }}</span>
+            </p>
+          </div>
+        </template>
+
+        <!--
+          Chosen here rather than after the fact, because the first turn is the
+          one that does the work. Applies to a batch too: twenty sessions is
+          exactly when you do not want to set this twenty times.
+        -->
+        <div class="flex items-center gap-3 flex-wrap pt-0.5">
+          <div class="pill-picker">
+            <button
+              v-for="choice in TRUST_CHOICES"
+              :key="choice.value"
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': startTrust === choice.value }"
+              :title="choice.hint"
+              @click="chooseTrust(choice.value)"
+            >
+              {{ choice.label }}
+            </button>
+          </div>
+          <span
+            v-if="startTrust === 'full'"
+            class="type-detail flex items-center gap-1.5"
+            style="color: var(--accent);"
+          >
+            <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
+            Runs commands without asking, sandboxed, in its own workspace.
+          </span>
+          <span v-else-if="startTrust === 'readonly'" class="type-meta">
+            It will propose changes rather than make them.
+          </span>
+          <span v-else class="type-meta">
+            Writes files freely; stops to ask before anything riskier.
+          </span>
+        </div>
+
+        <!-- Or start on something that already exists -->
+        <div v-if="!batchMode" class="flex gap-2 pt-1">
+          <!--
+            Open pull requests and recent branches, offered rather than
+            remembered. Free text is kept because the useful paste is often a
+            URL from somebody's message, for a pull request on a fork this
+            checkout has no remote for.
+          -->
+          <RefPicker
+            v-model="existingRef"
+            class="flex-1"
+            input-class="field-input"
+            placeholder="…or pick a pull request or branch, or paste a URL"
+            with-pull-requests
+            :disabled="startingFrom"
+            @enter="onStartFrom"
+          />
+          <UButton
+            label="Work on it"
+            icon="i-lucide-git-pull-request-arrow"
+            size="sm"
+            variant="soft"
+            color="neutral"
+            :loading="startingFrom"
+            :disabled="!existingRef.trim()"
+            @click="onStartFrom"
+          />
+        </div>
+        <p v-if="!batchMode" class="type-meta">
+          Checks the branch out in its own workspace. What you change from there is
+          this session's, shown separately from what the branch already had.
+        </p>
+      </div>
+
+      <div
+        v-else
+        class="rounded-md px-4 py-3 flex items-start gap-3"
+        style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
+      >
+        <UIcon name="i-lucide-folder" class="size-4 shrink-0 mt-0.5 ink-accent" />
+        <span class="type-detail ink-2">
+          Pick a project folder in the sidebar to start a session. Sessions branch from a git repository.
+        </span>
+      </div>
+
+      <!-- Work already started in the terminal, which this can pick up -->
+      <div v-if="workingDir && transcripts.length" class="order-4 space-y-2">
+        <h2 class="text-section-label">Continue from your terminal</h2>
+        <p class="type-meta">
+          Conversations you had with Claude Code here. Continuing one resumes it in a
+          workspace of its own, so what it does next is reviewable before it lands.
+          The workspace is a clean copy of the branch — uncommitted work from the terminal
+          stays where it is.
+        </p>
+        <div
+          v-for="transcript in transcripts.slice(0, 5)"
+          :key="transcript.sdkSessionId"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-md"
+          style="border: 1px dashed var(--border-subtle);"
+        >
+          <UIcon name="i-lucide-terminal" class="size-4 shrink-0 ink-4" />
+          <div class="flex-1 min-w-0">
+            <div class="type-strong truncate text-body">{{ transcript.title }}</div>
+            <div class="type-mono-meta">
+              {{ transcript.turnCount }} turn{{ transcript.turnCount === 1 ? '' : 's' }}
+              · {{ relative(transcript.updatedAt) }}
+            </div>
+          </div>
+          <UButton
+            label="Continue here"
+            size="xs"
+            variant="soft"
+            :loading="adopting === transcript.sdkSessionId"
+            :disabled="Boolean(adopting)"
+            @click="onAdopt(transcript.sdkSessionId)"
+          />
+        </div>
+      </div>
+
+      <div v-if="loading && !sessions.length" class="order-5 space-y-1">
+        <SkeletonRow v-for="i in 3" :key="i" />
+      </div>
+
+      <!--
+        Grouped by repository rather than split into "here" and "everything
+        else". A session that is blocked is blocked whichever project it is in,
+        and the old shape made that answerable only after switching.
+      -->
+      <!--
+        One list of work, sessions and runs together.
+
+        They used to be two pages, split by what *started* the work — which is a
+        distinction the system cares about and nobody else does. What makes the
+        merge possible without flattening either is two layers: the chips filter
+        on the coarse question that is true of both, and each row still says
+        where it got to in its own words. "Ready to land" and "Nothing came of
+        it" are both done, and only a session can be either.
+
+        A row is one piece of work you would act on. Activity listed one row per
+        run, so a four-turn session appeared four times, competing with itself.
+      -->
+      <div class="order-5 space-y-3">
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <button
+            v-for="chip in statusChips"
+            :key="chip.value"
+            class="px-2.5 py-1 rounded-md fs-mono transition-all focus-ring"
+            :style="{
+              background: status === chip.value ? 'var(--accent-muted)' : 'transparent',
+              color: status === chip.value ? 'var(--accent)' : 'var(--text-tertiary)',
+            }"
+            @click="status = status === chip.value ? null : chip.value"
+          >
+            {{ chip.label }}
+            <span class="font-mono fs-micro ml-1 opacity-70">{{ chip.count }}</span>
+          </button>
+
+          <div class="w-px h-4 mx-1 shrink-0" style="background: var(--border-default);" />
+
+          <button
+            v-for="chip in WORK_ORIGIN"
+            :key="chip.value"
+            class="px-2.5 py-1 rounded-md fs-mono transition-all focus-ring flex items-center gap-1.5"
+            :style="{
+              background: origin === chip.value ? 'var(--accent-muted)' : 'transparent',
+              color: origin === chip.value ? 'var(--accent)' : 'var(--text-tertiary)',
+            }"
+            @click="origin = origin === chip.value ? null : chip.value"
+          >
+            <UIcon :name="chip.icon" class="size-3 shrink-0" />
+            {{ chip.label }}
+          </button>
+
+          <span v-if="status || origin" class="ml-auto">
+            <UButton label="Clear" size="xs" variant="ghost" color="neutral" @click="clearFilters" />
+          </span>
+        </div>
+
+        <!--
+          Searching the whole log rather than the page of it that is loaded: the
+          runs half is capped by the server, so the query has to reach it.
+        -->
+        <input
+          v-model="search"
+          class="field-search w-full"
+          placeholder="Search work — what it was called, and what it did…"
+        />
+
+        <!--
+          Offered for everything on screen that came to nothing, rather than one
+          project at a time. One at a time is the tax that makes people stop
+          clearing up at all.
+        -->
+        <div v-if="emptySessionIds.length" class="flex items-center gap-2">
+          <span class="type-meta flex-1">
+            {{ emptySessionIds.length }} of these left no changes behind.
+          </span>
+          <template v-if="confirmingClose">
+            <span class="fs-mono text-label">
+              Close {{ emptySessionIds.length }} and delete their branches?
+            </span>
+            <UButton
+              label="Close them"
+              size="xs"
+              color="error"
+              :loading="closing"
+              @click="closeEmpty('visible', emptySessionIds)"
+            />
+            <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="() => { confirmingClose = null }" />
+          </template>
+          <UButton
+            v-else
+            label="Close these"
+            icon="i-lucide-trash-2"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            @click="() => { confirmingClose = 'visible' }"
+          />
+        </div>
+
+        <div v-if="work.length" class="space-y-2">
+          <template v-for="item in work" :key="item.key">
+            <SessionCard
+              v-if="sessionFor(item)"
+              :session="sessionFor(item)!"
+              :repo-name="scope === 'here' ? null : nameFor(sessionFor(item)!.repoDir)"
+            />
+            <RunCard v-else :item="item" />
+          </template>
+        </div>
+
+        <EmptyState
+          v-else-if="hasFilters"
+          icon="i-lucide-search-x"
+          title="Nothing matches those filters"
+          description="Widen them, or clear them to see everything again."
+          action-label="Clear filters"
+          @action="clearFilters"
+        />
+      </div>
+
+
+      <EmptyState
+        v-if="workingDir && !work.length && !hasFilters && !loading"
+        class="order-5"
+        icon="i-lucide-git-branch"
+        :title="scope === 'here' ? 'Nothing has run in this project' : 'Nothing has run yet'"
+        description="Start a session above to give Claude its own copy of this project. Rituals and commands you run turn up here too, alongside it."
+      />
+
+      <!--
+        The way back to work happening somewhere else. Only worth saying when
+        the current view is hiding some of it.
+      -->
+      <button
+        v-if="scope === 'here' && elsewhere.length"
+        class="order-7 w-full flex items-center gap-2 px-3 py-2.5 rounded-md hover-row focus-ring"
+        style="border: 1px dashed var(--border-subtle);"
+        @click="scope = 'all'"
+      >
+        <UIcon name="i-lucide-folders" class="size-3.5 shrink-0 text-meta" />
+        <span class="type-detail">
+          {{ elsewhere.length }} session{{ elsewhere.length === 1 ? '' : 's' }} in other projects
+        </span>
+        <span
+          v-if="elsewhereNeedsYou"
+          class="type-meta"
+          style="color: var(--error);"
+        >{{ elsewhereNeedsYou }} needing you</span>
+        <span class="ml-auto type-meta ink-accent">Show</span>
+      </button>
+
+      <!-- Always visible, so worktrees never accumulate unnoticed -->
+      <WorktreePanel class="order-8" />
+    </div>
+  </div>
+</template>

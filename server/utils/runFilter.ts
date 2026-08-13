@@ -32,6 +32,16 @@ export interface RunFilter {
   q?: string
   outcome?: RunOutcomeFilter
   source?: RunSource
+  /**
+   * Sources to leave out, applied before the limit.
+   *
+   * Work lists a session as one row however many turns it took, so it discards
+   * runs a session owns — and on a real machine 49 of the 50 most recent runs
+   * were exactly those. Filtering them out here rather than in the page is the
+   * difference between the cap being spent on rows that appear and a ritual run
+   * from yesterday being invisible behind fifty turns of one session.
+   */
+  exclude?: RunSource[]
 }
 
 /** What set this run going, which is the thing people remember about it. */
@@ -68,7 +78,9 @@ function matchesQuery(run: FilterableRun, query: string): boolean {
 }
 
 export function matchesFilter(run: FilterableRun, filter: RunFilter): boolean {
-  if (filter.source && sourceOf(run) !== filter.source) return false
+  const source = sourceOf(run)
+  if (filter.source && source !== filter.source) return false
+  if (filter.exclude?.includes(source)) return false
   if (filter.outcome && !matchesOutcome(run, filter.outcome)) return false
 
   const query = filter.q?.trim().toLowerCase()

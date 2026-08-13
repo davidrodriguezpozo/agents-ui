@@ -1,0 +1,208 @@
+import type { RunSummary } from '~/composables/useRuns'
+import type { Session } from '~/composables/useSessions'
+import { outcomeOf } from '~/utils/sessionOutcome'
+
+/**
+ * Sessions and runs as one list of work.
+ *
+ * The reason this is harder than it looks, written down because it is the whole
+ * design: a session's states are about *what you do with the changes* — it needs
+ * you, it is ready to land, nothing came of it — and a run's are about *whether
+ * it happened*. Forced into one enum, half the values are meaningless on half
+ * the rows, and the loser is the sessions list.
+ *
+ * So there are two layers instead of one. `status` is the coarse question that
+ * is genuinely true of both and is what the filters offer. `outcome` is a
+ * sentence in the row's own vocabulary, and nothing filters on it — "Ready to
+ * land" and "Nothing came of it" are both *done*, and only a session can be
+ * either.
+ *
+ * The other half of the job is what a row *is*. Activity listed one row per run,
+ * so a four-turn session appeared four times, competing with itself. A row here
+ * is one piece of work you would act on: a session however many turns it took,
+ * or a run that no session owns.
+ */
+
+export type WorkOrigin = 'session' | 'ritual' | 'agent' | 'command'
+
+/** The coarse question, and the only thing worth filtering on. */
+export type WorkStatus = 'running' | 'needs-you' | 'done' | 'failed'
+
+export interface WorkItem {
+  key: string
+  origin: WorkOrigin
+  status: WorkStatus
+  title: string
+  /** Where it got to, in the words its own kind uses. Never filtered on. */
+  outcome: string
+  /** The quiet line: a branch, an invocation, what it did. */
+  detail?: string
+  to: string
+  at: number
+  costUsd?: number
+  durationMs?: number
+  /** Sessions only: work sitting in a workspace, waiting on a decision. */
+  changedFiles?: number
+  turnCount?: number
+}
+
+export const WORK_STATUS: { value: WorkStatus; label: string }[] = [
+  { value: 'running', label: 'running' },
+  { value: 'needs-you', label: 'needs you' },
+  { value: 'done', label: 'done' },
+  { value: 'failed', label: 'failed' },
+]
+
+export const WORK_ORIGIN: { value: WorkOrigin; label: string; icon: string }[] = [
+  { value: 'session', label: 'yours', icon: 'i-lucide-git-branch' },
+  { value: 'ritual', label: 'rituals', icon: 'i-lucide-alarm-clock' },
+  { value: 'agent', label: 'agents', icon: 'i-lucide-bot' },
+  { value: 'command', label: 'commands', icon: 'i-lucide-terminal' },
+]
+
+export const STATUS_LOOK: Record<WorkStatus, { icon: string; colour: string }> = {
+  running: { icon: 'i-lucide-loader-2', colour: 'var(--accent)' },
+  'needs-you': { icon: 'i-lucide-hand', colour: 'var(--warning)' },
+  done: { icon: 'i-lucide-check', colour: 'var(--success)' },
+  failed: { icon: 'i-lucide-x', colour: 'var(--error)' },
+}
+
+/** A session, in its own words. `outcomeOf` already decides the hard part. */
+export function fromSession(session: Session): WorkItem {
+  const outcome = outcomeOf(session)
+
+  const [status, label]: [WorkStatus, string] = (() => {
+    switch (outcome) {
+      case 'working':
+        return ['running', 'Working']
+      case 'needs-you':
+        if (session.activity === 'awaiting-permission') return ['needs-you', 'Waiting for permission']
+        if (session.activity === 'failed') return ['failed', 'Its last turn failed']
+        // Finished, and does not work — which is not the same as failing to run.
+        return ['needs-you', 'Checks fail']
+      case 'ready':
+        return ['done', session.landed ? 'Merged' : 'Ready to land']
+      case 'gone':
+        return ['done', 'Workspace gone']
+      default:
+        return ['done', 'Nothing came of it']
+    }
+  })()
+
+  return {
+    key: `session:${session.id}`,
+    origin: 'session',
+    status,
+    title: session.title,
+    outcome: label,
+    detail: session.summary?.text ?? session.branch,
+    to: `/sessions/${session.id}`,
+    at: session.updatedAt,
+    changedFiles: session.worktree?.changedFiles,
+    turnCount: session.turnCount,
+  }
+}
+
+/** A run, in its own. */
+export function fromRun(run: RunSummary): WorkItem {
+  const [status, label]: [WorkStatus, string] = (() => {
+    if (run.status === 'queued') return ['running', 'Waiting its turn']
+    if (run.status === 'running') return ['running', 'Running']
+
+    // A run that used up its turns or its budget did not need anything from
+    // you — it needed more room. Saying "needed you" of it is the badge lying,
+    // and it is not a failure either.
+    if (run.stoppedBy === 'turns') return ['needs-you', 'Ran out of turns']
+    if (run.stoppedBy === 'budget') return ['needs-you', 'Reached the spending limit']
+
+    if (run.needsAttention || run.deniedTools?.length) return ['needs-you', 'Needed you']
+    if (run.status === 'failed') return ['failed', 'Failed']
+    if (run.status === 'cancelled') return ['done', 'Stopped by you']
+    return ['done', 'Completed']
+  })()
+
+  return {
+    key: `run:${run.id}`,
+    // 'session' is filtered out before this is ever called, so the fallback is
+    // only here to keep the type honest.
+    origin: (run.source === 'session' ? 'agent' : run.source) as WorkOrigin,
+    status,
+    title: run.title,
+    outcome: label,
+    detail: run.invocation ?? run.error ?? run.preview,
+    to: `/runs/${run.id}`,
+    at: run.completedAt ?? run.startedAt ?? run.createdAt,
+    costUsd: run.costUsd,
+    durationMs: run.durationMs,
+  }
+}
+
+export interface WorkInput {
+  sessions: Session[]
+  /**
+   * Runs as the server returned them, already filtered and capped there.
+   *
+   * Runs whose source is a session are dropped: that session is its own row, and
+   * listing its turns beside it is how a four-turn session came to appear four
+   * times in Activity, competing with itself for your attention.
+   */
+  runs: RunSummary[]
+}
+
+export interface WorkFilters {
+  status?: WorkStatus | null
+  origin?: WorkOrigin | null
+  /** Matched against sessions here; the server has already matched the runs. */
+  query?: string
+}
+
+export function buildWorkList({ sessions, runs }: WorkInput, filters: WorkFilters = {}): WorkItem[] {
+  const q = (filters.query ?? '').trim().toLowerCase()
+
+  const items: WorkItem[] = []
+
+  for (const session of sessions) {
+    if (session.status === 'archived') continue
+    const item = fromSession(session)
+    // Sessions are all here, so they are searched here. Runs arrive already
+    // narrowed by the server, because that list is capped and searching one
+    // page of it would only search that page.
+    if (q && !`${item.title} ${item.detail ?? ''}`.toLowerCase().includes(q)) continue
+    items.push(item)
+  }
+
+  for (const run of runs) {
+    if (run.source === 'session') continue
+    items.push(fromRun(run))
+  }
+
+  return items
+    .filter(item => !filters.status || item.status === filters.status)
+    .filter(item => !filters.origin || item.origin === filters.origin)
+    .sort(byUrgencyThenRecency)
+}
+
+/**
+ * What is stuck, then what is happening, then everything else newest first.
+ *
+ * Recency alone buries a session that has been blocked since 02:00 under
+ * whatever ran most recently, which is how the old list managed to hide the one
+ * row that wanted something.
+ */
+const STATUS_RANK: Record<WorkStatus, number> = {
+  'needs-you': 0,
+  failed: 1,
+  running: 2,
+  done: 3,
+}
+
+export function byUrgencyThenRecency(a: WorkItem, b: WorkItem): number {
+  return STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.at - a.at
+}
+
+/** How many of each status the unfiltered list holds, for the filter chips. */
+export function statusCounts(items: WorkItem[]): Record<WorkStatus, number> {
+  const counts: Record<WorkStatus, number> = { running: 0, 'needs-you': 0, done: 0, failed: 0 }
+  for (const item of items) counts[item.status]++
+  return counts
+}

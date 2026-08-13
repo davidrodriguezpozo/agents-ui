@@ -136,8 +136,16 @@ describe('simple mode', () => {
 
   it('still reaches everything simple mode does show', () => {
     const items = flattenPalette(buildPalette(source({ isSimple: true }), ''))
-    for (const path of ['/', '/sessions', '/pulls', '/schedules', '/runs', '/library', '/settings']) {
+    // /sessions and /runs became one destination when Work merged them.
+    for (const path of ['/', '/work', '/pulls', '/schedules', '/library', '/settings']) {
       expect(items.some(i => i.to === path), `should reach ${path}`).toBe(true)
+    }
+  })
+
+  it('finds Work by either of the words it used to be called', () => {
+    for (const term of ['sessions', 'activity', 'runs']) {
+      const items = flattenPalette(buildPalette(source(), term))
+      expect(items.some(i => i.to === '/work'), `"${term}" should find Work`).toBe(true)
     }
   })
 })

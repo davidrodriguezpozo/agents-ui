@@ -61,10 +61,9 @@ export interface PaletteSource {
 function navigation(isSimple: boolean): PaletteItem[] {
   const items: PaletteItem[] = [
     { key: 'go:now', kind: 'goto', label: 'Now', icon: 'i-lucide-target', to: '/', keywords: 'home dashboard needs you' },
-    { key: 'go:sessions', kind: 'goto', label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions', keywords: 'work branches worktrees' },
+    { key: 'go:work', kind: 'goto', label: 'Work', icon: 'i-lucide-git-branch', to: '/work', keywords: 'sessions activity runs branches worktrees history log' },
     { key: 'go:reviews', kind: 'goto', label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls', keywords: 'pull requests pr' },
     { key: 'go:daily', kind: 'goto', label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules', keywords: 'rituals schedule cron' },
-    { key: 'go:activity', kind: 'goto', label: 'Activity', icon: 'i-lucide-activity', to: '/runs', keywords: 'runs history log' },
     { key: 'go:library', kind: 'goto', label: 'Library', icon: 'i-lucide-library', to: '/library', keywords: 'agents commands skills' },
     { key: 'go:settings', kind: 'goto', label: 'Settings', icon: 'i-lucide-settings', to: '/settings', keywords: 'preferences limits sandbox backups' },
   ]
@@ -92,7 +91,7 @@ function actions(source: PaletteSource): PaletteItem[] {
       label: 'Start a session',
       hint: 'Give Claude its own copy of this project',
       icon: 'i-lucide-plus',
-      to: '/sessions',
+      to: '/work',
       keywords: 'new work branch',
     },
     {

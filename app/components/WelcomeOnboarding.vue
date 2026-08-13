@@ -47,7 +47,7 @@ const starts = [
     cta: 'Write a ritual',
   },
   {
-    to: '/sessions',
+    to: '/work',
     icon: 'i-lucide-git-branch',
     title: 'Start a session',
     body: 'Say what you want done. It gets its own branch and checkout, runs your tests when it is finished, and will not merge if they fail.',

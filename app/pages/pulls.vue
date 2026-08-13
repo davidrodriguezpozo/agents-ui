@@ -224,7 +224,7 @@ async function confirmMerge(pull: Pull) {
               ? `No open pull request in ${reading.repo} is yours or waiting on your review. When one is, it turns up here — and one press starts a session on it.`
               : 'No open pull request here is yours or waiting on your review.'"
             action-label="See your sessions"
-            action-to="/sessions"
+            action-to="/work"
           />
         </template>
       </template>
