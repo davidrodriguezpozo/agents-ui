@@ -127,7 +127,7 @@ useUnsavedChanges(isDirty)
   <div>
     <PageHeader :title="command?.frontmatter.name || slug">
       <template #leading>
-        <NuxtLink to="/commands" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to commands">
+        <NuxtLink :to="{ path: '/library', query: { type: 'commands' } }" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to the library">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
         </NuxtLink>
       </template>

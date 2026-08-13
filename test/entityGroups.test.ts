@@ -98,3 +98,37 @@ describe('filterGroups', () => {
     expect(filterGroups(sparse, 'only', text)).toHaveLength(1)
   })
 })
+
+describe('filterGroups with fields that are not strings', () => {
+  /**
+   * Every field these searches look through comes from YAML frontmatter, so the
+   * types describing them are a hope rather than a guarantee. This function is
+   * shared by four lists, so hardening it here fixes the same latent crash in
+   * all of them.
+   */
+  const groups = groupByOrigin<Thing & { hint?: unknown }>([
+    { name: 'with-list', hint: ['--since YYYY-MM-DD'] },
+    { name: 'with-number', hint: 42 },
+    { name: 'with-object', hint: { nested: true } },
+    { name: 'with-null', hint: null },
+  ])
+  const text = (t: Thing & { hint?: unknown }) => [t.name, t.hint]
+
+  it('searches inside a list-valued field', () => {
+    const result = filterGroups(groups, 'since', text)
+    expect(result.flatMap(g => g.items).map(i => i.name)).toEqual(['with-list'])
+  })
+
+  it('searches a numeric field by its digits', () => {
+    expect(filterGroups(groups, '42', text).flatMap(g => g.items).map(i => i.name)).toEqual(['with-number'])
+  })
+
+  it('ignores a field it cannot read rather than throwing', () => {
+    expect(() => filterGroups(groups, 'nested', text)).not.toThrow()
+    expect(filterGroups(groups, 'nested', text)).toEqual([])
+  })
+
+  it('still matches on the fields it can read when a sibling is unreadable', () => {
+    expect(filterGroups(groups, 'with-object', text).flatMap(g => g.items)).toHaveLength(1)
+  })
+})

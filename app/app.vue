@@ -123,7 +123,10 @@ const navLinks = computed(() => isSimple.value
       { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
-      { label: 'My skills', icon: 'i-lucide-sparkles', to: '/skills' },
+      // Was "My skills", which stopped being true when the Library merged
+      // agents and commands in beside them. Its Personal group is first and
+      // open, so what you wrote is still the first thing on the screen.
+      { label: 'Library', icon: 'i-lucide-library', to: '/library' },
     ]
   : [
       { label: 'Now', icon: 'i-lucide-target', to: '/' },
@@ -131,10 +134,9 @@ const navLinks = computed(() => isSimple.value
       { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       { label: 'Activity', icon: 'i-lucide-activity', to: '/runs' },
-      { label: 'Agents', icon: 'i-lucide-cpu', to: '/agents' },
+      // Agents, commands and skills were three nav items for one question.
+      { label: 'Library', icon: 'i-lucide-library', to: '/library' },
       { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },
-      { label: 'Commands', icon: 'i-lucide-terminal', to: '/commands' },
-      { label: 'Skills', icon: 'i-lucide-sparkles', to: '/skills' },
       { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
       { label: 'MCP', icon: 'i-lucide-plug', to: '/mcp' },
     ]
@@ -196,13 +198,20 @@ function attentionFor(to: string) {
 
 function badgeFor(to: string) {
   if (isSimple.value) {
-    // "My skills" means the ones this person owns — plugin skills aren't theirs.
-    if (to !== '/skills') return null
-    return skills.value.filter(s => s.source !== 'plugin' && s.source !== 'github').length || null
+    // Simple mode counts what this person owns — somebody else's plugin brought
+    // 137 skills, and none of them are an answer to "how much have I made".
+    if (to !== '/library') return null
+    const mine = (item: { source?: string }) => item.source !== 'plugin' && item.source !== 'github'
+    return (
+      agents.value.filter(mine).length
+      + commands.value.filter(mine).length
+      + skills.value.filter(mine).length
+    ) || null
   }
-  if (to === '/agents') return agents.value.length || null
-  if (to === '/commands') return commands.value.length || null
-  if (to === '/skills') return skills.value.length || null
+  // One count for the three things the Library now holds.
+  if (to === '/library') {
+    return (agents.value.length + commands.value.length + skills.value.length) || null
+  }
   if (to === '/plugins') return plugins.value.length || null
   if (to === '/workflows') return workflows.value.length || null
   return null

@@ -197,7 +197,7 @@ const agentOptions = computed(() =>
   <div>
     <PageHeader :title="skill?.frontmatter.name || slug">
       <template #leading>
-        <NuxtLink to="/skills" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to skills">
+        <NuxtLink :to="{ path: '/library', query: { type: 'skills' } }" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to the library">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
         </NuxtLink>
       </template>

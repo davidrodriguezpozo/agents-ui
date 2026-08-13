@@ -1,4 +1,4 @@
-<script setup lang="ts" generic="T extends { slug: string }">
+<script setup lang="ts" generic="T extends { slug: string; key?: string }">
 import type { OriginGroup, GroupKind } from '~/utils/entityGroups'
 import { initiallyCollapsed } from '~/utils/entityGroups'
 
@@ -14,6 +14,17 @@ const props = defineProps<{
   groups: OriginGroup<T>[]
   /** Builds the href for a group's "View plugin" link. Omit to hide it. */
   pluginRoute?: (pluginId: string) => string
+  /**
+   * Show every group open regardless of its collapse state, for while a search
+   * is narrowing the list.
+   *
+   * Without this, searching worked and looked like it had not: a query that cut
+   * `posthog` from 141 matches to 2 left both of them behind a fold, because the
+   * group had been collapsed on arrival when it was still 141. The search is
+   * already the filter; hiding its results defeats it. The user's own collapse
+   * state is untouched and comes back when the query clears.
+   */
+  openWhileFiltering?: boolean
 }>()
 
 /**
@@ -36,6 +47,11 @@ function toggle(key: string) {
   collapsed.value[key] = !collapsed.value[key]
 }
 
+/** A search overrides a fold; nothing else does. */
+function isOpen(key: string) {
+  return props.openWhileFiltering || !collapsed.value[key]
+}
+
 /** A single group of your own things is the whole page; a header for it is noise. */
 const showHeaders = computed(() =>
   props.groups.length > 1 || props.groups[0]?.kind === 'plugin',
@@ -55,11 +71,11 @@ function iconColour(kind: GroupKind) {
       <div v-if="showHeaders" class="flex items-center gap-2">
         <button
           class="flex items-center gap-2 flex-1 text-left py-2.5 px-3 -mx-2 rounded-md hover-bg focus-ring"
-          :aria-expanded="!collapsed[group.key]"
+          :aria-expanded="isOpen(group.key)"
           @click="toggle(group.key)"
         >
           <UIcon
-            :name="collapsed[group.key] ? 'i-lucide-chevron-right' : 'i-lucide-chevron-down'"
+            :name="isOpen(group.key) ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
             class="size-3.5 text-meta"
           />
           <UIcon :name="group.icon" class="size-3.5" :style="{ color: iconColour(group.kind) }" />
@@ -77,12 +93,17 @@ function iconColour(kind: GroupKind) {
       </div>
 
       <div
-        v-if="!collapsed[group.key]"
+        v-if="isOpen(group.key)"
         class="space-y-px"
         :class="showHeaders ? 'ml-5 border-l pl-3' : ''"
         :style="showHeaders ? 'border-color: var(--border-subtle);' : ''"
       >
-        <template v-for="item in group.items" :key="item.slug">
+        <!--
+          `key` before `slug`, because the merged Library holds three types and a
+          command may share a slug with a skill — many skills are also exposed as
+          slash commands.
+        -->
+        <template v-for="item in group.items" :key="item.key ?? item.slug">
           <slot name="row" :item="item" />
         </template>
       </div>

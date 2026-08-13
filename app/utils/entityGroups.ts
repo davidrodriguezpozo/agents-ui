@@ -90,16 +90,34 @@ export function initiallyCollapsed<T>(groups: OriginGroup<T>[]): Record<string, 
 }
 
 /**
+ * Anything a search should look through, as a string it can be searched in.
+ *
+ * The fields these come from are YAML frontmatter, and the types that describe
+ * them are a hope rather than a guarantee. `argument-hint: [--since YYYY-MM-DD]`
+ * is valid authoring — Claude Code's own docs show the flow-sequence form — and
+ * it arrives as an array against a type that says `string`. Calling
+ * `.toLowerCase()` on it threw, and because the throw happened inside a
+ * `computed`, the list silently stopped filtering rather than failing loudly.
+ */
+function asSearchable(field: unknown): string {
+  if (typeof field === 'string') return field
+  if (field == null) return ''
+  if (Array.isArray(field)) return field.map(asSearchable).join(' ')
+  if (typeof field === 'number' || typeof field === 'boolean') return String(field)
+  return ''
+}
+
+/**
  * Filter groups by a search term, dropping any that end up empty.
  *
- * `text` returns the searchable strings for one item, so each page decides
- * what counts — a command's invocation, a skill's linked agent — without this
- * needing to know any of their shapes.
+ * `text` returns the searchable fields for one item, so each page decides what
+ * counts — a command's invocation, a skill's linked agent — without this needing
+ * to know any of their shapes.
  */
 export function filterGroups<T>(
   groups: OriginGroup<T>[],
   query: string,
-  text: (item: T) => (string | undefined)[],
+  text: (item: T) => unknown[],
 ): OriginGroup<T>[] {
   const q = query.trim().toLowerCase()
   if (!q) return groups
@@ -108,7 +126,7 @@ export function filterGroups<T>(
     .map(group => ({
       ...group,
       items: group.items.filter(item =>
-        text(item).some(field => field?.toLowerCase().includes(q)),
+        text(item).some(field => asSearchable(field).toLowerCase().includes(q)),
       ),
     }))
     .filter(group => group.items.length > 0)

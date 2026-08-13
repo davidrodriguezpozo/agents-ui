@@ -120,7 +120,7 @@ useUnsavedChanges(isDirty)
   <div class="h-screen flex flex-col">
     <PageHeader bleed :title="frontmatter.name || 'Agent'">
       <template #leading>
-        <NuxtLink to="/agents" class="p-1 -ml-1 rounded-md hover-bg ink-3">
+        <NuxtLink :to="{ path: '/library', query: { type: 'agents' } }" class="p-1 -ml-1 rounded-md hover-bg ink-3">
           <UIcon name="i-lucide-arrow-left" class="size-4" />
         </NuxtLink>
         <div class="size-2.5 rounded-full shrink-0" :style="{ background: frontmatter.color || 'var(--accent)' }" />
