@@ -8,6 +8,7 @@ const { fetchAll: fetchPlugins, plugins } = usePlugins()
 const { fetchAll: fetchSkills, skills } = useSkills()
 const { fetchAll: fetchWorkflows, workflows } = useWorkflows()
 const { fetchAll: fetchSessions } = useSessions()
+const { sources: inboxSources, load: loadInbox } = useInbox()
 
 const initialized = ref(false)
 const showSearch = ref(false)
@@ -42,6 +43,8 @@ async function refreshAll() {
   await Promise.all([
     fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), fetchWorkflows(),
     fetchSessions(),
+    // A file read, so it is free — and the badge cannot count what it has not read.
+    loadInbox(),
   ])
 }
 
@@ -105,8 +108,15 @@ const { summary: pullSummary, watchContinuously: watchPulls, stopWatching: stopW
  * shows, reviews included. It used to omit reviews, so a morning whose only
  * problem was three pull requests waiting on you looked quiet from the tab bar.
  */
+const inboxWaiting = computed(() =>
+  inboxSources.value.reduce((n, source) => n + source.items.length, 0),
+)
+
 const stuckTotal = computed(() =>
-  attention.value.blocked + attention.value.failingRituals + pullSummary.value.onYou,
+  attention.value.blocked
+  + attention.value.failingRituals
+  + pullSummary.value.onYou
+  + inboxWaiting.value,
 )
 
 useHead({
@@ -185,12 +195,18 @@ function isActive(to: string) {
  *
  * Red when something is stuck, accent when work is merely in flight: the second
  * is not news, it is just not finished.
+ *
+ * It counts `stuckTotal`, which is the same set of inputs the queue builds from —
+ * blocked sessions, broken rituals, pull requests on you, and whatever the inbox
+ * sources last found. That is deliberate and has bitten twice: a badge reading
+ * "3" over a screen listing eleven things is worse than no badge, and both times
+ * the cause was the badge counting from one place and the view from another.
  */
 function attentionFor(to: string) {
   if (to !== '/') return null
 
-  const { blocked, working, failingRituals } = attention.value
-  const stuck = blocked + failingRituals + pullSummary.value.onYou
+  const { working } = attention.value
+  const stuck = stuckTotal.value
 
   if (stuck) {
     return {

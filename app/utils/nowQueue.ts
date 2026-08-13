@@ -1,6 +1,7 @@
 import type { Digest } from '~/composables/useDigest'
 import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
 import type { AttentionItem } from '~/composables/useAttention'
+import type { InboxItem, InboxSourceReading } from '~/composables/useInbox'
 
 /**
  * One queue of everything that will not move until you do something.
@@ -20,6 +21,7 @@ export type NowKind =
   | 'stopped-ritual'
   | 'failing-ritual'
   | 'review'
+  | 'inbox'
   | 'ready-session'
   | 'missed-ritual'
 
@@ -37,17 +39,22 @@ const URGENCY: Record<NowKind, number> = {
   'stopped-ritual': 1,
   'failing-ritual': 2,
   review: 3,
-  'ready-session': 4,
-  'missed-ritual': 5,
+  // A ticket with your name on it is somebody's expectation of you, like a
+  // review — but nobody is blocked on it this minute, so it sits below one.
+  inbox: 4,
+  'ready-session': 5,
+  'missed-ritual': 6,
 }
 
 export interface NowAction {
   /** What the button says. A control says exactly what happens. */
   label: string
-  kind: 'allow-rules' | 'work-on-pull'
-  /** Schedule id for `allow-rules`, pull number for `work-on-pull`. */
+  kind: 'allow-rules' | 'work-on-pull' | 'work-on-inbox'
+  /** Schedule id, pull number, or the URL of the thing to pick up. */
   target: string | number
   rules?: string[]
+  /** For `work-on-inbox`: what the session should be told to do. */
+  prompt?: string
 }
 
 export interface NowItem {
@@ -108,6 +115,33 @@ function pullItem(pull: Pull): NowItem {
   }
 }
 
+/**
+ * A ticket assigned to you, as a row that can become a session.
+ *
+ * This is the point of having an inbox at all rather than a dashboard: every
+ * other aggregator ends at "here is your notification". The action turns the
+ * row into Claude working on it, in its own checkout, which is the one thing
+ * this app can do that a notification list cannot.
+ */
+function inboxRow(source: InboxSourceReading, item: InboxItem): NowItem {
+  return {
+    key: `inbox:${source.key}:${item.id}`,
+    kind: 'inbox',
+    urgency: URGENCY.inbox,
+    title: item.title,
+    because: item.why,
+    href: item.url,
+    action: {
+      label: 'Work on it',
+      kind: 'work-on-inbox',
+      target: item.url,
+      prompt: `Pick up this ${source.label} item and do the work it describes: ${item.url}\n\n`
+        + `Context on why it is waiting: ${item.why}\n\n`
+        + 'Read it first, then say what you plan to do before changing anything.',
+    },
+  }
+}
+
 export interface NowInput {
   /**
    * Current state: blocked sessions and broken rituals, as they are right now.
@@ -130,6 +164,11 @@ export interface NowInput {
    * counted in the sidebar.
    */
   digest: Digest | null
+  /**
+   * What each inbox source last found. Read from a file, so this costs nothing —
+   * finding them is a job that runs on its own, not a request this makes.
+   */
+  inbox?: InboxSourceReading[]
 }
 
 /**
@@ -139,7 +178,7 @@ export interface NowInput {
  * been blocked longer than one blocked ten minutes ago, and the longer it has
  * been stuck the more likely it is the reason your morning is not going well.
  */
-export function buildNowQueue({ attention, pulls, digest }: NowInput): NowItem[] {
+export function buildNowQueue({ attention, pulls, digest, inbox }: NowInput): NowItem[] {
   const items: NowItem[] = []
 
   // Current state first, and the only source for these two kinds.
@@ -236,6 +275,10 @@ export function buildNowQueue({ attention, pulls, digest }: NowInput): NowItem[]
     }
   }
 
+  for (const source of inbox ?? []) {
+    for (const item of source.items) items.push(inboxRow(source, item))
+  }
+
   for (const pull of pulls) {
     // The server's judgement of whether this moves without you. A draft never
     // is, and it already says so.
@@ -255,5 +298,6 @@ export const NOW_LOOK: Record<NowKind, { icon: string; colour: string }> = {
   'failing-ritual': { icon: 'i-lucide-circle-alert', colour: 'var(--warning)' },
   review: { icon: 'i-lucide-git-pull-request', colour: 'var(--info)' },
   'ready-session': { icon: 'i-lucide-circle-check', colour: 'var(--success)' },
+  inbox: { icon: 'i-lucide-inbox', colour: 'var(--plugin)' },
   'missed-ritual': { icon: 'i-lucide-clock-alert', colour: 'var(--text-tertiary)' },
 }

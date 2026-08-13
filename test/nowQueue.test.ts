@@ -285,3 +285,59 @@ describe('buildNowQueue items', () => {
     expect(new Set(keys).size).toBe(keys.length)
   })
 })
+
+describe('work waiting elsewhere', () => {
+  const source = (over = {}) => ({
+    key: 'notion', label: 'Notion', requires: 'notion', icon: 'i-lucide-file-text',
+    items: [{ id: 'https://n/1', title: 'Bank reconciliation', url: 'https://n/1', why: 'Assigned to you, still open.' }],
+    ...over,
+  })
+
+  it('ranks a ticket below a review and above work waiting to land', () => {
+    // Somebody's expectation of you, like a review — but nobody is blocked on it
+    // this minute, so a person waiting outranks it.
+    const items = buildNowQueue({
+      attention: [],
+      pulls: [pull()],
+      digest: digest({ sessions: [{ id: 'r', title: 'ready', behindBase: false, state: 'ready' }] }),
+      inbox: [source()],
+    })
+    expect(kinds(items)).toEqual(['review', 'inbox', 'ready-session'])
+  })
+
+  it('shows the reason the source gave, verbatim', () => {
+    const [item] = buildNowQueue({ attention: [], pulls: [], digest: null, inbox: [source()] })
+    expect(item!.because).toBe('Assigned to you, still open.')
+    expect(item!.href).toBe('https://n/1')
+  })
+
+  it('offers to turn it into a session, which is the point of an inbox', () => {
+    // Every other aggregator ends at "here is your notification".
+    const [item] = buildNowQueue({ attention: [], pulls: [], digest: null, inbox: [source()] })
+    expect(item!.action?.kind).toBe('work-on-inbox')
+    expect(item!.action?.label).toBe('Work on it')
+    expect(item!.action?.prompt).toContain('https://n/1')
+    expect(item!.action?.prompt).toContain('Assigned to you, still open.')
+  })
+
+  it('keys rows by source and item, so two sources cannot collide', () => {
+    const items = buildNowQueue({
+      attention: [], pulls: [], digest: null,
+      inbox: [source(), source({ key: 'slack', label: 'Slack' })],
+    })
+    expect(new Set(items.map(i => i.key)).size).toBe(2)
+  })
+
+  it('is absent entirely when no source has been asked yet', () => {
+    expect(buildNowQueue({ attention: [], pulls: [], digest: null })).toEqual([])
+    expect(buildNowQueue({ attention: [], pulls: [], digest: null, inbox: [] })).toEqual([])
+  })
+
+  it('shows nothing for a source that ran and found nothing', () => {
+    const items = buildNowQueue({
+      attention: [], pulls: [], digest: null,
+      inbox: [source({ items: [], checkedAt: 123 })],
+    })
+    expect(items).toEqual([])
+  })
+})

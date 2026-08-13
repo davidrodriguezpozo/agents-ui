@@ -19,10 +19,15 @@ const { digest, loading: digestLoading, load: loadDigest } = useDigest()
 const { all: pulls, loading: pullsLoading, work } = useGithubPulls()
 const { attention, refresh: refreshAttention } = useAttention()
 const { allowRules } = useSchedules()
+const { sources: inboxSources, refreshing, load: loadInbox, refresh: refreshInbox } = useInbox()
+const { create: createSession } = useSessions()
 const router = useRouter()
 const toast = useToast()
 
-onMounted(() => { if (!digest.value) void loadDigest() })
+onMounted(() => {
+  if (!digest.value) void loadDigest()
+  void loadInbox()
+})
 
 /** Resolved locally so a row disappears the moment you deal with it. */
 const settled = ref<Set<string>>(new Set())
@@ -33,10 +38,25 @@ const items = computed(() =>
     attention: attention.value.items,
     pulls: pulls.value,
     digest: digest.value,
+    inbox: inboxSources.value,
   }).filter(item => !settled.value.has(item.key)),
 )
 
 const loading = computed(() => (digestLoading.value || pullsLoading.value) && !digest.value)
+
+function money(usd: number) {
+  return usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`
+}
+
+/**
+ * Refreshing costs real money and takes a minute or two, so it says what it is
+ * doing and what happened — never a spinner that stops with no verdict.
+ */
+async function onRefresh(key: string, label: string) {
+  const result = await refreshInbox(key)
+  if (result.ok) return
+  toast.add({ title: `Could not refresh ${label}`, description: result.reason, color: 'error' })
+}
 
 async function resolve(item: NowItem) {
   if (!item.action) return
@@ -59,6 +79,15 @@ async function resolve(item: NowItem) {
 
     if (item.action.kind === 'work-on-pull') {
       const session = await work(Number(item.action.target))
+      settled.value = new Set([...settled.value, item.key])
+      if (session?.id) router.push(`/sessions/${session.id}`)
+      return
+    }
+
+    // The payoff of having an inbox rather than a dashboard: the ticket becomes
+    // Claude working on it, in its own checkout.
+    if (item.action.kind === 'work-on-inbox') {
+      const session = await createSession(item.action.prompt ?? String(item.action.target))
       settled.value = new Set([...settled.value, item.key])
       if (session?.id) router.push(`/sessions/${session.id}`)
     }
@@ -138,5 +167,39 @@ async function resolve(item: NowItem) {
         </div>
       </li>
     </ul>
+    <!--
+      Where the rows from elsewhere came from, and what asking cost.
+
+      Said out loud because it is the one action in this app that can cost a
+      dollar: a real Notion refresh here took 82 seconds and $1.48. Nothing
+      polls it — the number is exactly why — so the age of the answer is part of
+      the answer, and refreshing is something a person or a ritual decides to do.
+    -->
+    <div v-if="inboxSources.length" class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
+      <div
+        v-for="source in inboxSources"
+        :key="source.key"
+        class="flex items-center gap-2"
+      >
+        <UIcon :name="source.icon" class="size-3 shrink-0 text-meta" />
+        <span class="type-meta">{{ source.label }}</span>
+
+        <span v-if="source.error" class="type-meta ink-error" :title="source.error">
+          last refresh failed
+        </span>
+        <span v-else-if="source.checkedAt" class="type-meta">
+          {{ source.items.length }} · {{ relativeTime(source.checkedAt) }}<template v-if="source.costUsd"> · {{ money(source.costUsd) }}</template>
+        </span>
+        <span v-else class="type-meta">never checked</span>
+
+        <button
+          class="type-meta ink-accent hover:underline focus-ring rounded disabled:opacity-50"
+          :disabled="refreshing !== null"
+          @click="onRefresh(source.key, source.label)"
+        >
+          {{ refreshing === source.key ? 'looking…' : 'refresh' }}
+        </button>
+      </div>
+    </div>
   </section>
 </template>
