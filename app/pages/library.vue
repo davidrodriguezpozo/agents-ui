@@ -74,11 +74,24 @@ const createMenu = computed(() => [[
   { label: 'New skill', icon: CAPABILITY_LOOK.skill.icon, onSelect: () => { showSkillWizard.value = true } },
 ]])
 
-function createActive() {
-  if (activeType.value === 'agent') showAgentWizard.value = true
-  else if (activeType.value === 'command') showCommandForm.value = true
-  else if (activeType.value === 'skill') showSkillWizard.value = true
+function openCreate(type: CapabilityType) {
+  if (type === 'agent') showAgentWizard.value = true
+  else if (type === 'command') showCommandForm.value = true
+  else showSkillWizard.value = true
 }
+
+function createActive() {
+  if (activeType.value !== 'all') openCreate(activeType.value)
+}
+
+/** `?new=agent` so the command palette can open the right form from a keystroke. */
+onMounted(() => {
+  const requested = String(route.query.new ?? '')
+  if (TYPES.includes(requested as CapabilityType)) {
+    openCreate(requested as CapabilityType)
+    router.replace({ query: { ...route.query, new: undefined } })
+  }
+})
 
 /** Only agents and skills are files you can drop in. */
 const canImport = computed(() => activeType.value === 'agent' || activeType.value === 'skill')

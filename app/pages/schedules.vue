@@ -17,6 +17,15 @@ const showModal = ref(false)
 const adopting = ref<string | null>(null)
 const expanded = ref<string | null>(null)
 
+/** `?new=1` so the command palette can start a ritual from a keystroke. */
+const route = useRoute()
+const router = useRouter()
+onMounted(() => {
+  if (!route.query.new) return
+  showModal.value = true
+  router.replace({ query: { ...route.query, new: undefined } })
+})
+
 /**
  * Sandboxing arrived switched on, and it reaches rituals that were running
  * happily before it existed. This is the only place those rituals are listed,

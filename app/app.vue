@@ -495,7 +495,7 @@ function badgeFor(to: string) {
         </div>
       </main>
     </div>
-    <GlobalSearch />
+    <GlobalSearch v-model:open="showSearch" />
     <ChatPanel v-model:open="chatOpen" />
   </UApp>
 </template>
