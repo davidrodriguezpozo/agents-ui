@@ -44,12 +44,12 @@ function formatDate(iso: string) {
   <div>
     <PageHeader title="Plugins">
       <template #trailing>
-        <span class="font-mono text-[12px] text-meta">{{ plugins.length }}</span>
+        <span class="font-mono fs-sm text-meta">{{ plugins.length }}</span>
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4">
-      <p class="text-[13px] mb-4 leading-relaxed text-label">
+    <div class="page-container py-6">
+      <p class="fs-base mb-4 leading-relaxed text-label">
         Pre-built extensions that add new features and capabilities.
       </p>
 
@@ -65,10 +65,10 @@ function formatDate(iso: string) {
       <div
         v-if="error"
         class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
-        style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
+        style="background: var(--error-wash); border: 1px solid var(--error-tint);"
       >
-        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
-        <span class="text-[12px]" style="color: var(--error);">{{ error }}</span>
+        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5 ink-error" />
+        <span class="fs-sm ink-error">{{ error }}</span>
       </div>
 
       <div v-if="loading" class="space-y-1">
@@ -81,7 +81,7 @@ function formatDate(iso: string) {
           <div class="flex items-center gap-2 py-2 px-2 -mx-2">
             <UIcon name="i-lucide-store" class="size-3.5 text-meta" />
             <span class="font-mono type-strong text-body">{{ marketplace }}</span>
-            <span class="font-mono text-[12px] text-meta">{{ group.length }}</span>
+            <span class="font-mono fs-sm text-meta">{{ group.length }}</span>
           </div>
 
           <!-- Plugin list -->
@@ -115,13 +115,13 @@ function formatDate(iso: string) {
 
                 <!-- Version badge -->
                 <span
-                  class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
+                  class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
                 >
                   v{{ plugin.version }}
                 </span>
 
                 <!-- Description -->
-                <span class="flex-1 text-[12px] truncate text-label">
+                <span class="flex-1 fs-sm truncate text-label">
                   {{ plugin.description }}
                 </span>
 

@@ -96,7 +96,7 @@ function autoResizeChatInput() {
           <button
             v-for="m in (['edit', 'preview'] as const)"
             :key="m"
-            class="px-2.5 py-1 text-[11px] font-medium capitalize transition-all"
+            class="px-2.5 py-1 fs-mono font-medium capitalize transition-all"
             :style="{
               background: mode === m ? 'var(--accent-muted)' : 'transparent',
               color: mode === m ? 'var(--accent)' : 'var(--text-disabled)',
@@ -106,11 +106,11 @@ function autoResizeChatInput() {
             {{ m }}
           </button>
         </div>
-        <span class="text-[11px] font-mono" style="color: var(--text-disabled);">{{ wordCount }} words</span>
+        <span class="fs-mono font-mono ink-4">{{ wordCount }} words</span>
       </div>
       <button
         v-if="!improve.isOpen.value"
-        class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-md fs-mono font-medium transition-all"
         :style="{
           background: 'var(--surface-raised)',
           border: '1px solid var(--border-subtle)',
@@ -123,7 +123,7 @@ function autoResizeChatInput() {
       </button>
       <button
         v-else
-        class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all"
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-md fs-mono font-medium transition-all"
         :style="{
           background: 'var(--accent-muted)',
           border: '1px solid var(--accent-glow)',
@@ -144,7 +144,7 @@ function autoResizeChatInput() {
         <textarea
           v-if="mode === 'edit'"
           :value="modelValue"
-          class="flex-1 w-full resize-none bg-transparent text-[13px] leading-relaxed outline-none p-4"
+          class="flex-1 w-full resize-none bg-transparent fs-base leading-relaxed outline-none p-4"
           style="color: var(--text-primary); font-family: var(--font-mono);"
           placeholder="Write instructions for your agent..."
           @input="emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
@@ -158,10 +158,10 @@ function autoResizeChatInput() {
         >
           <div
             v-if="modelValue.trim()"
-            class="text-[13px] leading-[1.7]"
+            class="fs-base leading-[1.7]"
             v-html="renderMarkdown(modelValue)"
           />
-          <p v-else class="text-[13px]" style="color: var(--text-disabled);">Nothing to preview yet.</p>
+          <p v-else class="fs-base ink-4">Nothing to preview yet.</p>
         </div>
       </div>
 
@@ -174,11 +174,11 @@ function autoResizeChatInput() {
         <!-- Chat header -->
         <div class="shrink-0 px-3 py-2 flex items-center justify-between border-b" style="border-color: var(--border-subtle);">
           <div class="flex items-center gap-1.5">
-            <UIcon name="i-lucide-sparkles" class="size-3" style="color: var(--accent);" />
-            <span class="text-[11px] font-medium" style="color: var(--text-primary);">Improve</span>
+            <UIcon name="i-lucide-sparkles" class="size-3 ink-accent" />
+            <span class="fs-mono font-medium ink">Improve</span>
             <span
               v-if="improve.isStreaming.value"
-              class="text-[9px] font-mono tracking-widest uppercase px-1.5 py-px rounded-full"
+              class="fs-micro font-mono tracking-widest uppercase px-1.5 py-px rounded-full"
               style="background: var(--accent-muted); color: var(--accent);"
             >
               Thinking
@@ -200,7 +200,7 @@ function autoResizeChatInput() {
             <!-- User message -->
             <div v-if="msg.role === 'user'" class="flex justify-end">
               <div
-                class="max-w-[90%] rounded-xl rounded-br-md px-3 py-2 text-[12px] leading-relaxed"
+                class="max-w-[90%] rounded-xl rounded-br-md px-3 py-2 fs-sm leading-relaxed"
                 style="background: var(--accent-muted); border: 1px solid var(--accent-muted); color: var(--text-primary);"
               >
                 {{ msg.content }}
@@ -210,7 +210,7 @@ function autoResizeChatInput() {
             <!-- Assistant message -->
             <div v-else class="space-y-2">
               <div
-                class="rounded-xl rounded-bl-md px-3 py-2 text-[12px] leading-relaxed improve-msg"
+                class="rounded-xl rounded-bl-md px-3 py-2 fs-sm leading-relaxed improve-msg"
                 :class="{ 'is-streaming': improve.isStreaming.value && msg.id === improve.messages.value[improve.messages.value.length - 1]?.id }"
                 style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-primary);"
               >
@@ -225,12 +225,12 @@ function autoResizeChatInput() {
                     style="background: var(--surface-base); border: 1px solid var(--accent-glow);"
                   >
                     <div class="flex items-center gap-1.5">
-                      <UIcon name="i-lucide-file-text" class="size-3" style="color: var(--accent);" />
-                      <span class="text-[10px] font-medium" style="color: var(--accent);">Proposed instructions</span>
+                      <UIcon name="i-lucide-file-text" class="size-3 ink-accent" />
+                      <span class="fs-micro font-medium ink-accent">Proposed instructions</span>
                     </div>
-                    <pre class="text-[11px] leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto" style="color: var(--text-secondary); font-family: var(--font-mono);">{{ extractInstructionsBlock(msg.content) }}</pre>
+                    <pre class="fs-mono leading-relaxed whitespace-pre-wrap max-h-[120px] overflow-y-auto" style="color: var(--text-secondary); font-family: var(--font-mono);">{{ extractInstructionsBlock(msg.content) }}</pre>
                     <button
-                      class="w-full px-3 py-1.5 rounded-md text-[11px] font-medium transition-all"
+                      class="w-full px-3 py-1.5 rounded-md fs-mono font-medium transition-all"
                       style="background: var(--accent); color: white;"
                       @click="applyInstructions(extractInstructionsBlock(msg.content)!)"
                     >
@@ -244,7 +244,7 @@ function autoResizeChatInput() {
           </template>
 
           <!-- Error -->
-          <div v-if="improve.error.value" class="text-[11px] rounded-md px-3 py-2" style="background: rgba(248, 113, 113, 0.06); color: var(--error);">
+          <div v-if="improve.error.value" class="fs-mono rounded-md px-3 py-2" style="background: var(--error-wash); color: var(--error);">
             {{ improve.error.value }}
           </div>
         </div>
@@ -264,7 +264,7 @@ function autoResizeChatInput() {
               ref="chatInputRef"
               v-model="chatInput"
               rows="1"
-              class="w-full resize-none bg-transparent text-[12px] outline-none px-3 pt-2.5 pb-8"
+              class="w-full resize-none bg-transparent fs-sm outline-none px-3 pt-2.5 pb-8"
               style="color: var(--text-primary); font-family: var(--font-sans); max-height: 80px;"
               placeholder="Tell Claude what to change..."
               :disabled="improve.isStreaming.value"

@@ -70,7 +70,7 @@ const accent = computed(() => {
           this is the only thing on the row that says what the change
           was, which is what you actually decide on.
         -->
-        <p v-if="session.summary" class="type-detail leading-snug" style="color: var(--text-secondary);">
+        <p v-if="session.summary" class="type-detail leading-snug ink-2">
           {{ session.summary.text }}
         </p>
 

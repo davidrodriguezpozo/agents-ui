@@ -160,17 +160,17 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
             </div>
             <div>
               <span class="type-strong">{{ opt.label }}</span>
-              <p class="text-[11px] text-label mt-0.5">{{ opt.desc }}</p>
+              <p class="fs-mono text-label mt-0.5">{{ opt.desc }}</p>
             </div>
           </button>
         </div>
       </div>
 
       <ExampleBlock title="See what a good agent looks like">
-        <div class="space-y-1.5 text-[11px]" style="color: var(--text-secondary);">
+        <div class="space-y-1.5 fs-mono ink-2">
           <p><strong>Name:</strong> email-drafter</p>
           <p><strong>Instructions:</strong> "You are an email drafting assistant. Help the user write clear, professional emails. Before drafting, ask about the recipient, goal, and tone..."</p>
-          <p class="text-[10px]" style="color: var(--text-tertiary);">Good instructions are specific about behavior, tone, and rules.</p>
+          <p class="fs-micro ink-3">Good instructions are specific about behavior, tone, and rules.</p>
         </div>
       </ExampleBlock>
 
@@ -202,7 +202,7 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
             </div>
             <div>
               <span class="type-strong">{{ opt.label }}</span>
-              <p class="text-[11px] text-label mt-0.5">{{ opt.desc }}</p>
+              <p class="fs-mono text-label mt-0.5">{{ opt.desc }}</p>
             </div>
           </button>
         </div>

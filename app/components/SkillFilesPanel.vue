@@ -173,10 +173,10 @@ async function confirmDelete() {
     <div v-if="!files.length" class="px-5 py-8 flex flex-col items-center text-center gap-3">
       <UIcon name="i-lucide-folder-open" class="size-5 text-meta" />
       <p class="type-body max-w-md leading-relaxed">
-        Just <span class="font-mono text-[11px]">SKILL.md</span> so far. Put detail Claude
+        Just <span class="font-mono fs-mono">SKILL.md</span> so far. Put detail Claude
         should read only when it needs it in
-        <span class="font-mono text-[11px]">references/</span>, and anything meant to be run
-        rather than read in <span class="font-mono text-[11px]">scripts/</span>.
+        <span class="font-mono fs-mono">references/</span>, and anything meant to be run
+        rather than read in <span class="font-mono fs-mono">scripts/</span>.
       </p>
       <UButton
         v-if="!readOnly"
@@ -215,7 +215,7 @@ async function confirmDelete() {
               class="size-3.5 shrink-0"
               :style="{ color: selected === file.path ? 'var(--accent)' : 'var(--text-tertiary)' }"
             />
-            <span class="text-[12px] truncate font-mono">{{ file.name }}</span>
+            <span class="fs-sm truncate font-mono">{{ file.name }}</span>
             <span v-if="file.kind === 'file'" class="type-mono-meta shrink-0 ml-auto">
               {{ formatSize(file.size) }}
             </span>
@@ -248,9 +248,9 @@ async function confirmDelete() {
             class="flex items-center justify-between gap-3 px-4 py-2"
             style="border-bottom: 1px solid var(--border-subtle);"
           >
-            <span class="font-mono text-[11px] truncate text-label">{{ selected }}</span>
+            <span class="font-mono fs-mono truncate text-label">{{ selected }}</span>
             <div class="flex items-center gap-2 shrink-0">
-              <span v-if="isDirty" class="text-[10px] font-mono unsaved-pulse" style="color: var(--warning);">
+              <span v-if="isDirty" class="fs-micro font-mono unsaved-pulse ink-warn">
                 unsaved
               </span>
               <UButton
@@ -264,7 +264,7 @@ async function confirmDelete() {
             </div>
           </div>
 
-          <div v-if="loadError" class="px-4 py-3 text-[12px]" style="color: var(--error);">
+          <div v-if="loadError" class="px-4 py-3 fs-sm ink-error">
             {{ loadError }}
           </div>
           <div v-else-if="loadingFile" class="flex justify-center py-12">

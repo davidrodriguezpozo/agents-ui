@@ -164,7 +164,7 @@ function attentionFor(to: string) {
       return {
         count: blocked,
         title: `${blocked} waiting for you to approve something`,
-        style: { background: 'rgba(248,113,113,0.14)', color: 'var(--error)' },
+        style: { background: 'var(--error-tint)', color: 'var(--error)' },
       }
     }
     if (working) {
@@ -190,7 +190,7 @@ function attentionFor(to: string) {
     return {
       count: failingRituals,
       title: `${failingRituals} rituals whose last runs came to nothing`,
-      style: { background: 'rgba(248,113,113,0.14)', color: 'var(--error)' },
+      style: { background: 'var(--error-tint)', color: 'var(--error)' },
     }
   }
 
@@ -250,10 +250,10 @@ function badgeFor(to: string) {
             <UIcon name="i-lucide-bot" class="size-3.5" style="color: #ffffff;" />
           </div>
           <div class="flex flex-col">
-            <span class="text-[12px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
+            <span class="fs-sm font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
               Agents Studio
             </span>
-            <span class="text-[9px] font-mono tracking-wider uppercase" style="color: var(--text-disabled);">
+            <span class="fs-micro font-mono tracking-wider uppercase ink-4">
               Claude Code
             </span>
           </div>
@@ -265,7 +265,7 @@ function badgeFor(to: string) {
             v-for="link in navLinks"
             :key="link.to"
             :to="link.to"
-            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-all duration-150 relative focus-ring"
+            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
             :class="{ 'nav-item--active': isActive(link.to) }"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
@@ -284,7 +284,7 @@ function badgeFor(to: string) {
             <!-- Something blocked outranks how many of a thing you own -->
             <span
               v-if="attentionFor(link.to)"
-              class="font-mono text-[10px] tabular-nums px-1.5 rounded-full"
+              class="font-mono fs-micro tabular-nums px-1.5 rounded-full"
               :style="attentionFor(link.to)!.style"
               :title="attentionFor(link.to)!.title"
             >
@@ -292,7 +292,7 @@ function badgeFor(to: string) {
             </span>
             <span
               v-else-if="badgeFor(link.to)"
-              class="font-mono text-[10px] tabular-nums transition-colors duration-150"
+              class="font-mono fs-micro tabular-nums transition-colors duration-150"
               :style="{ color: isActive(link.to) ? 'var(--accent)' : 'var(--text-disabled)' }"
             >
               {{ badgeFor(link.to) }}
@@ -306,7 +306,7 @@ function badgeFor(to: string) {
             v-for="link in navSecondary"
             :key="link.to"
             :to="link.to"
-            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md text-[13px] transition-all duration-150 relative focus-ring"
+            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
               fontWeight: isActive(link.to) ? '500' : '400',
@@ -333,8 +333,8 @@ function badgeFor(to: string) {
             @click="showSearch = true"
           >
             <UIcon name="i-lucide-search" class="size-3.5" />
-            <span class="text-[12px] flex-1 text-left" style="font-family: var(--font-sans);">Search</span>
-            <kbd class="text-[9px] font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘K</kbd>
+            <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Search</span>
+            <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘K</kbd>
           </button>
         </div>
 
@@ -356,8 +356,8 @@ function badgeFor(to: string) {
                 style="background: var(--accent);"
               />
             </div>
-            <span class="text-[12px] flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
-            <kbd class="text-[9px] font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘J</kbd>
+            <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
+            <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘J</kbd>
           </button>
         </div>
 
@@ -370,7 +370,7 @@ function badgeFor(to: string) {
             @click="toggleMode"
           >
             <UIcon :name="isSimple ? 'i-lucide-settings-2' : 'i-lucide-minimize-2'" class="size-4" />
-            <span class="text-[12px]" style="font-family: var(--font-sans);">
+            <span class="fs-sm" style="font-family: var(--font-sans);">
               {{ isSimple ? 'Advanced tools' : 'Simple view' }}
             </span>
           </button>
@@ -384,7 +384,7 @@ function badgeFor(to: string) {
             @click="toggleTheme"
           >
             <UIcon :name="colorMode.value === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'" class="size-4" />
-            <span class="text-[12px]" style="font-family: var(--font-sans);">
+            <span class="fs-sm" style="font-family: var(--font-sans);">
               {{ colorMode.value === 'dark' ? 'Light mode' : 'Dark mode' }}
             </span>
           </button>
@@ -399,12 +399,12 @@ function badgeFor(to: string) {
             style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
             :title="build?.subject ? `Deployed: ${build.subject}` : undefined"
           >
-            <UIcon name="i-lucide-package" class="size-3.5 shrink-0 mt-px" style="color: var(--accent);" />
+            <UIcon name="i-lucide-package" class="size-3.5 shrink-0 mt-px ink-accent" />
             <div class="min-w-0">
-              <div class="text-[11px]" style="color: var(--text-secondary); font-family: var(--font-sans);">
+              <div class="fs-mono" style="color: var(--text-secondary); font-family: var(--font-sans);">
                 {{ build?.summary }}
               </div>
-              <div class="text-[10px] font-mono" style="color: var(--text-disabled);">make service</div>
+              <div class="fs-micro font-mono ink-4">make service</div>
             </div>
           </div>
 
@@ -415,7 +415,7 @@ function badgeFor(to: string) {
               <button
                 v-for="option in [{ value: 'user' as const, label: 'Personal' }, { value: 'project' as const, label: 'Project' }]"
                 :key="option.value"
-                class="flex-1 px-2 py-1 rounded-md text-[10px] font-medium transition-all"
+                class="flex-1 px-2 py-1 rounded-md fs-micro font-medium transition-all"
                 :style="{
                   background: createScope === option.value ? 'var(--accent-muted)' : 'transparent',
                   color: createScope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
@@ -429,7 +429,7 @@ function badgeFor(to: string) {
 
             <button
               v-else-if="!projectClaudeExists"
-              class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-[10px] transition-all hover-bg"
+              class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md fs-micro transition-all hover-bg"
               style="color: var(--text-disabled); border: 1px dashed var(--border-subtle);"
               :disabled="initializingProject"
               @click="createProjectConfig"
@@ -443,7 +443,7 @@ function badgeFor(to: string) {
             </button>
           </div>
 
-          <div class="font-mono text-[9px] truncate tracking-wide mt-1.5 px-1" style="color: var(--text-disabled);">
+          <div class="font-mono fs-micro truncate tracking-wide mt-1.5 px-1 ink-4">
             {{ claudeDir || 'No config directory' }}
           </div>
 
@@ -471,7 +471,7 @@ function badgeFor(to: string) {
 
         <NuxtPage v-else-if="initialized" />
         <div v-else class="flex items-center justify-center h-full">
-          <UIcon name="i-lucide-loader-2" class="size-5 animate-spin" style="color: var(--text-disabled);" />
+          <UIcon name="i-lucide-loader-2" class="size-5 animate-spin ink-4" />
         </div>
       </main>
     </div>

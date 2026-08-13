@@ -79,7 +79,7 @@ async function onInstall(marketplace: string, plugin: string) {
           class="size-14 rounded-xl flex items-center justify-center"
           style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
         >
-          <UIcon name="i-lucide-users" class="size-6" style="color: var(--accent);" />
+          <UIcon name="i-lucide-users" class="size-6 ink-accent" />
         </div>
       </div>
       <h2 class="text-page-title" style="font-family: var(--font-display);">
@@ -95,10 +95,10 @@ async function onInstall(marketplace: string, plugin: string) {
     <div
       v-if="health && !health.git"
       class="rounded-lg px-4 py-3 flex items-start gap-3"
-      style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.14);"
+      style="background: var(--error-wash); border: 1px solid var(--error-tint);"
     >
-      <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
-      <span class="text-[12px] text-body">
+      <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5 ink-error" />
+      <span class="fs-sm text-body">
         Git isn't installed on this computer, so team tools can't be downloaded.
         Ask IT to install it, or get it from <strong>git-scm.com</strong>.
       </span>
@@ -108,9 +108,9 @@ async function onInstall(marketplace: string, plugin: string) {
     <div class="rounded-lg p-5 space-y-3 bg-card">
       <div class="flex items-center gap-2">
         <span
-          class="size-5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0"
+          class="size-5 rounded-full flex items-center justify-center fs-micro font-mono shrink-0"
           :style="hasSource
-            ? 'background: rgba(34,197,94,0.15); color: rgb(34,197,94);'
+            ? 'background: var(--success-tint); color: var(--success);'
             : 'background: var(--accent-muted); color: var(--accent);'"
         >
           {{ hasSource ? '✓' : '1' }}
@@ -145,11 +145,11 @@ async function onInstall(marketplace: string, plugin: string) {
         <div
           v-for="source in sources"
           :key="source.name"
-          class="flex items-center gap-2 text-[12px]"
+          class="flex items-center gap-2 fs-sm"
         >
-          <UIcon name="i-lucide-check-circle-2" class="size-3.5 shrink-0" style="color: rgb(34,197,94);" />
+          <UIcon name="i-lucide-check-circle-2" class="size-3.5 shrink-0 ink-ok" />
           <span class="font-medium text-body">{{ source.name }}</span>
-          <span class="font-mono text-[10px] truncate text-meta">{{ source.sourceUrl }}</span>
+          <span class="font-mono fs-micro truncate text-meta">{{ source.sourceUrl }}</span>
         </div>
       </div>
     </div>
@@ -158,9 +158,9 @@ async function onInstall(marketplace: string, plugin: string) {
     <div v-if="hasSource" class="rounded-lg p-5 space-y-3 bg-card">
       <div class="flex items-center gap-2">
         <span
-          class="size-5 rounded-full flex items-center justify-center text-[10px] font-mono shrink-0"
+          class="size-5 rounded-full flex items-center justify-center fs-micro font-mono shrink-0"
           :style="installedCount
-            ? 'background: rgba(34,197,94,0.15); color: rgb(34,197,94);'
+            ? 'background: var(--success-tint); color: var(--success);'
             : 'background: var(--accent-muted); color: var(--accent);'"
         >
           {{ installedCount ? '✓' : '2' }}
@@ -179,10 +179,10 @@ async function onInstall(marketplace: string, plugin: string) {
           class="flex items-center gap-3 px-3 py-2.5 rounded-md"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
         >
-          <UIcon name="i-lucide-puzzle" class="size-4 shrink-0" style="color: var(--accent);" />
+          <UIcon name="i-lucide-puzzle" class="size-4 shrink-0 ink-accent" />
           <div class="flex-1 min-w-0">
-            <div class="text-[12px] font-medium truncate text-body">{{ plugin.name }}</div>
-            <div class="text-[11px] truncate text-label">{{ plugin.description || 'No description' }}</div>
+            <div class="fs-sm font-medium truncate text-body">{{ plugin.name }}</div>
+            <div class="fs-mono truncate text-label">{{ plugin.description || 'No description' }}</div>
             <div class="flex items-center gap-2 mt-0.5 type-mono-meta">
               <span v-if="plugin.skillCount">{{ plugin.skillCount }} skills</span>
               <span v-if="plugin.commandCount">{{ plugin.commandCount }} commands</span>
@@ -219,7 +219,7 @@ async function onInstall(marketplace: string, plugin: string) {
     <div class="pt-2 text-center" style="border-top: 1px solid var(--border-subtle);">
       <p class="type-detail pt-4">
         Here to run Claude on your own code instead?
-        <NuxtLink to="/sessions" class="font-medium hover:underline" style="color: var(--accent);">
+        <NuxtLink to="/sessions" class="font-medium hover:underline ink-accent">
           Start a session
         </NuxtLink>
         — it gets its own branch and checkout, and nothing here needs setting up first.

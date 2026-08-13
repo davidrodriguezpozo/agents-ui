@@ -16,8 +16,8 @@ const emit = defineEmits<{
       class="chat-quick-action flex items-center gap-2 px-3 py-2.5 rounded-lg text-left transition-all duration-150"
       @click="emit('select', action.prompt)"
     >
-      <UIcon :name="action.icon" class="size-3.5 shrink-0" style="color: var(--text-disabled);" />
-      <span class="text-[11px] font-medium" style="font-family: var(--font-sans);">{{ action.label }}</span>
+      <UIcon :name="action.icon" class="size-3.5 shrink-0 ink-4" />
+      <span class="fs-mono font-medium" style="font-family: var(--font-sans);">{{ action.label }}</span>
     </button>
   </div>
 </template>

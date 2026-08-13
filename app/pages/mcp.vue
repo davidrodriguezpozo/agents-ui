@@ -96,7 +96,7 @@ function displayName(server: McpServer): string {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-5 space-y-5">
+    <div class="page-container py-6 space-y-6">
       <p class="type-body max-w-2xl leading-relaxed">
         Tools your agents can reach that don't live on this machine — issue trackers, docs,
         mail. Each one is asked whether it is answering, so this says which of them
@@ -107,7 +107,7 @@ function displayName(server: McpServer): string {
       <div
         v-if="error"
         class="rounded-md px-4 py-3 type-detail"
-        style="background: rgba(248,113,113,0.06); border: 1px solid var(--error); color: var(--error);"
+        style="background: var(--error-wash); border: 1px solid var(--error); color: var(--error);"
       >
         {{ error }}
       </div>
@@ -127,7 +127,7 @@ function displayName(server: McpServer): string {
       </div>
 
       <template v-else>
-        <p v-if="broken" class="type-detail" style="color: var(--warning);">
+        <p v-if="broken" class="type-detail ink-warn">
           {{ broken }} of {{ sorted.length }} {{ broken === 1 ? 'needs' : 'need' }} attention.
         </p>
 
@@ -148,7 +148,7 @@ function displayName(server: McpServer): string {
                 <div class="flex items-center gap-2 flex-wrap">
                   <span class="type-strong">{{ displayName(server) }}</span>
                   <span
-                    class="text-[10px] px-1.5 py-px rounded-full"
+                    class="fs-micro px-1.5 py-px rounded-full"
                     style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
                   >
                     {{ provenance(server) }}
@@ -156,7 +156,7 @@ function displayName(server: McpServer): string {
                   <span v-if="server.transport" class="type-mono-meta">{{ server.transport }}</span>
                 </div>
 
-                <div class="font-mono text-[11px] truncate mt-0.5 text-meta" :title="server.target">
+                <div class="font-mono fs-mono truncate mt-0.5 text-meta" :title="server.target">
                   {{ server.target }}
                 </div>
 
@@ -174,7 +174,7 @@ function displayName(server: McpServer): string {
                   </button>
                   <pre
                     v-if="expanded === server.name"
-                    class="font-mono text-[10px] leading-relaxed whitespace-pre-wrap mt-1.5 p-2.5 rounded max-h-56 overflow-y-auto"
+                    class="font-mono fs-micro leading-relaxed whitespace-pre-wrap mt-1.5 p-2.5 rounded max-h-56 overflow-y-auto"
                     style="background: var(--surface-inset); color: var(--text-secondary);"
                   >{{ server.detail }}</pre>
                 </div>

@@ -37,7 +37,7 @@ const emit = defineEmits<{ action: []; secondary: [] }>()
       :class="variant === 'page' ? 'size-11 rounded-lg' : 'size-9 rounded-md'"
       style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
     >
-      <UIcon :name="icon" :class="variant === 'page' ? 'size-5' : 'size-4'" style="color: var(--text-tertiary);" />
+      <UIcon :name="icon" class="ink-3" :class="variant === 'page' ? 'size-5' : 'size-4'" />
     </div>
 
     <p class="type-strong">{{ title }}</p>

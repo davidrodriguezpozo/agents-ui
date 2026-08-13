@@ -75,11 +75,11 @@ onMounted(load)
   <div class="rounded-md p-4 space-y-3" style="border: 1px solid var(--border-subtle);">
     <div class="text-section-label">Put it back</div>
 
-    <p v-if="error" class="type-meta" style="color: var(--error);">{{ error }}</p>
+    <p v-if="error" class="type-meta ink-error">{{ error }}</p>
     <p v-else-if="preview?.unavailable" class="type-meta">{{ preview.unavailable }}</p>
 
     <template v-else-if="preview">
-      <p v-if="note" class="type-meta" style="color: var(--success);">{{ note }}</p>
+      <p v-if="note" class="type-meta ink-ok">{{ note }}</p>
 
       <!-- Named, not counted: a list is something you can check against what
            you remember doing, and a number is something you have to trust. -->

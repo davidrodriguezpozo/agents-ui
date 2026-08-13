@@ -154,9 +154,9 @@ const statusStyle = computed(() => {
     case 'queued':
       return { background: 'var(--accent-muted)', color: 'var(--accent)' }
     case 'completed':
-      return { background: 'rgba(34,197,94,0.12)', color: 'rgb(34,197,94)' }
+      return { background: 'var(--success-tint)', color: 'var(--success)' }
     case 'failed':
-      return { background: 'rgba(248,113,113,0.12)', color: 'var(--error)' }
+      return { background: 'var(--error-tint)', color: 'var(--error)' }
     default:
       return { background: 'var(--badge-subtle-bg)', color: 'var(--text-tertiary)' }
   }
@@ -221,7 +221,7 @@ function formatCost(usd?: number) {
 
 <template>
   <div>
-    <PageHeader width="wide" :title="meta?.title || 'Run'">
+    <PageHeader :title="meta?.title || 'Run'">
       <template #leading>
         <NuxtLink to="/runs" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to activity">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
@@ -230,12 +230,12 @@ function formatCost(usd?: number) {
       <template #trailing>
         <span
           v-if="run"
-          class="text-[10px] font-mono px-1.5 py-px rounded-full"
+          class="fs-micro font-mono px-1.5 py-px rounded-full"
           :style="statusStyle"
         >
           {{ statusLabel }}
         </span>
-        <span v-if="meta?.invocation" class="font-mono text-[12px]" style="color: var(--accent);">
+        <span v-if="meta?.invocation" class="font-mono fs-sm ink-accent">
           {{ meta.invocation }}
         </span>
       </template>
@@ -252,8 +252,8 @@ function formatCost(usd?: number) {
       </template>
     </PageHeader>
 
-    <div class="page-container page-container--wide py-5 space-y-5">
-      <div v-if="loadError" class="rounded-lg px-4 py-3 text-[12px]" style="background: rgba(248,113,113,0.06); color: var(--error);">
+    <div class="page-container py-5 space-y-5">
+      <div v-if="loadError" class="rounded-lg px-4 py-3 fs-sm" style="background: var(--error-wash); color: var(--error);">
         {{ loadError }}
       </div>
 
@@ -275,8 +275,8 @@ function formatCost(usd?: number) {
           class="rounded-lg px-4 py-3 flex items-center gap-3"
           style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
         >
-          <UIcon name="i-lucide-loader-2" class="size-4 animate-spin shrink-0" style="color: var(--accent);" />
-          <span class="text-[12px] text-body">
+          <UIcon name="i-lucide-loader-2" class="size-4 animate-spin shrink-0 ink-accent" />
+          <span class="fs-sm text-body">
             Running — you can close this tab and come back to it.
           </span>
         </div>
@@ -288,21 +288,21 @@ function formatCost(usd?: number) {
           class="rounded-lg px-4 py-3 flex items-start gap-3"
           style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
         >
-          <UIcon name="i-lucide-shield-alert" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
+          <UIcon name="i-lucide-shield-alert" class="size-4 shrink-0 mt-0.5 ink-accent" />
           <div class="flex-1 min-w-0 space-y-1">
-            <div class="text-[12px] font-medium text-body">This result is incomplete</div>
+            <div class="fs-sm font-medium text-body">This result is incomplete</div>
 
             <!--
               Why, rather than a guess at why. This said "a tool needed
               permission" about every unfinished run, including ones that
               simply used up their turns and were refused nothing at all.
             -->
-            <p v-if="meta.stoppedBy === 'turns'" class="text-[11px] leading-relaxed text-label">
+            <p v-if="meta.stoppedBy === 'turns'" class="fs-mono leading-relaxed text-label">
               It used up every turn it was allowed and stopped part-way. Nothing was refused —
               it just ran out of room. Raise <strong>most turns in one run</strong> in Settings
               if this is normal for the work, or start it again and it will carry on from here.
             </p>
-            <p v-else-if="meta.stoppedBy === 'budget'" class="text-[11px] leading-relaxed text-label">
+            <p v-else-if="meta.stoppedBy === 'budget'" class="fs-mono leading-relaxed text-label">
               It reached the spending limit and stopped part-way. Raise the limit in Settings,
               or leave it — the limit is doing exactly what it is for.
             </p>
@@ -312,7 +312,7 @@ function formatCost(usd?: number) {
               needed permission" about it would send someone looking for a
               permission that does not exist.
             -->
-            <p v-else-if="refusedHosts.length" class="text-[11px] leading-relaxed text-label">
+            <p v-else-if="refusedHosts.length" class="fs-mono leading-relaxed text-label">
               <!--
                 Said whenever there are hosts, not only when there is nothing
                 else. A run that hit both walls used to show the permission
@@ -330,7 +330,7 @@ function formatCost(usd?: number) {
               <strong class="font-mono">{{ refusedHosts.join(', ') }}</strong>,
               so whatever needed that did not happen.
             </p>
-            <p v-else class="text-[11px] leading-relaxed text-label">
+            <p v-else class="fs-mono leading-relaxed text-label">
               <!--
                 Each on its own line on purpose: with the text hugging the tags,
                 Vue's whitespace condensing drops the newline before <strong>
@@ -346,19 +346,19 @@ function formatCost(usd?: number) {
               <strong>{{ (meta.deniedTools || []).join(', ') || 'a tool' }}</strong>
               needed permission that nobody was there to give.
             </p>
-            <p v-if="hostsAllowed" class="text-[11px] leading-relaxed" style="color: var(--success);">
+            <p v-if="hostsAllowed" class="fs-mono leading-relaxed ink-ok">
               Allowed here from now on. The next run will reach them.
             </p>
-            <p v-else-if="canAllowHosts" class="text-[11px] leading-relaxed text-label">
+            <p v-else-if="canAllowHosts" class="fs-mono leading-relaxed text-label">
               You can allow just these hosts for this project, rather than turning the
               sandbox off for it.
             </p>
-            <p v-if="granted" class="text-[11px] leading-relaxed" style="color: var(--success);">
+            <p v-if="granted" class="fs-mono leading-relaxed ink-ok">
               Allowed from now on. The next run will not stop for this.
             </p>
-            <p v-else-if="canLearn" class="text-[11px] leading-relaxed text-label">
+            <p v-else-if="canLearn" class="fs-mono leading-relaxed text-label">
               You can allow just what it needed —
-              <span class="font-mono" style="color: var(--text-primary);">
+              <span class="font-mono ink">
                 {{ meta.suggestedRules?.join(', ') }}
               </span>
               — rather than giving it full access.
@@ -370,7 +370,7 @@ function formatCost(usd?: number) {
                  said above it — a refused host already names its own fix. -->
             <p
               v-else-if="!meta.stoppedBy && !refusedHosts.length"
-              class="text-[11px] leading-relaxed text-label"
+              class="fs-mono leading-relaxed text-label"
             >
               Run it again yourself, or raise what this is allowed to do.
             </p>
@@ -435,7 +435,7 @@ function formatCost(usd?: number) {
           </div>
         </div>
 
-        <div v-if="run.error" class="rounded-lg px-4 py-3 text-[12px]" style="background: rgba(248,113,113,0.06); color: var(--error);">
+        <div v-if="run.error" class="rounded-lg px-4 py-3 fs-sm" style="background: var(--error-wash); color: var(--error);">
           {{ run.error }}
         </div>
 
@@ -452,7 +452,7 @@ function formatCost(usd?: number) {
             </div>
           </div>
           <div
-            class="px-5 py-4 markdown text-[13px] overflow-x-auto"
+            class="px-5 py-4 markdown fs-base overflow-x-auto"
             style="color: var(--text-primary); font-family: var(--font-sans);"
             v-html="renderMarkdown(run.output)"
           />
@@ -468,7 +468,7 @@ function formatCost(usd?: number) {
           <div
             v-for="call in run.toolCalls"
             :key="call.id"
-            class="flex items-center gap-2 px-3 py-1.5 rounded-md text-[11px] font-mono"
+            class="flex items-center gap-2 px-3 py-1.5 rounded-md fs-mono font-mono"
             style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
           >
             <UIcon
@@ -482,11 +482,11 @@ function formatCost(usd?: number) {
         </div>
 
         <details v-if="meta?.projectDir" class="group">
-          <summary class="text-[10px] cursor-pointer list-none flex items-center gap-1.5 text-meta">
+          <summary class="fs-micro cursor-pointer list-none flex items-center gap-1.5 text-meta">
             <UIcon name="i-lucide-folder" class="size-3" />
             Ran in
           </summary>
-          <div class="mt-1 font-mono text-[10px] pl-4.5 text-meta">{{ meta.projectDir }}</div>
+          <div class="mt-1 font-mono fs-micro pl-4.5 text-meta">{{ meta.projectDir }}</div>
         </details>
       </template>
 

@@ -47,7 +47,7 @@ async function run() {
   <div v-if="command" class="p-6 space-y-5 bg-overlay">
     <div class="space-y-1.5">
       <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-play" class="size-4" style="color: var(--accent);" />
+        <UIcon name="i-lucide-play" class="size-4 ink-accent" />
         <h3 class="text-page-title">Run {{ command.invocation }}</h3>
       </div>
       <p class="type-body leading-relaxed">
@@ -63,12 +63,12 @@ async function run() {
         border: '1px solid ' + (workingDir ? 'var(--border-subtle)' : 'var(--accent-muted)'),
       }"
     >
-      <UIcon name="i-lucide-folder" class="size-3.5 shrink-0 mt-0.5" style="color: var(--accent);" />
+      <UIcon name="i-lucide-folder" class="size-3.5 shrink-0 mt-0.5 ink-accent" />
       <div class="flex-1 min-w-0">
-        <div class="text-[11px] font-medium text-body">
+        <div class="fs-mono font-medium text-body">
           {{ workingDir ? 'Runs in this folder' : 'No folder selected' }}
         </div>
-        <div class="font-mono text-[10px] truncate text-meta">
+        <div class="font-mono fs-micro truncate text-meta">
           {{ displayPath || 'Pick a project folder in the sidebar first, or it runs in your Claude settings folder.' }}
         </div>
       </div>
@@ -87,7 +87,7 @@ async function run() {
     </div>
 
     <div class="flex items-center justify-between gap-2">
-      <span class="font-mono text-[10px] truncate text-meta">
+      <span class="font-mono fs-micro truncate text-meta">
         {{ command.invocation }}{{ args.trim() ? ' ' + args.trim() : '' }}
       </span>
       <div class="flex gap-2 shrink-0">

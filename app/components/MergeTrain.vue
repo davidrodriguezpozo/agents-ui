@@ -202,14 +202,14 @@ function titleOf(car: TrainCar): string {
         successfully, and reads as four failures. When nothing is waiting, the
         news is what happened rather than what cannot.
       -->
-      <span v-else-if="summary.landed" class="type-mono-meta" style="color: var(--success);">
+      <span v-else-if="summary.landed" class="type-mono-meta ink-ok">
         all {{ summary.landed }} landed
       </span>
       <span v-else class="type-mono-meta">nothing waiting to land</span>
 
       <div v-if="!inFlight && summary.landable > 0 && !baseBlocker" class="flex items-center gap-2 ml-auto">
         <template v-if="confirming">
-          <span class="text-[11px] text-label">Merge what passes into {{ baseBranch }}?</span>
+          <span class="fs-mono text-label">Merge what passes into {{ baseBranch }}?</span>
           <UButton label="Land them" size="xs" :loading="starting" @click="emit('land')" />
           <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="() => { confirming = false }" />
         </template>
@@ -570,8 +570,8 @@ function titleOf(car: TrainCar): string {
   margin-bottom: 12px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
-  background: rgba(180, 83, 9, 0.07);
-  border: 1px solid rgba(180, 83, 9, 0.18);
+  background: var(--warning-wash);
+  border: 1px solid var(--warning-edge);
 }
 .blocker-icon { color: var(--warning); margin-top: 1px; }
 .blocker-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }

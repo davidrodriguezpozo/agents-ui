@@ -323,7 +323,7 @@ const totalRuns = computed(() => props.spend.bySource.reduce((sum, s) => sum + s
             >
               <span class="type-detail flex-1 truncate">{{ entry.title }}</span>
               <span class="type-mono-meta shrink-0">{{ relativeTime(entry.at) }}</span>
-              <span class="type-mono-meta shrink-0 w-16 text-right" style="color: var(--accent);">
+              <span class="type-mono-meta shrink-0 w-16 text-right ink-accent">
                 {{ formatCost(entry.cost) }}
               </span>
             </NuxtLink>

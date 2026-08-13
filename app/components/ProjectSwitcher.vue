@@ -175,21 +175,21 @@ const label = computed(() => {
       />
       <div class="flex-1 min-w-0">
         <div
-          class="text-[11px] font-medium truncate"
+          class="fs-mono font-medium truncate"
           :style="{ color: workingDir ? 'var(--text-primary)' : 'var(--text-disabled)', fontFamily: 'var(--font-sans)' }"
         >
           {{ label }}
         </div>
-        <div v-if="active?.branch" class="text-[10px] font-mono truncate" style="color: var(--text-disabled);">
+        <div v-if="active?.branch" class="fs-micro font-mono truncate ink-4">
           {{ active.branch }}
         </div>
       </div>
-      <UIcon name="i-lucide-chevrons-up-down" class="size-3 shrink-0" style="color: var(--text-disabled);" />
+      <UIcon name="i-lucide-chevrons-up-down" class="size-3 shrink-0 ink-4" />
     </button>
 
     <template #content>
       <div class="py-2">
-        <div class="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wide" style="color: var(--text-disabled);">
+        <div class="px-3 pb-2 fs-micro font-semibold uppercase tracking-wide ink-4">
           Projects
         </div>
 
@@ -209,17 +209,17 @@ const label = computed(() => {
               <div class="min-w-0 flex-1">
                 <div class="flex items-center gap-1.5">
                   <span
-                    class="text-[11px] font-medium truncate"
+                    class="fs-mono font-medium truncate"
                     :style="{ color: project.path === workingDir ? 'var(--text-primary)' : 'var(--text-secondary)' }"
                   >{{ project.name }}</span>
                   <span
                     v-if="project.sessionCount"
-                    class="text-[9px] px-1 rounded shrink-0"
+                    class="fs-micro px-1 rounded shrink-0"
                     style="background: var(--surface-raised); color: var(--text-disabled);"
                     :title="`${project.sessionCount} session${project.sessionCount === 1 ? '' : 's'}`"
                   >{{ project.sessionCount }}</span>
                 </div>
-                <div class="text-[10px] font-mono truncate" style="color: var(--text-disabled);">
+                <div class="fs-micro font-mono truncate ink-4">
                   <template v-if="!project.exists">not on disk — {{ display(project.path) }}</template>
                   <template v-else-if="!project.isRepo">not a git repository</template>
                   <template v-else>{{ project.branch ?? display(project.path) }}</template>
@@ -233,7 +233,7 @@ const label = computed(() => {
               title="Remove from this list — the repository is not touched"
               @click.stop="confirmingRemoval = project.path"
             >
-              <UIcon name="i-lucide-x" class="size-3" style="color: var(--text-disabled);" />
+              <UIcon name="i-lucide-x" class="size-3 ink-4" />
             </button>
             <div
               v-else
@@ -241,7 +241,7 @@ const label = computed(() => {
               style="background: var(--surface-raised);"
             >
               <button
-                class="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                class="fs-micro font-medium px-1.5 py-0.5 rounded"
                 style="color: var(--error);"
                 :disabled="busy"
                 @click.stop="confirmRemove(project.path)"
@@ -249,7 +249,7 @@ const label = computed(() => {
                 Remove
               </button>
               <button
-                class="text-[10px] px-1 py-0.5 rounded"
+                class="fs-micro px-1 py-0.5 rounded"
                 style="color: var(--text-disabled);"
                 @click.stop="confirmingRemoval = null"
               >
@@ -259,14 +259,14 @@ const label = computed(() => {
           </div>
         </div>
 
-        <p v-else-if="!adding" class="px-3 py-2 text-[11px] leading-relaxed" style="color: var(--text-secondary);">
+        <p v-else-if="!adding" class="px-3 py-2 fs-mono leading-relaxed ink-2">
           No projects yet. Add the repository you want sessions to branch from.
         </p>
 
         <div class="mt-1 pt-1" style="border-top: 1px solid var(--border-subtle);">
           <button
             v-if="workingDir"
-            class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover-bg text-[11px]"
+            class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover-bg fs-mono"
             style="color: var(--text-disabled);"
             :disabled="busy"
             @click="switchTo(null)"
@@ -277,7 +277,7 @@ const label = computed(() => {
 
           <button
             v-if="!adding"
-            class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover-bg text-[11px] font-medium"
+            class="w-full flex items-center gap-2 px-3 py-1.5 text-left hover-bg fs-mono font-medium"
             style="color: var(--accent);"
             @click="startAdding"
           >
@@ -290,7 +290,7 @@ const label = computed(() => {
               <input
                 ref="pathField"
                 v-model="pathInput"
-                class="field-input text-[12px] font-mono"
+                class="field-input fs-sm font-mono"
                 placeholder="~/code/your-project"
                 autocomplete="off"
                 @input="onInput"
@@ -318,7 +318,7 @@ const label = computed(() => {
                     class="size-3.5 shrink-0"
                     :style="{ color: idx === highlighted ? 'var(--accent)' : 'var(--text-disabled)' }"
                   />
-                  <span class="text-[11px] font-mono truncate">{{ suggestion.name }}</span>
+                  <span class="fs-mono font-mono truncate">{{ suggestion.name }}</span>
                   <UIcon
                     v-if="suggestion.hasChildren"
                     name="i-lucide-chevron-right"
@@ -329,12 +329,12 @@ const label = computed(() => {
               </div>
             </div>
 
-            <p v-if="error" class="text-[10px]" style="color: var(--error);">{{ error }}</p>
+            <p v-if="error" class="fs-micro ink-error">{{ error }}</p>
 
             <div class="flex items-center justify-end gap-2">
               <button
                 v-if="projects.length"
-                class="text-[11px] px-2 py-1 rounded hover-bg"
+                class="fs-mono px-2 py-1 rounded hover-bg"
                 style="color: var(--text-disabled);"
                 @click="adding = false"
               >

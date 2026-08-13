@@ -82,19 +82,19 @@ onMounted(load)
       underneath would open off the bottom of the screen.
     -->
     <div v-if="open" class="mb-1 px-2 py-2 rounded-md space-y-2" style="background: var(--input-bg);">
-      <p class="text-[10px]" style="color: var(--text-secondary);">{{ build.summary }}</p>
+      <p class="fs-micro ink-2">{{ build.summary }}</p>
 
       <template v-if="plan?.available">
-        <p v-if="plan.latest" class="text-[10px]" style="color: var(--accent);">
+        <p v-if="plan.latest" class="fs-micro ink-accent">
           {{ plan.latest }} is out.
         </p>
-        <p v-else-if="plan.note" class="text-[10px]" style="color: var(--accent);">{{ plan.note }}</p>
+        <p v-else-if="plan.note" class="fs-micro ink-accent">{{ plan.note }}</p>
 
         <!-- The command is shown whether or not the button applies, because in
              a checkout the command is the only answer. -->
         <button
           v-if="plan.command"
-          class="w-full text-left text-[10px] font-mono px-1.5 py-1 rounded"
+          class="w-full text-left fs-micro font-mono px-1.5 py-1 rounded"
           style="background: var(--editor-bg); color: var(--editor-text);"
           title="Copy"
           @click="copyCommand"
@@ -111,10 +111,10 @@ onMounted(load)
         />
       </template>
 
-      <p v-else-if="plan?.note" class="text-[10px]" style="color: var(--text-disabled);">{{ plan.note }}</p>
-      <p v-else class="text-[10px]" style="color: var(--text-disabled);">Up to date.</p>
+      <p v-else-if="plan?.note" class="fs-micro ink-4">{{ plan.note }}</p>
+      <p v-else class="fs-micro ink-4">Up to date.</p>
 
-      <p v-if="result" class="text-[10px]" :style="{ color: result.ok ? 'var(--success)' : 'var(--error)' }">
+      <p v-if="result" class="fs-micro" :style="{ color: result.ok ? 'var(--success)' : 'var(--error)' }">
         {{ result.message }}
         <template v-if="result.ok">
           <!-- Said rather than done: restarting in the same click would take
@@ -129,7 +129,7 @@ onMounted(load)
         </template>
       </p>
 
-      <p v-if="error" class="text-[10px]" style="color: var(--error);">{{ error }}</p>
+      <p v-if="error" class="fs-micro ink-error">{{ error }}</p>
     </div>
 
     <button
@@ -142,10 +142,10 @@ onMounted(load)
         class="size-1.5 rounded-full shrink-0"
         :style="{ background: plan?.available ? 'var(--accent)' : 'var(--text-disabled)' }"
       />
-      <span class="text-[10px] font-mono truncate" style="color: var(--text-disabled);">
+      <span class="fs-micro font-mono truncate ink-4">
         {{ label }}
       </span>
-      <span v-if="plan?.available" class="text-[10px] ml-auto" style="color: var(--accent);">update</span>
+      <span v-if="plan?.available" class="fs-micro ml-auto ink-accent">update</span>
     </button>
   </div>
 </template>

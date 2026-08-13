@@ -80,9 +80,9 @@ async function confirmMerge(pull: Pull) {
 
 <template>
   <div>
-    <PageHeader width="narrow" title="Reviews">
+    <PageHeader title="Reviews">
       <template #trailing>
-        <span v-if="summary.onYou" class="text-[11px] font-mono" style="color: var(--accent);">
+        <span v-if="summary.onYou" class="fs-mono font-mono ink-accent">
           {{ summary.onYou }} on you
         </span>
       </template>
@@ -102,13 +102,13 @@ async function confirmMerge(pull: Pull) {
       </template>
     </PageHeader>
 
-    <div class="page-container page-container--narrow py-4 space-y-6">
+    <div class="page-container page-container--measure py-4 space-y-6">
       <p class="type-body leading-relaxed">
         Open pull requests in
-        <span v-if="reading.repo" class="font-mono text-[12px]" style="color: var(--text-primary);">{{ reading.repo }}</span>
+        <span v-if="reading.repo" class="font-mono fs-sm ink">{{ reading.repo }}</span>
         <span v-else>this project</span>
         that have your name on them — asked of you, or opened by you. Read through
-        <code class="font-mono text-[11px]">gh</code>, with the sign-in you already have.
+        <code class="font-mono fs-mono">gh</code>, with the sign-in you already have.
       </p>
 
       <!--
@@ -120,7 +120,7 @@ async function confirmMerge(pull: Pull) {
         class="flex items-start gap-3 p-3.5 rounded-lg"
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
       >
-        <UIcon name="i-lucide-plug-zap" class="size-4 shrink-0 mt-0.5" style="color: var(--warning);" />
+        <UIcon name="i-lucide-plug-zap" class="size-4 shrink-0 mt-0.5 ink-warn" />
         <div class="min-w-0 space-y-1">
           <p class="type-strong text-body">GitHub could not be asked</p>
           <p class="type-detail">{{ reading.reason }}</p>
@@ -179,22 +179,22 @@ async function confirmMerge(pull: Pull) {
               <div
                 v-if="confirming === pull.number"
                 class="flex items-center gap-2 px-3 py-2 rounded-md ml-3"
-                style="background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.25);"
+                style="background: var(--success-wash); border: 1px solid var(--success-edge);"
               >
-                <UIcon name="i-lucide-git-merge" class="size-3.5 shrink-0" style="color: var(--success);" />
+                <UIcon name="i-lucide-git-merge" class="size-3.5 shrink-0 ink-ok" />
                 <span class="type-detail flex-1">
                   Merge #{{ pull.number }} into <span class="font-mono">{{ pull.baseBranch }}</span>?
                   Everyone on this repository sees it.
                 </span>
                 <button
-                  class="text-[11px] px-2 py-1 rounded press-scale focus-ring"
+                  class="fs-mono px-2 py-1 rounded press-scale focus-ring"
                   style="color: var(--text-tertiary);"
                   @click="confirming = null"
                 >
                   Cancel
                 </button>
                 <button
-                  class="text-[11px] px-2.5 py-1 rounded font-medium press-scale focus-ring"
+                  class="fs-mono px-2.5 py-1 rounded font-medium press-scale focus-ring"
                   style="background: var(--success); color: white;"
                   @click="confirmMerge(pull)"
                 >

@@ -125,7 +125,7 @@ onMounted(() => void list(''))
           </template>
         </div>
 
-        <p v-if="listError" class="px-3 py-2 type-meta" style="color: var(--error);">{{ listError }}</p>
+        <p v-if="listError" class="px-3 py-2 type-meta ink-error">{{ listError }}</p>
 
         <div v-else class="max-h-80 overflow-y-auto py-1">
           <button
@@ -164,7 +164,7 @@ onMounted(() => void list(''))
           <span class="type-detail font-mono truncate flex-1">
             {{ openPath ?? 'No file open' }}
           </span>
-          <span v-if="dirty" class="type-meta" style="color: var(--warning);">unsaved</span>
+          <span v-if="dirty" class="type-meta ink-warn">unsaved</span>
           <UButton
             v-if="dirty"
             label="Revert"
@@ -182,7 +182,7 @@ onMounted(() => void list(''))
           />
         </div>
 
-        <p v-if="fileError" class="px-3 py-2 type-meta" style="color: var(--error);">{{ fileError }}</p>
+        <p v-if="fileError" class="px-3 py-2 type-meta ink-error">{{ fileError }}</p>
 
         <CodeEditor
           v-else-if="openPath"

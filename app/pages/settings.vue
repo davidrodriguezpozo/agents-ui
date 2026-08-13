@@ -519,7 +519,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
     <PageHeader title="Settings">
       <template #right>
         <button
-          class="text-[12px] px-2 py-1 rounded focus-ring text-label"
+          class="fs-sm px-2 py-1 rounded focus-ring text-label"
           style="background: var(--surface-raised); border: 1px solid var(--border-default);"
           @click="viewMode = viewMode === 'structured' ? 'raw' : 'structured'"
         >
@@ -534,7 +534,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
     </div>
 
     <!-- Structured view -->
-    <div v-else-if="viewMode === 'structured'" class="px-6 py-4 space-y-6">
+    <div v-else-if="viewMode === 'structured'" class="page-container py-6 space-y-6">
 
       <BackupPanel />
 
@@ -549,7 +549,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <div class="flex items-center justify-between">
             <div>
               <div class="type-strong">Always Thinking</div>
-              <div class="text-[12px] mt-0.5 text-label">
+              <div class="fs-sm mt-0.5 text-label">
                 When enabled, Claude takes more time to reason through complex problems before responding. Better answers, but slower and uses more resources.
               </div>
             </div>
@@ -569,7 +569,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <div class="flex items-center justify-between">
             <div>
               <div class="type-strong">Say what each session did</div>
-              <div class="text-[12px] mt-0.5 text-label">
+              <div class="fs-sm mt-0.5 text-label">
                 After a session changes something, a small model writes one sentence describing
                 it, shown on the sessions list. Just under a cent per turn that changes files —
                 it appears on the spend page as "summary", so you can see what it comes to
@@ -598,7 +598,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                  to it collapses to one word per line. -->
             <div class="flex-1 min-w-0">
               <div class="type-strong">Let sessions fix their own failing checks</div>
-              <div class="text-[12px] mt-0.5 text-label">
+              <div class="fs-sm mt-0.5 text-label">
                 When a turn leaves the checks failing, the session takes another turn at fixing
                 it, carrying the failure with it, until they pass or it runs out of attempts.
                 Off by default because it spends a full turn each time without being asked —
@@ -631,7 +631,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <!-- Spending limits -->
       <div class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Limits</h3>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           These stop work rather than report on it. Leave any of them blank for no limit.
           Today has cost <strong>{{ spentToday < 0.01 && spentToday > 0 ? '<$0.01' : `$${spentToday.toFixed(2)}` }}</strong> so far.
         </p>
@@ -745,13 +745,13 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <!-- Checks -->
       <div class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Checks for this project</h3>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           The command that tells you whether this project works. It runs in a session's own
           workspace after any turn that changed files, and a session whose checks fail will not
           be merged without you saying so explicitly.
         </p>
 
-        <div v-if="!checks?.dir" class="text-[12px] text-label">
+        <div v-if="!checks?.dir" class="fs-sm text-label">
           Pick a project folder in the sidebar first — this is set per repository.
         </div>
 
@@ -813,13 +813,13 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <!-- Preparing a workspace -->
       <div class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Making a workspace runnable</h3>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           A session works in its own checkout of your repository, and a fresh checkout is only
           the tracked files — no dependencies, nothing generated. This is what makes one usable,
           run once per workspace before its first check.
         </p>
 
-        <div v-if="!setup?.dir" class="text-[12px] text-label">
+        <div v-if="!setup?.dir" class="fs-sm text-label">
           Pick a project folder in the sidebar first — this is set per repository.
         </div>
 
@@ -880,12 +880,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <!-- Running it -->
       <div class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Running this project</h3>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           What starts this project so you can look at it. Each session runs it in its own
           workspace, on a port of its own, so several can be up at once.
         </p>
 
-        <div v-if="!dev?.dir" class="text-[12px] text-label">
+        <div v-if="!dev?.dir" class="fs-sm text-label">
           Pick a project folder in the sidebar first — this is set per repository.
         </div>
 
@@ -952,12 +952,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             body="Commands a run decides to execute go through a sandbox: no network beyond the hosts you list, and no reaching outside what its permission rules already allow. It also means a sandboxed command need not stop and ask, so unattended work is interrupted less often."
           />
         </h3>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           Sessions and rituals run shell commands as you. Sandboxed, they reach only the hosts
           listed here — which is what makes leaving one running at 08:00 a reasonable thing to do.
         </p>
 
-        <div v-if="!sandbox?.dir" class="text-[12px] text-label">
+        <div v-if="!sandbox?.dir" class="fs-sm text-label">
           Pick a project folder in the sidebar first — this is set per repository.
         </div>
 
@@ -1040,7 +1040,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         class="rounded-lg p-5 space-y-4 bg-card"
       >
         <h3 class="text-section-title">Status Line</h3>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           Shows custom information in Claude Code's interface. Use a bash command to display dynamic content.
         </p>
 
@@ -1122,7 +1122,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             class="flex items-center justify-between py-2 px-3 rounded-md"
             style="background: var(--input-bg);"
           >
-            <span class="font-mono text-[12px] text-body">{{ plugin.name }}</span>
+            <span class="font-mono fs-sm text-body">{{ plugin.name }}</span>
             <div class="flex items-center gap-3">
               <label class="field-toggle">
                 <input
@@ -1159,7 +1159,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             @click="onCheckUpdates"
           />
         </div>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           Manage skill repositories imported from GitHub.
         </p>
 
@@ -1175,14 +1175,14 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             style="background: var(--input-bg);"
           >
             <div class="flex-1 min-w-0">
-              <span class="font-mono text-[12px] text-body">{{ entry.owner }}/{{ entry.repo }}</span>
-              <span class="text-[10px] text-meta ml-2">{{ entry.selectedSkills.length }} skills</span>
+              <span class="font-mono fs-sm text-body">{{ entry.owner }}/{{ entry.repo }}</span>
+              <span class="fs-micro text-meta ml-2">{{ entry.selectedSkills.length }} skills</span>
             </div>
             <div class="flex items-center gap-2">
               <span
                 v-if="entry.currentSha !== entry.remoteSha"
-                class="text-[10px] font-medium px-2 py-0.5 rounded-full"
-                style="background: rgba(59, 130, 246, 0.1); color: var(--info, #3b82f6);"
+                class="fs-micro font-medium px-2 py-0.5 rounded-full"
+                style="background: var(--info-tint); color: var(--info);"
               >
                 Update available
               </span>
@@ -1213,7 +1213,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <h3 class="text-section-title">Automations</h3>
           <UButton label="Add Automation" icon="i-lucide-plus" size="xs" variant="soft" @click="() => { showAddHookModal = true }" />
         </div>
-        <p class="text-[12px] text-meta">
+        <p class="fs-sm text-meta">
           Run shell commands automatically when certain events happen in Claude Code.
         </p>
 
@@ -1225,7 +1225,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <div v-for="hook in hooks" :key="hook.event">
             <div class="flex items-center gap-2 mb-1.5">
               <UIcon name="i-lucide-webhook" class="size-3.5 text-meta" />
-              <span class="text-[12px] font-medium text-body">{{ hookEventLabels[hook.event] || hook.event }}</span>
+              <span class="fs-sm font-medium text-body">{{ hookEventLabels[hook.event] || hook.event }}</span>
               <span class="type-mono-meta">{{ hook.commands.length }}</span>
             </div>
             <div class="ml-5 space-y-1">
@@ -1236,12 +1236,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                 style="background: var(--input-bg);"
               >
                 <div class="flex-1 min-w-0">
-                  <span class="font-mono text-[12px] truncate block text-label">
+                  <span class="font-mono fs-sm truncate block text-label">
                     {{ typeof cmd === 'string' ? cmd : (cmd as any).command || JSON.stringify(cmd) }}
                   </span>
                   <span
                     v-if="typeof cmd === 'object' && (cmd as any).matcher"
-                    class="font-mono text-[10px] block mt-0.5 text-meta"
+                    class="font-mono fs-micro block mt-0.5 text-meta"
                   >
                     matcher: {{ (cmd as any).matcher }}
                   </span>
@@ -1262,7 +1262,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
     </div>
 
     <!-- Raw JSON editor -->
-    <div v-else class="px-6 py-4">
+    <div v-else class="page-container py-6">
       <div
         class="rounded-lg overflow-hidden"
         style="border: 1px solid var(--border-subtle);"
@@ -1292,7 +1292,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <template #content>
         <div class="p-6 space-y-4 bg-overlay">
           <h3 class="text-page-title">Add Automation</h3>
-          <p class="text-[12px] leading-relaxed text-label">
+          <p class="fs-sm leading-relaxed text-label">
             Run a shell command automatically when a specific event happens.
           </p>
 

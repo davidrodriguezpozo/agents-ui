@@ -100,7 +100,7 @@ const money = computed(() => {
       <!-- A ritual the scheduler gave up on is the loudest thing there is: it
            has stopped happening, and will keep not happening until you say so. -->
       <div v-for="item in digest.stopped" :key="item.id" class="flex items-start gap-2.5">
-        <UIcon name="i-lucide-pause-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--warning);" />
+        <UIcon name="i-lucide-pause-circle" class="size-4 shrink-0 mt-0.5 ink-warn" />
         <div class="flex-1 min-w-0">
           <NuxtLink to="/schedules" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
           <span class="type-detail"> is no longer running — {{ item.reason }}</span>
@@ -114,7 +114,7 @@ const money = computed(() => {
         from the thing being broken.
       -->
       <div v-for="item in digest.missed" :key="`missed-${item.id}`" class="flex items-start gap-2.5">
-        <UIcon name="i-lucide-moon" class="size-4 shrink-0 mt-0.5" style="color: var(--text-disabled);" />
+        <UIcon name="i-lucide-moon" class="size-4 shrink-0 mt-0.5 ink-4" />
         <div class="flex-1 min-w-0">
           <NuxtLink to="/schedules" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
           <span class="type-detail">
@@ -130,7 +130,7 @@ const money = computed(() => {
         all, so the sentence says so rather than implying it will be picked up.
       -->
       <div v-for="item in digest.gaps" :key="`gap-${item.id}`" class="flex items-start gap-2.5">
-        <UIcon name="i-lucide-eye-off" class="size-4 shrink-0 mt-0.5" style="color: var(--text-disabled);" />
+        <UIcon name="i-lucide-eye-off" class="size-4 shrink-0 mt-0.5 ink-4" />
         <div class="flex-1 min-w-0">
           <NuxtLink to="/schedules" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
           <span class="type-detail">
@@ -167,7 +167,7 @@ const money = computed(() => {
             class="flex items-center gap-2 flex-wrap mt-1"
           >
             <template v-if="granted.has(item.scheduleId) || item.alreadyAllowed">
-              <UIcon name="i-lucide-shield-check" class="size-3.5" style="color: var(--success);" />
+              <UIcon name="i-lucide-shield-check" class="size-3.5 ink-ok" />
               <span class="type-meta">Allowed. It will not stop for these again.</span>
             </template>
             <template v-else>
@@ -195,7 +195,7 @@ const money = computed(() => {
       </div>
 
       <div v-for="item in wanted" :key="item.id" class="flex items-start gap-2.5">
-        <UIcon name="i-lucide-circle-alert" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
+        <UIcon name="i-lucide-circle-alert" class="size-4 shrink-0 mt-0.5 ink-error" />
         <div class="flex-1 min-w-0">
           <NuxtLink :to="`/sessions/${item.id}`" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
           <p class="type-detail">
@@ -210,11 +210,11 @@ const money = computed(() => {
            work that went well needs acknowledging, not reading. -->
       <div v-if="produced.length" class="pt-1 space-y-2">
         <div v-for="item in produced" :key="item.id" class="flex items-start gap-2.5">
-          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0 mt-0.5" style="color: var(--success);" />
+          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0 mt-0.5 ink-ok" />
           <div class="flex-1 min-w-0">
             <NuxtLink :to="`/sessions/${item.id}`" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
             <p v-if="item.summary" class="type-detail">{{ item.summary }}</p>
-            <p v-if="item.behindBase" class="type-detail" style="color: var(--warning);">
+            <p v-if="item.behindBase" class="type-detail ink-warn">
               Verified before its base moved on — worth bringing it up to date first.
             </p>
           </div>

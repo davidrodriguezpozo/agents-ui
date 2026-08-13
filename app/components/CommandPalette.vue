@@ -79,14 +79,14 @@ defineExpose({ move, choose, hasMatches: computed(() => matches.value.length > 0
         @mouseenter="selected = index"
         @click="choose(index)"
       >
-        <span class="font-mono type-detail shrink-0" style="color: var(--accent);">
+        <span class="font-mono type-detail shrink-0 ink-accent">
           {{ entry.invocation }}
         </span>
         <span class="type-meta flex-1 min-w-0 truncate">{{ entry.description }}</span>
         <span
           v-if="entry.origin"
-          class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0"
-          style="background: rgba(139, 92, 246, 0.12); color: rgb(139, 92, 246);"
+          class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
+          style="background: var(--plugin-tint); color: var(--plugin);"
         >
           {{ entry.origin }}
         </span>

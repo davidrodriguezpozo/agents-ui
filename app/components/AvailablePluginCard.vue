@@ -26,7 +26,7 @@ defineExpose({ installing })
     <div class="flex items-center gap-3 flex-1 min-w-0">
       <UIcon name="i-lucide-puzzle" class="size-3.5 shrink-0 text-meta" />
       <span class="type-strong w-44 shrink-0 truncate">{{ plugin.name }}</span>
-      <span class="flex-1 text-[12px] truncate text-label">{{ plugin.description }}</span>
+      <span class="flex-1 fs-sm truncate text-label">{{ plugin.description }}</span>
       <div class="flex items-center gap-3 shrink-0">
         <span v-if="plugin.skillCount" class="type-mono-meta">
           {{ plugin.skillCount }} skill{{ plugin.skillCount === 1 ? '' : 's' }}

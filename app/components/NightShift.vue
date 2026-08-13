@@ -174,7 +174,7 @@ const tableRows = computed(() =>
         <button
           v-for="w in WINDOWS"
           :key="w.hours"
-          class="px-2 py-0.5 rounded text-[11px] font-medium transition-colors focus-ring"
+          class="px-2 py-0.5 rounded fs-mono font-medium transition-colors focus-ring"
           :style="{
             background: hours === w.hours ? 'var(--accent-muted)' : 'transparent',
             color: hours === w.hours ? 'var(--accent)' : 'var(--text-tertiary)',
@@ -187,7 +187,7 @@ const tableRows = computed(() =>
       </div>
     </header>
 
-    <div v-if="error" class="px-4 py-3 text-[12px]" style="color: var(--error);">{{ error }}</div>
+    <div v-if="error" class="px-4 py-3 fs-sm ink-error">{{ error }}</div>
 
     <!-- Held at reduced opacity on refetch rather than replaced by a skeleton:
          this redraws every thirty seconds and a flash would never settle. -->

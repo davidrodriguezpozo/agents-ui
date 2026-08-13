@@ -47,7 +47,7 @@ const filteredSkills = computed(() => {
   <div>
     <PageHeader title="Skills">
       <template #trailing>
-        <span class="font-mono text-[12px] text-meta">{{ skills.length }}</span>
+        <span class="font-mono fs-sm text-meta">{{ skills.length }}</span>
       </template>
       <template #right>
         <UButton label="Import" icon="i-lucide-upload" size="sm" variant="soft" @click="() => { showImportModal = true }" />
@@ -60,8 +60,8 @@ const filteredSkills = computed(() => {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4">
-      <p class="text-[13px] mb-4 leading-relaxed text-label">
+    <div class="page-container py-6">
+      <p class="fs-base mb-4 leading-relaxed text-label">
         Specific capabilities that can be added to agents and invoked as slash commands.
       </p>
 
@@ -76,7 +76,7 @@ const filteredSkills = computed(() => {
           <button
             v-for="filter in sourceFilters"
             :key="filter.key"
-            class="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all focus-ring"
+            class="px-2.5 py-1 rounded-md fs-mono font-medium transition-all focus-ring"
             :style="{
               background: sourceFilter === filter.key ? 'var(--accent-muted)' : 'transparent',
               color: sourceFilter === filter.key ? 'var(--accent)' : 'var(--text-tertiary)',
@@ -84,7 +84,7 @@ const filteredSkills = computed(() => {
             @click="sourceFilter = filter.key"
           >
             {{ filter.label }}
-            <span class="font-mono text-[10px] ml-1 opacity-70">{{ filter.count }}</span>
+            <span class="font-mono fs-micro ml-1 opacity-70">{{ filter.count }}</span>
           </button>
         </div>
       </div>
@@ -92,10 +92,10 @@ const filteredSkills = computed(() => {
       <div
         v-if="error"
         class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
-        style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
+        style="background: var(--error-wash); border: 1px solid var(--error-tint);"
       >
-        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
-        <span class="text-[12px]" style="color: var(--error);">{{ error }}</span>
+        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5 ink-error" />
+        <span class="fs-sm ink-error">{{ error }}</span>
       </div>
 
       <div v-if="loading" class="space-y-1">
@@ -111,17 +111,17 @@ const filteredSkills = computed(() => {
           class="flex items-center gap-3 px-3 py-2.5 rounded-md group focus-ring hover-row"
         >
           <!-- Icon -->
-          <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0" style="color: var(--accent);" />
+          <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0 ink-accent" />
 
           <!-- Name -->
-          <span class="type-strong w-44 shrink-0 truncate">
+          <span class="type-strong w-64 shrink-0 truncate">
             {{ skill.frontmatter.name }}
           </span>
 
           <!-- Context badge -->
           <span
             v-if="skill.frontmatter.context"
-            class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
+            class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
           >
             {{ skill.frontmatter.context }}
           </span>
@@ -129,7 +129,7 @@ const filteredSkills = computed(() => {
           <!-- Agent badge -->
           <span
             v-if="skill.frontmatter.agent"
-            class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-agent"
+            class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-agent"
           >
             agent: {{ skill.frontmatter.agent }}
           </span>
@@ -141,7 +141,7 @@ const filteredSkills = computed(() => {
           />
 
           <!-- Description -->
-          <span class="flex-1 text-[12px] truncate text-label">
+          <span class="flex-1 fs-sm truncate text-label">
             {{ skill.frontmatter.description }}
           </span>
 
@@ -174,17 +174,17 @@ const filteredSkills = computed(() => {
       <div v-else class="flex flex-col items-center justify-center py-12 space-y-5">
         <div class="rounded-md p-4 bg-card max-w-sm w-full type-detail leading-relaxed space-y-1">
           <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-cpu" class="size-3.5" style="color: var(--accent);" />
+            <UIcon name="i-lucide-cpu" class="size-3.5 ink-accent" />
             <span>code-reviewer</span>
             <span class="text-meta">agent</span>
           </div>
           <div class="flex items-center gap-2 ml-5">
-            <UIcon name="i-lucide-sparkles" class="size-3" style="color: var(--accent);" />
+            <UIcon name="i-lucide-sparkles" class="size-3 ink-accent" />
             <span>security-audit</span>
             <span class="text-meta">skill</span>
           </div>
           <div class="flex items-center gap-2 ml-5">
-            <UIcon name="i-lucide-sparkles" class="size-3" style="color: var(--accent);" />
+            <UIcon name="i-lucide-sparkles" class="size-3 ink-accent" />
             <span>performance-check</span>
             <span class="text-meta">skill</span>
           </div>

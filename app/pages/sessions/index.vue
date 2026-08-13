@@ -466,7 +466,7 @@ async function switchTo(path: string) {
 
 <template>
   <div>
-    <PageHeader width="narrow" title="Sessions">
+    <PageHeader title="Sessions">
       <template #trailing>
         <!--
           Only worth a control when there is somewhere else to look. One project
@@ -480,7 +480,7 @@ async function switchTo(path: string) {
           <button
             v-for="option in [{ value: 'here' as const, label: 'This project' }, { value: 'all' as const, label: 'All projects' }]"
             :key="option.value"
-            class="px-2 py-0.5 rounded text-[10px] font-medium transition-all"
+            class="px-2 py-0.5 rounded fs-micro font-medium transition-all"
             :style="{
               background: scope === option.value ? 'var(--accent-muted)' : 'transparent',
               color: scope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
@@ -499,7 +499,7 @@ async function switchTo(path: string) {
       </template>
     </PageHeader>
 
-    <div class="page-container page-container--narrow py-4 space-y-5">
+    <div class="page-container page-container--measure py-4 space-y-5">
       <p class="type-body">
         Each session works on its own copy of your project, so several can run at the same time
         without overwriting each other. Nothing touches your files until you merge it.
@@ -514,24 +514,24 @@ async function switchTo(path: string) {
       <div
         v-if="notARepo"
         class="rounded-lg p-4 space-y-3"
-        style="background: rgba(212, 153, 34, 0.08); border: 1px solid rgba(212, 153, 34, 0.25);"
+        style="background: var(--warning-wash); border: 1px solid var(--warning-edge);"
       >
         <div class="flex items-start gap-2.5">
-          <UIcon name="i-lucide-folder-git-2" class="size-4 shrink-0 mt-0.5" style="color: var(--warning);" />
+          <UIcon name="i-lucide-folder-git-2" class="size-4 shrink-0 mt-0.5 ink-warn" />
           <div class="space-y-1">
-            <div class="text-[12px] font-medium text-body">
+            <div class="fs-sm font-medium text-body">
               <span class="font-mono">{{ displayPath }}</span> is not a git repository
             </div>
-            <p class="text-[11px] leading-relaxed text-label">
+            <p class="fs-mono leading-relaxed text-label">
               Sessions work on their own copy of a repository, so there has to be one to copy.
             </p>
           </div>
         </div>
 
-        <div v-if="lookingInside" class="text-[11px] text-meta">Looking for one inside…</div>
+        <div v-if="lookingInside" class="fs-mono text-meta">Looking for one inside…</div>
 
         <div v-else-if="nestedRepos.length" class="space-y-2">
-          <p class="text-[11px] leading-relaxed text-label">
+          <p class="fs-mono leading-relaxed text-label">
             {{ nestedRepos.length === 1 ? 'There is one inside' : 'There are some inside' }}.
             Sessions branch from the repository, and everything around it stays readable —
             so notes and specs beside it are still there to work from.
@@ -550,7 +550,7 @@ async function switchTo(path: string) {
           </div>
         </div>
 
-        <p v-else class="text-[11px] leading-relaxed text-label">
+        <p v-else class="fs-mono leading-relaxed text-label">
           Nothing inside it is one either. Pick a repository in the sidebar, or run
           <span class="font-mono">git init</span> here.
         </p>
@@ -626,7 +626,7 @@ async function switchTo(path: string) {
             is not.
           -->
           <p v-if="duplicateOf" class="type-meta flex items-center gap-1.5 flex-wrap">
-            <UIcon name="i-lucide-copy" class="size-3 shrink-0" style="color: var(--warning);" />
+            <UIcon name="i-lucide-copy" class="size-3 shrink-0 ink-warn" />
             <span style="color: var(--warning);">You already asked for this.</span>
             <NuxtLink
               :to="`/sessions/${duplicateOf.session.id}`"
@@ -641,7 +641,7 @@ async function switchTo(path: string) {
           <textarea
             v-model="batchText"
             rows="5"
-            class="field-input w-full resize-y font-mono text-[12px]"
+            class="field-input w-full resize-y font-mono fs-sm"
             placeholder="One instruction per line — each becomes its own session:&#10;&#10;Fix the flaky upload test&#10;Update the README for the new install flow&#10;Bump the linter and fix what it finds"
             :disabled="startingBatch"
           />
@@ -664,7 +664,7 @@ async function switchTo(path: string) {
               :disabled="startingBatch"
               @click="() => { batchMode = false; batchText = '' }"
             />
-            <span v-if="tooMany" class="type-meta" style="color: var(--error);">
+            <span v-if="tooMany" class="type-meta ink-error">
               {{ batchPrompts.length }} is too many — {{ MAX_AT_ONCE }} at once is the limit.
               Each one is a full checkout.
             </span>
@@ -678,7 +678,7 @@ async function switchTo(path: string) {
             again twenty minutes later, retyped rather than re-run.
           -->
           <div v-if="batchDuplicates.length && !startingBatch" class="space-y-1">
-            <p class="type-meta" style="color: var(--warning);">
+            <p class="type-meta ink-warn">
               {{ batchDuplicates.length === 1 ? 'One of these' : `${batchDuplicates.length} of these` }}
               you have already asked for:
             </p>
@@ -772,8 +772,8 @@ async function switchTo(path: string) {
         class="rounded-md px-4 py-3 flex items-start gap-3"
         style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
       >
-        <UIcon name="i-lucide-folder" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
-        <span class="type-detail" style="color: var(--text-secondary);">
+        <UIcon name="i-lucide-folder" class="size-4 shrink-0 mt-0.5 ink-accent" />
+        <span class="type-detail ink-2">
           Pick a project folder in the sidebar to start a session. Sessions branch from a git repository.
         </span>
       </div>
@@ -793,7 +793,7 @@ async function switchTo(path: string) {
           class="flex items-center gap-3 px-3 py-2.5 rounded-md"
           style="border: 1px dashed var(--border-subtle);"
         >
-          <UIcon name="i-lucide-terminal" class="size-4 shrink-0" style="color: var(--text-disabled);" />
+          <UIcon name="i-lucide-terminal" class="size-4 shrink-0 ink-4" />
           <div class="flex-1 min-w-0">
             <div class="type-strong truncate text-body">{{ transcript.title }}</div>
             <div class="type-mono-meta">
@@ -830,7 +830,7 @@ async function switchTo(path: string) {
               :style="{ color: group.isActive ? 'var(--accent)' : 'var(--text-disabled)' }"
             />
             <h2 class="text-section-label !mb-0">{{ group.name }}</h2>
-            <span v-if="group.needsYou" class="type-meta" style="color: var(--error);">
+            <span v-if="group.needsYou" class="type-meta ink-error">
               {{ group.needsYou }} needing you
             </span>
             <button
@@ -860,7 +860,7 @@ async function switchTo(path: string) {
             <div v-if="group.sections.length > 1" class="flex items-baseline gap-2 pt-2 first:pt-0">
               <h3 class="text-section-label">{{ part.section.title }}</h3>
               <span class="type-mono-meta">{{ part.sessions.length }}</span>
-              <span v-if="part.section.hint" class="text-[11px] text-meta truncate">
+              <span v-if="part.section.hint" class="fs-mono text-meta truncate">
                 {{ part.section.hint }}
               </span>
 
@@ -873,7 +873,7 @@ async function switchTo(path: string) {
               <template v-if="part.section.outcome === 'ready' && group.isActive && !landing">
                 <span class="flex-1" />
                 <template v-if="confirmingLand">
-                  <span class="text-[11px] text-label">
+                  <span class="fs-mono text-label">
                     Merge what passes into {{ activeProject?.branch || 'your current branch' }}?
                   </span>
                   <UButton
@@ -909,7 +909,7 @@ async function switchTo(path: string) {
               <template v-if="part.section.outcome === 'nothing'">
                 <span class="flex-1" />
                 <template v-if="confirmingClose === group.path">
-                  <span class="text-[11px] text-label">
+                  <span class="fs-mono text-label">
                     Close {{ part.sessions.length }} and delete their branches?
                   </span>
                   <UButton
@@ -974,7 +974,7 @@ async function switchTo(path: string) {
           class="type-meta"
           style="color: var(--error);"
         >{{ elsewhereNeedsYou }} needing you</span>
-        <span class="ml-auto type-meta" style="color: var(--accent);">Show</span>
+        <span class="ml-auto type-meta ink-accent">Show</span>
       </button>
 
       <!-- Always visible, so worktrees never accumulate unnoticed -->

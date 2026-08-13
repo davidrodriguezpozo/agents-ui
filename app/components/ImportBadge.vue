@@ -6,7 +6,7 @@ defineProps<{
 
 <template>
   <span
-    class="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-px rounded-full shrink-0"
+    class="inline-flex items-center gap-1 fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
     style="background: var(--badge-subtle-bg); color: var(--text-disabled);"
     :title="`Imported from github.com/${repo}`"
   >

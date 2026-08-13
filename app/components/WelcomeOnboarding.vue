@@ -67,7 +67,7 @@ const starts = [
   <div class="space-y-8">
     <!-- Hero -->
     <div class="text-center space-y-3 pt-2">
-      <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
+      <h2 class="fs-title font-bold" style="font-family: var(--font-display);">
         Leave Claude Code running
       </h2>
       <p class="type-body max-w-xl mx-auto leading-relaxed">
@@ -85,13 +85,13 @@ const starts = [
         class="rounded-md p-4 bg-card hover-card focus-ring group flex flex-col"
       >
         <div class="flex items-center gap-2 mb-2">
-          <UIcon :name="start.icon" class="size-4" style="color: var(--accent);" />
+          <UIcon :name="start.icon" class="size-4 ink-accent" />
           <span class="type-strong">{{ start.title }}</span>
         </div>
         <p class="type-detail leading-relaxed flex-1">
           {{ start.body }}
         </p>
-        <div class="flex items-center gap-1.5 mt-3 text-[12px] font-medium" style="color: var(--accent);">
+        <div class="flex items-center gap-1.5 mt-3 fs-sm font-medium ink-accent">
           {{ start.cta }}
           <UIcon
             name="i-lucide-arrow-right"

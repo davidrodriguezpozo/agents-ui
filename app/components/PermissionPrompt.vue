@@ -60,16 +60,16 @@ const detail = computed(() => {
         style="color: var(--accent);"
       />
       <div class="min-w-0 flex-1 space-y-1.5">
-        <p class="text-[12px] font-medium" style="color: var(--text-primary);">
+        <p class="fs-sm font-medium ink">
           {{ headline }}
         </p>
         <pre
-          class="text-[11px] whitespace-pre-wrap break-words max-h-32 overflow-y-auto rounded-md px-2.5 py-2 m-0"
+          class="fs-mono whitespace-pre-wrap break-words max-h-32 overflow-y-auto rounded-md px-2.5 py-2 m-0"
           style="font-family: var(--font-mono); background: var(--badge-subtle-bg); color: var(--text-secondary);"
         >{{ detail }}</pre>
         <p
           v-if="request.decisionReason"
-          class="text-[10px]"
+          class="fs-micro"
           style="color: var(--text-tertiary);"
         >
           {{ request.decisionReason }}

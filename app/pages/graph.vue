@@ -315,29 +315,27 @@ function onNodeClick({ node }: NodeMouseEvent) {
 
 <template>
   <div class="relative h-screen flex flex-col">
-    <!-- Floating header -->
-    <div
-      class="absolute top-0 left-0 right-0 z-10 h-14 flex items-center gap-3 px-6"
-      style="background: color-mix(in srgb, var(--surface-base) 85%, transparent); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border-subtle);"
-    >
-      <h1 class="text-page-title flex-1">Graph</h1>
-      <span class="font-mono text-[11px]" style="color: var(--text-disabled);">
-        {{ nodes.filter(n => n.type !== 'columnHeader').length }} nodes
-      </span>
-      <span class="font-mono text-[11px]" style="color: var(--text-disabled);">
-        {{ edges.length }} edges
-      </span>
-      <button
-        class="font-mono text-[11px] px-2 py-1 rounded focus-ring"
-        style="color: var(--text-tertiary); background: var(--surface-raised); border: 1px solid var(--border-default);"
-        @click="showLegend = !showLegend"
-      >
-        {{ showLegend ? 'Hide' : 'Show' }} Legend
-      </button>
-    </div>
+    <!-- Floats over the canvas, but the same height and type as every other page -->
+    <PageHeader overlay title="Graph">
+      <template #right>
+        <span class="type-mono-meta">
+          {{ nodes.filter(n => n.type !== 'columnHeader').length }} nodes
+        </span>
+        <span class="type-mono-meta">
+          {{ edges.length }} edges
+        </span>
+        <button
+          class="type-mono px-2 py-1 rounded focus-ring"
+          style="background: var(--surface-raised); border: 1px solid var(--border-default);"
+          @click="showLegend = !showLegend"
+        >
+          {{ showLegend ? 'Hide' : 'Show' }} legend
+        </button>
+      </template>
+    </PageHeader>
 
     <div v-if="loading" class="flex-1 flex items-center justify-center" style="background: var(--surface-base);">
-      <UIcon name="i-lucide-loader-2" class="size-6 animate-spin" style="color: var(--text-disabled);" />
+      <UIcon name="i-lucide-loader-2" class="size-6 animate-spin ink-4" />
     </div>
 
     <div v-else ref="graphCanvasRef" class="flex-1 graph-canvas">
@@ -359,7 +357,7 @@ function onNodeClick({ node }: NodeMouseEvent) {
               <UIcon v-if="data.icon === 'zap'" name="i-lucide-zap" class="size-3.5" />
               <UIcon v-else-if="data.icon === 'cpu'" name="i-lucide-cpu" class="size-3.5" />
               <UIcon v-else-if="data.icon === 'puzzle'" name="i-lucide-puzzle" class="size-3.5" />
-              <span v-else class="font-mono text-[10px] font-bold">&gt;_</span>
+              <span v-else class="font-mono fs-micro font-bold">&gt;_</span>
             </span>
             {{ data.label }}
           </div>
@@ -381,15 +379,15 @@ function onNodeClick({ node }: NodeMouseEvent) {
             <div class="graph-node__accent-line" :style="{ background: data.color }" />
             <div class="flex items-center gap-2">
               <div class="size-2.5 rounded-full shrink-0" :style="{ background: data.color, boxShadow: `0 0 0 2px ${data.color}30` }" />
-              <span class="font-mono text-[11px] font-semibold truncate" style="color: var(--text-primary);">
+              <span class="font-mono fs-mono font-semibold truncate ink">
                 {{ data.label }}
               </span>
             </div>
             <div v-if="data.model" class="mt-1.5 flex items-center">
               <span
-                class="text-[9px] font-mono font-medium px-1.5 py-px rounded-full"
+                class="fs-micro font-mono font-medium px-1.5 py-px rounded-full"
                 :style="{
-                  background: data.model === 'opus' ? 'rgba(192,132,252,0.15)' : data.model === 'sonnet' ? 'rgba(96,165,250,0.15)' : 'rgba(251,191,36,0.15)',
+                  background: data.model === 'opus' ? 'color-mix(in srgb, var(--model-opus) 15%, transparent)' : data.model === 'sonnet' ? 'color-mix(in srgb, var(--model-sonnet) 15%, transparent)' : 'var(--warning-tint)',
                   color: data.model === 'opus' ? 'var(--model-opus)' : data.model === 'sonnet' ? 'var(--model-sonnet)' : 'var(--model-haiku)',
                 }"
               >
@@ -405,10 +403,10 @@ function onNodeClick({ node }: NodeMouseEvent) {
           <Handle type="source" :position="Position.Right" class="graph-handle" />
           <div class="graph-node graph-node--command" :class="{ 'graph-node--orphan': data.orphan }">
             <div class="flex items-center gap-1.5">
-              <span class="font-mono text-[10px] font-bold shrink-0" style="color: var(--text-disabled);">
+              <span class="font-mono fs-micro font-bold shrink-0 ink-4">
                 &gt;_
               </span>
-              <span class="font-mono text-[11px] truncate" style="color: var(--text-secondary);">
+              <span class="font-mono fs-mono truncate ink-2">
                 /{{ data.label }}
               </span>
             </div>
@@ -422,7 +420,7 @@ function onNodeClick({ node }: NodeMouseEvent) {
           <div class="graph-node graph-node--skill" :class="{ 'graph-node--orphan': data.orphan }">
             <div class="flex items-center gap-1.5">
               <UIcon name="i-lucide-zap" class="size-3 shrink-0" style="color: var(--model-haiku);" />
-              <span class="font-mono text-[11px] font-medium truncate" style="color: var(--text-secondary);">
+              <span class="font-mono fs-mono font-medium truncate ink-2">
                 {{ data.label }}
               </span>
             </div>
@@ -436,20 +434,20 @@ function onNodeClick({ node }: NodeMouseEvent) {
           <div class="graph-node graph-node--plugin" :class="{ 'graph-node--orphan': data.orphan }">
             <div class="flex items-center gap-1.5">
               <UIcon name="i-lucide-puzzle" class="size-3 shrink-0" style="color: var(--model-sonnet);" />
-              <span class="font-mono text-[11px] font-medium truncate" style="color: var(--text-secondary);">
+              <span class="font-mono fs-mono font-medium truncate ink-2">
                 {{ data.label }}
               </span>
               <span
-                class="ml-auto text-[9px] font-mono px-1 py-px rounded-full shrink-0"
+                class="ml-auto fs-micro font-mono px-1 py-px rounded-full shrink-0"
                 :style="{
-                  background: data.enabled ? 'rgba(74,222,128,0.15)' : 'var(--badge-subtle-bg)',
+                  background: data.enabled ? 'var(--success-tint)' : 'var(--badge-subtle-bg)',
                   color: data.enabled ? 'var(--success)' : 'var(--text-disabled)',
                 }"
               >
                 {{ data.enabled ? 'on' : 'off' }}
               </span>
             </div>
-            <div v-if="data.skillCount" class="text-[10px] mt-1" style="color: var(--text-tertiary);">
+            <div v-if="data.skillCount" class="fs-micro mt-1 ink-3">
               {{ data.skillCount }} skill{{ data.skillCount !== 1 ? 's' : '' }}
             </div>
           </div>
@@ -472,16 +470,16 @@ function onNodeClick({ node }: NodeMouseEvent) {
       <Transition name="page">
         <div
           v-if="showLegend"
-          class="absolute bottom-4 left-4 z-10 rounded-lg p-3.5 text-[11px] space-y-2"
+          class="absolute bottom-4 left-4 z-10 rounded-lg p-3.5 fs-mono space-y-2"
           style="background: color-mix(in srgb, var(--surface-base) 92%, transparent); backdrop-filter: blur(12px); border: 1px solid var(--border-default);"
         >
-          <div class="font-mono font-semibold mb-2" style="color: var(--text-secondary);">Legend</div>
+          <div class="font-mono font-semibold mb-2 ink-2">Legend</div>
           <div class="flex items-center gap-2">
             <div class="size-2.5 rounded-full" style="background: var(--accent);" />
             <span style="color: var(--text-tertiary);">Agent</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="font-mono text-[9px] font-bold" style="color: var(--text-disabled);">&gt;_</span>
+            <span class="font-mono fs-micro font-bold ink-4">&gt;_</span>
             <span style="color: var(--text-tertiary);">Command</span>
           </div>
           <div class="flex items-center gap-2">
@@ -506,7 +504,7 @@ function onNodeClick({ node }: NodeMouseEvent) {
             <div class="size-3 rounded" style="border: 1px dashed var(--border-default); opacity: 0.55;" />
             <span style="color: var(--text-tertiary);">No connections</span>
           </div>
-          <div class="mt-1" style="color: var(--text-disabled);">
+          <div class="mt-1 ink-4">
             Hover a node to highlight connections
           </div>
         </div>

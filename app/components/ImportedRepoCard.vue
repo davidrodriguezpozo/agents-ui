@@ -79,18 +79,18 @@ function formatDate(iso: string) {
         </div>
         <div class="flex-1 min-w-0">
           <div class="type-strong truncate">{{ entry.owner }}/{{ entry.repo }}</div>
-          <span class="text-[10px] text-meta">{{ entry.selectedSkills.length }} skill{{ entry.selectedSkills.length === 1 ? '' : 's' }} selected</span>
+          <span class="fs-micro text-meta">{{ entry.selectedSkills.length }} skill{{ entry.selectedSkills.length === 1 ? '' : 's' }} selected</span>
         </div>
         <span
           v-if="hasUpdate"
-          class="text-[10px] font-medium px-2 py-0.5 rounded-full"
-          style="background: rgba(59, 130, 246, 0.1); color: var(--info, #3b82f6);"
+          class="fs-micro font-medium px-2 py-0.5 rounded-full"
+          style="background: var(--info-tint); color: var(--info);"
         >
           Update available
         </span>
       </div>
 
-      <div class="flex items-center gap-3 text-[10px] text-meta font-mono">
+      <div class="flex items-center gap-3 fs-micro text-meta font-mono">
         <span>Imported {{ formatDate(entry.importedAt) }}</span>
         <span>SHA {{ entry.currentSha.slice(0, 7) }}</span>
       </div>
@@ -115,8 +115,8 @@ function formatDate(iso: string) {
                 @change="toggleSkill(skill.slug)"
               />
               <div class="flex-1 min-w-0">
-                <span class="text-[12px] font-medium">{{ skill.name }}</span>
-                <p class="text-[10px] text-label mt-0.5 line-clamp-1">{{ skill.description }}</p>
+                <span class="fs-sm font-medium">{{ skill.name }}</span>
+                <p class="fs-micro text-label mt-0.5 line-clamp-1">{{ skill.description }}</p>
               </div>
             </label>
           </div>
@@ -139,7 +139,7 @@ function formatDate(iso: string) {
         :href="entry.url"
         target="_blank"
         rel="noopener"
-        class="text-[12px] text-meta hover:text-label transition-colors"
+        class="fs-sm text-meta hover:text-label transition-colors"
       >
         View on GitHub
       </a>

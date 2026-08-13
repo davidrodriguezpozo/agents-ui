@@ -100,8 +100,8 @@ function reset() {
 
       <div
         v-if="error"
-        class="rounded-md px-3 py-2 text-[12px]"
-        style="background: rgba(248, 113, 113, 0.06); color: var(--error); border: 1px solid rgba(248, 113, 113, 0.12);"
+        class="rounded-md px-3 py-2 fs-sm"
+        style="background: var(--error-wash); color: var(--error); border: 1px solid var(--error-tint);"
       >
         {{ error }}
       </div>
@@ -125,7 +125,7 @@ function reset() {
           Found <strong>{{ scanResult.skills.length }}</strong> skills in
           <span class="font-mono">{{ scanResult.owner }}/{{ scanResult.repo }}</span>
         </p>
-        <button class="text-[12px] text-meta hover:text-label" @click="toggleAll">
+        <button class="fs-sm text-meta hover:text-label" @click="toggleAll">
           {{ selected.size === scanResult.skills.length ? 'Deselect all' : 'Select all' }}
         </button>
       </div>
@@ -147,27 +147,27 @@ function reset() {
               <span class="type-strong truncate">{{ skill.name }}</span>
               <span
                 v-if="skill.conflict"
-                class="text-[9px] font-medium px-1.5 py-px rounded-full shrink-0"
-                style="background: rgba(234, 179, 8, 0.1); color: var(--warning, #eab308);"
+                class="fs-micro font-medium px-1.5 py-px rounded-full shrink-0"
+                style="background: var(--warning-tint); color: var(--warning, #eab308);"
               >
                 exists locally
               </span>
               <span
                 v-if="skill.category"
-                class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
+                class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle"
               >
                 {{ skill.category }}
               </span>
             </div>
-            <p class="text-[11px] text-label mt-0.5 line-clamp-2">{{ skill.description }}</p>
+            <p class="fs-mono text-label mt-0.5 line-clamp-2">{{ skill.description }}</p>
           </div>
         </label>
       </div>
 
       <div
         v-if="error"
-        class="rounded-md px-3 py-2 text-[12px]"
-        style="background: rgba(248, 113, 113, 0.06); color: var(--error); border: 1px solid rgba(248, 113, 113, 0.12);"
+        class="rounded-md px-3 py-2 fs-sm"
+        style="background: var(--error-wash); color: var(--error); border: 1px solid var(--error-tint);"
       >
         {{ error }}
       </div>
@@ -197,7 +197,7 @@ function reset() {
       <div class="flex flex-col items-center py-6 space-y-3">
         <div
           class="size-12 rounded-full flex items-center justify-center"
-          style="background: rgba(34, 197, 94, 0.1);"
+          style="background: var(--success-tint);"
         >
           <UIcon name="i-lucide-check" class="size-6" style="color: var(--success, #22c55e);" />
         </div>

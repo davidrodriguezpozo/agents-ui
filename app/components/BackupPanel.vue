@@ -120,7 +120,7 @@ const visible = computed(() =>
     <div class="flex items-start justify-between gap-4">
       <div>
         <h3 class="text-section-title">Backups</h3>
-        <p class="text-[12px] mt-1 text-label">
+        <p class="fs-sm mt-1 text-label">
           Your daily rituals only exist here — nothing else on this machine remembers them.
           They are copied automatically, alongside your sessions, to a folder outside the app's
           own directory so a backup survives that directory being deleted.
@@ -143,10 +143,10 @@ const visible = computed(() =>
       class="rounded-md px-4 py-3 flex items-start gap-3"
       style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
     >
-      <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
+      <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5 ink-accent" />
       <div class="space-y-1">
         <div class="type-strong">Something is wrong with your saved data</div>
-        <div class="type-detail" style="color: var(--text-secondary);">{{ data.problem }}</div>
+        <div class="type-detail ink-2">{{ data.problem }}</div>
       </div>
     </div>
 
@@ -176,11 +176,11 @@ const visible = computed(() =>
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
         >
           <div class="flex items-center gap-3">
-            <UIcon name="i-lucide-shield-check" class="size-3.5 shrink-0" style="color: var(--text-disabled);" />
+            <UIcon name="i-lucide-shield-check" class="size-3.5 shrink-0 ink-4" />
 
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2 flex-wrap">
-                <span class="type-detail" style="color: var(--text-primary);">{{ exactly(snapshot.createdAt) }}</span>
+                <span class="type-detail ink">{{ exactly(snapshot.createdAt) }}</span>
                 <span class="type-mono-meta px-1.5 py-px rounded-full" style="background: var(--badge-subtle-bg);">
                   {{ reasonLabel[snapshot.reason] }}
                 </span>

@@ -87,7 +87,7 @@ function commit() {
         />
         <span
           v-else
-          class="flex items-center justify-center size-4 rounded-full text-[10px] font-mono"
+          class="flex items-center justify-center size-4 rounded-full fs-micro font-mono"
           style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
         >{{ index + 1 }}</span>
       </div>
@@ -97,7 +97,7 @@ function commit() {
           <input
             v-if="editing"
             v-model="draft"
-            class="field-input text-[13px] font-medium max-w-xs"
+            class="field-input fs-base font-medium max-w-xs"
             @blur="commit"
             @keydown.enter="commit"
             @keydown.esc="() => { editing = false; draft = step.label }"
@@ -113,7 +113,7 @@ function commit() {
 
           <!-- Which agent does it, which is the step's whole substance -->
           <button
-            class="inline-flex items-center gap-1.5 text-[11px] px-1.5 py-px rounded-full shrink-0"
+            class="inline-flex items-center gap-1.5 fs-mono px-1.5 py-px rounded-full shrink-0"
             style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
             :disabled="locked"
             :title="locked ? undefined : 'Use a different agent'"
@@ -133,7 +133,7 @@ function commit() {
           <span v-if="facts" class="type-meta">{{ facts }}</span>
         </div>
 
-        <p v-if="error" class="type-detail mt-1" style="color: var(--error);">{{ error }}</p>
+        <p v-if="error" class="type-detail mt-1 ink-error">{{ error }}</p>
 
         <!-- What it said. The reason for running the thing. -->
         <div v-if="preview" class="mt-1.5">
@@ -168,7 +168,7 @@ function commit() {
           <UIcon name="i-lucide-chevron-down" class="size-3.5 text-meta" />
         </button>
         <button class="p-1 rounded hover-bg focus-ring" title="Remove this step" @click="emit('remove')">
-          <UIcon name="i-lucide-x" class="size-3.5" style="color: var(--error);" />
+          <UIcon name="i-lucide-x" class="size-3.5 ink-error" />
         </button>
       </div>
     </div>

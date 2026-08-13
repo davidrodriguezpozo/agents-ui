@@ -66,11 +66,11 @@ function formatCost(usd: number): string {
         class="size-3"
         style="color: var(--text-disabled);"
       />
-      <UIcon name="i-lucide-history" class="size-3" style="color: var(--text-disabled);" />
-      <span class="text-[11px] font-mono" style="color: var(--text-tertiary);">History</span>
+      <UIcon name="i-lucide-history" class="size-3 ink-4" />
+      <span class="fs-mono font-mono ink-3">History</span>
       <span
         v-if="sessions.length"
-        class="text-[9px] font-mono px-1.5 py-px rounded-full"
+        class="fs-micro font-mono px-1.5 py-px rounded-full"
         style="background: var(--badge-subtle-bg); color: var(--text-disabled);"
       >
         {{ sessions.length }}
@@ -78,11 +78,11 @@ function formatCost(usd: number): string {
     </button>
 
     <div v-if="open" class="px-3 pb-3 space-y-1 max-h-[220px] overflow-y-auto">
-      <div v-if="loading" class="text-[11px] font-mono py-2 px-1" style="color: var(--text-disabled);">
+      <div v-if="loading" class="fs-mono font-mono py-2 px-1 ink-4">
         Loading…
       </div>
 
-      <div v-else-if="!sessions.length" class="text-[11px] py-2 px-1 leading-relaxed" style="color: var(--text-disabled);">
+      <div v-else-if="!sessions.length" class="fs-mono py-2 px-1 leading-relaxed ink-4">
         No saved conversations yet. Runs are saved automatically once you send a message.
       </div>
 
@@ -97,7 +97,7 @@ function formatCost(usd: number): string {
         @click="openSession(session)"
       >
         <div class="flex items-center gap-2">
-          <span class="text-[11px] flex-1 truncate" style="color: var(--text-secondary);">
+          <span class="fs-mono flex-1 truncate ink-2">
             {{ session.title }}
           </span>
           <span
@@ -109,7 +109,7 @@ function formatCost(usd: number): string {
             <UIcon name="i-lucide-trash-2" class="size-3" />
           </span>
         </div>
-        <div class="flex items-center gap-2 mt-0.5 text-[9px] font-mono" style="color: var(--text-disabled);">
+        <div class="flex items-center gap-2 mt-0.5 fs-micro font-mono ink-4">
           <span>{{ relativeTime(session.updatedAt) }}</span>
           <span>·</span>
           <span>{{ session.messageCount }} msg</span>

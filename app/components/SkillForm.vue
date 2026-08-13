@@ -76,7 +76,7 @@ async function save() {
 <template>
   <div class="p-6 space-y-4 bg-overlay">
     <h3 class="text-page-title">{{ mode === 'edit' ? 'Edit Skill' : 'New Skill' }}</h3>
-    <p class="text-[12px] leading-relaxed text-label">
+    <p class="fs-sm leading-relaxed text-label">
       Skills are specific capabilities that can be added to agents. Define what this skill does and when it should be used.
     </p>
 

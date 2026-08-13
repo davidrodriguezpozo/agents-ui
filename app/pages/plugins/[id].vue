@@ -175,7 +175,7 @@ if (import.meta.client) {
       </template>
       <template #right>
         <button
-          class="text-[12px] px-2 py-1 rounded focus-ring text-label"
+          class="fs-sm px-2 py-1 rounded focus-ring text-label"
           @click="showUninstallConfirm = true"
         >
           Uninstall
@@ -197,7 +197,7 @@ if (import.meta.client) {
       <UIcon name="i-lucide-loader-2" class="size-6 animate-spin text-meta" />
     </div>
 
-    <div v-else-if="plugin" class="px-6 py-5 space-y-6">
+    <div v-else-if="plugin" class="page-container py-6 space-y-6">
       <!-- Plugin info card -->
       <div class="rounded-lg overflow-hidden" style="border: 1px solid var(--border-subtle);">
         <div class="relative px-5 pt-6 pb-5" style="background: var(--surface-raised);">
@@ -211,23 +211,23 @@ if (import.meta.client) {
               class="size-11 rounded-lg flex items-center justify-center shrink-0"
               style="background: var(--badge-subtle-bg); border: 1px solid var(--border-subtle);"
             >
-              <UIcon name="i-lucide-puzzle" class="size-5" style="color: var(--accent);" />
+              <UIcon name="i-lucide-puzzle" class="size-5 ink-accent" />
             </div>
 
             <div class="flex-1 min-w-0 pt-0.5">
               <div class="flex items-center gap-2.5 flex-wrap">
-                <span class="text-[15px] font-semibold tracking-tight truncate">{{ plugin.name }}</span>
-                <span class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full shrink-0 badge badge-subtle">
+                <span class="fs-lg font-semibold truncate">{{ plugin.name }}</span>
+                <span class="fs-micro font-mono font-medium px-2 py-0.5 rounded-full shrink-0 badge badge-subtle">
                   v{{ plugin.version }}
                 </span>
                 <span
-                  class="text-[10px] font-mono font-medium px-2 py-0.5 rounded-full shrink-0 badge"
+                  class="fs-micro font-mono font-medium px-2 py-0.5 rounded-full shrink-0 badge"
                   :class="plugin.enabled ? 'badge-success' : 'badge-subtle'"
                 >
                   {{ plugin.enabled ? 'enabled' : 'disabled' }}
                 </span>
               </div>
-              <p v-if="plugin.description" class="text-[12px] mt-1 leading-relaxed text-label">
+              <p v-if="plugin.description" class="fs-sm mt-1 leading-relaxed text-label">
                 {{ plugin.description }}
               </p>
             </div>
@@ -240,16 +240,16 @@ if (import.meta.client) {
           style="background: var(--surface-base); border-top: 1px solid var(--border-subtle);"
         >
           <div class="flex items-center gap-1.5">
-            <span class="text-[12px] text-meta">Marketplace</span>
-            <span class="font-mono text-[12px] text-body">{{ plugin.marketplace }}</span>
+            <span class="fs-sm text-meta">Marketplace</span>
+            <span class="font-mono fs-sm text-body">{{ plugin.marketplace }}</span>
           </div>
           <div v-if="plugin.author" class="flex items-center gap-1.5">
-            <span class="text-[12px] text-meta">Author</span>
-            <span class="font-mono text-[12px] text-body">{{ plugin.author.name }}</span>
+            <span class="fs-sm text-meta">Author</span>
+            <span class="font-mono fs-sm text-body">{{ plugin.author.name }}</span>
           </div>
           <div class="flex items-center gap-1.5">
-            <span class="text-[12px] text-meta">Installed</span>
-            <span class="font-mono text-[12px] text-body">{{ formatDate(plugin.installedAt) }}</span>
+            <span class="fs-sm text-meta">Installed</span>
+            <span class="font-mono fs-sm text-body">{{ formatDate(plugin.installedAt) }}</span>
           </div>
         </div>
       </div>
@@ -260,14 +260,14 @@ if (import.meta.client) {
           <button
             v-for="tab in tabs"
             :key="tab.key"
-            class="px-3 py-2.5 text-[12px] font-medium transition-all relative flex items-center gap-1.5 shrink-0"
+            class="px-3 py-2.5 fs-sm font-medium transition-all relative flex items-center gap-1.5 shrink-0"
             :style="{ color: activeTab === tab.key ? 'var(--text-primary)' : 'var(--text-tertiary)' }"
             @click="activeTab = tab.key"
           >
             <UIcon :name="tab.icon" class="size-3.5" />
             {{ tab.label }}
             <span
-              class="font-mono text-[10px] tabular-nums"
+              class="font-mono fs-micro tabular-nums"
               :style="{ color: activeTab === tab.key ? 'var(--accent)' : 'var(--text-disabled)' }"
             >
               {{ tab.count }}
@@ -316,10 +316,10 @@ if (import.meta.client) {
                 style="border: 1px solid var(--border-subtle);"
               >
                 <div class="flex items-center gap-2">
-                  <span class="font-mono text-[12px] font-medium" style="color: var(--accent);">{{ hook.event }}</span>
+                  <span class="font-mono fs-sm font-medium ink-accent">{{ hook.event }}</span>
                   <span
                     v-if="hook.matcher"
-                    class="text-[10px] font-mono px-1.5 py-px rounded-full badge badge-subtle"
+                    class="fs-micro font-mono px-1.5 py-px rounded-full badge badge-subtle"
                   >
                     matches {{ hook.matcher }}
                   </span>
@@ -327,7 +327,7 @@ if (import.meta.client) {
                 <pre
                   v-for="cmd in hook.commands"
                   :key="cmd"
-                  class="font-mono text-[11px] px-3 py-2 rounded-md overflow-x-auto text-body"
+                  class="font-mono fs-mono px-3 py-2 rounded-md overflow-x-auto text-body"
                   style="background: var(--surface-raised);"
                 >{{ cmd }}</pre>
               </div>
@@ -347,12 +347,12 @@ if (import.meta.client) {
                 class="rounded-lg px-4 py-3 flex items-center gap-3"
                 style="border: 1px solid var(--border-subtle);"
               >
-                <UIcon name="i-lucide-plug" class="size-4 shrink-0" style="color: var(--accent);" />
-                <span class="font-mono text-[12px] font-medium shrink-0">{{ server.name }}</span>
-                <span class="text-[10px] font-mono px-1.5 py-px rounded-full badge badge-subtle shrink-0">
+                <UIcon name="i-lucide-plug" class="size-4 shrink-0 ink-accent" />
+                <span class="font-mono fs-sm font-medium shrink-0">{{ server.name }}</span>
+                <span class="fs-micro font-mono px-1.5 py-px rounded-full badge badge-subtle shrink-0">
                   {{ server.transport }}
                 </span>
-                <span class="font-mono text-[11px] truncate text-label">{{ server.target }}</span>
+                <span class="font-mono fs-mono truncate text-label">{{ server.target }}</span>
               </div>
             </div>
           </div>
@@ -385,14 +385,14 @@ if (import.meta.client) {
                   </span>
                   <span
                     v-if="skill.frontmatter.agent"
-                    class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-agent"
+                    class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-agent"
                   >
                     agent: {{ skill.frontmatter.agent }}
                   </span>
-                  <span class="flex-1 text-[12px] truncate text-label">
+                  <span class="flex-1 fs-sm truncate text-label">
                     {{ skill.frontmatter.description }}
                   </span>
-                  <span class="font-mono text-[10px] shrink-0 text-meta">
+                  <span class="font-mono fs-micro shrink-0 text-meta">
                     {{ Math.round(skill.body.length / 100) / 10 }}k chars
                   </span>
                 </button>
@@ -448,7 +448,7 @@ if (import.meta.client) {
                     class="flex items-center justify-between px-4 py-3"
                     style="background: var(--surface-raised); border-top: 1px solid var(--border-subtle);"
                   >
-                    <span class="font-mono text-[10px] truncate text-meta">{{ skill.filePath }}</span>
+                    <span class="font-mono fs-micro truncate text-meta">{{ skill.filePath }}</span>
                     <UButton label="Save Skill" icon="i-lucide-save" size="sm" :loading="savingSkill" @click="saveSkill(skill.slug)" />
                   </div>
                 </div>
@@ -460,11 +460,11 @@ if (import.meta.client) {
 
       <!-- File location (collapsed) -->
       <details class="group">
-        <summary class="text-[10px] cursor-pointer list-none flex items-center gap-1.5 text-meta">
+        <summary class="fs-micro cursor-pointer list-none flex items-center gap-1.5 text-meta">
           <UIcon name="i-lucide-file" class="size-3" />
           Show file location
         </summary>
-        <div class="mt-1 font-mono text-[10px] pl-4.5 text-meta">{{ plugin.installPath }}</div>
+        <div class="mt-1 font-mono fs-micro pl-4.5 text-meta">{{ plugin.installPath }}</div>
       </details>
     </div>
 
@@ -473,7 +473,7 @@ if (import.meta.client) {
       <template #content>
         <div class="p-6 space-y-4 bg-overlay">
           <h3 class="text-page-title">Uninstall Plugin</h3>
-          <p class="text-[13px] text-body">
+          <p class="fs-base text-body">
             Uninstall <strong>{{ plugin?.name }}</strong>? The plugin will be removed but its files will remain on your computer.
           </p>
           <div class="flex justify-end gap-2">

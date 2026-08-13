@@ -168,14 +168,14 @@ function toBase64(bytes: Uint8Array): string {
       />
 
       <div v-if="importing" class="flex flex-col items-center gap-2">
-        <UIcon name="i-lucide-loader-2" class="size-6 animate-spin" style="color: var(--accent);" />
+        <UIcon name="i-lucide-loader-2" class="size-6 animate-spin ink-accent" />
         <span class="type-detail">Importing...</span>
       </div>
 
       <div v-else class="flex flex-col items-center gap-2">
-        <UIcon name="i-lucide-upload" class="size-6" style="color: var(--text-disabled);" />
+        <UIcon name="i-lucide-upload" class="size-6 ink-4" />
         <p class="type-body">
-          Drop a <code class="font-mono text-[11px] px-1 py-px rounded" style="background: var(--badge-subtle-bg);">.md</code> file here or click to browse
+          Drop a <code class="font-mono fs-mono px-1 py-px rounded" style="background: var(--badge-subtle-bg);">.md</code> file here or click to browse
         </p>
         <p class="type-meta">
           Import an {{ type === 'agents' ? 'agent' : 'skill' }} exported from another setup
@@ -195,7 +195,7 @@ function toBase64(bytes: Uint8Array): string {
         @change="onFolderSelect"
       />
       <button
-        class="text-[12px] font-medium rounded px-2 py-1 focus-ring hover-bg"
+        class="fs-sm font-medium rounded px-2 py-1 focus-ring hover-bg"
         style="color: var(--accent);"
         @click="folderInput?.click()"
       >

@@ -62,7 +62,7 @@ defineExpose({ focus, resetHeight });
         ref="inputRef"
         :value="modelValue"
         rows="1"
-        class="w-full resize-none bg-transparent text-[13px] outline-none px-4 pt-3 pb-10"
+        class="w-full resize-none bg-transparent fs-base outline-none px-4 pt-3 pb-10"
         style="
           color: var(--text-primary);
           font-family: var(--font-sans);
@@ -83,7 +83,7 @@ defineExpose({ focus, resetHeight });
         class="absolute bottom-2.5 left-3 right-3 flex items-center justify-between"
       >
         <span
-          class="text-[10px] font-mono flex items-center gap-1.5"
+          class="fs-micro font-mono flex items-center gap-1.5"
           style="color: var(--text-disabled)"
         >
           <template v-if="projectDisplayPath">

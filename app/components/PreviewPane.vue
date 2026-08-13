@@ -127,13 +127,13 @@ onBeforeUnmount(() => {
     <div v-if="!status?.command" class="px-3 py-6 text-center space-y-1">
       <p class="type-meta">No dev command set for this project.</p>
       <p class="field-hint">
-        Set one in <NuxtLink to="/settings" class="underline" style="color: var(--accent);">Settings</NuxtLink>
+        Set one in <NuxtLink to="/settings" class="underline ink-accent">Settings</NuxtLink>
         — the same place as the check and setup commands.
       </p>
     </div>
 
     <template v-else>
-      <p v-if="error" class="px-3 py-2 type-meta" style="color: var(--error);">{{ error }}</p>
+      <p v-if="error" class="px-3 py-2 type-meta ink-error">{{ error }}</p>
 
       <!--
         The output is the whole value of a failure: "did not start" on its own
@@ -142,7 +142,7 @@ onBeforeUnmount(() => {
       -->
       <pre
         v-if="state === 'failed' && status.preview?.output"
-        class="font-mono text-[10px] leading-relaxed overflow-x-auto max-h-48 p-2.5 m-3 rounded"
+        class="font-mono fs-micro leading-relaxed overflow-x-auto max-h-48 p-2.5 m-3 rounded"
         style="background: var(--surface-inset); color: var(--text-secondary);"
       >{{ status.preview.output }}</pre>
 

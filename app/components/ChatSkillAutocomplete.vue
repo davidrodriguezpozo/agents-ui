@@ -128,7 +128,7 @@ defineExpose({ moveUp, moveDown, selectCurrent })
   >
     <div
       v-if="loading && filtered.length === 0"
-      class="px-3 py-3 text-[11px] font-mono"
+      class="px-3 py-3 fs-mono font-mono"
       style="color: var(--text-disabled);"
     >
       Loading...
@@ -136,7 +136,7 @@ defineExpose({ moveUp, moveDown, selectCurrent })
 
     <template v-for="group in grouped" :key="group.label">
       <div
-        class="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider sticky top-0"
+        class="px-3 py-1.5 fs-micro font-mono uppercase tracking-wider sticky top-0"
         style="color: var(--text-disabled); background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);"
       >
         {{ group.label }}
@@ -158,12 +158,12 @@ defineExpose({ moveUp, moveDown, selectCurrent })
         />
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-1.5">
-            <span class="text-[12px] font-medium truncate" style="color: var(--text-primary); font-family: var(--font-sans);">
+            <span class="fs-sm font-medium truncate" style="color: var(--text-primary); font-family: var(--font-sans);">
               {{ item.label }}
             </span>
             <span
               v-if="item.agent"
-              class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0"
+              class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
               style="background: var(--badge-subtle-bg); color: var(--text-tertiary);"
             >
               {{ item.agent }}
@@ -171,13 +171,13 @@ defineExpose({ moveUp, moveDown, selectCurrent })
           </div>
           <span
             v-if="item.description"
-            class="text-[11px] truncate block"
+            class="fs-mono truncate block"
             style="color: var(--text-tertiary);"
           >
             {{ item.description }}
           </span>
         </div>
-        <span class="text-[10px] font-mono shrink-0" style="color: var(--text-disabled);">
+        <span class="fs-micro font-mono shrink-0 ink-4">
           /{{ item.value }}
         </span>
       </button>

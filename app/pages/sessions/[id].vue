@@ -426,7 +426,7 @@ const checkPanel = computed<CheckPanel>(() => {
       detail: ran,
       icon: 'i-lucide-circle-x',
       color: 'var(--error)',
-      frame: 'background: rgba(248,113,113,0.06); border: 1px solid var(--error);',
+      frame: 'background: var(--error-wash); border: 1px solid var(--error);',
     }
   }
 
@@ -436,7 +436,7 @@ const checkPanel = computed<CheckPanel>(() => {
       detail: `${ran} — so there is no verdict either way.`,
       icon: 'i-lucide-circle-help',
       color: 'var(--warning)',
-      frame: 'background: rgba(212,153,34,0.06); border: 1px solid var(--warning);',
+      frame: 'background: var(--warning-wash); border: 1px solid var(--warning);',
     }
   }
 
@@ -450,7 +450,7 @@ const checkPanel = computed<CheckPanel>(() => {
       detail: `${ran} — ${behindWord.value} since then.`,
       icon: 'i-lucide-git-pull-request-arrow',
       color: 'var(--warning)',
-      frame: 'background: rgba(212,153,34,0.06); border: 1px solid var(--warning);',
+      frame: 'background: var(--warning-wash); border: 1px solid var(--warning);',
     }
   }
 
@@ -460,8 +460,8 @@ const checkPanel = computed<CheckPanel>(() => {
     icon: 'i-lucide-check-check',
     color: session.value?.checkStale ? 'var(--warning)' : 'var(--success)',
     frame: session.value?.checkStale
-      ? 'background: rgba(212,153,34,0.06); border: 1px solid var(--warning);'
-      : 'background: rgba(34,197,94,0.06); border: 1px solid var(--success);',
+      ? 'background: var(--warning-wash); border: 1px solid var(--warning);'
+      : 'background: var(--success-wash); border: 1px solid var(--success);',
   }
 })
 
@@ -806,14 +806,14 @@ const totalChanges = computed(() => {
 
 <template>
   <div>
-    <PageHeader width="wide" :title="session?.title || 'Session'">
+    <PageHeader :title="session?.title || 'Session'">
       <template #leading>
         <NuxtLink to="/sessions" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to sessions">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-label" />
         </NuxtLink>
       </template>
       <template #trailing>
-        <span v-if="session" class="font-mono type-detail" style="color: var(--accent);">
+        <span v-if="session" class="font-mono type-detail ink-accent">
           {{ session.branch }}
         </span>
       </template>
@@ -831,7 +831,7 @@ const totalChanges = computed(() => {
               { id: 'terminal' as const, label: 'Terminal', icon: 'i-lucide-square-terminal' },
             ]"
             :key="tab.id"
-            class="flex items-center gap-1.5 px-2 py-1 rounded text-[12px] transition-all"
+            class="flex items-center gap-1.5 px-2 py-1 rounded fs-sm transition-all"
             :style="{
               background: pane === tab.id ? 'var(--surface-raised)' : 'transparent',
               color: pane === tab.id ? 'var(--accent)' : 'var(--text-disabled)',
@@ -915,8 +915,8 @@ const totalChanges = computed(() => {
       </template>
     </PageHeader>
 
-    <div class="page-container page-container--wide py-5 space-y-5">
-      <div v-if="loadError" class="rounded-md px-4 py-3 type-detail" style="background: rgba(248,113,113,0.06); color: var(--error);">
+    <div class="page-container py-5 space-y-5">
+      <div v-if="loadError" class="rounded-md px-4 py-3 type-detail" style="background: var(--error-wash); color: var(--error);">
         {{ loadError }}
       </div>
 
@@ -930,7 +930,7 @@ const totalChanges = computed(() => {
           v-if="session.prWatch && !watchActive && session.prWatch.reason"
           class="flex items-start gap-2.5 rounded-md px-4 py-3 type-detail"
           :style="session.prWatch.state === 'landed'
-            ? 'background: var(--success-muted, rgba(74,222,128,0.06)); color: var(--text-secondary);'
+            ? 'background: var(--success-wash); color: var(--text-secondary);'
             : 'background: var(--accent-muted); color: var(--text-secondary);'"
         >
           <UIcon
@@ -943,14 +943,14 @@ const totalChanges = computed(() => {
         <!-- Where this session is working, stated plainly -->
         <div class="rounded-md px-4 py-3 space-y-1" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
           <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0" style="color: var(--text-disabled);" />
-            <span class="type-detail" style="color: var(--text-secondary);">
-              Working on <span class="font-mono" style="color: var(--accent);">{{ session.branch }}</span>,
+            <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0 ink-4" />
+            <span class="type-detail ink-2">
+              Working on <span class="font-mono ink-accent">{{ session.branch }}</span>,
               branched from <span class="font-mono">{{ session.baseBranch }}</span>
             </span>
           </div>
           <div class="type-mono-meta pl-6 truncate">{{ session.worktreePath }}</div>
-          <div v-if="!session.worktree.exists" class="type-meta pl-6" style="color: var(--error);">
+          <div v-if="!session.worktree.exists" class="type-meta pl-6 ink-error">
             This workspace is missing from disk — it was removed outside the app.
           </div>
 
@@ -960,11 +960,11 @@ const totalChanges = computed(() => {
             <span
               v-for="rule in projectRules"
               :key="rule"
-              class="inline-flex items-center gap-1 text-[10px] px-1.5 py-px rounded-md group/rule"
+              class="inline-flex items-center gap-1 fs-micro px-1.5 py-px rounded-md group/rule"
               style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
               :title="rule"
             >
-              <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0" style="color: var(--success);" />
+              <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0 ink-ok" />
               {{ describeRule(rule) }}
               <button
                 class="opacity-0 group-hover/rule:opacity-100 transition-opacity focus-ring rounded"
@@ -1056,7 +1056,7 @@ const totalChanges = computed(() => {
             buried in a button label.
           -->
           <div v-if="behind && session.check?.status !== 'passing'" class="flex items-center gap-2 pt-0.5">
-            <UIcon name="i-lucide-git-pull-request-arrow" class="size-3.5 shrink-0" style="color: var(--warning);" />
+            <UIcon name="i-lucide-git-pull-request-arrow" class="size-3.5 shrink-0 ink-warn" />
             <span class="type-meta">
               {{ behindWord }} since this workspace was cut — bring them in before trusting anything here.
             </span>
@@ -1074,7 +1074,7 @@ const totalChanges = computed(() => {
 
           <pre
             v-if="showCheckOutput && session.check?.output"
-            class="font-mono text-[10px] leading-relaxed overflow-x-auto max-h-64 p-2.5 rounded"
+            class="font-mono fs-micro leading-relaxed overflow-x-auto max-h-64 p-2.5 rounded"
             style="background: var(--surface-inset); color: var(--text-secondary);"
           >{{ session.check.output }}</pre>
         </div>
@@ -1135,8 +1135,8 @@ const totalChanges = computed(() => {
               >
                 uncommitted
               </span>
-              <span class="type-mono-meta" style="color: var(--success);">+{{ file.added }}</span>
-              <span class="type-mono-meta" style="color: var(--error);">−{{ file.removed }}</span>
+              <span class="type-mono-meta ink-ok">+{{ file.added }}</span>
+              <span class="type-mono-meta ink-error">−{{ file.removed }}</span>
             </div>
           </div>
 
@@ -1154,7 +1154,7 @@ const totalChanges = computed(() => {
             </button>
             <div
               v-if="showPatch"
-              class="px-4 py-3 overflow-x-auto font-mono text-[11px] leading-[1.6] diff-patch"
+              class="px-4 py-3 overflow-x-auto font-mono fs-mono leading-[1.6] diff-patch"
               style="background: var(--surface-inset); border-top: 1px solid var(--border-subtle);"
             >
               <template v-for="(line, i) in patchLines" :key="i">
@@ -1212,7 +1212,7 @@ const totalChanges = computed(() => {
         <!-- What was said in the terminal, before this session existed -->
         <div v-if="inherited.length" class="space-y-3">
           <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-terminal" class="size-3.5 shrink-0" style="color: var(--text-disabled);" />
+            <UIcon name="i-lucide-terminal" class="size-3.5 shrink-0 ink-4" />
             <span class="text-section-label">From your terminal</span>
             <span class="type-meta">
               {{ inherited.length }} message{{ inherited.length === 1 ? '' : 's' }} — history, already said
@@ -1287,7 +1287,7 @@ const totalChanges = computed(() => {
                     class="size-3 shrink-0"
                     :style="{ color: step.isError ? 'var(--error)' : 'var(--text-disabled)' }"
                   />
-                  <span class="shrink-0" style="color: var(--text-secondary);">{{ describe(step).verb }}</span>
+                  <span class="shrink-0 ink-2">{{ describe(step).verb }}</span>
                   <!-- Falls back to what came back, for a tool whose arguments
                        we have no rule for — better than a bare verb -->
                   <span class="truncate" :style="{ color: describe(step).writes ? 'var(--accent)' : undefined }">
@@ -1316,7 +1316,7 @@ const totalChanges = computed(() => {
               v-html="renderMarkdown(turn.id === activeRunId && liveRun?.output ? liveRun.output : turn.output)"
             />
             <div v-else-if="turn.status === 'running'" class="flex items-center gap-2 type-meta">
-              <UIcon name="i-lucide-loader-2" class="size-3 animate-spin" style="color: var(--accent);" />
+              <UIcon name="i-lucide-loader-2" class="size-3 animate-spin ink-accent" />
               Working — you can close this tab and come back.
             </div>
             <!-- A stopped turn is not a failure, and its half-finished work is still real -->
@@ -1324,7 +1324,7 @@ const totalChanges = computed(() => {
               <UIcon name="i-lucide-square" class="size-3" />
               {{ turn.output ? 'Stopped part-way through.' : 'Stopped before it said anything.' }}
             </div>
-            <div v-if="turn.error" class="type-detail" style="color: var(--error);">{{ turn.error }}</div>
+            <div v-if="turn.error" class="type-detail ink-error">{{ turn.error }}</div>
           </div>
         </div>
 
@@ -1369,7 +1369,7 @@ const totalChanges = computed(() => {
             :key="index"
             class="flex items-start gap-2 group/comment"
           >
-            <span class="type-mono-meta shrink-0" style="color: var(--accent);">
+            <span class="type-mono-meta shrink-0 ink-accent">
               {{ comment.file }}:{{ comment.line }}
             </span>
             <span class="type-detail flex-1 min-w-0">{{ comment.body }}</span>
@@ -1493,7 +1493,7 @@ const totalChanges = computed(() => {
               style="background: var(--accent-muted); color: var(--text-secondary);"
             >
               <div>This branch already has one open.</div>
-              <a :href="prPreview.existingUrl" target="_blank" class="font-mono" style="color: var(--accent);">
+              <a :href="prPreview.existingUrl" target="_blank" class="font-mono ink-accent">
                 {{ prPreview.existingUrl }}
               </a>
             </div>
@@ -1501,14 +1501,14 @@ const totalChanges = computed(() => {
             <div
               v-if="prPreview.blockedReason"
               class="rounded-md px-3 py-2.5 type-detail"
-              style="background: rgba(248,113,113,0.06); color: var(--error);"
+              style="background: var(--error-wash); color: var(--error);"
             >
               {{ prPreview.blockedReason }}
             </div>
 
             <template v-else>
               <p class="type-body">
-                Pushes <span class="font-mono type-detail" style="color: var(--accent);">{{ prPreview.branch }}</span>
+                Pushes <span class="font-mono type-detail ink-accent">{{ prPreview.branch }}</span>
                 to <span class="font-mono type-detail">{{ prPreview.remote }}</span> and opens a request into
                 <span class="font-mono type-detail">{{ prPreview.baseBranch }}</span> —
                 {{ prPreview.commits.length }} commit{{ prPreview.commits.length === 1 ? '' : 's' }}.
@@ -1522,7 +1522,7 @@ const totalChanges = computed(() => {
 
               <div class="space-y-1.5">
                 <label class="field-label">Description</label>
-                <textarea v-model="prBody" rows="7" class="field-textarea w-full font-mono text-[11px]" />
+                <textarea v-model="prBody" rows="7" class="field-textarea w-full font-mono fs-mono" />
               </div>
 
               <label
@@ -1577,14 +1577,14 @@ const totalChanges = computed(() => {
             <p class="type-body">
               Brings <strong>{{ mergePreview.commits }}</strong>
               commit{{ mergePreview.commits === 1 ? '' : 's' }} from
-              <span class="font-mono type-detail" style="color: var(--accent);">{{ session?.branch }}</span>
+              <span class="font-mono type-detail ink-accent">{{ session?.branch }}</span>
               into <span class="font-mono type-detail">{{ mergePreview.targetBranch }}</span>.
             </p>
 
             <div
               v-if="mergePreview.blockedReason"
               class="rounded-md px-3 py-2.5 type-detail"
-              style="background: rgba(248,113,113,0.06); color: var(--error);"
+              style="background: var(--error-wash); color: var(--error);"
             >
               {{ mergePreview.blockedReason }}
             </div>
@@ -1645,7 +1645,7 @@ const totalChanges = computed(() => {
               </p>
               <pre
                 v-if="mergePreview.check.status === 'failing' && mergePreview.check.output"
-                class="font-mono text-[10px] leading-relaxed overflow-x-auto max-h-40 p-2 rounded"
+                class="font-mono fs-micro leading-relaxed overflow-x-auto max-h-40 p-2 rounded"
                 style="background: var(--surface-inset); color: var(--text-secondary);"
               >{{ mergePreview.check.output }}</pre>
             </div>
@@ -1704,7 +1704,7 @@ const totalChanges = computed(() => {
             style="background: var(--input-bg);"
           >
             <UCheckbox v-model="watchLand" class="mt-0.5" />
-            <span class="type-detail" style="color: var(--text-secondary);">
+            <span class="type-detail ink-2">
               <span style="color: var(--text-primary);">Merge it once the checks pass.</span>
               This is the one thing here everybody else can see, and nothing in this app can
               undo it. It never merges on a pull request that reported no checks at all.

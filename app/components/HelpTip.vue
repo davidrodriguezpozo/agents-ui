@@ -16,15 +16,15 @@ const showExample = ref(false)
       :aria-label="`Learn more about ${title}`"
       @click.stop
     >
-      <span class="text-[10px] font-bold leading-none">?</span>
+      <span class="fs-micro font-bold leading-none">?</span>
     </button>
     <template #content>
       <div class="p-3 space-y-1.5">
-        <div class="text-[12px] font-semibold" style="color: var(--text-primary);">{{ title }}</div>
-        <p class="text-[11px] leading-relaxed" style="color: var(--text-secondary);">{{ body }}</p>
+        <div class="fs-sm font-semibold ink">{{ title }}</div>
+        <p class="fs-mono leading-relaxed ink-2">{{ body }}</p>
         <button
           v-if="hasExample"
-          class="text-[11px] font-medium mt-1"
+          class="fs-mono font-medium mt-1"
           style="color: var(--accent);"
           @click="showExample = !showExample"
         >

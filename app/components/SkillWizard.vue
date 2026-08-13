@@ -120,7 +120,7 @@ function back() {
     <!-- Progress -->
     <div class="space-y-2">
       <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-sparkles" class="size-4" style="color: var(--accent);" />
+        <UIcon name="i-lucide-sparkles" class="size-4 ink-accent" />
         <h3 class="text-page-title">Teach Claude something</h3>
         <span class="ml-auto type-mono-meta">{{ step }} of 3</span>
       </div>
@@ -178,7 +178,7 @@ function back() {
         <div class="flex items-center justify-between">
           <label class="field-label">What should Claude do?</label>
           <button
-            class="text-[11px] font-medium px-2 py-1 rounded hover-bg flex items-center gap-1.5"
+            class="fs-mono font-medium px-2 py-1 rounded hover-bg flex items-center gap-1.5"
             style="color: var(--accent);"
             :disabled="drafting"
             @click="draftWithClaude"
@@ -194,7 +194,7 @@ function back() {
         <textarea
           v-model="instructions"
           rows="10"
-          class="field-textarea font-mono text-[12px]"
+          class="field-textarea font-mono fs-sm"
           placeholder="Step by step, describe what Claude should do. Plain English is fine."
           autofocus
         />
@@ -221,12 +221,12 @@ function back() {
             @click="createScope = option.value"
           >
             <div
-              class="text-[12px] font-medium"
+              class="fs-sm font-medium"
               :style="{ color: createScope === option.value ? 'var(--accent)' : 'var(--text-primary)' }"
             >
               {{ option.label }}
             </div>
-            <div class="text-[10px] text-meta">{{ option.hint }}</div>
+            <div class="fs-micro text-meta">{{ option.hint }}</div>
           </button>
         </div>
       </div>
@@ -234,7 +234,7 @@ function back() {
 
     <!-- Actions -->
     <div class="flex items-center justify-between pt-1">
-      <button class="text-[12px] px-2 py-1 rounded hover-bg text-meta" @click="back">
+      <button class="fs-sm px-2 py-1 rounded hover-bg text-meta" @click="back">
         {{ step === 1 ? 'Cancel' : 'Back' }}
       </button>
       <UButton

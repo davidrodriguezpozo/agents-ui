@@ -34,12 +34,12 @@ const emit = defineEmits<{ work: [WorkIntent | undefined]; merge: [] }>()
  */
 const TONES: Record<PullState, { fg: string; bg: string; icon: string }> = {
   'draft': { fg: 'var(--text-tertiary)', bg: 'var(--badge-subtle-bg)', icon: 'i-lucide-git-pull-request-draft' },
-  'conflicted': { fg: 'var(--error)', bg: 'rgba(248,113,113,0.12)', icon: 'i-lucide-git-merge' },
-  'changes-requested': { fg: 'var(--warning)', bg: 'rgba(217,119,6,0.12)', icon: 'i-lucide-message-square-warning' },
-  'unanswered': { fg: 'var(--warning)', bg: 'rgba(217,119,6,0.12)', icon: 'i-lucide-message-circle-more' },
-  'checks-failing': { fg: 'var(--error)', bg: 'rgba(248,113,113,0.12)', icon: 'i-lucide-circle-x' },
+  'conflicted': { fg: 'var(--error)', bg: 'var(--error-tint)', icon: 'i-lucide-git-merge' },
+  'changes-requested': { fg: 'var(--warning)', bg: 'var(--warning-tint)', icon: 'i-lucide-message-square-warning' },
+  'unanswered': { fg: 'var(--warning)', bg: 'var(--warning-tint)', icon: 'i-lucide-message-circle-more' },
+  'checks-failing': { fg: 'var(--error)', bg: 'var(--error-tint)', icon: 'i-lucide-circle-x' },
   'checks-running': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-loader-2' },
-  'ready': { fg: 'var(--success)', bg: 'rgba(34,197,94,0.12)', icon: 'i-lucide-circle-check' },
+  'ready': { fg: 'var(--success)', bg: 'var(--success-tint)', icon: 'i-lucide-circle-check' },
   'awaiting-review': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-eye' },
 }
 
@@ -90,7 +90,7 @@ const approvals = computed(() => props.pull.approvals || 0)
       <!-- Where it has got to, first. The title is the second question. -->
       <div class="flex items-center gap-2 flex-wrap">
         <span
-          class="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0"
+          class="inline-flex items-center gap-1.5 fs-micro font-medium px-2 py-0.5 rounded-full shrink-0"
           :style="{ background: tone.bg, color: tone.fg }"
         >
           <UIcon
@@ -111,7 +111,7 @@ const approvals = computed(() => props.pull.approvals || 0)
           rel="noopener"
           class="type-strong text-body hover:underline inline-flex items-baseline gap-1.5 min-w-0 focus-ring rounded"
         >
-          <span class="font-mono text-[11px] shrink-0" style="color: var(--text-disabled);">#{{ pull.number }}</span>
+          <span class="font-mono fs-mono shrink-0 ink-4">#{{ pull.number }}</span>
           <span class="truncate">{{ pull.title }}</span>
         </a>
 
@@ -146,7 +146,7 @@ const approvals = computed(() => props.pull.approvals || 0)
           <span
             v-for="label in pull.labels.slice(0, 4)"
             :key="label.name"
-            class="text-[9px] px-1.5 py-px rounded-full"
+            class="fs-micro px-1.5 py-px rounded-full"
             :style="{
               background: `#${label.color}1f`,
               color: `#${label.color}`,
@@ -166,8 +166,8 @@ const approvals = computed(() => props.pull.approvals || 0)
           :href="check.url || pull.url"
           target="_blank"
           rel="noopener"
-          class="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded hover:underline focus-ring"
-          style="background: rgba(248,113,113,0.10); color: var(--error);"
+          class="inline-flex items-center gap-1 fs-micro font-mono px-1.5 py-0.5 rounded hover:underline focus-ring"
+          style="background: var(--error-tint); color: var(--error);"
         >
           <UIcon name="i-lucide-x" class="size-2.5" />
           {{ check.name }}
@@ -186,8 +186,8 @@ const approvals = computed(() => props.pull.approvals || 0)
       -->
       <button
         v-if="canMerge"
-        class="text-[11px] px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer transition-colors"
-        style="background: rgba(34,197,94,0.12); color: var(--success);"
+        class="fs-mono px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer transition-colors"
+        style="background: var(--success-tint); color: var(--success);"
         :disabled="busy"
         @click="emit('merge')"
       >
@@ -197,7 +197,7 @@ const approvals = computed(() => props.pull.approvals || 0)
       <!-- The whole reason this page is not a link to github.com -->
       <button
         v-if="pull.intent"
-        class="inline-flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer transition-colors"
+        class="inline-flex items-center gap-1.5 fs-mono px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer transition-colors"
         style="background: var(--accent-muted); color: var(--accent);"
         :disabled="busy"
         :title="`Start a session on this branch, already working on it`"

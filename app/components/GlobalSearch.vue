@@ -116,12 +116,12 @@ if (import.meta.client) {
           <UIcon name="i-lucide-search" class="size-4 shrink-0 text-meta" />
           <input
             v-model="query"
-            class="flex-1 bg-transparent text-[13px] outline-none"
+            class="flex-1 bg-transparent fs-base outline-none"
             placeholder="Search agents, commands, skills, plugins..."
             autofocus
             @keydown="onKeydown"
           />
-          <kbd class="text-[10px] font-mono px-1.5 py-0.5 rounded badge badge-subtle">ESC</kbd>
+          <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded badge badge-subtle">ESC</kbd>
         </div>
 
         <!-- Results -->
@@ -131,7 +131,7 @@ if (import.meta.client) {
           </div>
 
           <div v-if="!query" class="flex flex-col items-center justify-center py-8">
-            <p class="text-[12px] text-meta">Type to search across all items</p>
+            <p class="fs-sm text-meta">Type to search across all items</p>
           </div>
 
           <button
@@ -157,17 +157,17 @@ if (import.meta.client) {
 
             <span
               v-if="result.model && modelColors[result.model]"
-              class="text-[10px] font-mono font-medium px-1 py-px rounded-full shrink-0"
+              class="fs-micro font-mono font-medium px-1 py-px rounded-full shrink-0"
               :class="[modelColors[result.model]?.bg, modelColors[result.model]?.text]"
             >
               {{ result.model }}
             </span>
 
-            <span class="flex-1 text-[12px] truncate text-label">
+            <span class="flex-1 fs-sm truncate text-label">
               {{ result.sublabel }}
             </span>
 
-            <span class="text-[10px] font-mono shrink-0 text-meta">
+            <span class="fs-micro font-mono shrink-0 text-meta">
               {{ result.type }}
             </span>
           </button>

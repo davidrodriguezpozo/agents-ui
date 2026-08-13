@@ -82,7 +82,7 @@ async function save() {
     <h3 class="text-page-title">
       {{ mode === "edit" ? "Edit Agent" : "New Agent" }}
     </h3>
-    <p class="text-[12px] leading-relaxed text-label">
+    <p class="fs-sm leading-relaxed text-label">
       Agents are specialized AI assistants with custom instructions. Give yours
       a name and describe when it should be used.
     </p>

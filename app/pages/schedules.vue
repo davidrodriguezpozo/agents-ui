@@ -137,16 +137,16 @@ function nextLabel(schedule: Schedule) {
 
 <template>
   <div>
-    <PageHeader width="narrow" title="Daily rituals">
+    <PageHeader title="Daily rituals">
       <template #trailing>
-        <span v-if="schedules.length" class="font-mono text-[12px] text-meta">{{ schedules.length }}</span>
+        <span v-if="schedules.length" class="font-mono fs-sm text-meta">{{ schedules.length }}</span>
       </template>
       <template #right>
         <UButton label="New ritual" icon="i-lucide-plus" size="sm" @click="createNew" />
       </template>
     </PageHeader>
 
-    <div class="page-container page-container--narrow py-4 space-y-6">
+    <div class="page-container page-container--measure py-4 space-y-6">
       <p class="type-body leading-relaxed">
         Things Claude runs for you on a schedule, so the result is waiting when you get in.
         They run while this is running — install it as a service and that means always.
@@ -162,19 +162,19 @@ function nextLabel(schedule: Schedule) {
         class="rounded-md px-4 py-3 flex items-start gap-3"
         style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
       >
-        <UIcon name="i-lucide-shield" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
+        <UIcon name="i-lucide-shield" class="size-4 shrink-0 mt-0.5 ink-accent" />
         <div class="flex-1 min-w-0 space-y-1.5">
-          <div class="text-[12px] font-medium text-body">Runs here are now sandboxed</div>
-          <p class="text-[11px] leading-relaxed text-label">
+          <div class="fs-sm font-medium text-body">Runs here are now sandboxed</div>
+          <p class="fs-mono leading-relaxed text-label">
             Your rituals reach only the hosts this project allows, and it currently allows
             none. That is deliberate — it is what makes leaving them running reasonable —
             but a ritual that has been quietly fetching something will stop being able to.
             Nothing has broken yet; this is the warning rather than the failure.
           </p>
-          <p class="text-[11px] leading-relaxed text-label">
+          <p class="fs-mono leading-relaxed text-label">
             If one does stop, it will say which host it wanted and offer to allow it. You
             can also list them now, or turn the sandbox off for this project, in
-            <NuxtLink to="/settings" class="underline" style="color: var(--accent);">Settings</NuxtLink>.
+            <NuxtLink to="/settings" class="underline ink-accent">Settings</NuxtLink>.
           </p>
         </div>
         <UButton
@@ -194,10 +194,10 @@ function nextLabel(schedule: Schedule) {
         class="rounded-md px-4 py-3 flex items-start gap-3"
         style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
       >
-        <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5" style="color: var(--accent);" />
+        <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 mt-0.5 ink-accent" />
         <div class="space-y-1.5">
           <div class="type-strong">Your rituals could not be loaded</div>
-          <div class="type-detail" style="color: var(--text-secondary);">{{ loadError }}</div>
+          <div class="type-detail ink-2">{{ loadError }}</div>
           <p class="type-meta">
             They have not been deleted. Nothing will be overwritten until this is resolved —
             restore a backup from Settings to get them back.
@@ -220,15 +220,15 @@ function nextLabel(schedule: Schedule) {
           :style="{ opacity: schedule.enabled ? 1 : 0.6 }"
         >
           <div class="flex items-center gap-3 px-4 py-3">
-            <UIcon name="i-lucide-alarm-clock" class="size-4 shrink-0" style="color: var(--accent);" />
+            <UIcon name="i-lucide-alarm-clock" class="size-4 shrink-0 ink-accent" />
 
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
                 <span class="type-strong truncate text-body">{{ schedule.title }}</span>
                 <span
                   v-if="schedule.origin === 'team'"
-                  class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0"
-                  style="background: rgba(139, 92, 246, 0.12); color: rgb(139, 92, 246);"
+                  class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
+                  style="background: var(--plugin-tint); color: var(--plugin);"
                 >
                   {{ schedule.pluginName || 'team' }}
                 </span>
@@ -319,11 +319,11 @@ function nextLabel(schedule: Schedule) {
                 <span
                   v-for="rule in schedule.allowRules"
                   :key="rule"
-                  class="inline-flex items-center gap-1 text-[10px] px-1.5 py-px rounded-md group/rule"
+                  class="inline-flex items-center gap-1 fs-micro px-1.5 py-px rounded-md group/rule"
                   style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
                   :title="rule"
                 >
-                  <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0" style="color: var(--success);" />
+                  <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0 ink-ok" />
                   {{ describeRule(rule) }}
                   <button
                     class="opacity-0 group-hover/rule:opacity-100 transition-opacity"
@@ -371,7 +371,7 @@ function nextLabel(schedule: Schedule) {
             <button class="p-1 rounded hover-bg shrink-0 text-meta" title="Edit" @click="edit(schedule)">
               <UIcon name="i-lucide-pencil" class="size-3.5" />
             </button>
-            <button class="p-1 rounded hover-bg shrink-0" style="color: var(--error);" title="Remove" @click="onRemove(schedule)">
+            <button class="p-1 rounded hover-bg shrink-0 ink-error" title="Remove" @click="onRemove(schedule)">
               <UIcon name="i-lucide-trash-2" class="size-3.5" />
             </button>
           </div>
@@ -422,13 +422,13 @@ function nextLabel(schedule: Schedule) {
           class="flex items-center gap-3 px-4 py-3 rounded-lg"
           style="border: 1px dashed var(--border-subtle);"
         >
-          <UIcon name="i-lucide-sparkles" class="size-4 shrink-0" style="color: rgb(139, 92, 246);" />
+          <UIcon name="i-lucide-sparkles" class="size-4 shrink-0" style="color: var(--plugin);" />
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
               <span class="type-strong truncate text-body">{{ ritual.title }}</span>
               <span
-                class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0"
-                style="background: rgba(139, 92, 246, 0.12); color: rgb(139, 92, 246);"
+                class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
+                style="background: var(--plugin-tint); color: var(--plugin);"
               >
                 {{ ritual.pluginName }}
               </span>
@@ -437,7 +437,7 @@ function nextLabel(schedule: Schedule) {
               <span style="color: var(--accent);">{{ ritual.command }}</span>
               <span>{{ ritual.recurrenceLabel }}</span>
             </div>
-            <p v-if="ritual.description" class="text-[11px] mt-0.5 text-label">{{ ritual.description }}</p>
+            <p v-if="ritual.description" class="fs-mono mt-0.5 text-label">{{ ritual.description }}</p>
           </div>
           <UButton
             label="Add"

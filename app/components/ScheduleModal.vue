@@ -293,7 +293,7 @@ async function onSave() {
 <template>
   <div class="p-6 space-y-5 bg-overlay">
     <div class="flex items-center gap-2">
-      <UIcon name="i-lucide-alarm-clock" class="size-4" style="color: var(--accent);" />
+      <UIcon name="i-lucide-alarm-clock" class="size-4 ink-accent" />
       <h3 class="text-page-title">{{ isEdit ? 'Edit ritual' : 'Make this a daily ritual' }}</h3>
     </div>
 
@@ -324,7 +324,7 @@ async function onSave() {
         <div class="flex gap-2">
           <input
             v-model="input"
-            class="field-input font-mono text-[12px] flex-1"
+            class="field-input font-mono fs-sm flex-1"
             placeholder="/hd:goodmorning"
             @keydown="onInputKey"
           />
@@ -359,12 +359,12 @@ async function onSave() {
           style="background: var(--input-bg);"
         >
           <div class="flex items-center gap-2">
-            <span class="type-detail font-mono shrink-0" style="color: var(--text-disabled);">
+            <span class="type-detail font-mono shrink-0 ink-4">
               {{ index + 1 }}
             </span>
             <input
               v-model="step.title"
-              class="field-input flex-1 text-[12px]"
+              class="field-input flex-1 fs-sm"
               :placeholder="`Step ${index + 1}`"
             />
             <UButton
@@ -397,7 +397,7 @@ async function onSave() {
           </div>
           <textarea
             v-model="step.input"
-            class="field-input font-mono text-[12px] w-full"
+            class="field-input font-mono fs-sm w-full"
             rows="2"
             :placeholder="index === 0 ? 'Look at what came in overnight.' : 'Fix what the last step found.'"
           />
@@ -440,7 +440,7 @@ async function onSave() {
             { value: 'event' as const, label: 'When something happens' },
           ]"
           :key="option.value"
-          class="flex-1 px-2 py-1.5 rounded-md text-[11px] font-medium transition-all"
+          class="flex-1 px-2 py-1.5 rounded-md fs-mono font-medium transition-all"
           :style="{
             background: firesOn === option.value ? 'var(--accent-muted)' : 'var(--surface-raised)',
             color: firesOn === option.value ? 'var(--accent)' : 'var(--text-disabled)',
@@ -495,7 +495,7 @@ async function onSave() {
         <select v-model.number="hour" class="field-select w-20">
           <option v-for="h in 24" :key="h - 1" :value="h - 1">{{ String(h - 1).padStart(2, '0') }}</option>
         </select>
-        <span class="text-[13px] text-meta">:</span>
+        <span class="fs-base text-meta">:</span>
         <select v-model.number="minute" class="field-select w-20">
           <option v-for="m in [0, 15, 30, 45]" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
         </select>
@@ -504,7 +504,7 @@ async function onSave() {
         <button
           v-for="(label, day) in DAY_LABELS"
           :key="day"
-          class="flex-1 px-1 py-1.5 rounded-md text-[11px] font-medium transition-all"
+          class="flex-1 px-1 py-1.5 rounded-md fs-mono font-medium transition-all"
           :style="{
             background: days.includes(day) ? 'var(--accent-muted)' : 'var(--surface-raised)',
             color: days.includes(day) ? 'var(--accent)' : 'var(--text-disabled)',
@@ -529,7 +529,7 @@ async function onSave() {
         style="background: var(--input-bg);"
       >
         <UCheckbox v-model="catchUp" class="mt-0.5" />
-        <span class="type-detail" style="color: var(--text-secondary);">
+        <span class="type-detail ink-2">
           <span style="color: var(--text-primary);">Run it late if the machine was off.</span>
           Without this, a turn missed by more than two hours is reported and skipped. With
           it, the run happens whenever the machine comes back and is told how late it is.
@@ -573,12 +573,12 @@ async function onSave() {
           />
           <div class="min-w-0">
             <div
-              class="text-[12px] font-medium"
+              class="fs-sm font-medium"
               :style="{ color: permission === choice.value ? 'var(--accent)' : 'var(--text-primary)' }"
             >
               {{ choice.label }}
             </div>
-            <div class="text-[10px] leading-relaxed text-meta">{{ choice.hint }}</div>
+            <div class="fs-micro leading-relaxed text-meta">{{ choice.hint }}</div>
           </div>
         </button>
       </div>
@@ -588,7 +588,7 @@ async function onSave() {
       </span>
     </div>
 
-    <p class="text-[11px] leading-relaxed text-meta">
+    <p class="fs-mono leading-relaxed text-meta">
       Rituals only run while this app is open.
     </p>
 

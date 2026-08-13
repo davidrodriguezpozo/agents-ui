@@ -117,9 +117,9 @@ function statusStyle(status: string) {
     case 'queued':
       return { background: 'var(--accent-muted)', color: 'var(--accent)' }
     case 'completed':
-      return { background: 'rgba(34,197,94,0.12)', color: 'rgb(34,197,94)' }
+      return { background: 'var(--success-tint)', color: 'var(--success)' }
     case 'failed':
-      return { background: 'rgba(248,113,113,0.12)', color: 'var(--error)' }
+      return { background: 'var(--error-tint)', color: 'var(--error)' }
     default:
       return { background: 'var(--badge-subtle-bg)', color: 'var(--text-tertiary)' }
   }
@@ -149,15 +149,15 @@ function sourceIcon(value: RunSource) {
 
 <template>
   <div>
-    <PageHeader width="narrow" title="Activity">
+    <PageHeader title="Activity">
       <template #trailing>
-        <span v-if="active.length" class="text-[11px] font-mono" style="color: var(--accent);">
+        <span v-if="active.length" class="fs-mono font-mono ink-accent">
           {{ running.length }} running<template v-if="waiting.length">, {{ waiting.length }} waiting</template>
         </span>
       </template>
     </PageHeader>
 
-    <div class="page-container page-container--narrow py-4 space-y-6">
+    <div class="page-container page-container--measure py-4 space-y-6">
       <p class="type-body leading-relaxed">
         Everything Claude has run for you. Runs keep going if you close the tab — come back any time.
       </p>
@@ -245,8 +245,8 @@ function sourceIcon(value: RunSource) {
               style="color: var(--accent);"
             />
             <span class="type-strong truncate flex-1 text-body">{{ run.title }}</span>
-            <span v-if="run.status === 'queued'" class="font-mono text-[10px] shrink-0 text-meta">waiting</span>
-            <span class="font-mono text-[10px] shrink-0 text-meta">{{ relativeTime(run.createdAt) }}</span>
+            <span v-if="run.status === 'queued'" class="font-mono fs-micro shrink-0 text-meta">waiting</span>
+            <span class="font-mono fs-micro shrink-0 text-meta">{{ relativeTime(run.createdAt) }}</span>
           </NuxtLink>
 
           <!--
@@ -254,7 +254,7 @@ function sourceIcon(value: RunSource) {
             looks identical to one that is stuck, and the difference is the whole
             question you came to this page with.
           -->
-          <p v-if="waiting.length" class="text-[11px] text-meta">
+          <p v-if="waiting.length" class="fs-mono text-meta">
             Work nobody is watching waits its turn
             <template v-if="concurrencyLimit"> — {{ concurrencyLimit }} at once</template>.
             A turn you type starts straight away. Change it in Settings.
@@ -270,7 +270,7 @@ function sourceIcon(value: RunSource) {
             class="flex items-start gap-3 px-3 py-2.5 rounded-md group focus-ring hover-row"
           >
             <span
-              class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0 mt-0.5"
+              class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 mt-0.5"
               :style="badge(run).style"
             >
               {{ badge(run).label }}
@@ -278,16 +278,16 @@ function sourceIcon(value: RunSource) {
             <div class="flex-1 min-w-0">
               <div class="flex items-center gap-2">
                 <!-- What started it, so a ritual is never mistaken for something you ran -->
-                <UIcon :name="sourceIcon(run.source)" class="size-3 shrink-0" style="color: var(--text-disabled);" />
+                <UIcon :name="sourceIcon(run.source)" class="size-3 shrink-0 ink-4" />
                 <span class="type-strong truncate text-body">{{ run.title }}</span>
-                <span v-if="run.invocation" class="font-mono text-[10px] shrink-0" style="color: var(--accent);">
+                <span v-if="run.invocation" class="font-mono fs-micro shrink-0 ink-accent">
                   {{ run.invocation }}
                 </span>
               </div>
               <!-- Why it is incomplete, not a guess. A run that used up its turns
                    was refused nothing, and saying otherwise sends you looking for
                    a permission problem that does not exist. -->
-              <p v-if="run.needsAttention" class="text-[11px] mt-0.5 flex items-center gap-1" style="color: var(--accent);">
+              <p v-if="run.needsAttention" class="fs-mono mt-0.5 flex items-center gap-1 ink-accent">
                 <UIcon
                   :name="run.stoppedBy ? 'i-lucide-gauge' : 'i-lucide-shield-alert'"
                   class="size-3 shrink-0"
@@ -298,8 +298,8 @@ function sourceIcon(value: RunSource) {
                   Incomplete — {{ (run.deniedTools || []).join(', ') || 'a tool' }} needed your approval
                 </template>
               </p>
-              <p v-else-if="run.preview" class="text-[11px] truncate text-label mt-0.5">{{ run.preview }}</p>
-              <p v-else-if="run.error" class="text-[11px] truncate mt-0.5" style="color: var(--error);">{{ run.error }}</p>
+              <p v-else-if="run.preview" class="fs-mono truncate text-label mt-0.5">{{ run.preview }}</p>
+              <p v-else-if="run.error" class="fs-mono truncate mt-0.5 ink-error">{{ run.error }}</p>
             </div>
             <div class="flex items-center gap-2.5 shrink-0 type-mono-meta">
               <span v-if="formatDuration(run.durationMs)">{{ formatDuration(run.durationMs) }}</span>

@@ -32,11 +32,11 @@ function timeAgo(iso: string): string {
         class="size-8 rounded-md flex items-center justify-center shrink-0 mt-0.5"
         style="background: var(--accent-muted); border: 1px solid var(--accent-muted);"
       >
-        <UIcon name="i-lucide-git-branch" class="size-4" style="color: var(--accent);" />
+        <UIcon name="i-lucide-git-branch" class="size-4 ink-accent" />
       </div>
       <div class="flex-1 min-w-0">
-        <div class="type-strong truncate" style="color: var(--text-primary);">{{ workflow.name }}</div>
-        <div class="text-[11px] mt-0.5 line-clamp-2" style="color: var(--text-tertiary);">
+        <div class="type-strong truncate ink">{{ workflow.name }}</div>
+        <div class="fs-mono mt-0.5 line-clamp-2 ink-3">
           {{ workflow.description || 'No description' }}
         </div>
       </div>
@@ -46,14 +46,14 @@ function timeAgo(iso: string): string {
         <div
           v-for="(agent, idx) in stepAgents.slice(0, 4)"
           :key="idx"
-          class="size-5 rounded-full flex items-center justify-center text-[8px] font-bold"
+          class="size-6 rounded-full flex items-center justify-center fs-micro font-bold"
           :style="{ background: agent ? getAgentColor(agent.frontmatter.color) + '30' : 'var(--badge-subtle-bg)', color: agent ? getAgentColor(agent.frontmatter.color) : 'var(--text-disabled)', border: '2px solid var(--surface-raised)', zIndex: 10 - idx }"
         >
           {{ idx + 1 }}
         </div>
       </div>
-      <span class="text-[10px]" style="color: var(--text-disabled);">{{ workflow.steps.length }} step{{ workflow.steps.length === 1 ? '' : 's' }}</span>
-      <span v-if="workflow.lastRunAt" class="text-[10px] ml-auto" style="color: var(--text-disabled);">{{ timeAgo(workflow.lastRunAt) }}</span>
+      <span class="fs-micro ink-4">{{ workflow.steps.length }} step{{ workflow.steps.length === 1 ? '' : 's' }}</span>
+      <span v-if="workflow.lastRunAt" class="fs-micro ml-auto ink-4">{{ timeAgo(workflow.lastRunAt) }}</span>
     </div>
   </NuxtLink>
 </template>

@@ -202,7 +202,7 @@ const agentOptions = computed(() =>
         </NuxtLink>
       </template>
       <template #trailing>
-        <UIcon name="i-lucide-sparkles" class="size-4" style="color: var(--accent);" />
+        <UIcon name="i-lucide-sparkles" class="size-4 ink-accent" />
         <SourceBadge
           v-if="skill"
           :scope="skill.scope"
@@ -214,7 +214,7 @@ const agentOptions = computed(() =>
         <NuxtLink
           v-if="skill?.pluginId"
           :to="`/plugins/${encodeURIComponent(skill.pluginId)}?tab=skills`"
-          class="text-[11px] px-2 py-0.5 rounded focus-ring text-meta hover-bg"
+          class="fs-mono px-2 py-0.5 rounded focus-ring text-meta hover-bg"
         >
           View in plugin
         </NuxtLink>
@@ -231,38 +231,38 @@ const agentOptions = computed(() =>
         <a
           :href="`/api/skills/${slug}/export`"
           download
-          class="text-[12px] px-2 py-1 rounded focus-ring text-label hover-bg"
+          class="fs-sm px-2 py-1 rounded focus-ring text-label hover-bg"
           title="Download .md file"
         >
           <UIcon name="i-lucide-download" class="size-3.5" />
         </a>
         <template v-if="!isImported">
           <button
-            class="text-[12px] px-2 py-1 rounded focus-ring text-label"
+            class="fs-sm px-2 py-1 rounded focus-ring text-label"
             @click="showDeleteConfirm = true"
           >
             Delete
           </button>
-          <span v-if="isDirty" class="text-[10px] font-mono unsaved-pulse" style="color: var(--warning);">unsaved</span>
+          <span v-if="isDirty" class="fs-micro font-mono unsaved-pulse ink-warn">unsaved</span>
           <UButton label="Save" icon="i-lucide-save" size="sm" :loading="saving" @click="save" />
         </template>
         <UButton v-else label="Edit a copy" icon="i-lucide-copy" size="sm" @click="editCopy" />
       </template>
     </PageHeader>
 
-    <div v-if="skill" class="px-6 py-5 space-y-6">
+    <div v-if="skill" class="page-container py-6 space-y-6">
       <!-- Draft recovery banner -->
       <div
         v-if="hasDraft"
         class="rounded-lg px-4 py-3 flex items-center gap-3"
-        style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.12);"
+        style="background: var(--info-wash); border: 1px solid var(--info-tint);"
       >
-        <UIcon name="i-lucide-archive-restore" class="size-4 shrink-0" style="color: var(--info, #3b82f6);" />
-        <span class="text-[12px] flex-1" style="color: var(--text-secondary);">
+        <UIcon name="i-lucide-archive-restore" class="size-4 shrink-0" style="color: var(--info);" />
+        <span class="fs-sm flex-1 ink-2">
           You have an unsaved draft from {{ draftAge }}.
         </span>
-        <button class="text-[12px] font-medium px-2 py-1 rounded hover-bg" style="color: var(--info, #3b82f6);" @click="restoreDraft">Restore</button>
-        <button class="text-[12px] px-2 py-1 rounded hover-bg text-meta" @click="clearDraft">Dismiss</button>
+        <button class="fs-sm font-medium px-2 py-1 rounded hover-bg" style="color: var(--info);" @click="restoreDraft">Restore</button>
+        <button class="fs-sm px-2 py-1 rounded hover-bg text-meta" @click="clearDraft">Dismiss</button>
       </div>
 
       <!-- Read-only banner for imported skills -->
@@ -274,7 +274,7 @@ const agentOptions = computed(() =>
         <svg class="size-4 shrink-0 text-label" viewBox="0 0 16 16" fill="currentColor">
           <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
         </svg>
-        <span class="text-[12px] flex-1 text-label">
+        <span class="fs-sm flex-1 text-label">
           This skill is imported from GitHub and is read-only. Updates from the source may overwrite local changes.
         </span>
         <UButton label="Edit a copy" size="xs" variant="soft" @click="editCopy" />
@@ -297,24 +297,24 @@ const agentOptions = computed(() =>
           <div class="flex items-start gap-4">
             <div
               class="size-11 rounded-lg flex items-center justify-center shrink-0"
-              style="background: var(--accent-muted); border: 1px solid rgba(45, 212, 191, 0.15);"
+              style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
             >
-              <UIcon name="i-lucide-sparkles" class="size-5" style="color: var(--accent);" />
+              <UIcon name="i-lucide-sparkles" class="size-5 ink-accent" />
             </div>
 
             <div class="flex-1 min-w-0 pt-0.5">
               <div class="flex items-center gap-2.5 flex-wrap">
-                <span class="text-[15px] font-semibold tracking-tight truncate">
+                <span class="fs-lg font-semibold truncate">
                   {{ frontmatter.name || 'Unnamed Skill' }}
                 </span>
                 <span
                   v-if="frontmatter.context"
-                  class="text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0 badge badge-subtle"
+                  class="fs-micro font-medium px-2 py-0.5 rounded-full shrink-0 badge badge-subtle"
                 >
                   {{ frontmatter.context }}
                 </span>
               </div>
-              <p v-if="frontmatter.description" class="text-[12px] mt-1 leading-relaxed text-label">
+              <p v-if="frontmatter.description" class="fs-sm mt-1 leading-relaxed text-label">
                 {{ frontmatter.description }}
               </p>
             </div>
@@ -399,11 +399,11 @@ const agentOptions = computed(() =>
 
       <!-- File location (collapsed) -->
       <details class="group">
-        <summary class="text-[10px] cursor-pointer list-none flex items-center gap-1.5 text-meta">
+        <summary class="fs-micro cursor-pointer list-none flex items-center gap-1.5 text-meta">
           <UIcon name="i-lucide-file" class="size-3" />
           Show file location
         </summary>
-        <div class="mt-1 font-mono text-[10px] pl-4.5 text-meta">
+        <div class="mt-1 font-mono fs-micro pl-4.5 text-meta">
           {{ skill.filePath }}
         </div>
       </details>

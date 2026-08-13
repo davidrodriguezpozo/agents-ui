@@ -72,7 +72,7 @@ async function useTemplate(templateId: string) {
   <div>
     <PageHeader title="Agents">
       <template #trailing>
-        <span class="text-[12px] text-meta">{{ agents.length }}</span>
+        <span class="fs-sm text-meta">{{ agents.length }}</span>
       </template>
       <template #right>
         <UButton label="Import" icon="i-lucide-upload" size="sm" variant="soft" @click="() => { showImportModal = true }" />
@@ -80,8 +80,8 @@ async function useTemplate(templateId: string) {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4">
-      <p class="text-[13px] mb-4 leading-relaxed text-label">
+    <div class="page-container py-6">
+      <p class="fs-base mb-4 leading-relaxed text-label">
         Specialized AI assistants with custom instructions and behavior.
       </p>
 
@@ -96,7 +96,7 @@ async function useTemplate(templateId: string) {
           <button
             v-for="filter in sourceFilters"
             :key="filter.key"
-            class="px-2.5 py-1 rounded-md text-[11px] font-medium transition-all focus-ring"
+            class="px-2.5 py-1 rounded-md fs-mono font-medium transition-all focus-ring"
             :style="{
               background: sourceFilter === filter.key ? 'var(--accent-muted)' : 'transparent',
               color: sourceFilter === filter.key ? 'var(--accent)' : 'var(--text-tertiary)',
@@ -104,7 +104,7 @@ async function useTemplate(templateId: string) {
             @click="sourceFilter = filter.key"
           >
             {{ filter.label }}
-            <span class="font-mono text-[10px] ml-1 opacity-70">{{ filter.count }}</span>
+            <span class="font-mono fs-micro ml-1 opacity-70">{{ filter.count }}</span>
           </button>
         </div>
       </div>
@@ -113,10 +113,10 @@ async function useTemplate(templateId: string) {
       <div
         v-if="error"
         class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
-        style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
+        style="background: var(--error-wash); border: 1px solid var(--error-tint);"
       >
-        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
-        <span class="text-[12px]" style="color: var(--error);">{{ error }}</span>
+        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5 ink-error" />
+        <span class="fs-sm ink-error">{{ error }}</span>
       </div>
 
       <div v-if="loading" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -150,7 +150,7 @@ async function useTemplate(templateId: string) {
             </span>
             <span
               v-if="agent.frontmatter.model && modelColors[agent.frontmatter.model]"
-              class="text-[10px] font-mono font-medium px-1.5 py-px rounded-full shrink-0"
+              class="fs-micro font-mono font-medium px-1.5 py-px rounded-full shrink-0"
               :class="[modelColors[agent.frontmatter.model]?.bg, modelColors[agent.frontmatter.model]?.text]"
             >
               {{ agent.frontmatter.model }}
@@ -158,7 +158,7 @@ async function useTemplate(templateId: string) {
           </div>
 
           <!-- Description -->
-          <p v-if="agent.frontmatter.description" class="text-[12px] leading-relaxed line-clamp-2 text-label relative">
+          <p v-if="agent.frontmatter.description" class="fs-sm leading-relaxed line-clamp-2 text-label relative">
             {{ agent.frontmatter.description }}
           </p>
 
@@ -170,13 +170,13 @@ async function useTemplate(templateId: string) {
               :plugin-name="agent.pluginName"
               :project-dir="agent.projectDir"
             />
-            <span v-if="skillCounts[agent.slug]" class="text-[10px] text-meta flex items-center gap-1.5">
-              <UIcon name="i-lucide-sparkles" class="size-3" style="color: var(--accent);" />
+            <span v-if="skillCounts[agent.slug]" class="fs-micro text-meta flex items-center gap-1.5">
+              <UIcon name="i-lucide-sparkles" class="size-3 ink-accent" />
               {{ skillCounts[agent.slug] }} skill{{ skillCounts[agent.slug] === 1 ? '' : 's' }}
             </span>
             <span
               v-if="agent.frontmatter.tools?.length"
-              class="text-[10px] text-meta ml-auto"
+              class="fs-micro text-meta ml-auto"
               :title="agent.frontmatter.tools.join(', ')"
             >
               {{ agent.frontmatter.tools.length }} tools
@@ -200,11 +200,11 @@ async function useTemplate(templateId: string) {
         </div>
 
         <ExampleBlock title="What does a good agent look like?" class="max-w-md mx-auto mb-6">
-          <div class="space-y-2 text-[11px]" style="color: var(--text-secondary);">
+          <div class="space-y-2 fs-mono ink-2">
             <div class="rounded-md p-3" style="background: var(--surface-base); border: 1px solid var(--border-subtle);">
-              <p><strong style="color: var(--text-primary);">code-reviewer</strong> <span class="text-[10px]" style="color: var(--text-disabled);">← This name is short and descriptive</span></p>
-              <p class="mt-1">"Reviews pull requests for bugs, style, and security." <span class="text-[10px]" style="color: var(--text-disabled);">← Explains what it does in one sentence</span></p>
-              <p class="mt-1 text-[10px]" style="color: var(--text-tertiary);">"Check for bugs, flag security issues, suggest improvements..." <span style="color: var(--text-disabled);">← Instructions are specific</span></p>
+              <p><strong style="color: var(--text-primary);">code-reviewer</strong> <span class="fs-micro ink-4">← This name is short and descriptive</span></p>
+              <p class="mt-1">"Reviews pull requests for bugs, style, and security." <span class="fs-micro ink-4">← Explains what it does in one sentence</span></p>
+              <p class="mt-1 fs-micro ink-3">"Check for bugs, flag security issues, suggest improvements..." <span style="color: var(--text-disabled);">← Instructions are specific</span></p>
             </div>
           </div>
         </ExampleBlock>

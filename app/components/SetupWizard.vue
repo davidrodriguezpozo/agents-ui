@@ -92,12 +92,12 @@ function finish() {
             class="size-16 rounded-xl flex items-center justify-center"
             style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
           >
-            <UIcon name="i-lucide-bot" class="size-7" style="color: var(--accent);" />
+            <UIcon name="i-lucide-bot" class="size-7 ink-accent" />
           </div>
         </div>
 
         <div class="space-y-2">
-          <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
+          <h2 class="fs-title font-bold" style="font-family: var(--font-display);">
             Set up Agents Studio
           </h2>
           <p class="type-body leading-relaxed max-w-sm mx-auto">
@@ -111,20 +111,20 @@ function finish() {
         >
           <div class="flex items-center gap-3">
             <UIcon name="i-lucide-folder" class="size-4 shrink-0 text-meta" />
-            <code class="font-mono text-[12px]" style="color: var(--text-secondary);">{{ claudeDir }}</code>
+            <code class="font-mono fs-sm ink-2">{{ claudeDir }}</code>
           </div>
           <div class="space-y-1.5 pl-7">
             <div class="flex items-center gap-2 type-detail">
-              <UIcon name="i-lucide-cpu" class="size-3 shrink-0" style="color: var(--accent);" />
-              <span><code class="font-mono text-[11px]">agents/</code> — your AI assistants</span>
+              <UIcon name="i-lucide-cpu" class="size-3 shrink-0 ink-accent" />
+              <span><code class="font-mono fs-mono">agents/</code> — your AI assistants</span>
             </div>
             <div class="flex items-center gap-2 type-detail">
-              <UIcon name="i-lucide-terminal" class="size-3 shrink-0" style="color: var(--accent);" />
-              <span><code class="font-mono text-[11px]">commands/</code> — reusable workflows</span>
+              <UIcon name="i-lucide-terminal" class="size-3 shrink-0 ink-accent" />
+              <span><code class="font-mono fs-mono">commands/</code> — reusable workflows</span>
             </div>
             <div class="flex items-center gap-2 type-detail">
-              <UIcon name="i-lucide-sparkles" class="size-3 shrink-0" style="color: var(--accent);" />
-              <span><code class="font-mono text-[11px]">skills/</code> — specialized capabilities</span>
+              <UIcon name="i-lucide-sparkles" class="size-3 shrink-0 ink-accent" />
+              <span><code class="font-mono fs-mono">skills/</code> — specialized capabilities</span>
             </div>
           </div>
         </div>
@@ -141,18 +141,18 @@ function finish() {
           style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
         >
           <div class="flex items-center gap-2">
-            <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0" style="color: var(--warning);" />
+            <UIcon name="i-lucide-triangle-alert" class="size-4 shrink-0 ink-warn" />
             <span class="type-strong">
               {{ missing.length === 1 ? 'One thing is missing' : `${missing.length} things are missing` }}
             </span>
           </div>
 
           <div v-for="gap in missing" :key="gap.label" class="space-y-0.5">
-            <div class="type-detail" style="color: var(--text-primary);">
+            <div class="type-detail ink">
               <span class="font-mono">{{ gap.label }}</span> isn't installed on this machine.
             </div>
             <p class="type-meta">{{ gap.why }}</p>
-            <p class="type-meta" style="color: var(--text-secondary);">{{ gap.fix }}</p>
+            <p class="type-meta ink-2">{{ gap.fix }}</p>
           </div>
         </div>
 
@@ -167,7 +167,7 @@ function finish() {
 
       <!-- Step 2: Creating -->
       <div v-else-if="step === 'creating'" class="flex flex-col items-center gap-4">
-        <UIcon name="i-lucide-loader-2" class="size-8 animate-spin" style="color: var(--accent);" />
+        <UIcon name="i-lucide-loader-2" class="size-8 animate-spin ink-accent" />
         <p class="type-body">Setting up your workspace...</p>
       </div>
 
@@ -176,14 +176,14 @@ function finish() {
         <div class="flex justify-center">
           <div
             class="size-16 rounded-xl flex items-center justify-center"
-            style="background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.15);"
+            style="background: var(--success-tint); border: 1px solid var(--success-tint);"
           >
             <UIcon name="i-lucide-check" class="size-7" style="color: var(--success, #22c55e);" />
           </div>
         </div>
 
         <div class="space-y-2">
-          <h2 class="text-[24px] font-semibold tracking-tight" style="font-family: var(--font-display);">
+          <h2 class="fs-title font-bold" style="font-family: var(--font-display);">
             You're all set
           </h2>
           <p class="type-body leading-relaxed max-w-sm mx-auto">

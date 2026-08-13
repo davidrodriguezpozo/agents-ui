@@ -307,7 +307,7 @@ async function onRemove(owner: string, repo: string) {
   <div>
     <PageHeader title="Explore">
       <template #trailing>
-        <span class="text-[12px] text-meta"
+        <span class="fs-sm text-meta"
           >{{ agentTemplates.length + commandTemplates.length }} templates</span
         >
       </template>
@@ -322,14 +322,14 @@ async function onRemove(owner: string, repo: string) {
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4 space-y-5">
+    <div class="page-container py-6 space-y-6">
       <!-- Tab switcher -->
       <div
         class="flex items-center gap-1 p-0.5 rounded-md w-fit"
         style="background: var(--badge-subtle-bg)"
       >
         <button
-          class="px-3 py-1.5 rounded-md text-[12px] font-medium transition-all"
+          class="px-3 py-1.5 rounded-md fs-sm font-medium transition-all"
           :style="{
             background:
               activeTab === 'templates' ? 'var(--surface-base)' : 'transparent',
@@ -347,7 +347,7 @@ async function onRemove(owner: string, repo: string) {
           Templates
         </button>
         <button
-          class="px-3 py-1.5 rounded-md text-[12px] font-medium transition-all"
+          class="px-3 py-1.5 rounded-md fs-sm font-medium transition-all"
           :style="{
             background:
               activeTab === 'extensions'
@@ -367,7 +367,7 @@ async function onRemove(owner: string, repo: string) {
           Extensions ({{ plugins.length }})
         </button>
         <button
-          class="px-3 py-1.5 rounded-md text-[12px] font-medium transition-all"
+          class="px-3 py-1.5 rounded-md fs-sm font-medium transition-all"
           :style="{
             background:
               activeTab === 'imported' ? 'var(--surface-base)' : 'transparent',
@@ -385,8 +385,8 @@ async function onRemove(owner: string, repo: string) {
           Imported ({{ githubImports.length }})
           <span
             v-if="updatesAvailable > 0"
-            class="ml-1 inline-flex items-center justify-center size-4 rounded-full text-[9px] font-bold text-white"
-            style="background: var(--info, #3b82f6)"
+            class="ml-1 inline-flex items-center justify-center size-4 rounded-full fs-micro font-bold text-white"
+            style="background: var(--info)"
           >
             {{ updatesAvailable }}
           </span>
@@ -406,7 +406,7 @@ async function onRemove(owner: string, repo: string) {
 
       <!-- Templates Tab -->
       <template v-if="activeTab === 'templates'">
-        <p class="text-[13px] leading-relaxed text-label">
+        <p class="fs-base leading-relaxed text-label">
           Ready-made configurations you can create with one click. Customize
           them after creation.
         </p>
@@ -450,7 +450,7 @@ async function onRemove(owner: string, repo: string) {
                       {{ template.frontmatter.name }}
                     </div>
                     <span
-                      class="text-[10px] px-1.5 py-px rounded-full"
+                      class="fs-micro px-1.5 py-px rounded-full"
                       style="
                         background: var(--badge-subtle-bg);
                         color: var(--text-disabled);
@@ -464,7 +464,7 @@ async function onRemove(owner: string, repo: string) {
                   {{ template.frontmatter.description }}
                 </p>
                 <button
-                  class="text-[12px] text-meta hover:text-label transition-colors"
+                  class="fs-sm text-meta hover:text-label transition-colors"
                   @click="
                     previewId = previewId === template.id ? null : template.id
                   "
@@ -477,7 +477,7 @@ async function onRemove(owner: string, repo: string) {
                 </button>
                 <div
                   v-if="previewId === template.id"
-                  class="rounded-md p-3 text-[12px] font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
+                  class="rounded-md p-3 fs-sm font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
                   style="
                     background: var(--surface-base);
                     border: 1px solid var(--border-subtle);
@@ -547,7 +547,7 @@ async function onRemove(owner: string, repo: string) {
                   {{ template.frontmatter.description }}
                 </p>
                 <button
-                  class="text-[12px] text-meta hover:text-label transition-colors"
+                  class="fs-sm text-meta hover:text-label transition-colors"
                   @click="
                     previewId = previewId === template.id ? null : template.id
                   "
@@ -560,7 +560,7 @@ async function onRemove(owner: string, repo: string) {
                 </button>
                 <div
                   v-if="previewId === template.id"
-                  class="rounded-md p-3 text-[12px] font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
+                  class="rounded-md p-3 fs-sm font-mono leading-relaxed text-label max-h-48 overflow-y-auto"
                   style="
                     background: var(--surface-base);
                     border: 1px solid var(--border-subtle);
@@ -588,7 +588,7 @@ async function onRemove(owner: string, repo: string) {
 
       <!-- Imported Tab -->
       <template v-if="activeTab === 'imported'">
-        <p class="text-[13px] leading-relaxed text-label">
+        <p class="fs-base leading-relaxed text-label">
           Skills imported from GitHub repositories. Updates are checked
           automatically.
         </p>
@@ -644,17 +644,17 @@ async function onRemove(owner: string, repo: string) {
 
       <!-- Extensions Tab -->
       <template v-if="activeTab === 'extensions'">
-        <p class="text-[13px] leading-relaxed text-label">
+        <p class="fs-base leading-relaxed text-label">
           Browse, install, and manage plugins from your registered marketplaces.
         </p>
 
         <div
           v-if="pluginsError"
           class="rounded-lg px-4 py-3 flex items-start gap-3"
-          style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
+          style="background: var(--error-wash); border: 1px solid var(--error-tint);"
         >
           <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error)" />
-          <span class="text-[12px]" style="color: var(--error)">{{ pluginsError }}</span>
+          <span class="fs-sm" style="color: var(--error)">{{ pluginsError }}</span>
         </div>
 
         <!-- Section 1: Installed Plugins -->
@@ -675,13 +675,13 @@ async function onRemove(owner: string, repo: string) {
                   <div class="flex items-center gap-2.5">
                     <div
                       class="size-8 rounded-md flex items-center justify-center shrink-0"
-                      style="background: var(--accent-muted); border: 1px solid rgba(45, 212, 191, 0.15);"
+                      style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
                     >
-                      <UIcon name="i-lucide-puzzle" class="size-4" style="color: var(--accent);" />
+                      <UIcon name="i-lucide-puzzle" class="size-4 ink-accent" />
                     </div>
                     <div class="flex-1 min-w-0">
                       <div class="type-strong truncate">{{ plugin.name }}</div>
-                      <span class="text-[10px] px-1.5 py-px rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
+                      <span class="fs-micro px-1.5 py-px rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
                         v{{ plugin.version }}
                       </span>
                     </div>
@@ -705,7 +705,7 @@ async function onRemove(owner: string, repo: string) {
                   </div>
                 </div>
                 <div class="px-4 py-3 flex items-center justify-between" style="border-top: 1px solid var(--border-subtle);">
-                  <NuxtLink :to="`/plugins/${plugin.id}`" class="text-[12px] text-meta hover:text-label transition-colors">
+                  <NuxtLink :to="`/plugins/${plugin.id}`" class="fs-sm text-meta hover:text-label transition-colors">
                     View details
                   </NuxtLink>
                   <UButton
@@ -729,7 +729,7 @@ async function onRemove(owner: string, repo: string) {
           <div v-for="(group, marketplace) in availableGroupedByMarketplace" :key="marketplace" class="space-y-3">
             <div class="flex items-center gap-2">
               <UIcon name="i-lucide-store" class="size-3.5 text-meta" />
-              <span class="font-mono text-[12px] font-medium text-body">{{ marketplace }}</span>
+              <span class="font-mono fs-sm font-medium text-body">{{ marketplace }}</span>
               <span class="font-mono type-meta">{{ group.length }}</span>
             </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -780,7 +780,7 @@ async function onRemove(owner: string, repo: string) {
 
         <!-- Section 3: Marketplace Sources -->
         <details class="group">
-          <summary class="text-[12px] flex items-center gap-1.5 text-meta cursor-pointer">
+          <summary class="fs-sm flex items-center gap-1.5 text-meta cursor-pointer">
             <UIcon name="i-lucide-settings" class="size-3" />
             Marketplace sources ({{ marketplaceSources.length }})
           </summary>
@@ -799,7 +799,7 @@ async function onRemove(owner: string, repo: string) {
               />
             </div>
 
-            <p v-else class="text-[12px] text-meta">No marketplace sources registered.</p>
+            <p v-else class="fs-sm text-meta">No marketplace sources registered.</p>
 
             <UButton
               label="Add marketplace"

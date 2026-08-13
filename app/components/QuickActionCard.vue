@@ -24,17 +24,17 @@ defineEmits<{
       class="size-10 rounded-lg flex items-center justify-center shrink-0"
       style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
     >
-      <UIcon :name="icon" class="size-5" style="color: var(--accent);" />
+      <UIcon :name="icon" class="size-5 ink-accent" />
     </div>
     <div class="flex-1 text-left">
       <div class="type-strong" style="color: var(--text-primary); font-family: var(--font-sans);">
         {{ title }}
       </div>
-      <div class="text-[11px] mt-0.5" style="color: var(--text-tertiary);">
+      <div class="fs-mono mt-0.5 ink-3">
         {{ description }}
       </div>
     </div>
-    <UIcon name="i-lucide-arrow-right" class="size-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style="color: var(--text-disabled);" />
+    <UIcon name="i-lucide-arrow-right" class="size-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ink-4" />
   </NuxtLink>
   <button
     v-else
@@ -48,16 +48,16 @@ defineEmits<{
       class="size-10 rounded-lg flex items-center justify-center shrink-0"
       style="background: linear-gradient(135deg, var(--accent-muted) 0%, var(--accent-muted) 100%); border: 1px solid var(--accent-muted);"
     >
-      <UIcon :name="icon" class="size-5" style="color: var(--accent);" />
+      <UIcon :name="icon" class="size-5 ink-accent" />
     </div>
     <div class="flex-1 text-left">
       <div class="type-strong" style="color: var(--text-primary); font-family: var(--font-sans);">
         {{ title }}
       </div>
-      <div class="text-[11px] mt-0.5" style="color: var(--text-tertiary);">
+      <div class="fs-mono mt-0.5 ink-3">
         {{ description }}
       </div>
     </div>
-    <UIcon name="i-lucide-arrow-right" class="size-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" style="color: var(--text-disabled);" />
+    <UIcon name="i-lucide-arrow-right" class="size-4 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ink-4" />
   </button>
 </template>

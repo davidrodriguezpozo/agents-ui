@@ -185,7 +185,7 @@ const statItems = computed(() => [
   <div v-else>
     <PageHeader title="Dashboard" />
 
-    <div class="px-6 py-5 stagger-section space-y-5">
+    <div class="page-container py-6 stagger-section space-y-6">
       <!--
         What happened while you were away, above everything else. The counters
         below say how much you own; this says what changed, which is the reason
@@ -218,7 +218,7 @@ const statItems = computed(() => [
                 :name="item.icon"
                 class="size-4 text-meta group-hover:text-[var(--accent)] transition-colors duration-200"
               />
-              <span class="text-[12px] font-medium text-label">{{
+              <span class="fs-sm font-medium text-label">{{
                 item.label
               }}</span>
             </div>
@@ -264,11 +264,11 @@ const statItems = computed(() => [
               :style="{ background: modelBarColors[model] || '#71717a' }"
             />
             <span
-              class="text-[11px] font-medium"
+              class="fs-mono font-medium"
               style="color: var(--text-secondary)"
               >{{ modelLabels[model] }}</span
             >
-            <span class="font-mono text-[11px] tabular-nums text-meta">{{
+            <span class="font-mono fs-mono tabular-nums text-meta">{{
               count
             }}</span>
           </div>
@@ -302,7 +302,7 @@ const statItems = computed(() => [
             </h3>
             <NuxtLink
               to="/agents"
-              class="text-[12px] focus-ring rounded px-1.5 py-0.5 hover-bg transition-colors"
+              class="fs-sm focus-ring rounded px-1.5 py-0.5 hover-bg transition-colors"
               style="color: var(--accent)"
               >View all</NuxtLink
             >
@@ -339,7 +339,7 @@ const statItems = computed(() => [
                 </span>
                 <span
                   v-if="agent.frontmatter.description"
-                  class="text-[11px] text-label truncate block"
+                  class="fs-mono text-label truncate block"
                 >
                   {{ agent.frontmatter.description }}
                 </span>
@@ -349,7 +349,7 @@ const statItems = computed(() => [
                   agent.frontmatter.model &&
                   modelColors[agent.frontmatter.model]
                 "
-                class="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded-full shrink-0"
+                class="fs-micro font-mono font-medium px-1.5 py-0.5 rounded-full shrink-0"
                 :class="[
                   modelColors[agent.frontmatter.model]?.bg,
                   modelColors[agent.frontmatter.model]?.text,
@@ -385,7 +385,7 @@ const statItems = computed(() => [
               </h3>
               <NuxtLink
                 to="/commands"
-                class="text-[12px] focus-ring rounded px-1.5 py-0.5 hover-bg transition-colors"
+                class="fs-sm focus-ring rounded px-1.5 py-0.5 hover-bg transition-colors"
                 style="color: var(--accent)"
                 >View all</NuxtLink
               >
@@ -401,14 +401,14 @@ const statItems = computed(() => [
                 class="flex items-center gap-2.5 px-4 py-2.5 hover-bg"
               >
                 <span
-                  class="font-mono text-[11px] shrink-0"
+                  class="font-mono fs-mono shrink-0"
                   style="color: var(--accent)"
                   >/</span
                 >
-                <span class="text-[12px] truncate text-body flex-1">
+                <span class="fs-sm truncate text-body flex-1">
                   {{ cmd.frontmatter.name }}
                 </span>
-                <span class="text-[10px] shrink-0 text-meta font-mono">
+                <span class="fs-micro shrink-0 text-meta font-mono">
                   {{ cmd.directory }}
                 </span>
               </NuxtLink>
@@ -437,7 +437,7 @@ const statItems = computed(() => [
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="type-strong">Relationship Graph</div>
-                  <div class="text-[11px] text-label">
+                  <div class="fs-mono text-label">
                     Visualize connections
                   </div>
                 </div>
@@ -457,7 +457,7 @@ const statItems = computed(() => [
                   class="size-8 rounded-md flex items-center justify-center shrink-0"
                   style="
                     background: var(--accent-secondary-muted);
-                    border: 1px solid rgba(99, 102, 241, 0.12);
+                    border: 1px solid var(--accent-glow);
                   "
                 >
                   <UIcon
@@ -468,7 +468,7 @@ const statItems = computed(() => [
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="type-strong">Create Workflow</div>
-                  <div class="text-[11px] text-label">Multi-step pipelines</div>
+                  <div class="fs-mono text-label">Multi-step pipelines</div>
                 </div>
                 <UIcon
                   name="i-lucide-arrow-right"
@@ -497,7 +497,7 @@ const statItems = computed(() => [
                 </div>
                 <div class="flex-1 min-w-0">
                   <div class="type-strong">Explore</div>
-                  <div class="text-[11px] text-label">Templates & extensions</div>
+                  <div class="fs-mono text-label">Templates & extensions</div>
                 </div>
                 <UIcon
                   name="i-lucide-arrow-right"
@@ -576,7 +576,7 @@ const statItems = computed(() => [
       <!-- Advanced: directory picker -->
       <details>
         <summary
-          class="text-[12px] flex items-center gap-1.5 text-meta cursor-pointer"
+          class="fs-sm flex items-center gap-1.5 text-meta cursor-pointer"
         >
           <UIcon
             name="i-lucide-settings"
@@ -585,7 +585,7 @@ const statItems = computed(() => [
           Advanced: Configuration folder
         </summary>
         <div class="rounded-lg p-4 mt-2 bg-card">
-          <p class="text-[12px] mb-3 text-label">
+          <p class="fs-sm mb-3 text-label">
             This is where Claude Code stores your agents, commands, and
             settings. The default is ~/.claude.
           </p>
@@ -617,14 +617,14 @@ const statItems = computed(() => [
 
       <!-- Keyboard shortcuts -->
       <div class="flex items-center gap-4 px-2 text-meta">
-        <span class="text-[12px] flex items-center gap-1.5">
-          <kbd class="text-[10px] font-mono px-1 py-px rounded badge-subtle"
+        <span class="fs-sm flex items-center gap-1.5">
+          <kbd class="fs-micro font-mono px-1 py-px rounded badge-subtle"
             >&#x2318;K</kbd
           >
           Search
         </span>
-        <span class="text-[12px] flex items-center gap-1.5">
-          <kbd class="text-[10px] font-mono px-1 py-px rounded badge-subtle"
+        <span class="fs-sm flex items-center gap-1.5">
+          <kbd class="fs-micro font-mono px-1 py-px rounded badge-subtle"
             >&#x2318;S</kbd
           >
           Save

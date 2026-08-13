@@ -60,17 +60,17 @@ const costLabel = computed(() => {
 <template>
   <div class="border-t transition-all" style="border-color: var(--border-subtle); background: var(--surface-base);">
     <button class="w-full flex items-center gap-2 px-4 py-2 text-left hover-bg transition-all" @click="isExpanded = !isExpanded">
-      <UIcon :name="isExpanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3" style="color: var(--text-disabled);" />
-      <span class="text-[11px] font-mono" style="color: var(--text-tertiary);">Execution Inspector</span>
+      <UIcon :name="isExpanded ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3 ink-4" />
+      <span class="fs-mono font-mono ink-3">Execution Inspector</span>
       <span
         v-if="invocations.length || toolCalls.length"
-        class="text-[9px] font-mono px-1.5 py-px rounded-full"
+        class="fs-micro font-mono px-1.5 py-px rounded-full"
         style="background: var(--badge-subtle-bg); color: var(--text-disabled);"
       >
         {{ invocations.length || toolCalls.length }} tool{{ (invocations.length || toolCalls.length) !== 1 ? 's' : '' }}
       </span>
 
-      <div class="ml-auto flex items-center gap-2 text-[9px] font-mono" style="color: var(--text-disabled);">
+      <div class="ml-auto flex items-center gap-2 fs-micro font-mono ink-4">
         <span v-if="totalTokens">{{ compact(totalTokens) }} tok</span>
         <span v-if="costLabel">{{ costLabel }}</span>
         <div v-if="isStreaming" class="size-1.5 rounded-full bg-amber-400 animate-pulse" />
@@ -81,7 +81,7 @@ const costLabel = computed(() => {
       <!-- What the run actually used -->
       <div
         v-if="effectiveConfig"
-        class="rounded-md px-3 py-2 space-y-1 text-[10px] font-mono"
+        class="rounded-md px-3 py-2 space-y-1 fs-micro font-mono"
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-disabled);"
       >
         <div class="flex gap-2">
@@ -100,7 +100,7 @@ const costLabel = computed(() => {
         </div>
         <div class="flex gap-2">
           <span class="w-16 shrink-0">cwd</span>
-          <span class="truncate" style="color: var(--text-secondary);">{{ effectiveConfig.cwd }}</span>
+          <span class="truncate ink-2">{{ effectiveConfig.cwd }}</span>
         </div>
         <div v-if="effectiveConfig.pluginName" class="flex gap-2">
           <span class="w-16 shrink-0">plugin</span>
@@ -108,7 +108,7 @@ const costLabel = computed(() => {
         </div>
       </div>
 
-      <div v-if="!invocations.length" class="text-[11px] font-mono py-2" style="color: var(--text-disabled);">
+      <div v-if="!invocations.length" class="fs-mono font-mono py-2 ink-4">
         No tool calls yet. Start a conversation to see execution details.
       </div>
 
@@ -120,7 +120,7 @@ const costLabel = computed(() => {
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
       >
         <button
-          class="w-full flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono text-left hover-bg"
+          class="w-full flex items-center gap-2 px-3 py-1.5 fs-mono font-mono text-left hover-bg"
           @click="toggleInvocation(invocation.id)"
         >
           <UIcon
@@ -128,19 +128,19 @@ const costLabel = computed(() => {
             class="size-3 shrink-0"
             :style="{ color: invocation.isError ? 'var(--error)' : 'var(--text-disabled)' }"
           />
-          <span class="shrink-0" style="color: var(--text-secondary);">{{ invocation.toolName }}</span>
-          <span class="flex-1 truncate" style="color: var(--text-disabled);">{{ summarizeInput(invocation.input) }}</span>
-          <span class="shrink-0" style="color: var(--text-disabled);">{{ duration(invocation) }}</span>
+          <span class="shrink-0 ink-2">{{ invocation.toolName }}</span>
+          <span class="flex-1 truncate ink-4">{{ summarizeInput(invocation.input) }}</span>
+          <span class="shrink-0 ink-4">{{ duration(invocation) }}</span>
         </button>
 
         <div v-if="openInvocation === invocation.id" class="px-3 pb-2 space-y-2" style="border-top: 1px solid var(--border-subtle);">
           <div>
-            <div class="text-[9px] uppercase tracking-wider mt-2 mb-1" style="color: var(--text-disabled);">Input</div>
-            <pre class="text-[10px] font-mono overflow-x-auto p-2 rounded" style="background: var(--surface-base); color: var(--text-secondary);">{{ formatJson(invocation.input) }}</pre>
+            <div class="fs-micro uppercase tracking-wider mt-2 mb-1 ink-4">Input</div>
+            <pre class="fs-micro font-mono overflow-x-auto p-2 rounded" style="background: var(--surface-base); color: var(--text-secondary);">{{ formatJson(invocation.input) }}</pre>
           </div>
           <div v-if="invocation.result">
-            <div class="text-[9px] uppercase tracking-wider mb-1" style="color: var(--text-disabled);">Result</div>
-            <pre class="text-[10px] font-mono overflow-x-auto p-2 rounded whitespace-pre-wrap" style="background: var(--surface-base); color: var(--text-secondary);">{{ invocation.result }}</pre>
+            <div class="fs-micro uppercase tracking-wider mb-1 ink-4">Result</div>
+            <pre class="fs-micro font-mono overflow-x-auto p-2 rounded whitespace-pre-wrap" style="background: var(--surface-base); color: var(--text-secondary);">{{ invocation.result }}</pre>
           </div>
         </div>
       </div>
@@ -148,7 +148,7 @@ const costLabel = computed(() => {
       <!-- Run totals -->
       <div
         v-if="lastRun"
-        class="rounded-md px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-mono"
+        class="rounded-md px-3 py-2 flex flex-wrap gap-x-4 gap-y-1 fs-micro font-mono"
         style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-disabled);"
       >
         <span>{{ lastRun.numTurns }} turns</span>

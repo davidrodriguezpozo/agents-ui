@@ -63,7 +63,7 @@ function isToolEnabled(tool: string): boolean {
       <button
         v-for="tab in (['instructions', 'settings', 'skills'] as const)"
         :key="tab"
-        class="px-4 py-2.5 text-[12px] font-medium capitalize transition-all relative"
+        class="px-4 py-2.5 fs-sm font-medium capitalize transition-all relative"
         :style="{ color: activeTab === tab ? 'var(--text-primary)' : 'var(--text-tertiary)' }"
         @click="activeTab = tab"
       >
@@ -78,34 +78,34 @@ function isToolEnabled(tool: string): boolean {
 
     <div v-if="activeTab === 'settings'" class="flex-1 overflow-y-auto p-4 space-y-4">
       <div class="space-y-1">
-        <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Name</label>
+        <label class="fs-mono font-medium ink-3">Name</label>
         <input :value="frontmatter.name" class="field-input w-full" placeholder="Agent name" @input="updateFrontmatter('name', ($event.target as HTMLInputElement).value)" />
       </div>
       <div class="space-y-1">
-        <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Description</label>
+        <label class="fs-mono font-medium ink-3">Description</label>
         <input :value="frontmatter.description" class="field-input w-full" placeholder="What does this agent do?" @input="updateFrontmatter('description', ($event.target as HTMLInputElement).value)" />
       </div>
       <div class="space-y-1">
-        <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Model</label>
+        <label class="fs-mono font-medium ink-3">Model</label>
         <div class="flex gap-2">
-          <button v-for="opt in modelOptions" :key="opt.value" class="px-3 py-1.5 rounded-md text-[11px] font-medium transition-all" :style="{ background: frontmatter.model === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.model === opt.value ? 'var(--accent-glow)' : 'var(--border-subtle)'), color: frontmatter.model === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('model', opt.value)">{{ opt.label }}</button>
+          <button v-for="opt in modelOptions" :key="opt.value" class="px-3 py-1.5 rounded-md fs-mono font-medium transition-all" :style="{ background: frontmatter.model === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.model === opt.value ? 'var(--accent-glow)' : 'var(--border-subtle)'), color: frontmatter.model === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('model', opt.value)">{{ opt.label }}</button>
         </div>
       </div>
       <div class="space-y-1">
-        <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Memory</label>
+        <label class="fs-mono font-medium ink-3">Memory</label>
         <div class="flex gap-2">
-          <button v-for="opt in memoryOptions" :key="opt.value" class="px-3 py-1.5 rounded-md text-[11px] font-medium transition-all" :style="{ background: frontmatter.memory === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.memory === opt.value ? 'var(--accent-glow)' : 'var(--border-subtle)'), color: frontmatter.memory === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('memory', opt.value)">{{ opt.label }}</button>
+          <button v-for="opt in memoryOptions" :key="opt.value" class="px-3 py-1.5 rounded-md fs-mono font-medium transition-all" :style="{ background: frontmatter.memory === opt.value ? 'var(--accent-muted)' : 'var(--surface-raised)', border: '1px solid ' + (frontmatter.memory === opt.value ? 'var(--accent-glow)' : 'var(--border-subtle)'), color: frontmatter.memory === opt.value ? 'var(--accent)' : 'var(--text-secondary)' }" @click="updateFrontmatter('memory', opt.value)">{{ opt.label }}</button>
         </div>
       </div>
       <div class="space-y-1">
         <div class="flex items-center justify-between">
-          <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Tools</label>
-          <label class="flex items-center gap-1.5 text-[10px]" style="color: var(--text-tertiary);">
+          <label class="fs-mono font-medium ink-3">Tools</label>
+          <label class="flex items-center gap-1.5 fs-micro ink-3">
             <input v-model="restrictTools" type="checkbox" class="size-3" />
             Restrict
           </label>
         </div>
-        <p v-if="!restrictTools" class="text-[10px] leading-relaxed" style="color: var(--text-disabled);">
+        <p v-if="!restrictTools" class="fs-micro leading-relaxed ink-4">
           Inherits every tool available to the parent session — the Claude Code default when
           <code>tools:</code> is omitted.
         </p>
@@ -113,7 +113,7 @@ function isToolEnabled(tool: string): boolean {
           <button
             v-for="tool in allTools"
             :key="tool"
-            class="px-1.5 py-0.5 rounded text-[10px] font-mono transition-all"
+            class="px-1.5 py-0.5 rounded fs-micro font-mono transition-all"
             :style="{
               background: isToolEnabled(tool) ? 'var(--accent-muted)' : 'var(--surface-raised)',
               color: isToolEnabled(tool) ? 'var(--accent)' : 'var(--text-disabled)',
@@ -127,22 +127,22 @@ function isToolEnabled(tool: string): boolean {
       </div>
 
       <div class="space-y-1">
-        <label class="text-[11px] font-medium" style="color: var(--text-tertiary);">Color</label>
+        <label class="fs-mono font-medium ink-3">Color</label>
         <input type="color" :value="frontmatter.color || '#e5a93e'" class="w-8 h-8 rounded-md cursor-pointer border" style="border-color: var(--border-subtle);" @input="updateFrontmatter('color', ($event.target as HTMLInputElement).value)" />
       </div>
     </div>
 
     <div v-if="activeTab === 'skills'" class="flex-1 overflow-y-auto p-4">
-      <div v-if="loadingSkills" class="text-[11px] font-mono py-4 text-center" style="color: var(--text-disabled);">Loading skills...</div>
-      <div v-else-if="!skills.length" class="text-[12px] py-4 text-center" style="color: var(--text-tertiary);">No skills attached to this agent yet.</div>
+      <div v-if="loadingSkills" class="fs-mono font-mono py-4 text-center ink-4">Loading skills...</div>
+      <div v-else-if="!skills.length" class="fs-sm py-4 text-center ink-3">No skills attached to this agent yet.</div>
       <div v-else class="space-y-2">
         <div v-for="skill in skills" :key="skill.slug" class="flex items-center gap-2 px-3 py-2 rounded-md" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
-          <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0" style="color: var(--accent);" />
+          <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0 ink-accent" />
           <div class="flex-1 min-w-0">
-            <div class="text-[12px] font-medium truncate" style="color: var(--text-primary);">{{ skill.frontmatter.name }}</div>
-            <div class="text-[10px] truncate" style="color: var(--text-tertiary);">{{ skill.frontmatter.description }}</div>
+            <div class="fs-sm font-medium truncate ink">{{ skill.frontmatter.name }}</div>
+            <div class="fs-micro truncate ink-3">{{ skill.frontmatter.description }}</div>
           </div>
-          <span class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">{{ skill.source }}</span>
+          <span class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">{{ skill.source }}</span>
         </div>
       </div>
     </div>

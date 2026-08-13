@@ -68,7 +68,7 @@ function retry() {
         >
           {{ heading }}
         </h1>
-        <p class="text-[13px] leading-relaxed" style="color: var(--text-secondary);">
+        <p class="fs-base leading-relaxed ink-2">
           {{ explanation }}
         </p>
       </div>
@@ -88,14 +88,14 @@ function retry() {
 
       <details v-if="detail" class="text-left">
         <summary
-          class="text-[11px] cursor-pointer list-none flex items-center justify-center gap-1.5"
+          class="fs-mono cursor-pointer list-none flex items-center justify-center gap-1.5"
           style="color: var(--text-disabled);"
         >
           <UIcon name="i-lucide-chevron-right" class="size-3" />
           Technical detail
         </summary>
         <pre
-          class="mt-2 font-mono text-[10px] p-3 rounded-md overflow-x-auto whitespace-pre-wrap"
+          class="mt-2 font-mono fs-micro p-3 rounded-md overflow-x-auto whitespace-pre-wrap"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle); color: var(--text-tertiary);"
         >{{ detail }}</pre>
       </details>

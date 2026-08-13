@@ -97,8 +97,8 @@ function shortPath(path: string): string {
         class="size-3"
         style="color: var(--text-disabled);"
       />
-      <UIcon name="i-lucide-git-branch" class="size-3.5" style="color: var(--text-tertiary);" />
-      <span class="type-detail" style="color: var(--text-secondary);">Workspaces on disk</span>
+      <UIcon name="i-lucide-git-branch" class="size-3.5 ink-3" />
+      <span class="type-detail ink-2">Workspaces on disk</span>
       <span class="type-mono-meta">{{ data.worktrees.length }}</span>
       <span
         v-if="restorable.length"
@@ -143,7 +143,7 @@ function shortPath(path: string): string {
 
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="font-mono type-detail truncate" style="color: var(--text-primary);">
+              <span class="font-mono type-detail truncate ink">
                 {{ worktree.branch || 'detached' }}
               </span>
               <span
@@ -160,7 +160,7 @@ function shortPath(path: string): string {
               >
                 no session
               </span>
-              <span v-else-if="worktree.prunable" class="type-mono-meta shrink-0" style="color: var(--error);">
+              <span v-else-if="worktree.prunable" class="type-mono-meta shrink-0 ink-error">
                 directory missing
               </span>
             </div>

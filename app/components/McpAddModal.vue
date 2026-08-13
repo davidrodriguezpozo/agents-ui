@@ -83,13 +83,13 @@ async function onSave() {
 <template>
   <div class="p-6 space-y-5 bg-overlay">
     <div class="flex items-center gap-2">
-      <UIcon name="i-lucide-plug" class="size-4" style="color: var(--accent);" />
+      <UIcon name="i-lucide-plug" class="size-4 ink-accent" />
       <h3 class="text-page-title">Add an MCP server</h3>
     </div>
 
     <div class="field-group">
       <label class="field-label">Name</label>
-      <input v-model="name" class="field-input font-mono text-[12px]" placeholder="sentry" />
+      <input v-model="name" class="field-input font-mono fs-sm" placeholder="sentry" />
       <span class="field-hint">Letters, numbers, dots and dashes — no spaces.</span>
     </div>
 
@@ -99,7 +99,7 @@ async function onSave() {
         <button
           v-for="option in (['http', 'sse', 'stdio'] as const)"
           :key="option"
-          class="flex-1 px-2 py-1.5 rounded-md text-[12px] font-medium transition-all"
+          class="flex-1 px-2 py-1.5 rounded-md fs-sm font-medium transition-all"
           :style="{
             background: transport === option ? 'var(--accent-muted)' : 'var(--surface-raised)',
             color: transport === option ? 'var(--accent)' : 'var(--text-secondary)',
@@ -115,14 +115,14 @@ async function onSave() {
       <label class="field-label">{{ isStdio ? 'Command' : 'URL' }}</label>
       <input
         v-model="target"
-        class="field-input font-mono text-[12px]"
+        class="field-input font-mono fs-sm"
         :placeholder="isStdio ? 'npx' : 'https://mcp.sentry.dev/mcp'"
       />
     </div>
 
     <div v-if="isStdio" class="field-group">
       <label class="field-label">Arguments</label>
-      <textarea v-model="argsText" rows="3" class="field-textarea font-mono text-[12px]" placeholder="-y&#10;@sentry/mcp-server" />
+      <textarea v-model="argsText" rows="3" class="field-textarea font-mono fs-sm" placeholder="-y&#10;@sentry/mcp-server" />
       <span class="field-hint">One per line, so a path with a space in it stays in one piece.</span>
     </div>
 
@@ -131,7 +131,7 @@ async function onSave() {
       <textarea
         v-model="pairsText"
         rows="2"
-        class="field-textarea font-mono text-[12px]"
+        class="field-textarea font-mono fs-sm"
         :placeholder="isStdio ? 'API_KEY=…' : 'Authorization: Bearer …'"
       />
       <span class="field-hint">
@@ -157,7 +157,7 @@ async function onSave() {
           </span>
         </label>
       </div>
-      <span v-if="needsProject && !workingDir" class="field-hint" style="color: var(--warning);">
+      <span v-if="needsProject && !workingDir" class="field-hint ink-warn">
         Pick a project first — both of these are saved against one.
       </span>
     </div>

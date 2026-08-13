@@ -239,79 +239,76 @@ function pastFacts(past: { costUsd?: number; durationMs?: number }): string {
 
 <template>
   <div class="flex flex-col h-full">
-    <!-- Top bar -->
-    <div
-      class="h-14 flex items-center gap-3 px-4 shrink-0 sticky top-0 z-10"
-      style="border-bottom: 1px solid var(--border-subtle); background: var(--surface-base);"
-    >
-      <NuxtLink to="/workflows" class="p-1.5 rounded-md hover-bg focus-ring">
-        <UIcon name="i-lucide-arrow-left" class="size-4 text-meta" />
-      </NuxtLink>
+    <PageHeader :title="name || 'Untitled Workflow'">
+      <template #leading>
+        <NuxtLink to="/workflows" class="p-1.5 -ml-1.5 rounded-md hover-bg focus-ring">
+          <UIcon name="i-lucide-arrow-left" class="size-4 text-meta" />
+        </NuxtLink>
+      </template>
 
-      <!-- Editable name -->
-      <div class="flex-1 min-w-0">
+      <!-- Rename in place -->
+      <template #title>
         <input
           v-if="editingName"
           v-model="name"
-          class="field-input text-[14px] font-medium w-full max-w-xs"
+          class="field-input text-page-title w-full max-w-md"
           @blur="editingName = false"
           @keydown.enter="editingName = false"
         />
         <button
           v-else
-          class="text-[14px] font-medium truncate text-left"
-          style="color: var(--text-primary);"
+          class="truncate text-left"
           @click="editingName = true"
         >
           {{ name || 'Untitled Workflow' }}
         </button>
-      </div>
+      </template>
 
+      <template #right>
+        <UButton
+          v-if="isRunning"
+          label="Stop"
+          icon="i-lucide-square"
+          size="sm"
+          color="error"
+          variant="soft"
+          @click="onStop"
+        />
+        <UButton
+          v-else
+          label="Run"
+          icon="i-lucide-play"
+          size="sm"
+          :disabled="!canRun"
+          @click="() => { showRunModal = true }"
+        />
+        <UButton label="Save" icon="i-lucide-save" size="sm" variant="soft" :loading="saving" @click="save" />
+        <UButton icon="i-lucide-trash-2" size="sm" variant="ghost" color="error" @click="deleteWorkflow" />
+      </template>
+    </PageHeader>
 
-      <UButton
-        v-if="isRunning"
-        label="Stop"
-        icon="i-lucide-square"
-        size="sm"
-        color="error"
-        variant="soft"
-        @click="onStop"
-      />
-      <UButton
-        v-else
-        label="Run"
-        icon="i-lucide-play"
-        size="sm"
-        :disabled="!canRun"
-        @click="() => { showRunModal = true }"
-      />
-      <UButton label="Save" icon="i-lucide-save" size="sm" variant="soft" :loading="saving" @click="save" />
-      <UButton icon="i-lucide-trash-2" size="sm" variant="ghost" color="error" @click="deleteWorkflow" />
-    </div>
-
-    <!-- Description -->
-    <div class="px-4 py-2" style="border-bottom: 1px solid var(--border-subtle);">
+    <!-- Description, on the frame so it lines up under the title -->
+    <div class="page-container pt-4" style="border-bottom: 1px solid var(--border-subtle);">
       <input
         v-if="editingDescription"
         v-model="description"
-        class="field-input text-[12px] w-full max-w-lg"
-        placeholder="Workflow description..."
+        class="field-input type-body w-full max-w-lg mb-4"
+        placeholder="What does this workflow do?"
         @blur="editingDescription = false"
         @keydown.enter="editingDescription = false"
       />
       <button
         v-else
-        class="text-[12px] text-left"
-        style="color: var(--text-tertiary);"
+        class="type-body text-left pb-4"
         @click="editingDescription = true"
       >
-        {{ description || 'Click to add a description...' }}
+        {{ description || 'Add a description' }}
       </button>
     </div>
 
     <!-- Steps -->
     <div class="flex-1 overflow-y-auto">
-      <div class="page-container page-container--narrow py-5 space-y-5">
+      <div class="page-container page-container--measure py-5 space-y-5">
         <div v-if="activeRun" class="flex items-center gap-2">
           <span class="type-detail" :style="{ color: runLook.colour }">{{ runLook.text }}</span>
           <span v-if="runCost" class="type-meta">{{ runCost }} in total</span>

@@ -132,7 +132,7 @@ useUnsavedChanges(isDirty)
         </NuxtLink>
       </template>
       <template #trailing>
-        <span v-if="command" class="font-mono text-[12px]" style="color: var(--accent);">
+        <span v-if="command" class="font-mono fs-sm ink-accent">
           {{ command.invocation }}
         </span>
         <SourceBadge
@@ -155,32 +155,32 @@ useUnsavedChanges(isDirty)
         <NuxtLink
           v-if="readOnly && command?.pluginId"
           :to="`/plugins/${encodeURIComponent(command.pluginId)}?tab=commands`"
-          class="text-[12px] px-2 py-1 rounded focus-ring text-label"
+          class="fs-sm px-2 py-1 rounded focus-ring text-label"
         >
           View in plugin
         </NuxtLink>
         <template v-else>
           <button
-            class="text-[12px] px-2 py-1 rounded focus-ring text-label"
+            class="fs-sm px-2 py-1 rounded focus-ring text-label"
             @click="showDeleteConfirm = true"
           >
             Delete
           </button>
-          <span v-if="isDirty" class="text-[10px] font-mono unsaved-pulse" style="color: var(--warning);">unsaved</span>
+          <span v-if="isDirty" class="fs-micro font-mono unsaved-pulse ink-warn">unsaved</span>
           <UButton label="Save" icon="i-lucide-save" size="sm" :loading="saving" @click="save" />
         </template>
       </template>
     </PageHeader>
 
-    <div v-if="command" class="px-6 py-5 space-y-6">
+    <div v-if="command" class="page-container py-6 space-y-6">
       <!-- Read-only notice for plugin-provided commands -->
       <div
         v-if="readOnly"
         class="rounded-lg px-4 py-3 flex items-center gap-3"
-        style="background: rgba(139, 92, 246, 0.06); border: 1px solid rgba(139, 92, 246, 0.14);"
+        style="background: var(--plugin-wash); border: 1px solid var(--plugin-tint);"
       >
-        <UIcon name="i-lucide-puzzle" class="size-4 shrink-0" style="color: rgb(139, 92, 246);" />
-        <span class="text-[12px] flex-1 text-body">
+        <UIcon name="i-lucide-puzzle" class="size-4 shrink-0" style="color: var(--plugin);" />
+        <span class="fs-sm flex-1 text-body">
           <strong>{{ command.invocation }}</strong> comes from the
           <strong>{{ command.pluginName }}</strong> plugin. It's shown read-only here — edits would be
           overwritten the next time the plugin updates.
@@ -191,14 +191,14 @@ useUnsavedChanges(isDirty)
       <div
         v-if="hasDraft && !readOnly"
         class="rounded-lg px-4 py-3 flex items-center gap-3"
-        style="background: rgba(59, 130, 246, 0.06); border: 1px solid rgba(59, 130, 246, 0.12);"
+        style="background: var(--info-wash); border: 1px solid var(--info-tint);"
       >
-        <UIcon name="i-lucide-archive-restore" class="size-4 shrink-0" style="color: var(--info, #3b82f6);" />
-        <span class="text-[12px] flex-1" style="color: var(--text-secondary);">
+        <UIcon name="i-lucide-archive-restore" class="size-4 shrink-0" style="color: var(--info);" />
+        <span class="fs-sm flex-1 ink-2">
           You have an unsaved draft from {{ draftAge }}.
         </span>
-        <button class="text-[12px] font-medium px-2 py-1 rounded hover-bg" style="color: var(--info, #3b82f6);" @click="restoreDraft">Restore</button>
-        <button class="text-[12px] px-2 py-1 rounded hover-bg text-meta" @click="clearDraft">Dismiss</button>
+        <button class="fs-sm font-medium px-2 py-1 rounded hover-bg" style="color: var(--info);" @click="restoreDraft">Restore</button>
+        <button class="fs-sm px-2 py-1 rounded hover-bg text-meta" @click="clearDraft">Dismiss</button>
       </div>
 
       <!-- Configuration -->
@@ -261,11 +261,11 @@ useUnsavedChanges(isDirty)
 
       <!-- File location (collapsed) -->
       <details class="group">
-        <summary class="text-[10px] cursor-pointer list-none flex items-center gap-1.5 text-meta">
+        <summary class="fs-micro cursor-pointer list-none flex items-center gap-1.5 text-meta">
           <UIcon name="i-lucide-file" class="size-3" />
           Show file location
         </summary>
-        <div class="mt-1 font-mono text-[10px] pl-4.5 text-meta">
+        <div class="mt-1 font-mono fs-micro pl-4.5 text-meta">
           {{ command.filePath }}
         </div>
       </details>
@@ -287,7 +287,7 @@ useUnsavedChanges(isDirty)
       <template #content>
         <div class="p-6 space-y-4 bg-overlay">
           <h3 class="text-page-title">Delete Command</h3>
-          <p class="text-[13px] text-body">
+          <p class="fs-base text-body">
             Permanently delete <strong>/{{ command?.frontmatter.name }}</strong>? This action cannot be undone.
           </p>
           <div class="flex justify-end gap-2">

@@ -24,8 +24,8 @@ function formatDate(iso: string) {
   >
     <div class="flex items-center gap-3 flex-1 min-w-0">
       <UIcon name="i-lucide-store" class="size-3.5 shrink-0 text-meta" />
-      <span class="font-mono text-[12px] font-medium text-body">{{ source.name }}</span>
-      <span class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle">
+      <span class="font-mono fs-sm font-medium text-body">{{ source.name }}</span>
+      <span class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle">
         {{ source.sourceType }}
       </span>
       <span class="type-meta truncate flex-1">{{ source.sourceUrl }}</span>

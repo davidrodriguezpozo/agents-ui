@@ -63,7 +63,7 @@ function openRun(cmd: Command) {
     <!-- Nothing connected yet -->
     <TeamSetup v-if="isNewcomer || showSetup" @done="showSetup = false" />
 
-    <div v-else class="page-container page-container--wide space-y-7 !px-0">
+    <div v-else class="page-container space-y-7 !px-0">
       <!-- Header -->
       <div class="space-y-1.5">
         <h1 class="text-page-title" style="font-family: var(--font-display);">
@@ -83,12 +83,12 @@ function openRun(cmd: Command) {
           ? 'background: var(--surface-raised); border: 1px solid var(--border-subtle);'
           : 'background: var(--accent-muted); border: 1px solid var(--accent-muted);'"
       >
-        <UIcon name="i-lucide-folder" class="size-4 shrink-0" style="color: var(--accent);" />
+        <UIcon name="i-lucide-folder" class="size-4 shrink-0 ink-accent" />
         <div class="flex-1 min-w-0">
-          <div class="text-[12px] font-medium text-body">
+          <div class="fs-sm font-medium text-body">
             {{ workingDir ? 'Working in' : 'No folder picked yet' }}
           </div>
-          <div class="font-mono text-[10px] truncate text-meta">
+          <div class="font-mono fs-micro truncate text-meta">
             {{ displayPath || 'Choose the folder you want Claude to work in — bottom left.' }}
           </div>
         </div>
@@ -114,7 +114,7 @@ function openRun(cmd: Command) {
               @click="openRun(cmd)"
             >
               <div class="flex items-center gap-2 mb-1">
-                <span class="font-mono text-[12px] font-medium truncate" style="color: var(--accent);">
+                <span class="font-mono fs-sm font-medium truncate ink-accent">
                   {{ cmd.invocation }}
                 </span>
                 <UIcon
@@ -123,12 +123,12 @@ function openRun(cmd: Command) {
                   style="color: var(--accent);"
                 />
               </div>
-              <p class="text-[12px] leading-relaxed line-clamp-2 text-label">
+              <p class="fs-sm leading-relaxed line-clamp-2 text-label">
                 {{ cmd.frontmatter.description || 'No description provided.' }}
               </p>
               <div
                 v-if="cmd.frontmatter['argument-hint']"
-                class="mt-2 font-mono text-[10px] truncate text-meta"
+                class="mt-2 font-mono fs-micro truncate text-meta"
               >
                 needs: {{ cmd.frontmatter['argument-hint'] }}
               </div>
@@ -169,10 +169,10 @@ function openRun(cmd: Command) {
             @click="prefillSkill(skill.frontmatter.name)"
           >
             <div class="flex items-center gap-2 mb-1">
-              <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0" style="color: var(--accent);" />
-              <span class="text-[12px] font-medium truncate text-body">{{ skill.frontmatter.name }}</span>
+              <UIcon name="i-lucide-sparkles" class="size-3.5 shrink-0 ink-accent" />
+              <span class="fs-sm font-medium truncate text-body">{{ skill.frontmatter.name }}</span>
             </div>
-            <p class="text-[12px] leading-relaxed line-clamp-2 text-label">
+            <p class="fs-sm leading-relaxed line-clamp-2 text-label">
               {{ skill.frontmatter.description }}
             </p>
           </button>

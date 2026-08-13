@@ -53,7 +53,7 @@ watch(() => props.open, (val) => {
             <div class="field-group">
               <label class="field-label">
                 Project folder
-                <span class="text-[10px] font-normal ml-1" style="color: var(--text-disabled);">optional</span>
+                <span class="fs-micro font-normal ml-1 ink-4">optional</span>
               </label>
               <input
                 v-model="projectDir"

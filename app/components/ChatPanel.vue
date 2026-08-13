@@ -129,19 +129,19 @@ function handleQuickAction(prompt: string) {
             <div class="size-9 rounded-lg flex items-center justify-center transition-all duration-300" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', border: isStreaming ? '1px solid var(--accent-glow)' : '1px solid var(--border-subtle)', boxShadow: isStreaming ? '0 0 20px var(--accent-glow)' : 'none' }">
               <UIcon name="i-lucide-zap" class="size-4 transition-colors duration-300" :style="{ color: isStreaming ? 'var(--accent)' : 'var(--text-tertiary)' }" />
             </div>
-            <div class="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 transition-colors duration-300" :style="{ background: isStreaming ? 'var(--accent)' : 'var(--success)', borderColor: 'var(--surface-base)', boxShadow: isStreaming ? '0 0 8px var(--accent-glow)' : '0 0 6px rgba(5, 150, 105, 0.3)' }" :class="{ 'chat-dot-pulse': isStreaming }" />
+            <div class="absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 transition-colors duration-300" :style="{ background: isStreaming ? 'var(--accent)' : 'var(--success)', borderColor: 'var(--surface-base)', boxShadow: isStreaming ? '0 0 8px var(--accent-glow)' : '0 0 6px var(--success-edge)' }" :class="{ 'chat-dot-pulse': isStreaming }" />
           </div>
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-2">
-              <span class="text-[14px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">Claude</span>
-              <span class="text-[9px] font-mono tracking-widest uppercase px-1.5 py-px rounded-full transition-all duration-300" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', color: isStreaming ? 'var(--accent)' : 'var(--text-disabled)' }">{{ statusText }}</span>
+              <span class="fs-base font-semibold" style="color: var(--text-primary); font-family: var(--font-display);">Claude</span>
+              <span class="fs-micro font-mono tracking-widest uppercase px-1.5 py-px rounded-full transition-all duration-300" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', color: isStreaming ? 'var(--accent)' : 'var(--text-disabled)' }">{{ statusText }}</span>
             </div>
-            <span class="text-[10px] font-mono" style="color: var(--text-disabled);">{{ activeAgent ? activeAgent.name : 'Agents Studio' }}</span>
+            <span class="fs-micro font-mono ink-4">{{ activeAgent ? activeAgent.name : 'Agents Studio' }}</span>
           </div>
-          <button v-if="messages.length" class="p-1.5 rounded-md transition-all hover-bg" style="color: var(--text-disabled);" title="New conversation" @click="() => { clearChat(); clearAgent() }">
+          <button v-if="messages.length" class="p-1.5 rounded-md transition-all hover-bg ink-4" title="New conversation" @click="() => { clearChat(); clearAgent() }">
             <UIcon name="i-lucide-rotate-ccw" class="size-3.5" />
           </button>
-          <button class="p-1.5 rounded-md transition-all hover-bg" style="color: var(--text-tertiary);" @click="emit('update:open', false)">
+          <button class="p-1.5 rounded-md transition-all hover-bg ink-3" @click="emit('update:open', false)">
             <UIcon name="i-lucide-panel-right-close" class="size-4" />
           </button>
         </div>
@@ -153,8 +153,8 @@ function handleQuickAction(prompt: string) {
       <!-- Active agent banner -->
       <div v-if="activeAgent" class="shrink-0 px-5 py-2 flex items-center gap-2.5" style="background: var(--surface-raised); border-bottom: 1px solid var(--border-subtle);">
         <div class="size-2 rounded-full shrink-0" :style="{ background: activeAgent.color || 'var(--accent)' }" />
-        <span class="text-[12px] font-medium flex-1 truncate" style="color: var(--text-primary); font-family: var(--font-sans);">Chatting with <strong>{{ activeAgent.name }}</strong></span>
-        <button class="p-1 rounded-md hover-bg transition-all" style="color: var(--text-disabled);" title="Switch to generic Claude" @click="clearAgent">
+        <span class="fs-sm font-medium flex-1 truncate" style="color: var(--text-primary); font-family: var(--font-sans);">Chatting with <strong>{{ activeAgent.name }}</strong></span>
+        <button class="p-1 rounded-md hover-bg transition-all ink-4" title="Switch to generic Claude" @click="clearAgent">
           <UIcon name="i-lucide-x" class="size-3" />
         </button>
       </div>
@@ -169,11 +169,11 @@ function handleQuickAction(prompt: string) {
             </div>
           </div>
           <div class="text-center space-y-2">
-            <p class="text-[18px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">How can I help?</p>
-            <p class="text-[12px] max-w-[280px] leading-relaxed" style="color: var(--text-tertiary);">Describe what you need in plain English. I'll create the right agents, commands, or skills for you.</p>
+            <p class="fs-lg font-semibold" style="color: var(--text-primary); font-family: var(--font-display);">How can I help?</p>
+            <p class="fs-sm max-w-[280px] leading-relaxed ink-3">Describe what you need in plain English. I'll create the right agents, commands, or skills for you.</p>
           </div>
           <QuickActions :actions="quickActions" @select="handleQuickAction" />
-          <p class="text-[10px] font-mono leading-relaxed" style="color: var(--text-disabled);">Has read/write access to your .claude directory</p>
+          <p class="fs-micro font-mono leading-relaxed ink-4">Has read/write access to your .claude directory</p>
         </div>
 
         <template v-for="(msg, idx) in messages" :key="msg.id">
@@ -185,7 +185,7 @@ function handleQuickAction(prompt: string) {
           />
         </template>
 
-        <div v-if="error" class="flex items-start gap-2.5 rounded-lg px-3.5 py-2.5 text-[12px]" style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12); color: var(--error);">
+        <div v-if="error" class="flex items-start gap-2.5 rounded-lg px-3.5 py-2.5 fs-sm" style="background: var(--error-wash); border: 1px solid var(--error-tint); color: var(--error);">
           <UIcon name="i-lucide-alert-circle" class="size-3.5 shrink-0 mt-0.5" />
           <span>{{ error }}</span>
         </div>

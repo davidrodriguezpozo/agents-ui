@@ -30,24 +30,24 @@ defineProps<{
         <UIcon name="i-lucide-cpu" class="size-4" :style="{ color: getAgentColor(agent.frontmatter.color) }" />
       </div>
       <div class="flex-1 min-w-0">
-        <div class="type-strong truncate" style="color: var(--text-primary);">
+        <div class="type-strong truncate ink">
           {{ agent.frontmatter.name }}
         </div>
-        <div class="text-[11px] mt-0.5 line-clamp-2" style="color: var(--text-tertiary);">
+        <div class="fs-mono mt-0.5 line-clamp-2 ink-3">
           {{ agent.frontmatter.description || 'No description' }}
         </div>
       </div>
     </div>
     <div class="flex items-center gap-2 mt-3 pt-3 relative" style="border-top: 1px solid var(--border-subtle);">
-      <span class="text-[10px] px-1.5 py-0.5 rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
+      <span class="fs-micro px-1.5 py-0.5 rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
         {{ getFriendlyModelName(agent.frontmatter.model) }}
       </span>
-      <span v-if="agent.hasMemory" class="text-[10px] px-1.5 py-0.5 rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
+      <span v-if="agent.hasMemory" class="fs-micro px-1.5 py-0.5 rounded-full" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">
         Has memory
       </span>
       <span
         v-if="agent.frontmatter.tools?.length"
-        class="text-[10px] px-1.5 py-0.5 rounded-full"
+        class="fs-micro px-1.5 py-0.5 rounded-full"
         style="background: var(--badge-subtle-bg); color: var(--text-disabled);"
         :title="agent.frontmatter.tools.join(', ')"
       >

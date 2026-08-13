@@ -68,18 +68,18 @@ const filtered = computed(() => {
           :name="expanded === item.key ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
           class="size-3.5 shrink-0 text-meta"
         />
-        <span class="font-mono text-[12px] font-medium shrink-0 max-w-[220px] truncate" style="color: var(--accent);">
+        <span class="font-mono fs-sm font-medium shrink-0 max-w-[220px] truncate ink-accent">
           {{ item.title }}
         </span>
         <span
           v-for="badge in item.badges"
           :key="badge.label"
-          class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge"
+          class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge"
           :class="badge.tone === 'agent' ? 'badge-agent' : 'badge-subtle'"
         >
           {{ badge.label }}
         </span>
-        <span class="flex-1 text-[12px] truncate text-label">
+        <span class="flex-1 fs-sm truncate text-label">
           {{ item.description || '—' }}
         </span>
       </button>
@@ -90,13 +90,13 @@ const filtered = computed(() => {
         </div>
         <div
           v-if="item.body"
-          class="px-5 py-4 markdown text-[13px] overflow-x-auto"
+          class="px-5 py-4 markdown fs-base overflow-x-auto"
           style="background: var(--surface-base); color: var(--text-primary); font-family: var(--font-sans);"
           v-html="renderMarkdown(item.body)"
         />
         <div
           v-if="item.filePath"
-          class="px-4 py-2 font-mono text-[10px] truncate text-meta"
+          class="px-4 py-2 font-mono fs-micro truncate text-meta"
           style="border-top: 1px solid var(--border-subtle);"
         >
           {{ item.filePath }}

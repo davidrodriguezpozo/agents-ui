@@ -205,7 +205,7 @@ onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPoin
           <span class="type-meta flex-1 min-w-0 truncate">{{ entry.meta }}</span>
           <span
             v-if="entry.badge"
-            class="text-[9px] font-mono px-1.5 py-px rounded-full shrink-0"
+            class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
             style="background: var(--accent-muted); color: var(--accent);"
           >
             {{ entry.badge }}

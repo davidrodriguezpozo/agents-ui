@@ -120,7 +120,7 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
         :class="{ 'animate-spin': run.status === 'running' }"
         :style="{ color: run.status === 'running' ? 'var(--accent)' : 'var(--text-secondary)' }"
       />
-      <span class="text-[12px] font-medium text-body">
+      <span class="fs-sm font-medium text-body">
         <template v-if="run.status === 'running'">
           Landing into {{ run.baseBranch }} — {{ done }} of {{ run.steps.length }}
         </template>
@@ -160,7 +160,7 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
       <div
         v-for="step in run.steps"
         :key="step.sessionId"
-        class="flex items-baseline gap-2 text-[11px]"
+        class="flex items-baseline gap-2 fs-mono"
       >
         <UIcon
           :name="stepIcon(step, current?.sessionId === step.sessionId)"
@@ -184,10 +184,10 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
       was worried about is in the base, a red line explaining why one of them
       could not merge is describing a problem that no longer exists.
     -->
-    <p v-if="allLanded" class="text-[11px]" style="color: var(--success);">
+    <p v-if="allLanded" class="fs-mono ink-ok">
       Everything in this run is in {{ run.baseBranch }} now.
     </p>
-    <p v-else-if="run.error" class="text-[11px]" style="color: var(--error);">{{ run.error }}</p>
+    <p v-else-if="run.error" class="fs-mono ink-error">{{ run.error }}</p>
 
     <!--
       Named rather than counted. "3 were skipped" is the beginning of a
@@ -195,7 +195,7 @@ function stepIcon(step: LandingRun['steps'][number], isCurrent: boolean) {
     -->
     <div v-if="run.skipped.length" class="pt-2 space-y-1" style="border-top: 1px solid var(--border-subtle);">
       <p class="type-meta">Left alone:</p>
-      <p v-for="skip in run.skipped" :key="skip.sessionId" class="text-[11px] flex gap-2">
+      <p v-for="skip in run.skipped" :key="skip.sessionId" class="fs-mono flex gap-2">
         <NuxtLink
           :to="`/sessions/${skip.sessionId}`"
           class="truncate hover:underline underline-offset-2 text-label shrink-0 max-w-[16rem]"

@@ -37,15 +37,15 @@ const filteredGroups = computed(() => {
   <div>
     <PageHeader title="Commands">
       <template #trailing>
-        <span class="font-mono text-[12px] text-meta">{{ commands.length }}</span>
+        <span class="font-mono fs-sm text-meta">{{ commands.length }}</span>
       </template>
       <template #right>
         <UButton label="New Command" icon="i-lucide-plus" size="sm" @click="() => { showCreateModal = true }" />
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4">
-      <p class="text-[13px] mb-4 leading-relaxed text-label">
+    <div class="page-container py-6">
+      <p class="fs-base mb-4 leading-relaxed text-label">
         Reusable workflows you can trigger with a slash command (e.g., /deploy). Grouped by where they come from.
       </p>
 
@@ -61,10 +61,10 @@ const filteredGroups = computed(() => {
       <div
         v-if="error"
         class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
-        style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
+        style="background: var(--error-wash); border: 1px solid var(--error-tint);"
       >
-        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
-        <span class="text-[12px]" style="color: var(--error);">{{ error }}</span>
+        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5 ink-error" />
+        <span class="fs-sm ink-error">{{ error }}</span>
       </div>
 
       <div v-if="loading" class="space-y-1">
@@ -86,16 +86,16 @@ const filteredGroups = computed(() => {
               <UIcon
                 :name="group.icon"
                 class="size-3.5"
-                :style="{ color: group.kind === 'plugin' ? 'rgb(139, 92, 246)' : group.kind === 'project' ? 'rgb(34, 197, 94)' : 'var(--text-tertiary)' }"
+                :style="{ color: group.kind === 'plugin' ? 'var(--plugin)' : group.kind === 'project' ? 'var(--success)' : 'var(--text-tertiary)' }"
               />
               <span class="type-strong">{{ group.label }}</span>
-              <span class="font-mono text-[12px] text-meta">{{ group.commands.length }}</span>
+              <span class="font-mono fs-sm text-meta">{{ group.commands.length }}</span>
             </button>
 
             <NuxtLink
               v-if="group.pluginId"
               :to="`/plugins/${encodeURIComponent(group.pluginId)}`"
-              class="text-[11px] px-2 py-1 rounded focus-ring text-meta hover-bg shrink-0"
+              class="fs-mono px-2 py-1 rounded focus-ring text-meta hover-bg shrink-0"
             >
               View plugin
             </NuxtLink>
@@ -109,21 +109,21 @@ const filteredGroups = computed(() => {
               :to="`/commands/${cmd.slug}`"
               class="flex items-center gap-3 px-3 py-2 rounded-md group focus-ring hover-row"
             >
-              <span class="font-mono text-[10px] font-medium shrink-0 text-meta">&gt;_</span>
+              <span class="font-mono fs-micro font-medium shrink-0 text-meta">&gt;_</span>
 
               <!-- Real invocation, e.g. /defender:pickup -->
-              <span class="font-mono text-[12px] font-medium w-52 shrink-0 truncate" style="color: var(--accent);">
+              <span class="font-mono fs-sm font-medium w-52 shrink-0 truncate ink-accent">
                 {{ cmd.invocation }}
               </span>
 
               <span
                 v-if="cmd.frontmatter['argument-hint']"
-                class="text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle max-w-[160px] truncate"
+                class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0 badge badge-subtle max-w-[160px] truncate"
               >
                 {{ cmd.frontmatter['argument-hint'] }}
               </span>
 
-              <span class="flex-1 text-[12px] truncate text-label">
+              <span class="flex-1 fs-sm truncate text-label">
                 {{ cmd.frontmatter.description }}
               </span>
 

@@ -73,15 +73,15 @@ async function createBlank() {
   <div>
     <PageHeader title="Workflows">
       <template #trailing>
-        <span class="text-[12px] text-meta">{{ workflows.length }}</span>
+        <span class="fs-sm text-meta">{{ workflows.length }}</span>
       </template>
       <template #right>
         <UButton label="New Workflow" icon="i-lucide-plus" size="sm" @click="() => { showCreateModal = true }" />
       </template>
     </PageHeader>
 
-    <div class="px-6 py-4">
-      <p class="text-[13px] mb-4 leading-relaxed text-label">
+    <div class="page-container py-6">
+      <p class="fs-base mb-4 leading-relaxed text-label">
         Chain agents together into multi-step pipelines that pass work from one agent to the next.
       </p>
 
@@ -98,10 +98,10 @@ async function createBlank() {
       <div
         v-if="error"
         class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
-        style="background: rgba(248, 113, 113, 0.06); border: 1px solid rgba(248, 113, 113, 0.12);"
+        style="background: var(--error-wash); border: 1px solid var(--error-tint);"
       >
-        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5" style="color: var(--error);" />
-        <span class="text-[12px]" style="color: var(--error);">{{ error }}</span>
+        <UIcon name="i-lucide-alert-circle" class="size-4 shrink-0 mt-0.5 ink-error" />
+        <span class="fs-sm ink-error">{{ error }}</span>
       </div>
 
       <!-- Loading -->
@@ -131,10 +131,10 @@ async function createBlank() {
               class="size-12 rounded-lg flex items-center justify-center"
               style="background: var(--accent-muted); border: 1px solid var(--accent-muted);"
             >
-              <UIcon name="i-lucide-git-branch" class="size-6" style="color: var(--accent);" />
+              <UIcon name="i-lucide-git-branch" class="size-6 ink-accent" />
             </div>
           </div>
-          <h3 class="text-[18px] font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">Chain your agents together</h3>
+          <h3 class="fs-lg font-semibold" style="color: var(--text-primary); font-family: var(--font-display);">Chain your agents together</h3>
           <p class="type-body max-w-md mx-auto">
             Create workflows that pass work from one agent to the next. Start from a template or create your own.
           </p>
@@ -167,7 +167,7 @@ async function createBlank() {
                 :key="idx"
                 class="type-mono-meta"
               >
-                {{ step.label }}<span v-if="idx < template.steps.length - 1" class="mx-1" style="color: var(--text-disabled);">-></span>
+                {{ step.label }}<span v-if="idx < template.steps.length - 1" class="mx-1 ink-4">-></span>
               </span>
             </div>
           </button>
@@ -186,7 +186,7 @@ async function createBlank() {
           <h3 class="text-page-title">New Workflow</h3>
           <form class="space-y-3" @submit.prevent="createBlank">
             <div>
-              <label class="text-[12px] font-medium text-label block mb-1">Name</label>
+              <label class="fs-sm font-medium text-label block mb-1">Name</label>
               <input
                 v-model="newName"
                 placeholder="My Workflow"
@@ -195,7 +195,7 @@ async function createBlank() {
               />
             </div>
             <div>
-              <label class="text-[12px] font-medium text-label block mb-1">Description</label>
+              <label class="fs-sm font-medium text-label block mb-1">Description</label>
               <input
                 v-model="newDescription"
                 placeholder="What does this workflow do?"

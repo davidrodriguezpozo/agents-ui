@@ -63,22 +63,22 @@ const summary = computed(() => {
         class="size-3"
         style="color: var(--text-disabled);"
       />
-      <UIcon name="i-lucide-sliders-horizontal" class="size-3" style="color: var(--text-disabled);" />
-      <span class="text-[11px] font-mono" style="color: var(--text-tertiary);">Run settings</span>
-      <span class="ml-auto text-[10px] font-mono truncate" style="color: var(--text-disabled);">{{ summary }}</span>
+      <UIcon name="i-lucide-sliders-horizontal" class="size-3 ink-4" />
+      <span class="fs-mono font-mono ink-3">Run settings</span>
+      <span class="ml-auto fs-micro font-mono truncate ink-4">{{ summary }}</span>
     </button>
 
     <div v-if="open" class="px-4 pb-4 space-y-4">
       <!-- Permission mode -->
       <div class="space-y-1.5">
-        <label class="text-[10px] font-medium uppercase tracking-wider" style="color: var(--text-disabled);">
+        <label class="fs-micro font-medium uppercase tracking-wider ink-4">
           Permissions
         </label>
         <div class="flex flex-wrap gap-1.5">
           <button
             v-for="mode in PERMISSION_MODES"
             :key="mode.value"
-            class="px-2 py-1 rounded-md text-[11px] font-medium transition-all"
+            class="px-2 py-1 rounded-md fs-mono font-medium transition-all"
             :title="mode.hint"
             :style="{
               background: runConfig.permissionMode === mode.value ? 'var(--accent-muted)' : 'var(--surface-raised)',
@@ -90,7 +90,7 @@ const summary = computed(() => {
             {{ mode.label }}
           </button>
         </div>
-        <p class="text-[10px] leading-relaxed" style="color: var(--text-disabled);">
+        <p class="fs-micro leading-relaxed ink-4">
           {{ PERMISSION_MODES.find(m => m.value === runConfig.permissionMode)?.hint }}
         </p>
       </div>
@@ -98,22 +98,22 @@ const summary = computed(() => {
       <!-- Tools -->
       <div class="space-y-1.5">
         <div class="flex items-center justify-between">
-          <label class="text-[10px] font-medium uppercase tracking-wider" style="color: var(--text-disabled);">
+          <label class="fs-micro font-medium uppercase tracking-wider ink-4">
             Tools
           </label>
-          <label class="flex items-center gap-1.5 text-[10px]" style="color: var(--text-tertiary);">
+          <label class="flex items-center gap-1.5 fs-micro ink-3">
             <input v-model="restrictTools" type="checkbox" class="size-3" />
             Restrict
           </label>
         </div>
-        <p v-if="!restrictTools" class="text-[10px] leading-relaxed" style="color: var(--text-disabled);">
+        <p v-if="!restrictTools" class="fs-micro leading-relaxed ink-4">
           Every tool the CLI offers, minus anything the agent's own <code>tools:</code> frontmatter restricts.
         </p>
         <div v-else class="flex flex-wrap gap-1">
           <button
             v-for="tool in allTools"
             :key="tool"
-            class="px-1.5 py-0.5 rounded text-[10px] font-mono transition-all"
+            class="px-1.5 py-0.5 rounded fs-micro font-mono transition-all"
             :style="{
               background: isToolEnabled(tool) ? 'var(--accent-muted)' : 'var(--surface-raised)',
               color: isToolEnabled(tool) ? 'var(--accent)' : 'var(--text-disabled)',
@@ -129,7 +129,7 @@ const summary = computed(() => {
       <!-- Turns + settings sources -->
       <div class="flex items-center gap-4">
         <div class="space-y-1 flex-1">
-          <label class="text-[10px] font-medium uppercase tracking-wider" style="color: var(--text-disabled);">
+          <label class="fs-micro font-medium uppercase tracking-wider ink-4">
             Max turns
           </label>
           <input
@@ -137,11 +137,11 @@ const summary = computed(() => {
             type="number"
             min="1"
             max="200"
-            class="field-input text-[12px]"
+            class="field-input fs-sm"
             @input="runConfig = { ...runConfig, maxTurns: Math.max(1, Math.min(Number(($event.target as HTMLInputElement).value) || 1, 200)) }"
           />
         </div>
-        <label class="flex items-start gap-2 flex-1 text-[11px] cursor-pointer" style="color: var(--text-secondary);">
+        <label class="flex items-start gap-2 flex-1 fs-mono cursor-pointer ink-2">
           <input
             :checked="runConfig.loadProjectSettings"
             type="checkbox"
@@ -150,7 +150,7 @@ const summary = computed(() => {
           />
           <span>
             Load real config
-            <span class="block text-[10px]" style="color: var(--text-disabled);">
+            <span class="block fs-micro ink-4">
               settings.json, CLAUDE.md and project rules — as the CLI would
             </span>
           </span>

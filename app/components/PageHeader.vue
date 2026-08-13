@@ -1,30 +1,46 @@
 <script setup lang="ts">
 /**
- * `width` should match the container the page body uses, so the title lines up
- * with the content underneath it rather than floating off at the window edge.
+ * The page header, and the only one.
+ *
+ * It used to take a `width` prop — narrow, wide or full — chosen per page,
+ * which meant the title's x-position moved as you clicked between nav items.
+ * That is gone. There are now exactly two kinds of page and the header knows
+ * which is which:
+ *
+ *   - a **document** page (lists, detail, settings) sits in the shared
+ *     `.page-container` frame, so every title lands on the same pixel;
+ *   - a **workbench** page (`bleed`) is edge-to-edge because its body is
+ *     panes, not prose — the graph canvas, the agent studio, a session.
+ *
+ * `overlay` floats the header over the body instead of stacking above it, for
+ * a canvas that should run under it. Height and type never vary.
  */
 withDefaults(defineProps<{
   title: string
-  width?: 'narrow' | 'wide' | 'full'
+  bleed?: boolean
+  overlay?: boolean
 }>(), {
-  width: 'full',
+  bleed: false,
+  overlay: false,
 })
 </script>
 
 <template>
   <div
-    class="h-16 shrink-0 sticky top-0 z-10"
-    style="border-bottom: 1px solid var(--border-subtle); background: var(--surface-base); backdrop-filter: blur(12px);"
+    class="shrink-0 z-10 page-header"
+    :class="overlay ? 'absolute top-0 left-0 right-0' : 'sticky top-0'"
+    :style="{ height: 'var(--header-h)' }"
   >
     <div
       class="h-full flex items-center gap-3"
-      :class="width === 'full'
-        ? 'px-6'
-        : ['page-container', width === 'wide' ? 'page-container--wide' : 'page-container--narrow']"
+      :class="bleed || overlay ? 'px-8' : 'page-container'"
     >
       <slot name="leading" />
       <h1 class="text-page-title flex-1 flex items-center gap-2.5 min-w-0">
-        <span class="truncate">{{ title }}</span>
+        <!-- Pages with a rename-in-place title replace the text node -->
+        <slot name="title">
+          <span class="truncate">{{ title }}</span>
+        </slot>
         <slot name="trailing" />
       </h1>
       <div class="flex items-center gap-2 shrink-0">

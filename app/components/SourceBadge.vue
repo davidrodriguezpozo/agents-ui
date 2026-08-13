@@ -49,11 +49,11 @@ const display = computed(() => {
 const toneStyle = computed(() => {
   switch (display.value.tone) {
     case 'plugin':
-      return { background: 'rgba(139, 92, 246, 0.12)', color: 'rgb(139, 92, 246)' }
+      return { background: 'var(--plugin-tint)', color: 'var(--plugin)' }
     case 'github':
-      return { background: 'rgba(56, 139, 253, 0.12)', color: 'rgb(56, 139, 253)' }
+      return { background: 'var(--info-tint)', color: 'var(--info)' }
     case 'project':
-      return { background: 'rgba(34, 197, 94, 0.12)', color: 'rgb(34, 197, 94)' }
+      return { background: 'var(--success-tint)', color: 'var(--success)' }
     default:
       return { background: 'var(--badge-subtle-bg)', color: 'var(--text-tertiary)' }
   }
@@ -62,7 +62,7 @@ const toneStyle = computed(() => {
 
 <template>
   <span
-    class="inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-px rounded-full shrink-0 max-w-[180px]"
+    class="inline-flex items-center gap-1 fs-micro font-mono px-1.5 py-px rounded-full shrink-0 max-w-[180px]"
     :style="toneStyle"
     :title="display.title"
   >
