@@ -108,6 +108,20 @@ const spendArea = computed(() => {
 })
 
 /**
+ * Where the line ends, marked.
+ *
+ * Cumulative spend rises and then holds, so the area saturates and the whole
+ * strip reads as one flat wash with no obvious "you are here". The endpoint is
+ * the only value on the series anybody wants — what it has cost so far — and
+ * the total beside the label is what it says in words.
+ */
+const spendEnd = computed(() => {
+  const last = spend.value.points.at(-1)
+  if (!last || spend.value.points.length < 2) return null
+  return { x: last.left * 100, y: 100 - last.value * 100 }
+})
+
+/**
  * Direct labels only where the block is wide enough to hold one.
  *
  * A number on every mark is chaos and goes unread; a label clipped by its own
@@ -251,6 +265,16 @@ const tableRows = computed(() =>
                 <path :d="spendArea" class="strip-area" />
                 <path :d="spendPath" class="strip-line" vector-effect="non-scaling-stroke" />
               </svg>
+              <!--
+                Outside the stretched SVG: `preserveAspectRatio="none"` would
+                squash a circle into an ellipse, differently at every window
+                width.
+              -->
+              <span
+                v-if="spendEnd"
+                class="strip-end"
+                :style="{ left: `${spendEnd.x}%`, top: `${spendEnd.y}%` }"
+              />
             </div>
           </div>
 
@@ -453,6 +477,17 @@ const tableRows = computed(() =>
 .strip-svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .strip-area { fill: var(--accent); opacity: 0.09; }
 .strip-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+
+.strip-end {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--surface-base);
+  pointer-events: none;
+}
 
 /* ── Lanes ────────────────────────────────────── */
 

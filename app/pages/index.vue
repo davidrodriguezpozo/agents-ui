@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { getAgentColor, modelColors } from "~/utils/colors";
-
 const { claudeDir, set: setDir } = useClaudeDir();
 const { agents, fetchAll: fetchAgents } = useAgents();
 const { commands, fetchAll: fetchCommands } = useCommands();
@@ -21,60 +19,9 @@ interface Suggestion {
 }
 const suggestions = ref<Suggestion[]>([]);
 
-// Animated counters
-const animatedCounts = reactive({
-  agents: 0,
-  commands: 0,
-  skills: 0,
-  plugins: 0,
-});
-
-function animateCounter(target: number, key: keyof typeof animatedCounts) {
-  if (target === 0) {
-    animatedCounts[key] = 0;
-    return;
-  }
-  const duration = 600;
-  const startTime = performance.now();
-  function tick(now: number) {
-    const elapsed = now - startTime;
-    const progress = Math.min(elapsed / duration, 1);
-    const eased = 1 - Math.pow(1 - progress, 3); // easeOutCubic
-    animatedCounts[key] = Math.round(eased * target);
-    if (progress < 1) requestAnimationFrame(tick);
-  }
-  requestAnimationFrame(tick);
-}
-
 onMounted(async () => {
   dirInput.value = claudeDir.value || "";
   await Promise.all([loadSettings(), fetchPlugins(), fetchSkills(), fetchImports()]);
-
-  // Animate counters after data loads
-  nextTick(() => {
-    animateCounter(agents.value.length, "agents");
-    animateCounter(commands.value.length, "commands");
-    animateCounter(skills.value.length, "skills");
-    animateCounter(plugins.value.length, "plugins");
-  });
-
-  // Watch for data changes to re-animate
-  watch(
-    () => agents.value.length,
-    (v) => animateCounter(v, "agents"),
-  );
-  watch(
-    () => commands.value.length,
-    (v) => animateCounter(v, "commands"),
-  );
-  watch(
-    () => skills.value.length,
-    (v) => animateCounter(v, "skills"),
-  );
-  watch(
-    () => plugins.value.length,
-    (v) => animateCounter(v, "plugins"),
-  );
 
   try {
     suggestions.value = await $fetch<Suggestion[]>("/api/suggestions");
@@ -99,45 +46,6 @@ async function changeDir() {
   }
 }
 
-const modelLabels: Record<string, string> = {
-  opus: "Opus",
-  sonnet: "Sonnet",
-  haiku: "Haiku",
-  unset: "Default",
-};
-
-const modelBreakdown = computed(() => {
-  const counts: Record<string, number> = {
-    opus: 0,
-    sonnet: 0,
-    haiku: 0,
-    unset: 0,
-  };
-  for (const a of agents.value) {
-    const m = a.frontmatter.model;
-    if (m && counts[m] !== undefined) counts[m]++;
-    else counts.unset = (counts.unset ?? 0) + 1;
-  }
-  return counts;
-});
-
-const totalAgents = computed(() => agents.value.length);
-const modelPercentages = computed(() => {
-  if (!totalAgents.value) return {};
-  const result: Record<string, number> = {};
-  for (const [model, count] of Object.entries(modelBreakdown.value)) {
-    if (count > 0) result[model] = (count / totalAgents.value) * 100;
-  }
-  return result;
-});
-
-const modelBarColors: Record<string, string> = {
-  opus: "#7C3AED",
-  sonnet: "#2563EB",
-  haiku: "#D97706",
-  unset: "#71717a",
-};
-
 const hasContent = computed(
   () =>
     agents.value.length > 0 ||
@@ -145,37 +53,6 @@ const hasContent = computed(
     skills.value.length > 0 ||
     plugins.value.length > 0,
 );
-
-const statItems = computed(() => [
-  {
-    key: "agents" as const,
-    to: "/agents",
-    count: animatedCounts.agents,
-    label: "Agents",
-    icon: "i-lucide-cpu",
-  },
-  {
-    key: "commands" as const,
-    to: "/commands",
-    count: animatedCounts.commands,
-    label: "Commands",
-    icon: "i-lucide-terminal",
-  },
-  {
-    key: "skills" as const,
-    to: "/skills",
-    count: animatedCounts.skills,
-    label: "Skills",
-    icon: "i-lucide-sparkles",
-  },
-  {
-    key: "plugins" as const,
-    to: "/plugins",
-    count: animatedCounts.plugins,
-    label: "Plugins",
-    icon: "i-lucide-puzzle",
-  },
-]);
 </script>
 
 <template>
@@ -187,9 +64,14 @@ const statItems = computed(() => [
 
     <div class="page-container py-6 stagger-section space-y-6">
       <!--
-        What happened while you were away, above everything else. The counters
-        below say how much you own; this says what changed, which is the reason
-        to have opened the page at all.
+        What happened while you were away, and then what needs you. That is the
+        whole page now.
+
+        It used to carry four counters (Agents 11, Commands 37, Skills 199,
+        Plugins 8), a Model Distribution bar, and partial lists of agents and
+        commands that duplicated their own pages. None of it answered a question
+        anybody arrives with: how many skills you own is not news, and the
+        sidebar already says it. What changed overnight is news.
       -->
       <WhileYouWereAway v-if="hasContent" />
 
@@ -201,313 +83,6 @@ const statItems = computed(() => [
         other, and the sentences come first because they are what you act on.
       -->
       <NightShift v-if="hasContent" />
-
-      <!-- Hero stat bar. Hidden on first run: a row of zeros is a worse
-           opening than the welcome that follows it, and counts only mean
-           something once there is something to count. -->
-      <div v-if="hasContent" class="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <NuxtLink
-          v-for="item in statItems"
-          :key="item.to"
-          :to="item.to"
-          class="relative rounded-lg p-5 focus-ring hover-stat overflow-hidden group bg-card"
-        >
-          <div class="relative">
-            <div class="flex items-center gap-2 mb-3">
-              <UIcon
-                :name="item.icon"
-                class="size-4 text-meta group-hover:text-[var(--accent)] transition-colors duration-200"
-              />
-              <span class="fs-sm font-medium text-label">{{
-                item.label
-              }}</span>
-            </div>
-            <span class="stat-number counter-animate">{{ item.count }}</span>
-          </div>
-        </NuxtLink>
-      </div>
-
-      <!-- Model breakdown (visual bar) -->
-      <div
-        v-if="agents.length > 0"
-        class="rounded-lg px-5 py-4 bg-card"
-      >
-        <div class="flex items-center justify-between mb-3">
-          <span class="text-section-title">Model Distribution</span>
-          <span class="type-meta font-mono"
-            >{{ totalAgents }} agent{{ totalAgents === 1 ? "" : "s" }}</span
-          >
-        </div>
-
-        <!-- Proportional bar -->
-        <div class="proportion-bar mb-3">
-          <div
-            v-for="(pct, model) in modelPercentages"
-            :key="model"
-            class="proportion-bar__segment"
-            :style="{
-              flexGrow: pct,
-              background: modelBarColors[model] || '#71717a',
-            }"
-          />
-        </div>
-
-        <!-- Legend -->
-        <div class="flex items-center gap-5">
-          <div
-            v-for="(count, model) in modelBreakdown"
-            :key="model"
-            class="flex items-center gap-2"
-          >
-            <div
-              class="size-2 rounded-full"
-              :style="{ background: modelBarColors[model] || '#71717a' }"
-            />
-            <span
-              class="fs-mono font-medium"
-              style="color: var(--text-secondary)"
-              >{{ modelLabels[model] }}</span
-            >
-            <span class="font-mono fs-mono tabular-nums text-meta">{{
-              count
-            }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Bento grid: Agents + Commands + Quick Actions -->
-      <div
-        v-if="hasContent"
-        class="grid grid-cols-1 md:grid-cols-3 gap-4"
-      >
-        <!-- Agents list (takes 2 cols) -->
-        <div
-          class="md:col-span-2 rounded-lg overflow-hidden"
-          style="border: 1px solid var(--border-subtle)"
-        >
-          <div
-            class="flex items-center justify-between px-4 py-3"
-            style="
-              background: var(--surface-raised);
-              border-bottom: 1px solid var(--border-subtle);
-            "
-          >
-            <h3 class="text-section-title flex items-center gap-2">
-              <UIcon
-                name="i-lucide-cpu"
-                class="size-4"
-                style="color: var(--accent)"
-              />
-              Agents
-            </h3>
-            <NuxtLink
-              to="/agents"
-              class="fs-sm focus-ring rounded px-1.5 py-0.5 hover-bg transition-colors"
-              style="color: var(--accent)"
-              >View all</NuxtLink
-            >
-          </div>
-          <div
-            class="divide-y"
-            style="divide-color: var(--border-subtle)"
-          >
-            <NuxtLink
-              v-for="agent in agents.slice(0, 6)"
-              :key="agent.slug"
-              :to="`/agents/${agent.slug}`"
-              class="flex items-center gap-3 px-4 py-3 hover-bg group"
-            >
-              <div
-                class="size-8 rounded-md flex items-center justify-center shrink-0 transition-transform duration-200 group-hover:scale-105"
-                :style="{
-                  background: getAgentColor(agent.frontmatter.color) + '18',
-                  border:
-                    '1px solid ' +
-                    getAgentColor(agent.frontmatter.color) +
-                    '25',
-                }"
-              >
-                <UIcon
-                  name="i-lucide-cpu"
-                  class="size-3.5"
-                  :style="{ color: getAgentColor(agent.frontmatter.color) }"
-                />
-              </div>
-              <div class="flex-1 min-w-0">
-                <span class="type-strong truncate block">
-                  {{ agent.frontmatter.name }}
-                </span>
-                <span
-                  v-if="agent.frontmatter.description"
-                  class="fs-mono text-label truncate block"
-                >
-                  {{ agent.frontmatter.description }}
-                </span>
-              </div>
-              <span
-                v-if="
-                  agent.frontmatter.model &&
-                  modelColors[agent.frontmatter.model]
-                "
-                class="fs-micro font-mono font-medium px-1.5 py-0.5 rounded-full shrink-0"
-                :class="[
-                  modelColors[agent.frontmatter.model]?.bg,
-                  modelColors[agent.frontmatter.model]?.text,
-                ]"
-              >
-                {{ agent.frontmatter.model }}
-              </span>
-            </NuxtLink>
-          </div>
-        </div>
-
-        <!-- Right column: Commands + Quick Actions stacked -->
-        <div class="space-y-4">
-          <!-- Commands -->
-          <div
-            class="rounded-lg overflow-hidden"
-            style="border: 1px solid var(--border-subtle)"
-          >
-            <div
-              class="flex items-center justify-between px-4 py-3"
-              style="
-                background: var(--surface-raised);
-                border-bottom: 1px solid var(--border-subtle);
-              "
-            >
-              <h3 class="text-section-title flex items-center gap-2">
-                <UIcon
-                  name="i-lucide-terminal"
-                  class="size-4"
-                  style="color: var(--accent)"
-                />
-                Commands
-              </h3>
-              <NuxtLink
-                to="/commands"
-                class="fs-sm focus-ring rounded px-1.5 py-0.5 hover-bg transition-colors"
-                style="color: var(--accent)"
-                >View all</NuxtLink
-              >
-            </div>
-            <div
-              class="divide-y"
-              style="divide-color: var(--border-subtle)"
-            >
-              <NuxtLink
-                v-for="cmd in commands.slice(0, 4)"
-                :key="cmd.slug"
-                :to="`/commands/${cmd.slug}`"
-                class="flex items-center gap-2.5 px-4 py-2.5 hover-bg"
-              >
-                <span
-                  class="font-mono fs-mono shrink-0"
-                  style="color: var(--accent)"
-                  >/</span
-                >
-                <span class="fs-sm truncate text-body flex-1">
-                  {{ cmd.frontmatter.name }}
-                </span>
-                <span class="fs-micro shrink-0 text-meta font-mono">
-                  {{ cmd.directory }}
-                </span>
-              </NuxtLink>
-            </div>
-          </div>
-
-          <!-- Quick Actions -->
-          <div class="space-y-2">
-            <NuxtLink
-              to="/graph"
-              class="block rounded-lg p-4 focus-ring hover-card bg-card group"
-            >
-              <div class="flex items-center gap-3">
-                <div
-                  class="size-8 rounded-md flex items-center justify-center shrink-0"
-                  style="
-                    background: var(--accent-muted);
-                    border: 1px solid var(--accent-muted);
-                  "
-                >
-                  <UIcon
-                    name="i-lucide-workflow"
-                    class="size-4"
-                    style="color: var(--accent)"
-                  />
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="type-strong">Relationship Graph</div>
-                  <div class="fs-mono text-label">
-                    Visualize connections
-                  </div>
-                </div>
-                <UIcon
-                  name="i-lucide-arrow-right"
-                  class="size-4 text-meta opacity-0 group-hover:opacity-100 transition-all duration-200 group-hover:translate-x-0.5"
-                />
-              </div>
-            </NuxtLink>
-
-            <NuxtLink
-              to="/workflows"
-              class="block rounded-lg p-4 focus-ring hover-card bg-card group"
-            >
-              <div class="flex items-center gap-3">
-                <div
-                  class="size-8 rounded-md flex items-center justify-center shrink-0"
-                  style="
-                    background: var(--accent-secondary-muted);
-                    border: 1px solid var(--accent-glow);
-                  "
-                >
-                  <UIcon
-                    name="i-lucide-git-branch"
-                    class="size-4"
-                    style="color: var(--accent-secondary)"
-                  />
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="type-strong">Create Workflow</div>
-                  <div class="fs-mono text-label">Multi-step pipelines</div>
-                </div>
-                <UIcon
-                  name="i-lucide-arrow-right"
-                  class="size-4 text-meta opacity-0 group-hover:opacity-100 transition-all duration-200 group-hover:translate-x-0.5"
-                />
-              </div>
-            </NuxtLink>
-
-            <NuxtLink
-              to="/explore"
-              class="block rounded-lg p-4 focus-ring hover-card bg-card group"
-            >
-              <div class="flex items-center gap-3">
-                <div
-                  class="size-8 rounded-md flex items-center justify-center shrink-0"
-                  style="
-                    background: var(--accent-muted);
-                    border: 1px solid var(--accent-muted);
-                  "
-                >
-                  <UIcon
-                    name="i-lucide-compass"
-                    class="size-4"
-                    style="color: var(--accent)"
-                  />
-                </div>
-                <div class="flex-1 min-w-0">
-                  <div class="type-strong">Explore</div>
-                  <div class="fs-mono text-label">Templates & extensions</div>
-                </div>
-                <UIcon
-                  name="i-lucide-arrow-right"
-                  class="size-4 text-meta opacity-0 group-hover:opacity-100 transition-all duration-200 group-hover:translate-x-0.5"
-                />
-              </div>
-            </NuxtLink>
-          </div>
-        </div>
-      </div>
 
       <!-- Welcome onboarding (first-run) -->
       <WelcomeOnboarding
