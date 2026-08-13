@@ -37,9 +37,27 @@ const props = defineProps<{
   /** The landing in flight, when there is one. Drives the animation. */
   landing?: LandingRun | null
   starting?: boolean
+  /**
+   * Fold the ordering away behind the header.
+   *
+   * This panel is nine rows tall and took the whole first screen of /sessions,
+   * pushing the box you start work in and the sessions themselves below the
+   * fold. Its header already carries the only fact you need most of the time —
+   * "6 of 9 could land" — and the button to act on it. The ordering underneath
+   * matters when something is blocked, which is when you open it.
+   */
+  collapsible?: boolean
 }>()
 
 const emit = defineEmits<{ land: []; recheck: [] }>()
+
+const open = ref(false)
+
+/**
+ * A landing in flight opens it and keeps it open. The minutes are going into a
+ * specific one of these, and which one is the entire point of the animation.
+ */
+const showBody = computed(() => !props.collapsible || open.value || inFlight.value)
 
 /** Re-reading the plan is the whole recovery: fix the checkout, press this. */
 const refreshing = ref(false)
@@ -190,10 +208,30 @@ function titleOf(car: TrainCar): string {
   >
     <header
       class="flex items-center gap-3 flex-wrap px-4 py-2.5"
-      style="background: var(--surface-base); border-bottom: 1px solid var(--border-subtle);"
+      :style="{
+        background: 'var(--surface-base)',
+        borderBottom: showBody ? '1px solid var(--border-subtle)' : 'none',
+      }"
     >
-      <UIcon name="i-lucide-git-merge" class="size-3.5 shrink-0 text-meta" />
-      <h2 id="merge-train-title" class="text-section-label">Merge train</h2>
+      <button
+        v-if="collapsible"
+        class="flex items-center gap-3 focus-ring rounded -m-1 p-1"
+        :aria-expanded="showBody"
+        :disabled="inFlight"
+        :title="showBody ? 'Hide the order' : 'Show the order'"
+        @click="() => { open = !open }"
+      >
+        <UIcon
+          :name="showBody ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+          class="size-3.5 shrink-0 text-meta"
+        />
+        <UIcon name="i-lucide-git-merge" class="size-3.5 shrink-0 text-meta" />
+        <h2 id="merge-train-title" class="text-section-label">Merge train</h2>
+      </button>
+      <template v-else>
+        <UIcon name="i-lucide-git-merge" class="size-3.5 shrink-0 text-meta" />
+        <h2 id="merge-train-title" class="text-section-label">Merge train</h2>
+      </template>
       <span v-if="summary.landable" class="type-mono-meta">
         {{ summary.landable }} of {{ summary.total }} could land · {{ commitsLabel }}
       </span>
@@ -224,7 +262,7 @@ function titleOf(car: TrainCar): string {
       </div>
     </header>
 
-    <div class="train">
+    <div v-if="showBody" class="train">
       <!--
         The repository-level refusal, before the button rather than after the
         bill. Every row below can read "Ready" and still nothing will merge, so

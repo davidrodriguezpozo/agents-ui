@@ -7,6 +7,7 @@ const { fetchAll: fetchCommands, commands } = useCommands()
 const { fetchAll: fetchPlugins, plugins } = usePlugins()
 const { fetchAll: fetchSkills, skills } = useSkills()
 const { fetchAll: fetchWorkflows, workflows } = useWorkflows()
+const { fetchAll: fetchSessions } = useSessions()
 
 const initialized = ref(false)
 const showSearch = ref(false)
@@ -25,10 +26,23 @@ function toggleTheme() {
 
 watch(() => route.path, () => { sidebarOpen.value = false })
 
+/**
+ * Sessions are in here for a reason. `inCurrentProject` is worked out on the
+ * server against the selected folder, so after a project switch every session
+ * in the shared list still carries the *previous* project's answer — and
+ * /sessions, filtered to "This project", went on showing the sessions of the
+ * project you had just left. Now's Running and Settled bands read the same
+ * shared list and inherited it.
+ *
+ * Fetched here rather than in each page so one switch fixes every surface.
+ */
 async function refreshAll() {
   await loadConfig()
   await refreshScope()
-  await Promise.all([fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), fetchWorkflows()])
+  await Promise.all([
+    fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), fetchWorkflows(),
+    fetchSessions(),
+  ])
 }
 
 /**

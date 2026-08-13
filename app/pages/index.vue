@@ -7,7 +7,6 @@ const { skills, fetchAll: fetchSkills } = useSkills();
 const { imports: githubImports, fetchImports } = useGithubImports();
 const { settings, load: loadSettings } = useSettings();
 const { isSimple } = useUiMode();
-const { fetchAll: fetchSessions } = useSessions();
 
 const dirInput = ref("");
 const settingDir = ref(false);
@@ -22,16 +21,10 @@ const suggestions = ref<Suggestion[]>([]);
 
 onMounted(async () => {
   dirInput.value = claudeDir.value || "";
-  await Promise.all([
-    loadSettings(),
-    fetchPlugins(),
-    fetchSkills(),
-    fetchImports(),
-    // The Running and Settled bands read the shared session list, and app.vue
-    // fetches everything *except* sessions on boot — so arriving here directly
-    // would have shown neither band until you had been to /sessions first.
-    fetchSessions(),
-  ]);
+  // Sessions are not fetched here: app.vue loads them before any page renders
+  // and reloads them on a project switch, which is what keeps the Running and
+  // Settled bands honest about which project they are describing.
+  await Promise.all([loadSettings(), fetchPlugins(), fetchSkills(), fetchImports()]);
 
   try {
     suggestions.value = await $fetch<Suggestion[]>("/api/suggestions");

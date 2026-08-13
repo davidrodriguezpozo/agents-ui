@@ -413,6 +413,18 @@ const showTrain = computed(() => trainSessions.value.length >= 2)
 const landedSessionIds = computed(() =>
   sessions.value.filter(s => s.landed).map(s => s.id))
 
+/**
+ * Whether the merge train is the news, rather than a tool sitting at the bottom.
+ *
+ * It normally lives below the sessions — you start work, you see what happened,
+ * then you land what is finished. But while a landing is running or has just
+ * reported, that *is* what is happening on this page, so it hoists above the
+ * composer. Done with flex order rather than two copies of the markup, and it
+ * stays late in the DOM so the reading order is composer, sessions, train
+ * whichever way it is drawn.
+ */
+const landingIsHappening = computed(() => Boolean(landingRun.value) || landing.value)
+
 async function onLand() {
   confirmingLand.value = false
   try {
@@ -499,12 +511,22 @@ async function switchTo(path: string) {
       </template>
     </PageHeader>
 
-    <div class="page-container page-container--measure py-4 space-y-5">
-      <p class="type-body">
-        Each session works on its own copy of your project, so several can run at the same time
-        without overwriting each other. Nothing touches your files until you merge it.
-      </p>
+    <!--
+      Ordered by what you came to do: start something, see what happened to what
+      is already going, then land the finished ones.
 
+      The merge train used to be first and is nine rows tall, so on a 1512×810
+      window both the box you start work in and every session were below the
+      fold. It sits after the list now, folded, and hoists itself back above the
+      composer only while a landing is actually running — at which point it is
+      the thing that is happening.
+
+      The paragraph explaining what a session is went with it. Permanent
+      onboarding text on a page you open several times a day is a sign the labels
+      are not trusted; "Branches from …, its own workspace, its own branch" is
+      already said under the composer, where it is doing something.
+    -->
+    <div class="page-container page-container--measure py-4 flex flex-col gap-5">
       <!--
         Said before the button, not after it. Pressing "Start session" here
         used to be the first anyone heard that this folder cannot be branched,
@@ -513,7 +535,7 @@ async function switchTo(path: string) {
       -->
       <div
         v-if="notARepo"
-        class="rounded-lg p-4 space-y-3"
+        class="order-1 rounded-lg p-4 space-y-3"
         style="background: var(--warning-wash); border: 1px solid var(--warning-edge);"
       >
         <div class="flex items-start gap-2.5">
@@ -566,8 +588,14 @@ async function switchTo(path: string) {
         it: while a landing runs the train shows which one the minutes are going
         into, and the panel below carries the list of what each came to.
       -->
+      <div
+        v-if="(showTrain && workingDir) || landingRun"
+        class="flex flex-col gap-5"
+        :class="landingIsHappening ? 'order-2' : 'order-6'"
+      >
       <MergeTrain
         v-if="showTrain && workingDir"
+        collapsible
         :plan="landingPlan"
         :sessions="trainSessions"
         :base-branch="activeProject?.branch || 'your current branch'"
@@ -589,9 +617,10 @@ async function switchTo(path: string) {
         :landed-ids="landedSessionIds"
         @dismiss="dismissLanding"
       />
+      </div>
 
       <!-- Start a session -->
-      <div v-if="workingDir" class="space-y-1.5">
+      <div v-if="workingDir" class="order-3 space-y-1.5">
         <!-- One session, told what to do in the same breath -->
         <template v-if="!batchMode">
           <div class="flex gap-2 items-start">
@@ -779,7 +808,7 @@ async function switchTo(path: string) {
       </div>
 
       <!-- Work already started in the terminal, which this can pick up -->
-      <div v-if="workingDir && transcripts.length" class="space-y-2">
+      <div v-if="workingDir && transcripts.length" class="order-4 space-y-2">
         <h2 class="text-section-label">Continue from your terminal</h2>
         <p class="type-meta">
           Conversations you had with Claude Code here. Continuing one resumes it in a
@@ -812,7 +841,7 @@ async function switchTo(path: string) {
         </div>
       </div>
 
-      <div v-if="loading && !sessions.length" class="space-y-1">
+      <div v-if="loading && !sessions.length" class="order-5 space-y-1">
         <SkeletonRow v-for="i in 3" :key="i" />
       </div>
 
@@ -821,7 +850,7 @@ async function switchTo(path: string) {
         else". A session that is blocked is blocked whichever project it is in,
         and the old shape made that answerable only after switching.
       -->
-      <div v-else-if="groups.length" class="space-y-6">
+      <div v-else-if="groups.length" class="order-5 space-y-6">
         <div v-for="group in groups" :key="group.path" class="space-y-2">
           <div v-if="showProjectHeadings" class="flex items-center gap-2">
             <UIcon
@@ -950,6 +979,7 @@ async function switchTo(path: string) {
 
       <EmptyState
         v-else-if="workingDir"
+        class="order-5"
         icon="i-lucide-git-branch"
         :title="scope === 'here' ? 'No sessions in this project' : 'No sessions yet'"
         description="Start one to give Claude its own copy of this project to work in. You can run several at once and review each one's changes before keeping them."
@@ -961,7 +991,7 @@ async function switchTo(path: string) {
       -->
       <button
         v-if="scope === 'here' && elsewhere.length"
-        class="w-full flex items-center gap-2 px-3 py-2.5 rounded-md hover-row focus-ring"
+        class="order-7 w-full flex items-center gap-2 px-3 py-2.5 rounded-md hover-row focus-ring"
         style="border: 1px dashed var(--border-subtle);"
         @click="scope = 'all'"
       >
@@ -978,7 +1008,7 @@ async function switchTo(path: string) {
       </button>
 
       <!-- Always visible, so worktrees never accumulate unnoticed -->
-      <WorktreePanel />
+      <WorktreePanel class="order-8" />
     </div>
   </div>
 </template>
