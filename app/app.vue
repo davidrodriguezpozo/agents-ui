@@ -85,13 +85,19 @@ const { build, isStale, load: loadBuildStatus } = useBuildStatus()
  */
 const { summary: pullSummary, watchContinuously: watchPulls, stopWatching: stopWatchingPulls } = useGithubPulls()
 
-// The tab title is the only part of this app visible from another window, so
-// it carries the count of things that are stuck.
+/**
+ * The tab title is the only part of this app visible from another window, so it
+ * carries the count of things that are stuck — the same total the Now badge
+ * shows, reviews included. It used to omit reviews, so a morning whose only
+ * problem was three pull requests waiting on you looked quiet from the tab bar.
+ */
+const stuckTotal = computed(() =>
+  attention.value.blocked + attention.value.failingRituals + pullSummary.value.onYou,
+)
+
 useHead({
   title: computed(() =>
-    attention.value.needsYou > 0
-      ? `(${attention.value.needsYou}) Agents Studio`
-      : 'Agents Studio',
+    stuckTotal.value > 0 ? `(${stuckTotal.value}) Agents Studio` : 'Agents Studio',
   ),
 })
 
@@ -120,7 +126,7 @@ const navLinks = computed(() => isSimple.value
       { label: 'My skills', icon: 'i-lucide-sparkles', to: '/skills' },
     ]
   : [
-      { label: 'Dashboard', icon: 'i-lucide-layout-dashboard', to: '/' },
+      { label: 'Now', icon: 'i-lucide-target', to: '/' },
       { label: 'Sessions', icon: 'i-lucide-git-branch', to: '/sessions' },
       { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
@@ -152,45 +158,36 @@ function isActive(to: string) {
 }
 
 /**
- * The badge that means "look at this", as distinct from the one that counts
- * what you have. Blocked work is red because it is stuck; a turn in flight is
- * the accent colour because it is fine, just not finished.
+ * The badge that means "look at this", as distinct from the one that counts what
+ * you have.
+ *
+ * There used to be four of these — on Sessions, Reviews and Daily — one per
+ * place a slice of the answer happened to live. Four counters for one question
+ * is the app admitting the question has no home, so they are now one number on
+ * Now, which is where the answer is.
+ *
+ * Red when something is stuck, accent when work is merely in flight: the second
+ * is not news, it is just not finished.
  */
 function attentionFor(to: string) {
+  if (to !== '/') return null
+
   const { blocked, working, failingRituals } = attention.value
+  const stuck = blocked + failingRituals + pullSummary.value.onYou
 
-  if (to === '/sessions') {
-    if (blocked) {
-      return {
-        count: blocked,
-        title: `${blocked} waiting for you to approve something`,
-        style: { background: 'var(--error-tint)', color: 'var(--error)' },
-      }
-    }
-    if (working) {
-      return {
-        count: working,
-        title: `${working} working right now`,
-        style: { background: 'var(--accent-muted)', color: 'var(--accent)' },
-      }
-    }
-  }
-
-  // A review asked of you is somebody waiting, which is the same kind of news
-  // as a blocked session — but it is not stuck, so it is the accent and not red.
-  if (to === '/pulls' && pullSummary.value.onYou) {
+  if (stuck) {
     return {
-      count: pullSummary.value.onYou,
-      title: `${pullSummary.value.onYou} pull ${pullSummary.value.onYou === 1 ? 'request' : 'requests'} will not move until you do something`,
-      style: { background: 'var(--accent-muted)', color: 'var(--accent)' },
-    }
-  }
-
-  if (to === '/schedules' && failingRituals) {
-    return {
-      count: failingRituals,
-      title: `${failingRituals} rituals whose last runs came to nothing`,
+      count: stuck,
+      title: `${stuck} ${stuck === 1 ? 'thing' : 'things'} will not move until you do something`,
       style: { background: 'var(--error-tint)', color: 'var(--error)' },
+    }
+  }
+
+  if (working) {
+    return {
+      count: working,
+      title: `${working} working right now`,
+      style: { background: 'var(--accent-muted)', color: 'var(--accent)' },
     }
   }
 

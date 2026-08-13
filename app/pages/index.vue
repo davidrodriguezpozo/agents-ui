@@ -7,6 +7,7 @@ const { skills, fetchAll: fetchSkills } = useSkills();
 const { imports: githubImports, fetchImports } = useGithubImports();
 const { settings, load: loadSettings } = useSettings();
 const { isSimple } = useUiMode();
+const { fetchAll: fetchSessions } = useSessions();
 
 const dirInput = ref("");
 const settingDir = ref(false);
@@ -21,7 +22,16 @@ const suggestions = ref<Suggestion[]>([]);
 
 onMounted(async () => {
   dirInput.value = claudeDir.value || "";
-  await Promise.all([loadSettings(), fetchPlugins(), fetchSkills(), fetchImports()]);
+  await Promise.all([
+    loadSettings(),
+    fetchPlugins(),
+    fetchSkills(),
+    fetchImports(),
+    // The Running and Settled bands read the shared session list, and app.vue
+    // fetches everything *except* sessions on boot — so arriving here directly
+    // would have shown neither band until you had been to /sessions first.
+    fetchSessions(),
+  ]);
 
   try {
     suggestions.value = await $fetch<Suggestion[]>("/api/suggestions");
@@ -60,27 +70,32 @@ const hasContent = computed(
   <SimpleHome v-if="isSimple" />
 
   <div v-else>
-    <PageHeader title="Dashboard" />
+    <PageHeader title="Now" />
 
-    <div class="page-container py-6 stagger-section space-y-6">
+    <div class="page-container py-6 stagger-section space-y-7">
       <!--
-        What happened while you were away, and then what needs you. That is the
-        whole page now.
+        Three bands, in the order the questions get asked: what needs me, what
+        is still going, what went through without me.
 
-        It used to carry four counters (Agents 11, Commands 37, Skills 199,
-        Plugins 8), a Model Distribution bar, and partial lists of agents and
-        commands that duplicated their own pages. None of it answered a question
-        anybody arrives with: how many skills you own is not news, and the
-        sidebar already says it. What changed overnight is news.
+        This was a dashboard — four counters, a model-distribution bar, and
+        partial lists of agents and commands duplicating their own pages. None of
+        it answered a question anybody arrives with. Worse, the one question
+        everybody arrives with had no home at all: blocked sessions lived on
+        /sessions, reviews on /pulls, broken rituals on /schedules, the morning
+        report here. The four red counters in the sidebar were the app admitting
+        it, and a badge that stands in for a missing view is a missing view.
       -->
-      <WhileYouWereAway v-if="hasContent" />
+      <NowQueue v-if="hasContent" />
+
+      <NowRunning v-if="hasContent" />
+
+      <NowSettled v-if="hasContent" />
 
       <!--
-        And then the same night as a picture. The digest above answers "did
-        anything go wrong" in sentences; this answers "when" — which hours the
-        machine was actually working, what overlapped what, and whether the money
-        arrived in one lump or spread across the night. Neither replaces the
-        other, and the sentences come first because they are what you act on.
+        And then the same night as a picture. The bands above answer "what do I
+        do" in sentences; this answers "when" — which hours the machine was
+        working, what overlapped what, and whether the money arrived in one lump
+        or spread across the night.
       -->
       <NightShift v-if="hasContent" />
 

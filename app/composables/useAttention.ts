@@ -1,11 +1,28 @@
+export type AttentionKind = 'blocked-session' | 'failing-ritual'
+
+/** One thing that will not move until you do something, named. */
+export interface AttentionItem {
+  kind: AttentionKind
+  id: string
+  title: string
+  because: string
+  at?: number
+}
+
 export interface Attention {
   blocked: number
   working: number
   failingRituals: number
   needsYou: number
+  /**
+   * The same things the counts describe. The Now queue reads these rather than
+   * re-deriving them from the digest, which reports on a window and so could
+   * disagree with the badge that points at it.
+   */
+  items: AttentionItem[]
 }
 
-const EMPTY: Attention = { blocked: 0, working: 0, failingRituals: 0, needsYou: 0 }
+const EMPTY: Attention = { blocked: 0, working: 0, failingRituals: 0, needsYou: 0, items: [] }
 
 /**
  * What is waiting on you, kept fresh app-wide.
