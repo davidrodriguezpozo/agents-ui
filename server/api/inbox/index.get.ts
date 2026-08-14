@@ -24,6 +24,7 @@ export default defineEventHandler(async () => {
         durationMs: state?.durationMs,
         error: state?.error,
         projectDir: state?.projectDir,
+        refreshAt: state?.refreshAt,
       }
     }),
   }

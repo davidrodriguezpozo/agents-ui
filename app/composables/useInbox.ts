@@ -19,6 +19,8 @@ export interface InboxSourceReading {
   durationMs?: number
   error?: string
   projectDir?: string
+  /** Local `HH:MM` it refreshes itself at, if it was told to. */
+  refreshAt?: string
 }
 
 /**
@@ -65,6 +67,26 @@ export function useInbox() {
     }
   }
 
+  /**
+   * Turn the daily look on at `at`, or off with null.
+   *
+   * Returns the reason it could not, like `refresh` does, because the refusals
+   * are worth reading: a source has to have worked once by hand before it can be
+   * left to run on its own.
+   */
+  async function setSchedule(
+    key: string,
+    at: string | null,
+  ): Promise<{ ok: true } | { ok: false; reason: string }> {
+    try {
+      await $fetch('/api/inbox/schedule', { method: 'POST', body: { source: key, at } })
+      await load()
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, reason: errorMessage(e, 'Could not change the schedule.') }
+    }
+  }
+
   async function dismiss(key: string, id: string) {
     await $fetch('/api/inbox/dismiss', { method: 'POST', body: { source: key, id } })
     await load()
@@ -74,5 +96,5 @@ export function useInbox() {
     sources.value.flatMap(source => source.items.map(item => ({ source, item }))),
   )
 
-  return { sources, items, loading, refreshing, load, refresh, dismiss }
+  return { sources, items, loading, refreshing, load, refresh, setSchedule, dismiss }
 }

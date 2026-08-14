@@ -19,7 +19,9 @@ const { digest, loading: digestLoading, load: loadDigest } = useDigest()
 const { all: pulls, loading: pullsLoading, work } = useGithubPulls()
 const { attention, refresh: refreshAttention } = useAttention()
 const { allowRules } = useSchedules()
-const { sources: inboxSources, refreshing, load: loadInbox, refresh: refreshInbox } = useInbox()
+const {
+  sources: inboxSources, refreshing, load: loadInbox, refresh: refreshInbox, setSchedule,
+} = useInbox()
 const { create: createSession } = useSessions()
 const router = useRouter()
 const toast = useToast()
@@ -44,18 +46,55 @@ const items = computed(() =>
 
 const loading = computed(() => (digestLoading.value || pullsLoading.value) && !digest.value)
 
-function money(usd: number) {
-  return usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`
-}
+/**
+ * Sources that could not be looked at, so "nothing is waiting" is not claimed
+ * over the top of them.
+ *
+ * This is the same mistake as the badge and the queue disagreeing, made once
+ * more: the empty state was a fixed sentence rather than a reading of the same
+ * inputs the list is built from. It said "Nothing is waiting on you. No session
+ * is blocked, no ritual has broken, and nothing is sitting unreviewed" while a
+ * Notion refresh had been refused the tools it needed and knew nothing at all.
+ *
+ * An all-clear is a claim. It needs to be true of everything it covers.
+ */
+const unchecked = computed(() => inboxSources.value.filter(source => source.error))
 
 /**
- * Refreshing costs real money and takes a minute or two, so it says what it is
- * doing and what happened — never a spinner that stops with no verdict.
+ * Refreshing takes a minute or two, so it says what it is doing and what
+ * happened — never a spinner that stops with no verdict.
  */
 async function onRefresh(key: string, label: string) {
   const result = await refreshInbox(key)
   if (result.ok) return
   toast.add({ title: `Could not refresh ${label}`, description: result.reason, color: 'error' })
+}
+
+/**
+ * Off, or 08:00 — deliberately not a time picker.
+ *
+ * The choice worth offering is "before I start work" versus "only when I ask".
+ * Anybody who wants 06:45 can have it from the API; putting a clock widget in a
+ * footer would be the interface arguing with itself about what matters.
+ */
+const DAILY_AT = '08:00'
+
+async function onSchedule(source: { key: string; label: string; refreshAt?: string }) {
+  const wanted = source.refreshAt ? null : DAILY_AT
+  const result = await setSchedule(source.key, wanted)
+
+  if (!result.ok) {
+    toast.add({ title: `Could not schedule ${source.label}`, description: result.reason, color: 'error' })
+    return
+  }
+
+  toast.add({
+    title: wanted ? `${source.label} will refresh at ${DAILY_AT}` : `${source.label} is manual again`,
+    description: wanted
+      ? 'Once a day, before you start. It takes about a minute and runs on its own.'
+      : 'It will only look when you press refresh.',
+    color: 'success',
+  })
 }
 
 async function resolve(item: NowItem) {
@@ -113,13 +152,32 @@ async function resolve(item: NowItem) {
     <!--
       Said plainly. An empty list on the one screen that is meant to tell you
       whether anything is wrong reads as a page that failed to load.
+
+      But only said when it is true of everything: a source that could not be
+      looked at gets a different sentence and a different icon, because "nothing
+      is waiting on you" over the top of an inbox that knows nothing is the one
+      failure that would make somebody stop trusting this screen.
     -->
     <div
       v-else-if="!items.length"
       class="rounded-lg px-4 py-5 flex items-start gap-3 bg-card"
     >
-      <UIcon name="i-lucide-check" class="size-4 shrink-0 mt-0.5" style="color: var(--success);" />
-      <div>
+      <UIcon
+        :name="unchecked.length ? 'i-lucide-alert-triangle' : 'i-lucide-check'"
+        class="size-4 shrink-0 mt-0.5"
+        :style="{ color: unchecked.length ? 'var(--warning)' : 'var(--success)' }"
+      />
+      <div v-if="unchecked.length">
+        <p class="type-strong">
+          Nothing local is waiting — but {{ unchecked.map(s => s.label).join(' and ') }}
+          could not be checked.
+        </p>
+        <p class="type-detail mt-0.5">
+          No session is blocked, no ritual has broken, and nothing is sitting unreviewed.
+          {{ unchecked[0]?.error }}
+        </p>
+      </div>
+      <div v-else>
         <p class="type-strong">Nothing is waiting on you.</p>
         <p class="type-detail mt-0.5">
           No session is blocked, no ritual has broken, and nothing is sitting unreviewed.
@@ -168,12 +226,18 @@ async function resolve(item: NowItem) {
       </li>
     </ul>
     <!--
-      Where the rows from elsewhere came from, and what asking cost.
+      Where the rows from elsewhere came from, and how old the answer is.
 
-      Said out loud because it is the one action in this app that can cost a
-      dollar: a real Notion refresh here took 82 seconds and $1.48. Nothing
-      polls it — the number is exactly why — so the age of the answer is part of
-      the answer, and refreshing is something a person or a ritual decides to do.
+      Said out loud because a refresh is a job, not a request: a real Notion one
+      here takes between half a minute and a minute and a half. Nothing polls it,
+      so the age of the answer is part of the answer.
+
+      It reads in seconds rather than dollars on purpose. The CLI reports a
+      `total_cost_usd` per run and the app stores it, but almost everybody runs
+      Claude Code on a subscription, where that figure is the notional value of
+      the tokens and not a charge. "$0.85" beside a button would tell most people
+      they are about to be billed for something they are not. Time is true for
+      everyone.
     -->
     <div v-if="inboxSources.length" class="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5">
       <div
@@ -184,11 +248,16 @@ async function resolve(item: NowItem) {
         <UIcon :name="source.icon" class="size-3 shrink-0 text-meta" />
         <span class="type-meta">{{ source.label }}</span>
 
-        <span v-if="source.error" class="type-meta ink-error" :title="source.error">
-          last refresh failed
-        </span>
+        <!--
+          The reason, not a hover. "last refresh failed" in a tooltip was enough
+          when the failure was a timeout; it is not when the failure is "it was
+          not allowed to use these tools, so nothing here is up to date" — that
+          is the difference between a blank inbox and a wrong one, and it needs
+          reading without a mouse.
+        -->
+        <span v-if="source.error" class="type-meta ink-error">{{ source.error }}</span>
         <span v-else-if="source.checkedAt" class="type-meta">
-          {{ source.items.length }} · {{ relativeTime(source.checkedAt) }}<template v-if="source.costUsd"> · {{ money(source.costUsd) }}</template>
+          {{ source.items.length }} · {{ relativeTime(source.checkedAt) }}<template v-if="source.durationMs"> · {{ Math.round(source.durationMs / 1000) }}s</template>
         </span>
         <span v-else class="type-meta">never checked</span>
 
@@ -198,6 +267,22 @@ async function resolve(item: NowItem) {
           @click="onRefresh(source.key, source.label)"
         >
           {{ refreshing === source.key ? 'looking…' : 'refresh' }}
+        </button>
+
+        <!--
+          Only offered once a source has worked by hand — before that the daily
+          run has no project to ask from, and the server refuses with that reason.
+        -->
+        <button
+          v-if="source.checkedAt"
+          class="type-meta hover:underline focus-ring rounded"
+          :class="source.refreshAt ? 'ink-accent' : ''"
+          :title="source.refreshAt
+            ? `Refreshes itself daily at ${source.refreshAt}. Click to stop.`
+            : `Refresh it every day at ${DAILY_AT}, once, before you start work.`"
+          @click="onSchedule(source)"
+        >
+          {{ source.refreshAt ? `daily ${source.refreshAt}` : 'daily?' }}
         </button>
       </div>
     </div>

@@ -12,6 +12,7 @@ import { outcomeOf, summarizeRitualRuns, type RitualHistory } from './ritualHist
 import { RETRY_DELAY_MS, shouldGiveUp, shouldRetry } from './ritualHealth'
 import { checkBudget } from './budget'
 import { describeIncomplete } from './digest'
+import { tickInbox } from './inboxTick'
 import { withRunSlot } from './runQueue'
 import { pollPullRequests } from './prWatchRunner'
 
@@ -106,11 +107,17 @@ export function startScheduler(): void {
   setTimeout(() => {
     void pollEvents()
     void pollWatchedPullRequests()
+    void tickInbox()
   }, 15_000)
 
   pollTimer = setInterval(() => {
     void pollEvents()
     void pollWatchedPullRequests()
+    // Rides this timer rather than the 30-second clock tick because a refresh
+    // takes half a minute and being asked four times while running is pointless.
+    // Un-awaited alongside the others for the same reason they are: one slow
+    // source must not delay a pull request going green from being noticed.
+    void tickInbox()
   }, POLL_MS)
 
   console.log('[scheduler] started')
