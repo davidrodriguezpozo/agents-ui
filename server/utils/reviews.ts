@@ -388,6 +388,10 @@ Where you think a comment is wrong, leave the code alone and say so here with yo
 Do not reply on GitHub and do not resolve any threads. Tell me what you did and what you disagreed with, and I will answer them.`
   }
 
+  return reviewPrompt(pull, head)
+}
+
+function reviewPrompt(pull: Pull, head: string): string {
   return `${head}
 
 Opened by ${pull.author}, ${pull.changedFiles} ${pull.changedFiles === 1 ? 'file' : 'files'} changed against \`${pull.baseBranch}\`. My review was requested. The branch is checked out in this workspace.
@@ -397,6 +401,54 @@ Read the change — \`git diff ${pull.baseBranch}...HEAD\` — and then read aro
 Come back here with what you found, worst first. For each thing say where it is, what goes wrong, and how sure you are. Say plainly what is fine as well — a review that lists only problems reads as though everything is one, and I cannot tell the difference between "this is solid apart from X" and "I only looked at X".
 
 Do not post anything to GitHub. This is for me to read and decide on.`
+}
+
+/**
+ * A person's own command for an action, filled in with this pull request.
+ *
+ * The point of the setting: a quick action can run `/hd:review {url}` instead of
+ * the built-in prompt, so it lands in a session already invoking your own
+ * command. The template is sent verbatim as the opening turn — a leading slash
+ * is what makes the agent resolve it as a command rather than read it as prose,
+ * so this does not touch it.
+ *
+ * Placeholders are the only edit. `{url}`, `{number}`, `{title}`, `{branch}`
+ * (the head) and `{base}` are replaced wherever they appear. A template that
+ * names none of them almost always still means "on this pull request", so the
+ * URL is appended rather than left off — `/hd:review` becomes `/hd:review
+ * <url>`, which is the difference between a command that knows which pull
+ * request and one that asks.
+ */
+export function renderPullCommand(template: string, pull: Pull): string {
+  const trimmed = template.trim()
+  if (!trimmed) return ''
+
+  const filled = trimmed
+    .replaceAll('{url}', pull.url)
+    .replaceAll('{number}', String(pull.number))
+    .replaceAll('{title}', pull.title)
+    .replaceAll('{branch}', pull.headBranch)
+    .replaceAll('{base}', pull.baseBranch)
+
+  // No placeholder used means nothing here names the pull request, so the one
+  // fact the session cannot do without is added rather than assumed.
+  const named = /\{(url|number|title|branch|base)\}/.test(trimmed)
+  return named ? filled : `${filled} ${pull.url}`
+}
+
+/**
+ * What the opening turn should be, given a person's settings.
+ *
+ * The custom command wins when there is one; otherwise the built-in prompt,
+ * which is what every action did before the setting existed.
+ */
+export function turnForIntent(
+  pull: Pull,
+  intent: WorkIntent,
+  commands?: Partial<Record<WorkIntent, string>>,
+): string {
+  const custom = renderPullCommand(commands?.[intent] ?? '', pull)
+  return custom || workPrompt(pull, intent)
 }
 
 // --- Asking gh --------------------------------------------------------------

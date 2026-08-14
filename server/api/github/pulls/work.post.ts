@@ -2,7 +2,8 @@ import { getProjectDir } from '../../../utils/scope'
 import { startSessionFromRef } from '../../../utils/sessionFromRef'
 import { startTurn } from '../../../utils/sessionTurn'
 import { checkBudget } from '../../../utils/budget'
-import { intentFor, readPulls, workPrompt, type WorkIntent } from '../../../utils/reviews'
+import { intentFor, readPulls, turnForIntent, type WorkIntent } from '../../../utils/reviews'
+import { readPreferences } from '../../../utils/preferences'
 
 /**
  * Turn a pull request into a session that is already working on it.
@@ -76,10 +77,16 @@ export default defineEventHandler(async (event) => {
     title: `#${pull.number} ${pull.title}`,
   })
 
+  // The opening turn is your own command for this action when you have set one,
+  // and the built-in prompt otherwise. Read here rather than passed in so the
+  // page cannot send a stale template, and so a command edited between loading
+  // the page and pressing the button is the one that runs.
+  const { pullActions } = await readPreferences()
+
   // The workspace exists and is recorded by this point, so a turn that will not
   // start is still a session you have. Reported rather than rolled back.
   try {
-    return { ...session, intent, runId: await startTurn(session, workPrompt(pull, intent)) }
+    return { ...session, intent, runId: await startTurn(session, turnForIntent(pull, intent, pullActions)) }
   } catch (e: any) {
     return {
       ...session,

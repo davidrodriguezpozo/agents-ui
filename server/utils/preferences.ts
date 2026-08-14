@@ -21,6 +21,39 @@ export interface NotificationPreferences {
   finished: boolean
 }
 
+/**
+ * The command a pull request's quick action runs, keyed by what the row offers.
+ *
+ * These mirror `WorkIntent` in `reviews.ts` — the four states a pull request row
+ * has a button for. An empty string means "use the built-in prompt", which is
+ * what every action did before this existed and what most people want: the
+ * built-in prompts are careful, and the most important line in all of them is
+ * that nothing is posted to GitHub.
+ *
+ * A non-empty value replaces that prompt with whatever you type. It is sent as
+ * the session's opening turn exactly as written, which is what makes a slash
+ * command work: `/hd:review {url}` reaches the agent as a slash command it
+ * resolves from your own settings, so you can point a quick action at your own
+ * command or agent. `{url}`, `{number}`, `{title}`, `{branch}` and `{base}` are
+ * filled in from the pull request; a template with no placeholder has the URL
+ * appended, so `/hd:review` on its own still arrives knowing which one.
+ */
+export interface PullActionCommands {
+  /** Somebody else's, asked of you. */
+  review: string
+  /** Yours, with a reviewer waiting. */
+  address: string
+  /** Yours, with CI red. */
+  fix: string
+  /** Yours, conflicting with its base. */
+  update: string
+}
+
+export type PullActionIntent = keyof PullActionCommands
+
+/** The keys, in the order the settings page draws them. */
+export const PULL_ACTION_INTENTS: PullActionIntent[] = ['review', 'address', 'fix', 'update']
+
 export interface Preferences {
   notifications: NotificationPreferences
   /**
@@ -85,6 +118,12 @@ export interface Preferences {
    * nobody chose is a limit that stops their work at the worst possible moment.
    */
   pauseOnQuotaWarning: boolean
+  /**
+   * What each pull request quick action runs. Empty strings throughout means
+   * every action uses its built-in prompt, which is the default and was the
+   * only behaviour before this setting existed.
+   */
+  pullActions: PullActionCommands
 }
 
 /**
@@ -106,6 +145,22 @@ export const DEFAULT_PREFERENCES: Preferences = {
   maxTurns: 0,
   maxConcurrentRuns: 3,
   pauseOnQuotaWarning: false,
+  pullActions: { review: '', address: '', fix: '', update: '' },
+}
+
+/**
+ * A stored pull-action map, made safe to use: every key present, every value a
+ * trimmed string. A hand-edited file with a missing key or a number where a
+ * command should be must not reach the code that builds a turn from it.
+ */
+export function sanitisePullActions(value: unknown): PullActionCommands {
+  const source = (value ?? {}) as Record<string, unknown>
+  const clean = {} as PullActionCommands
+  for (const key of PULL_ACTION_INTENTS) {
+    const raw = source[key]
+    clean[key] = typeof raw === 'string' ? raw.trim() : ''
+  }
+  return clean
 }
 
 /** A limit is a positive number of dollars or it is not a limit. */
@@ -159,6 +214,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     maxConcurrentRuns: parsed?.preferences?.maxConcurrentRuns ?? DEFAULT_PREFERENCES.maxConcurrentRuns,
     // Absent means off — a file written before this existed never chose it.
     pauseOnQuotaWarning: parsed?.preferences?.pauseOnQuotaWarning === true,
+    // Filled key by key, so a file written before this existed reads as "every
+    // action uses its built-in prompt" rather than as undefined.
+    pullActions: sanitisePullActions(parsed?.preferences?.pullActions),
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -182,11 +240,12 @@ export async function savePreferences(
     maxTurns?: number
     maxConcurrentRuns?: number
     pauseOnQuotaWarning?: boolean
+    pullActions?: Partial<PullActionCommands>
   },
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning,
+    pauseOnQuotaWarning, pullActions,
     ...notifications
   } = patch
 
@@ -204,6 +263,11 @@ export async function savePreferences(
       pauseOnQuotaWarning: pauseOnQuotaWarning === undefined
         ? current.pauseOnQuotaWarning
         : pauseOnQuotaWarning === true,
+      // Merged over what is stored, so saving one action does not blank the
+      // other three — the settings page sends only the field that changed.
+      pullActions: pullActions === undefined
+        ? current.pullActions
+        : sanitisePullActions({ ...current.pullActions, ...pullActions }),
     }
     Object.assign(current, next)
     return next

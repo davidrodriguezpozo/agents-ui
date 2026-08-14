@@ -3,6 +3,8 @@ import {
   positiveOrZero,
   clampTurns,
   clampAttempts,
+  sanitisePullActions,
+  PULL_ACTION_INTENTS,
   MAX_REPAIR_ATTEMPTS,
   MAX_TURNS_CEILING,
 } from '../server/utils/preferences'
@@ -94,5 +96,34 @@ describe('clampAttempts', () => {
   it('returns 0 for non-numbers', () => {
     expect(clampAttempts('3')).toBe(0)
     expect(clampAttempts(NaN)).toBe(0)
+  })
+})
+
+/**
+ * The stored map reaches the code that builds a turn, so a hand-edited or
+ * pre-existing file must not put a missing key or a non-string where a command
+ * is expected. Every key present, every value a trimmed string.
+ */
+describe('sanitisePullActions', () => {
+  it('fills every intent with an empty string when given nothing', () => {
+    expect(sanitisePullActions(undefined)).toEqual({ review: '', address: '', fix: '', update: '' })
+    expect(sanitisePullActions(null)).toEqual({ review: '', address: '', fix: '', update: '' })
+    expect(sanitisePullActions({})).toEqual({ review: '', address: '', fix: '', update: '' })
+  })
+
+  it('keeps and trims string commands', () => {
+    expect(sanitisePullActions({ review: '  /hd:review {url}  ', fix: '/hd:fix' }))
+      .toEqual({ review: '/hd:review {url}', address: '', fix: '/hd:fix', update: '' })
+  })
+
+  it('drops non-string values to empty', () => {
+    expect(sanitisePullActions({ review: 5, address: {}, fix: null, update: true }))
+      .toEqual({ review: '', address: '', fix: '', update: '' })
+  })
+
+  it('ignores keys that are not real intents', () => {
+    const clean = sanitisePullActions({ review: '/x', bogus: '/y' } as Record<string, unknown>)
+    expect(Object.keys(clean).sort()).toEqual([...PULL_ACTION_INTENTS].sort())
+    expect('bogus' in clean).toBe(false)
   })
 })

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  intentFor, parsePulls, sortPulls, summarizePulls, verdictFor, workPrompt,
+  intentFor, parsePulls, renderPullCommand, sortPulls, summarizePulls, turnForIntent,
+  verdictFor, workPrompt,
   type Pull,
 } from '../server/utils/reviews'
 
@@ -222,5 +223,62 @@ describe('the order and the summary', () => {
     )
 
     expect(summary).toEqual({ onYou: 2, toReview: 1, toMerge: 1, waiting: 1 })
+  })
+})
+
+/**
+ * The setting's whole promise is that a quick action can run your own command
+ * on the right pull request. Two ways it could quietly break: a placeholder
+ * left unfilled, or a bare `/hd:review` arriving with nothing that says which
+ * pull request. Both are decided here.
+ */
+describe('renderPullCommand', () => {
+  const p = pull({
+    number: 42,
+    title: 'Add caching',
+    url: 'https://github.com/o/r/pull/42',
+    headBranch: 'feat/cache',
+    baseBranch: 'main',
+  })
+
+  it('is empty for an empty or whitespace template, so the built-in prompt wins', () => {
+    expect(renderPullCommand('', p)).toBe('')
+    expect(renderPullCommand('   ', p)).toBe('')
+  })
+
+  it('fills every placeholder from the pull request', () => {
+    expect(renderPullCommand('/hd:review {url} #{number} "{title}" {branch}->{base}', p))
+      .toBe('/hd:review https://github.com/o/r/pull/42 #42 "Add caching" feat/cache->main')
+  })
+
+  it('replaces a placeholder used more than once', () => {
+    expect(renderPullCommand('{number} and again {number}', p)).toBe('42 and again 42')
+  })
+
+  it('appends the url when the template names no placeholder', () => {
+    expect(renderPullCommand('/hd:review', p)).toBe('/hd:review https://github.com/o/r/pull/42')
+  })
+
+  it('does not append when a placeholder is present, even if it is not the url', () => {
+    expect(renderPullCommand('/hd:review #{number}', p)).toBe('/hd:review #42')
+  })
+})
+
+describe('turnForIntent', () => {
+  const p = pull({ number: 9, url: 'https://github.com/o/r/pull/9', mine: false })
+
+  it('uses the custom command when one is set for that intent', () => {
+    expect(turnForIntent(p, 'review', { review: '/hd:review {url}' }))
+      .toBe('/hd:review https://github.com/o/r/pull/9')
+  })
+
+  it('falls back to the built-in prompt when the intent has no command', () => {
+    expect(turnForIntent(p, 'review', { address: '/hd:address {url}' }))
+      .toBe(workPrompt(p, 'review'))
+  })
+
+  it('falls back to the built-in prompt when nothing is configured at all', () => {
+    expect(turnForIntent(p, 'review')).toBe(workPrompt(p, 'review'))
+    expect(turnForIntent(p, 'review', { review: '   ' })).toBe(workPrompt(p, 'review'))
   })
 })

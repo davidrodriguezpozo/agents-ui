@@ -57,6 +57,7 @@ const viewMode = ref<'structured' | 'raw'>('structured')
  */
 const sectionNav = [
   { id: 'general', label: 'General' },
+  { id: 'pull-actions', label: 'Review actions' },
   { id: 'limits', label: 'Limits' },
   { id: 'checks', label: 'Checks' },
   { id: 'setup', label: 'Workspace setup' },
@@ -235,6 +236,26 @@ const spentToday = ref(0)
 const pauseOnQuotaWarning = ref(false)
 
 /**
+ * The command each pull request quick action runs. Empty means the built-in
+ * prompt — the default, and what every action did before this existed. A value
+ * like `/hd:review {url}` sends that as the session's opening turn, so a quick
+ * action lands in your own command instead.
+ *
+ * Keyed by `WorkIntent` on the server; the labels here are the same words the
+ * Reviews page prints on the button, so the setting reads as "what this button
+ * does".
+ */
+type PullActionKey = 'review' | 'address' | 'fix' | 'update'
+const PULL_ACTIONS: { key: PullActionKey; label: string; verb: string; placeholder: string }[] = [
+  { key: 'review', label: 'Review it', verb: 'a review is asked of you', placeholder: '/hd:review {url}' },
+  { key: 'address', label: 'Address it', verb: 'a reviewer is waiting on yours', placeholder: '/hd:address-pr {url}' },
+  { key: 'fix', label: 'Fix CI', verb: 'a check is failing on yours', placeholder: '/hd:fix-ci {url}' },
+  { key: 'update', label: 'Resolve conflicts', verb: 'yours conflicts with its base', placeholder: '/hd:resolve-conflicts {url}' },
+]
+const pullActions = ref<Record<PullActionKey, string>>({ review: '', address: '', fix: '', update: '' })
+const savedPullActions = ref<Record<PullActionKey, string>>({ review: '', address: '', fix: '', update: '' })
+
+/**
  * What is left of the subscription. Never fetched on its own — it is collected
  * from the SDK during runs that were happening anyway — so "nothing heard yet"
  * is a normal state on a fresh install rather than a failure.
@@ -307,6 +328,7 @@ onMounted(async () => {
       pauseOnQuotaWarning: boolean
       dailyCapUsd: number
       runCapUsd: number
+      pullActions?: Record<PullActionKey, string>
     }>('/api/preferences')
     notifications.value = prefs.notifications
     summariseSessions.value = prefs.summariseSessions
@@ -316,6 +338,13 @@ onMounted(async () => {
     pauseOnQuotaWarning.value = prefs.pauseOnQuotaWarning === true
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
+    if (prefs.pullActions) {
+      for (const { key } of PULL_ACTIONS) {
+        const value = prefs.pullActions[key] ?? ''
+        pullActions.value[key] = value
+        savedPullActions.value[key] = value
+      }
+    }
 
     // What today has actually cost, so the limit is set against a real number
     // rather than a guess.
@@ -349,6 +378,27 @@ async function setRepairAttempts(value: number) {
     await $fetch('/api/preferences', { method: 'PUT', body: { repairAttempts: value } })
   } catch {
     repairAttempts.value = previous
+    toast.add({ title: 'Could not save that', color: 'error' })
+  }
+}
+
+/**
+ * Save one action's command. Saved on blur rather than per keystroke — a
+ * command is typed, not toggled — and only when it actually changed, so tabbing
+ * through the four does not write three times over.
+ */
+async function savePullAction(key: PullActionKey) {
+  const value = pullActions.value[key].trim()
+  pullActions.value[key] = value
+  if (value === savedPullActions.value[key]) return
+
+  const previous = savedPullActions.value[key]
+  savedPullActions.value[key] = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { pullActions: { [key]: value } } })
+  } catch {
+    savedPullActions.value[key] = previous
+    pullActions.value[key] = previous
     toast.add({ title: 'Could not save that', color: 'error' })
   }
 }
@@ -739,6 +789,53 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             </div>
           </div>
         </div>
+      </div>
+
+      <!--
+        Review actions — what the quick-action button on a pull request runs.
+
+        The Reviews page turns a pull request into a session already working on
+        it. By default that session opens with a careful built-in prompt; here
+        you can point each button at your own command instead, so "Review it"
+        can run /hd:review on the pull request rather than the built-in review.
+      -->
+      <div id="settings-pull-actions" class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Review actions</h3>
+        <p class="fs-sm text-meta">
+          Each button on a pull request in <NuxtLink to="/pulls" class="ink-accent hover:underline">Reviews</NuxtLink>
+          starts a session already working on it. Leave a box blank to use the built-in prompt for
+          that action. Type a command — <code class="font-mono fs-mono">/hd:review {url}</code> — to
+          run your own instead; it is sent as the session's first message.
+          <code class="font-mono fs-mono">{url}</code>, <code class="font-mono fs-mono">{number}</code>,
+          <code class="font-mono fs-mono">{title}</code>, <code class="font-mono fs-mono">{branch}</code>
+          and <code class="font-mono fs-mono">{base}</code> are filled in from the pull request; a
+          command with none of them has the URL added to the end.
+        </p>
+
+        <div class="space-y-4">
+          <div v-for="action in PULL_ACTIONS" :key="action.key" class="field-group">
+            <label class="field-label">
+              {{ action.label }}
+              <span class="text-meta font-normal"> — when {{ action.verb }}</span>
+            </label>
+            <input
+              v-model="pullActions[action.key]"
+              class="field-input font-mono fs-mono"
+              :placeholder="`Built-in prompt · e.g. ${action.placeholder}`"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              @blur="savePullAction(action.key)"
+              @keydown.enter="savePullAction(action.key)"
+            />
+          </div>
+        </div>
+
+        <p class="fs-sm text-meta">
+          A custom command replaces the built-in prompt entirely, including its instruction not to
+          post anything to GitHub — so a command that posts a review will post it. The session still
+          starts in a fresh worktree with the branch checked out, the same as before.
+        </p>
       </div>
 
       <!-- Spending limits -->

@@ -1,4 +1,9 @@
-import { savePreferences, type NotificationPreferences } from '../utils/preferences'
+import {
+  savePreferences,
+  sanitisePullActions,
+  type NotificationPreferences,
+  type PullActionCommands,
+} from '../utils/preferences'
 
 const KEYS: (keyof NotificationPreferences)[] = ['enabled', 'needsYou', 'failed', 'finished']
 
@@ -12,6 +17,7 @@ export default defineEventHandler(async (event) => {
     pauseOnQuotaWarning?: boolean
     dailyCapUsd?: number
     runCapUsd?: number
+    pullActions?: Partial<PullActionCommands>
   }>(event)
 
   // Only the switches, and only as booleans — nothing else belongs in here.
@@ -23,6 +29,7 @@ export default defineEventHandler(async (event) => {
     pauseOnQuotaWarning?: boolean
     dailyCapUsd?: number
     runCapUsd?: number
+    pullActions?: Partial<PullActionCommands>
   } = {}
   for (const key of KEYS) {
     const value = body?.notifications?.[key]
@@ -46,6 +53,19 @@ export default defineEventHandler(async (event) => {
   // 0 is how this returns to the built-in default, so absent is the only skip.
   if (typeof body?.maxTurns === 'number') patch.maxTurns = body.maxTurns
   if (typeof body?.maxConcurrentRuns === 'number') patch.maxConcurrentRuns = body.maxConcurrentRuns
+
+  // A partial is expected — the settings page sends only the action it changed,
+  // and `savePreferences` merges it over the three it did not. Sanitised here so
+  // only the keys the client actually sent are forwarded, each a trimmed string.
+  if (body?.pullActions && typeof body.pullActions === 'object') {
+    const sent = body.pullActions as Record<string, unknown>
+    const full = sanitisePullActions(sent)
+    const only: Partial<PullActionCommands> = {}
+    for (const key of Object.keys(full) as (keyof PullActionCommands)[]) {
+      if (key in sent) only[key] = full[key]
+    }
+    if (Object.keys(only).length) patch.pullActions = only
+  }
 
   return savePreferences(patch)
 })
