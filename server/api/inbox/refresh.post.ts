@@ -1,5 +1,6 @@
 import {
-  INBOX_DENIED_TOOLS, findInboxSource, inboxStore, parseInboxReply,
+  INBOX_DENIED_TOOLS, buildInboxPrompt, findInboxSource, inboxModel, inboxStore,
+  mergeLearned, parseInboxReply,
   type InboxSourceState,
 } from '../../utils/inbox'
 import { listMcpServers } from '../../utils/mcp'
@@ -70,6 +71,12 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  // What the last run worked out, so this one can skip the discovery that made
+  // the first refresh cost $1.48 rather than cents.
+  const previous = (await inboxStore.read()).sources.find(s => s.source === source.key)
+  const prompt = buildInboxPrompt(source, previous?.learned)
+  const model = inboxModel(previous?.learned)
+
   const startedAt = Date.now()
   let reply = ''
   let costUsd: number | undefined
@@ -85,8 +92,9 @@ export default defineEventHandler(async (event) => {
     // wanders. Twelve is enough for search-then-query and short of an afternoon.
     const { stdout } = await runClaude(
       [
-        '-p', source.prompt,
+        '-p', prompt,
         '--output-format', 'json',
+        ...(model ? ['--model', model] : []),
         '--allowedTools', ...source.tools,
         '--disallowedTools', ...INBOX_DENIED_TOOLS,
         '--max-turns', '12',
@@ -114,6 +122,11 @@ export default defineEventHandler(async (event) => {
     // Only replace the findings when there are new ones to replace them with.
     if (parsed && 'items' in parsed) {
       state.items = parsed.items
+
+      // Guarded rather than assigned: a run that used the note successfully tends
+      // to report that it worked instead of restating it, and storing that would
+      // turn a working cache into a status message.
+      state.learned = mergeLearned(state.learned, parsed.learned)
 
       // A dismissal for something no longer waiting is dead weight, and keeping
       // it would silently hide the item if it came back.
