@@ -26,6 +26,7 @@ export interface FilterableRun {
   needsAttention?: boolean
   deniedTools?: string[]
   refusedHosts?: string[]
+  hiddenAt?: number
 }
 
 export interface RunFilter {
@@ -42,6 +43,17 @@ export interface RunFilter {
    * from yesterday being invisible behind fifty turns of one session.
    */
   exclude?: RunSource[]
+  /**
+   * What to do about rows the reader has taken off the Work list.
+   *
+   * Undefined means show everything, and that default is deliberate rather than
+   * lazy. `listRuns` is also what `failingStreak`, the spend total and the
+   * night-shift figures are read through, and if hiding a row quietly removed it
+   * from those too then tidying a list would be a way to make a broken ritual
+   * look healthy. So only the caller that renders the Work list asks to exclude,
+   * and every other reading of history is untouched by what has been tidied.
+   */
+  hidden?: 'exclude' | 'only'
 }
 
 /** What set this run going, which is the thing people remember about it. */
@@ -78,6 +90,9 @@ function matchesQuery(run: FilterableRun, query: string): boolean {
 }
 
 export function matchesFilter(run: FilterableRun, filter: RunFilter): boolean {
+  if (filter.hidden === 'exclude' && run.hiddenAt) return false
+  if (filter.hidden === 'only' && !run.hiddenAt) return false
+
   const source = sourceOf(run)
   if (filter.source && source !== filter.source) return false
   if (filter.exclude?.includes(source)) return false

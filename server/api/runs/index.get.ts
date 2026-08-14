@@ -19,7 +19,12 @@ export default defineEventHandler(async (event) => {
     .map(name => oneOf(name.trim(), SOURCES))
     .filter((name): name is RunSource => Boolean(name))
 
+  // `?hidden=exclude` for the Work list, `?hidden=only` for looking at what was
+  // tidied away. Absent means everything, which is what every other caller wants.
+  const hidden = oneOf(query.hidden, ['exclude', 'only'] as const)
+
   return listRuns({
+    hidden,
     limit: Number(query.limit) || 50,
     q: typeof query.q === 'string' ? query.q : undefined,
     source: oneOf(query.source, SOURCES),

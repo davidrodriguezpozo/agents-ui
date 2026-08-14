@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { buildWorkList, fromRun, fromSession, statusCounts, type WorkItem } from '~/utils/workList'
+import {
+  buildWorkList, fromRun, fromSession, removableRuns, statusCounts, type WorkItem,
+} from '~/utils/workList'
 import type { Session } from '~/composables/useSessions'
 import type { RunSummary } from '~/composables/useRuns'
 
@@ -204,5 +206,51 @@ describe('statusCounts', () => {
       runs: [run({ status: 'running' })],
     })
     expect(statusCounts(items)).toEqual({ running: 1, 'needs-you': 1, done: 0, failed: 0 })
+  })
+})
+
+describe('addressing a row in order to remove it', () => {
+  it('carries the run id, so removing does not mean taking the key apart', () => {
+    const item = fromRun(run({ id: 'run-abc' }))
+    expect(item.runId).toBe('run-abc')
+    expect(item.key).toBe('run:run-abc')
+  })
+
+  it('carries whether it has already been removed, so it can be put back', () => {
+    expect(fromRun(run({ hiddenAt: 1_700_000_000_000 })).hiddenAt)
+      .toBe(1_700_000_000_000)
+    expect(fromRun(run()).hiddenAt).toBeUndefined()
+  })
+
+  it('gives a session row no run id, because there is no run to remove', () => {
+    // A session's rows are the session; removing one would have to mean deleting
+    // a worktree, which is a different act with a different confirmation.
+    const item = buildWorkList({ sessions: [session()], runs: [] })[0]!
+    expect(item.runId).toBeUndefined()
+  })
+})
+
+describe('what a bulk clear is allowed to take', () => {
+  it('takes finished runs', () => {
+    const items = [fromRun(run({ id: 'a', status: 'completed' })), fromRun(run({ id: 'b', status: 'failed' }))]
+    expect(removableRuns(items).map(i => i.runId)).toEqual(['a', 'b'])
+  })
+
+  it('leaves a run that is still going', () => {
+    // Removing something in flight reads as cancelling it, and it is not: the run
+    // carries on and its result lands where nobody is looking.
+    const items = [fromRun(run({ id: 'a', status: 'running' })), fromRun(run({ id: 'b', status: 'queued' }))]
+    expect(removableRuns(items)).toEqual([])
+  })
+
+  it('never takes a session', () => {
+    // A session is not a run; removing one would mean deleting a worktree.
+    const items = buildWorkList({ sessions: [session()], runs: [] })
+    expect(removableRuns(items)).toEqual([])
+  })
+
+  it('takes only from the list it is given, which is the filtered one', () => {
+    const shown = [fromRun(run({ id: 'shown', status: 'failed' }))]
+    expect(removableRuns(shown).map(i => i.runId)).toEqual(['shown'])
   })
 })

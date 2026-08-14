@@ -114,3 +114,39 @@ describe('leaving sources out', () => {
     expect(matchesFilter(run({ scheduleId: 's', status: 'completed' }), filter)).toBe(false)
   })
 })
+
+describe('rows taken off the Work list', () => {
+  const run = (over: Partial<FilterableRun> = {}): FilterableRun => ({
+    title: 'A run', status: 'failed', kind: 'command', ...over,
+  })
+
+  /**
+   * Hidden rather than deleted, because runs are what `failingStreak`, the spend
+   * total and the night-shift figures are computed from. Deleting a failed ritual
+   * run would reset the streak and make a broken ritual look healthy — the app
+   * would stop warning about the exact thing it exists to warn about.
+   *
+   * Which makes the *default* the load-bearing part: `listRuns` is shared by all
+   * of those readers, so hiding must do nothing unless it is asked for.
+   */
+  it('shows everything when nothing is asked, which every other reader relies on', () => {
+    expect(matchesFilter(run({ hiddenAt: 123 }), {})).toBe(true)
+    expect(matchesFilter(run(), {})).toBe(true)
+  })
+
+  it('leaves hidden rows out only when asked', () => {
+    expect(matchesFilter(run({ hiddenAt: 123 }), { hidden: 'exclude' })).toBe(false)
+    expect(matchesFilter(run(), { hidden: 'exclude' })).toBe(true)
+  })
+
+  it('shows only hidden rows, so there is a way back to them', () => {
+    expect(matchesFilter(run({ hiddenAt: 123 }), { hidden: 'only' })).toBe(true)
+    expect(matchesFilter(run(), { hidden: 'only' })).toBe(false)
+  })
+
+  it('still applies the other filters to a hidden-only view', () => {
+    const hidden = run({ hiddenAt: 123, status: 'completed' })
+    expect(matchesFilter(hidden, { hidden: 'only', outcome: 'failed' })).toBe(false)
+    expect(matchesFilter(hidden, { hidden: 'only', outcome: 'completed' })).toBe(true)
+  })
+})

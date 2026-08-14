@@ -16,6 +16,17 @@ import { STATUS_LOOK, WORK_ORIGIN, type WorkItem } from '~/utils/workList'
  */
 const props = defineProps<{ item: WorkItem }>()
 
+const emit = defineEmits<{ remove: [WorkItem]; restore: [WorkItem] }>()
+
+/**
+ * A finished run can be taken off the list; one still going cannot.
+ *
+ * Hiding something in flight reads as cancelling it and is not — the run would
+ * carry on invisibly and land where nobody is looking. Cancel is the control for
+ * that, and it lives on the run's own page.
+ */
+const removable = computed(() => props.item.status !== 'running')
+
 const look = computed(() => STATUS_LOOK[props.item.status])
 const origin = computed(() => WORK_ORIGIN.find(o => o.value === props.item.origin))
 
@@ -30,7 +41,7 @@ const accent = computed(() => {
 <template>
   <NuxtLink
     :to="item.to"
-    class="block rounded-md p-4 focus-ring hover-card bg-card"
+    class="group block rounded-md p-4 focus-ring hover-card bg-card"
     :style="accent"
   >
     <div class="flex items-start gap-3">
@@ -70,7 +81,35 @@ const accent = computed(() => {
         </div>
       </div>
 
-      <span class="type-mono-meta shrink-0">{{ relativeTime(item.at) }}</span>
+      <div class="flex items-start gap-1.5 shrink-0">
+        <span class="type-mono-meta">{{ relativeTime(item.at) }}</span>
+
+        <!--
+          `.stop.prevent` because the whole card is the link. Without both,
+          removing a row navigates to the thing you just removed.
+
+          Shown on hover rather than always: every row having a visible dismiss
+          turns a list you read into a list you tidy.
+        -->
+        <button
+          v-if="item.hiddenAt"
+          class="type-meta ink-accent hover:underline focus-ring rounded px-1"
+          title="Put this back on the list"
+          @click.stop.prevent="emit('restore', item)"
+        >
+          restore
+        </button>
+        <button
+          v-else-if="removable"
+          class="opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity
+                 focus-ring rounded p-0.5 -m-0.5 ink-3 hover:ink-1"
+          title="Remove from this list. Keeps the record — spend and ritual health still count it."
+          aria-label="Remove from this list"
+          @click.stop.prevent="emit('remove', item)"
+        >
+          <UIcon name="i-lucide-x" class="size-3.5" />
+        </button>
+      </div>
     </div>
 
     <!-- What set it going, which is the run equivalent of a session's branch -->

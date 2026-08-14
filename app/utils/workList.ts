@@ -44,6 +44,13 @@ export interface WorkItem {
   /** Sessions only: work sitting in a workspace, waiting on a decision. */
   changedFiles?: number
   turnCount?: number
+  /**
+   * Runs only: the id to address it by, so removing a row does not mean taking
+   * `key` apart to find the thing it refers to.
+   */
+  runId?: string
+  /** Set when this row has been taken off the list, so it can be put back. */
+  hiddenAt?: number
 }
 
 export const WORK_STATUS: { value: WorkStatus; label: string }[] = [
@@ -123,6 +130,8 @@ export function fromRun(run: RunSummary): WorkItem {
 
   return {
     key: `run:${run.id}`,
+    runId: run.id,
+    hiddenAt: run.hiddenAt,
     // 'session' is filtered out before this is ever called, so the fallback is
     // only here to keep the type honest.
     origin: (run.source === 'session' ? 'agent' : run.source) as WorkOrigin,
@@ -205,4 +214,20 @@ export function statusCounts(items: WorkItem[]): Record<WorkStatus, number> {
   const counts: Record<WorkStatus, number> = { running: 0, 'needs-you': 0, done: 0, failed: 0 }
   for (const item of items) counts[item.status]++
   return counts
+}
+
+/**
+ * The rows a "clear" would take.
+ *
+ * Only runs, and only finished ones. A session is not a run and removing one
+ * would have to mean deleting a worktree, which is a different act with its own
+ * confirmation. A row still running is left alone because removing it reads as
+ * cancelling it, and it is not: the run would carry on invisibly and land where
+ * nobody is looking.
+ *
+ * Given the already-filtered list, so the button can only ever take what is on
+ * screen — a clear whose scope you cannot predict is one nobody presses twice.
+ */
+export function removableRuns(items: WorkItem[]): WorkItem[] {
+  return items.filter(item => item.runId && item.status !== 'running')
 }

@@ -14,10 +14,20 @@ export interface RunQuery {
   outcome?: RunOutcomeFilter
   /** Sources to leave out, so the limit is spent on rows that will be shown. */
   exclude?: RunSource[]
+  /**
+   * Whether to leave out rows taken off the Work list, or show only those.
+   *
+   * Only the Work list asks. Left alone, history reads as it always did — which
+   * matters, because the same log is what ritual health and the spend total are
+   * computed from, and tidying a list must not quietly rewrite either.
+   */
+  hidden?: 'exclude' | 'only'
 }
 
 export interface RunSummary {
   id: string
+  /** Set when the reader took this off the Work list. The run itself is intact. */
+  hiddenAt?: number
   kind: RunKind
   title: string
   invocation?: string
@@ -96,6 +106,7 @@ export function useRuns() {
           source: query.source,
           outcome: query.outcome,
           exclude: query.exclude?.length ? query.exclude.join(',') : undefined,
+          hidden: query.hidden,
         },
       })
     } catch (e) {
@@ -103,6 +114,24 @@ export function useRuns() {
     } finally {
       loading.value = false
     }
+  }
+
+  /**
+   * Take rows off the Work list, or put them back.
+   *
+   * Nothing is deleted: the run stays in the log, so ritual health, the spend
+   * total and the night-shift figures carry on counting it. Returns which ids
+   * actually moved, because a run that started running since the page loaded is
+   * skipped rather than hidden mid-flight.
+   */
+  async function hideRuns(
+    ids: string[],
+    hidden = true,
+  ): Promise<{ changed: string[]; skipped: string[] }> {
+    return await $fetch<{ changed: string[]; skipped: string[] }>('/api/runs/hide', {
+      method: 'POST',
+      body: { ids, hidden },
+    })
   }
 
   /** Start a run and return its id. The run continues regardless of this tab. */
@@ -241,6 +270,7 @@ export function useRuns() {
     startRun,
     attach,
     cancelRun,
+    hideRuns,
     pendingPermissions,
     promptsFor,
     isAnsweringPermission: permissions.isAnswering,

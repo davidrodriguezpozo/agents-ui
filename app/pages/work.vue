@@ -6,7 +6,7 @@ import type { RunQuery } from '~/composables/useRuns'
 import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type { Session } from '~/composables/useSessions'
 import {
-  buildWorkList, statusCounts, WORK_ORIGIN, WORK_STATUS,
+  buildWorkList, removableRuns, statusCounts, WORK_ORIGIN, WORK_STATUS,
   type WorkItem, type WorkOrigin, type WorkStatus,
 } from '~/utils/workList'
 
@@ -15,7 +15,7 @@ const {
   fetchAll, create, createMany, startFrom,
 } = useSessions()
 const { fetchAll: fetchWorktrees } = useWorktrees()
-const { runs, fetchRuns } = useRuns()
+const { runs, fetchRuns, hideRuns } = useRuns()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
 const { projects, nameFor, activate, addProject, ensureLoaded: ensureProjectsLoaded } = useProjects()
@@ -167,7 +167,8 @@ let polling = false
 
 onMounted(async () => {
   await Promise.all([
-    fetchAll(), fetchWorktrees(), fetchTranscripts(), ensureProjectsLoaded(), fetchRuns(RUNS_QUERY),
+    fetchAll(), fetchWorktrees(), fetchTranscripts(), ensureProjectsLoaded(),
+    fetchRuns(runsQuery.value), countRemoved(),
   ])
 
   // Only poll while something could change on its own — but that now includes a
@@ -180,7 +181,7 @@ onMounted(async () => {
 
     polling = true
     try {
-      await Promise.all([fetchAll(), fetchRuns({ ...RUNS_QUERY, q: search.value.trim() })])
+      await Promise.all([fetchAll(), fetchRuns({ ...runsQuery.value, q: search.value.trim() })])
     } finally {
       polling = false
     }
@@ -340,7 +341,20 @@ const elsewhereNeedsYou = computed(() => needsYou(elsewhere.value))
  * that were then discarded — and a ritual run from yesterday was invisible
  * behind fifty turns of one session.
  */
-const RUNS_QUERY: RunQuery = { exclude: ['session'], limit: 50 }
+const RUNS_QUERY: RunQuery = { exclude: ['session'], limit: 50, hidden: 'exclude' }
+
+/**
+ * Looking at what has been taken off the list, rather than at the list.
+ *
+ * A removal that cannot be seen or undone is a deletion wearing a softer word,
+ * and this one genuinely is not: the run is still in the log and still counted by
+ * ritual health and the spend total. So there has to be somewhere the tidied rows
+ * are, and a way back from it.
+ */
+const REMOVED_QUERY: RunQuery = { exclude: ['session'], limit: 50, hidden: 'only' }
+
+const viewingRemoved = ref(false)
+const runsQuery = computed(() => (viewingRemoved.value ? REMOVED_QUERY : RUNS_QUERY))
 
 const status = ref<WorkStatus | null>(null)
 const origin = ref<WorkOrigin | null>(null)
@@ -376,6 +390,100 @@ const statusChips = computed(() => {
     .filter(s => s.count > 0 || status.value === s.value)
 })
 
+/**
+ * Taking rows off the list.
+ *
+ * "Remove" and not "delete", and the difference is the whole design. Runs are
+ * what `failingStreak`, the spend total and the night-shift figures are computed
+ * from — so deleting a failed ritual run would reset the streak and make a broken
+ * ritual look healthy. Clearing a cluttered list must never be a way to silence
+ * the warning this app exists to give, so nothing is deleted: the row leaves the
+ * list and every other reading of history is untouched.
+ *
+ * Which is why undo is offered rather than a confirmation. A reversible action
+ * asking "are you sure?" spends the reader's attention on a decision that costs
+ * nothing to get wrong.
+ */
+async function removeRuns(items: WorkItem[], label: string) {
+  const ids = items.map(item => item.runId).filter((id): id is string => Boolean(id))
+  if (!ids.length) return
+
+  try {
+    const { changed, skipped } = await hideRuns(ids, true)
+    await Promise.all([
+      fetchRuns({ ...runsQuery.value, q: search.value.trim() }),
+      // Without this the "N removed" way back stays at whatever it was on load,
+      // and the only route to an undo is a toast that expires.
+      countRemoved(),
+    ])
+
+    toast.add({
+      title: changed.length === 1 ? `Removed ${label}` : `Removed ${changed.length} rows`,
+      description: skipped.length
+        ? `${skipped.length} still running, so ${skipped.length === 1 ? 'it was' : 'they were'} left alone. `
+          + 'Nothing was deleted — spend and ritual health still count all of it.'
+        : 'Nothing was deleted. Spend and ritual health still count it.',
+      color: 'success',
+      actions: [{
+        label: 'Undo',
+        onClick: () => void restoreRuns(changed),
+      }],
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not remove that', description: errorMessage(e), color: 'error' })
+  }
+}
+
+async function restoreRuns(ids: string[]) {
+  if (!ids.length) return
+  try {
+    await hideRuns(ids, false)
+    await Promise.all([
+      fetchRuns({ ...runsQuery.value, q: search.value.trim() }),
+      countRemoved(),
+    ])
+  } catch (e) {
+    toast.add({ title: 'Could not put that back', description: errorMessage(e), color: 'error' })
+  }
+}
+
+/**
+ * The rows a "clear" would take, which is only ever what you can currently see.
+ *
+ * Scoped to the filtered list on purpose: a button that clears more than is on
+ * screen is one nobody can predict the effect of. Running rows are never in it —
+ * they are not finished, and removing one reads as cancelling it.
+ */
+const clearable = computed(() => (viewingRemoved.value ? [] : removableRuns(work.value)))
+
+async function clearVisible() {
+  await removeRuns(clearable.value, 'it')
+  confirmingClear.value = false
+}
+
+const confirmingClear = ref(false)
+
+/** How many rows are sitting in the removed view, so there is a way back to them. */
+const removedCount = ref(0)
+
+async function countRemoved() {
+  try {
+    const rows = await $fetch<{ id: string }[]>('/api/runs', {
+      query: { hidden: 'only', exclude: 'session', limit: 100 },
+    })
+    removedCount.value = rows.length
+  } catch {
+    // A count that cannot be read is not worth breaking the page over.
+  }
+}
+
+async function toggleRemovedView() {
+  viewingRemoved.value = !viewingRemoved.value
+  confirmingClear.value = false
+  await fetchRuns({ ...runsQuery.value, q: search.value.trim() })
+  if (!viewingRemoved.value) await countRemoved()
+}
+
 /** The session behind a row, when the row is one. `null` means it is a run. */
 function sessionFor(item: WorkItem): Session | null {
   if (item.origin !== 'session') return null
@@ -398,7 +506,7 @@ const emptySessionIds = computed(() =>
 let searchDebounce: ReturnType<typeof setTimeout> | null = null
 watch(search, () => {
   if (searchDebounce) clearTimeout(searchDebounce)
-  searchDebounce = setTimeout(() => { void fetchRuns({ ...RUNS_QUERY, q: search.value.trim() }) }, 200)
+  searchDebounce = setTimeout(() => { void fetchRuns({ ...runsQuery.value, q: search.value.trim() }) }, 200)
 })
 onUnmounted(() => { if (searchDebounce) clearTimeout(searchDebounce) })
 
@@ -990,6 +1098,66 @@ async function switchTo(path: string) {
           />
         </div>
 
+        <!--
+          Clearing the list, and the way back from it.
+
+          Says what it will take and how many, because a clear whose scope you
+          cannot predict is one nobody presses twice. Scoped to what is on screen:
+          the filters decide it, so narrowing them narrows this.
+        -->
+        <div
+          v-if="clearable.length || removedCount || viewingRemoved"
+          class="flex items-center justify-between gap-3 flex-wrap"
+        >
+          <p v-if="viewingRemoved" class="type-detail ink-2">
+            Rows you removed. They are still counted by spend and ritual health —
+            removing only takes them off the list.
+          </p>
+          <button
+            v-else-if="removedCount"
+            class="type-meta ink-3 hover:ink-1 hover:underline focus-ring rounded"
+            @click="toggleRemovedView"
+          >
+            {{ removedCount }} removed
+          </button>
+          <span v-else />
+
+          <div class="flex items-center gap-2">
+            <UButton
+              v-if="viewingRemoved"
+              label="Back to the list"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              @click="toggleRemovedView"
+            />
+            <template v-else-if="clearable.length">
+              <template v-if="confirmingClear">
+                <span class="type-meta ink-2">
+                  Remove {{ clearable.length }} finished {{ clearable.length === 1 ? 'row' : 'rows' }}?
+                </span>
+                <UButton label="Remove" size="xs" variant="soft" @click="clearVisible" />
+                <UButton
+                  label="Cancel"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  @click="() => { confirmingClear = false }"
+                />
+              </template>
+              <UButton
+                v-else
+                :label="`Clear ${clearable.length} finished`"
+                size="xs"
+                variant="ghost"
+                color="neutral"
+                icon="i-lucide-x"
+                @click="() => { confirmingClear = true }"
+              />
+            </template>
+          </div>
+        </div>
+
         <div v-if="work.length" class="space-y-2">
           <template v-for="item in work" :key="item.key">
             <SessionCard
@@ -997,7 +1165,12 @@ async function switchTo(path: string) {
               :session="sessionFor(item)!"
               :repo-name="scope === 'here' ? null : nameFor(sessionFor(item)!.repoDir)"
             />
-            <RunCard v-else :item="item" />
+            <RunCard
+              v-else
+              :item="item"
+              @remove="removeRuns([item], item.title)"
+              @restore="restoreRuns([item.runId!])"
+            />
           </template>
         </div>
 

@@ -35,6 +35,20 @@ export interface Run {
   error?: string
   stats?: RunStats
   sdkSessionId?: string
+  /**
+   * When the reader took this off the Work list, if they did.
+   *
+   * Hidden rather than deleted, and the distinction is load-bearing. Runs are
+   * what `failingStreak`, the spend total and the night-shift figures are
+   * computed from, so deleting a failed ritual run would reset the streak and
+   * make a broken ritual look healthy — the app would stop warning about the
+   * exact thing it exists to warn about. Clearing a cluttered list must not be a
+   * way to silence that.
+   *
+   * So this only removes the row from Work. Every other reading of history is
+   * unchanged, and the run can be put back.
+   */
+  hiddenAt?: number
   /** A scheduled run hit a permission prompt with nobody there to answer it. */
   needsAttention?: boolean
   /** Tools refused because the run was unattended — the result is incomplete. */
@@ -220,6 +234,79 @@ export async function readRun(id: string): Promise<Run | null> {
   }
 }
 
+/**
+ * Take rows off the Work list, or put them back.
+ *
+ * Returns what it did rather than throwing, because a bulk clear over a list the
+ * page was holding will always contain a few ids that have moved on — one run
+ * finished and was pruned, another started running since the page loaded — and
+ * failing the whole call over those would make the button unreliable at exactly
+ * the moment it is most useful.
+ *
+ * A run still going is left alone. Hiding something in flight reads as cancelling
+ * it, and it is not: the run would carry on, invisibly, and its result would
+ * arrive somewhere nobody is looking.
+ */
+export async function setRunsHidden(
+  ids: string[],
+  hidden: boolean,
+): Promise<{ changed: string[]; skipped: string[] }> {
+  const changed: string[] = []
+  const skipped: string[] = []
+
+  for (const id of ids) {
+    const entry = active.get(id)
+
+    if (entry) {
+      if (entry.run.status === 'running' || entry.run.status === 'queued') {
+        skipped.push(id)
+        continue
+      }
+      entry.run.hiddenAt = hidden ? Date.now() : undefined
+      await persist(id)
+      changed.push(id)
+      continue
+    }
+
+    const run = await readRun(id)
+    if (!run) {
+      skipped.push(id)
+      continue
+    }
+    if (run.status === 'running' || run.status === 'queued') {
+      skipped.push(id)
+      continue
+    }
+
+    run.hiddenAt = hidden ? Date.now() : undefined
+    if (await writeRun(run)) changed.push(id)
+    else skipped.push(id)
+  }
+
+  return { changed, skipped }
+}
+
+/**
+ * Write a run that is no longer in memory.
+ *
+ * Same write-then-rename as `persist`, for the same reason: a half-written file
+ * is one `readRun` rejects, and losing a run's history to a tidy-up would be a
+ * poor trade for a shorter list.
+ */
+async function writeRun(run: Run): Promise<boolean> {
+  try {
+    await mkdir(runsDir(), { recursive: true })
+    const path = runPath(run.id)
+    const tmp = `${path}.${process.pid}.${tmpCounter++}.tmp`
+    await writeFile(tmp, JSON.stringify(run, null, 2), 'utf-8')
+    await rename(tmp, path)
+    return true
+  } catch (e) {
+    console.error('[runStore] failed to write run', run.id, e)
+    return false
+  }
+}
+
 export interface RunSummary {
   id: string
   kind: RunKind
@@ -242,6 +329,7 @@ export interface RunSummary {
   /** First line or so of the output, for a list view. */
   preview: string
   error?: string
+  hiddenAt?: number
   needsAttention?: boolean
   deniedTools?: string[]
   refusedHosts?: string[]
@@ -282,6 +370,7 @@ function summarize(run: Run): RunSummary {
     chainId: run.chainId,
     stepIndex: run.stepIndex,
     sessionId: run.sessionId,
+    hiddenAt: run.hiddenAt,
     source: sourceOf(run),
   }
 }
