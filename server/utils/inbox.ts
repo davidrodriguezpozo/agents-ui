@@ -133,7 +133,11 @@ export const INBOX_DENIED_TOOLS = [
  */
 const SHAPE = 'Reply with ONLY a JSON object and nothing else — no prose, no code fence. '
   + 'Shape: {"items":[{"title":string,"url":string,"why":string}],"learned":string}. '
-  + '`why` is one sentence saying why it is waiting on this person. `items` is [] if nothing '
+  + '`why` is one sentence saying why it is waiting on this person. '
+  + '`url` must be the canonical URL the tool itself returns for that page — never one '
+  + 'you assemble, and never a `collection://` reference, which names a data source rather '
+  + 'than a page and 404s in a browser. '
+  + '`items` is [] if nothing '
   + 'is waiting, or if you cannot tell who this person is — never guess. '
   + '`learned` is a note to your future self: the exact ids, collection URLs and query '
   + 'strings you had to work out, written so the next run can skip straight to querying. '
@@ -158,7 +162,11 @@ const SHAPE = 'Reply with ONLY a JSON object and nothing else — no prose, no c
  */
 const SHAPE_CACHED = 'Reply with ONLY a JSON object and nothing else — no prose, no code fence. '
   + 'Shape: {"items":[{"title":string,"url":string,"why":string}],"stale":boolean}. '
-  + '`why` is one sentence saying why it is waiting on this person. `items` is [] if nothing '
+  + '`why` is one sentence saying why it is waiting on this person. '
+  + '`url` must be the canonical URL the tool itself returns for that page — never one '
+  + 'you assemble, and never a `collection://` reference, which names a data source rather '
+  + 'than a page and 404s in a browser. '
+  + '`items` is [] if nothing '
   + 'is waiting — never guess. Do not re-verify or re-derive the reference data you were '
   + 'given and do not search for it again: run the queries as supplied and report what they '
   + 'return. Set `stale` to true only if a query actually errors or an id no longer resolves, '
@@ -456,6 +464,115 @@ export function inboxItemId(url: string): string {
   return url.trim().replace(/[?#].*$/, '').toLowerCase()
 }
 
+/** 32 hex characters, which is how Notion writes a page id inside a URL. */
+const BARE_ID = /^[0-9a-f]{32}$/i
+const DASHED_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * A link that will actually open, or nothing.
+ *
+ * Every row in the queue is a link, and the whole promise of the row is that
+ * clicking it takes you to the thing. Rows were arriving whose links 404ed, and
+ * a row that goes nowhere is worse than an absent row: you go and look, twice,
+ * before concluding the app is lying to you.
+ *
+ * The reply is prose-adjacent JSON written by a model, so the URL field arrives
+ * in whatever shape the sentence around it had. What is handled here is only what
+ * a URL can arrive *as*:
+ *
+ *   - a markdown link, because a model asked for a URL writes `[Title](url)`
+ *     more readily than it writes a bare one;
+ *   - wrapped in angle brackets, which is the other way prose carries a link;
+ *   - trailed by the punctuation that ended the sentence it was quoted in;
+ *   - a bare page id, which is what you get when the reply is built from query
+ *     results rather than from a page's own `url` property. Notion writes ids in
+ *     URLs as 32 hex characters with no dashes, so a dashed one is undashed here
+ *     rather than passed through;
+ *   - a `collection://` or `notion://` reference. These are real identifiers
+ *     inside the MCP tools and meaningless to a browser, and one reaching the UI
+ *     is exactly a row that 404s. `collection://` has no page to point at, so it
+ *     is refused rather than guessed at.
+ *
+ * Anything already `http(s)` keeps its path untouched. Rewriting a working link
+ * to a prettier one is how you break the ones that were fine.
+ */
+/**
+ * A Notion page URL reduced to the part that is certainly true.
+ *
+ * A Notion page URL is `notion.so/<workspace>/<Title-slug>-<32 hex id>`, and only
+ * the id identifies anything: the workspace segment and the slug are decoration
+ * that Notion regenerates from the title. `notion.so/<id>` on its own resolves
+ * and redirects to the current slug.
+ *
+ * Which matters because a model assembling a URL gets the id right and the
+ * decoration wrong — it does not know the workspace segment and will happily
+ * build a slug out of the title it just read. That produces a URL which looks
+ * completely valid and 404s, and it is the shape a reader would report as "the
+ * links are all broken". Dropping the decoration cannot break a working link and
+ * repairs an invented one.
+ *
+ * Deliberately scoped to Notion hosts. Slack permalinks carry meaning in every
+ * segment and are passed through untouched — as is anything whose last path
+ * segment does not end in an id, because then there is nothing to be sure about.
+ */
+function canonicalNotionUrl(url: string): string {
+  let parsed: URL
+  try {
+    parsed = new URL(url)
+  } catch {
+    return url
+  }
+
+  if (!/(^|\.)notion\.so$/i.test(parsed.hostname)) return url
+
+  const last = parsed.pathname.split('/').filter(Boolean).pop()
+  if (!last) return url
+
+  // Either a bare id, or a slug ending in one.
+  const id = /^([0-9a-f]{32})$/i.exec(last)?.[1] ?? /-([0-9a-f]{32})$/i.exec(last)?.[1]
+  if (!id) return url
+
+  return `https://www.notion.so/${id.toLowerCase()}`
+}
+
+export function inboxItemUrl(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined
+
+  let url = raw.trim()
+  if (!url) return undefined
+
+  // `[Ticket title](https://…)` — take the target, not the label.
+  const markdown = /\[[^\]]*\]\(([^)\s]+)\)/.exec(url)
+  if (markdown) url = markdown[1]!
+
+  // Both ends: a link quoted inside brackets keeps the opening one as well as
+  // the closing one, and stripping only the tail leaves `(https://…` — which is
+  // not a URL and was silently dropping the row.
+  //
+  // No URL begins with any of these, so removing them cannot damage a good one.
+  // `/` is deliberately absent from the trailing set: it is part of the path.
+  url = url.replace(/^[<([{'"`]+/, '').replace(/[.,;:!?>)\]}'"`]+$/, '').trim()
+  if (!url) return undefined
+
+  if (BARE_ID.test(url)) return `https://www.notion.so/${url.toLowerCase()}`
+  if (DASHED_ID.test(url)) return `https://www.notion.so/${url.replace(/-/g, '').toLowerCase()}`
+
+  // A page id wearing a scheme the browser cannot open.
+  const notionScheme = /^notion:\/\/(?:www\.notion\.so\/)?(.+)$/i.exec(url)
+  if (notionScheme) return `https://www.notion.so/${notionScheme[1]!.replace(/^\/+/, '')}`
+
+  // A data source, not a page. There is nothing to open and nothing to guess.
+  if (/^collection:\/\//i.test(url)) return undefined
+
+  if (/^https?:\/\/\S+$/i.test(url)) return canonicalNotionUrl(url)
+
+  // Scheme-less but plausibly a host — `www.notion.so/…`, `notion.so/…`.
+  if (/^[\w-]+(\.[\w-]+)+\/\S*$/.test(url)) return `https://${url}`
+
+  // Anything else is not a link, and a row with nowhere to go is a dead end.
+  return undefined
+}
+
 /**
  * What a model replied, as items — or an explanation of why it was not usable.
  *
@@ -515,7 +632,7 @@ export function parseInboxReply(
   for (const raw of raws) {
     if (!raw || typeof raw !== 'object') continue
     const entry = raw as Record<string, unknown>
-    const url = typeof entry.url === 'string' ? entry.url.trim() : ''
+    const url = inboxItemUrl(entry.url) ?? ''
     const title = typeof entry.title === 'string' ? entry.title.trim() : ''
     // No URL means there is nowhere for the row to go, which makes it a claim
     // rather than a task. Dropped rather than shown as a dead end.

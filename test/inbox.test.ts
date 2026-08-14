@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  INBOX_DENIED_TOOLS, INBOX_SOURCES, findInboxSource, inboxItemId,
+  INBOX_DENIED_TOOLS, INBOX_SOURCES, findInboxSource, inboxItemId, inboxItemUrl,
   buildInboxPrompt, describeRunFailure, dueForRefresh, inboxModel, mergeLearned,
   parseInboxReply, parseTimeOfDay, salvageEnvelope,
   visibleItems,
@@ -644,5 +644,110 @@ describe('the reason beats the fact that there was one', () => {
   it('names an unfamiliar subtype rather than swallowing it', () => {
     expect(describeRunFailure({ is_error: true, subtype: 'error_during_execution' }, needed))
       .toContain('error_during_execution')
+  })
+})
+
+describe('a row that goes nowhere is worse than no row', () => {
+  /**
+   * Reported from use: the Notion links 404. Every row in the queue is a link and
+   * the whole promise of the row is that clicking it takes you to the thing, so a
+   * dead link costs the reader two trips before they conclude the app is lying.
+   *
+   * The reply is prose-adjacent JSON written by a model, so `url` arrives in
+   * whatever shape the sentence around it had.
+   */
+  it('reduces a Notion page URL to the id, which is the only part that is true', () => {
+    // The workspace segment and the slug are decoration Notion regenerates from
+    // the title, and they are exactly what a model assembling a URL gets wrong:
+    // it knows the id and invents the rest, producing a link that looks valid and
+    // 404s. `notion.so/<id>` resolves and redirects to the current slug.
+    expect(inboxItemUrl('https://www.notion.so/haddock/Fix-the-thing-1a2b3c4d5e6f78901234567890abcdef'))
+      .toBe('https://www.notion.so/1a2b3c4d5e6f78901234567890abcdef')
+    expect(inboxItemUrl('https://notion.so/1a2b3c4d5e6f78901234567890abcdef'))
+      .toBe('https://www.notion.so/1a2b3c4d5e6f78901234567890abcdef')
+  })
+
+  it('leaves a Notion URL alone when there is no id to be sure about', () => {
+    expect(inboxItemUrl('https://notion.so/x?v=1#block')).toBe('https://notion.so/x?v=1#block')
+  })
+
+  it('does not touch a URL from anywhere else', () => {
+    // A Slack permalink carries meaning in every segment.
+    const slack = 'https://haddock.slack.com/archives/C012AB3CD/p1234567890123456'
+    expect(inboxItemUrl(slack)).toBe(slack)
+    expect(inboxItemUrl('https://github.com/o/r/pull/12')).toBe('https://github.com/o/r/pull/12')
+  })
+
+  it('takes the target out of a markdown link', () => {
+    expect(inboxItemUrl('[Ticket title](https://notion.so/abc)')).toBe('https://notion.so/abc')
+  })
+
+  it('unwraps angle brackets', () => {
+    expect(inboxItemUrl('<https://notion.so/abc>')).toBe('https://notion.so/abc')
+  })
+
+  it('drops the punctuation that ended the sentence it was quoted in', () => {
+    expect(inboxItemUrl('https://notion.so/abc.')).toBe('https://notion.so/abc')
+    expect(inboxItemUrl('(https://notion.so/abc)')).toBe('https://notion.so/abc')
+    expect(inboxItemUrl('https://notion.so/abc,')).toBe('https://notion.so/abc')
+  })
+
+  it('keeps a trailing slash, which is part of the path', () => {
+    expect(inboxItemUrl('https://notion.so/abc/')).toBe('https://notion.so/abc/')
+  })
+
+  it('turns a bare page id into a URL, the way Notion writes one', () => {
+    // 32 hex, no dashes, which is what appears in a real Notion URL.
+    expect(inboxItemUrl('1a2b3c4d5e6f78901234567890abcdef'))
+      .toBe('https://www.notion.so/1a2b3c4d5e6f78901234567890abcdef')
+    expect(inboxItemUrl('1A2B3C4D5E6F78901234567890ABCDEF'))
+      .toBe('https://www.notion.so/1a2b3c4d5e6f78901234567890abcdef')
+  })
+
+  it('undashes a uuid rather than passing it through', () => {
+    expect(inboxItemUrl('99236f40-a22b-42d8-a1b3-01e899854581'))
+      .toBe('https://www.notion.so/99236f40a22b42d8a1b301e899854581')
+  })
+
+  it('refuses a collection reference, which has no page to open', () => {
+    // Real, and straight out of the note a run wrote for itself. It identifies a
+    // data source inside the MCP tools and means nothing to a browser.
+    expect(inboxItemUrl('collection://99236f40-a22b-42d8-a1b3-01e899854581')).toBeUndefined()
+  })
+
+  it('rewrites a notion:// link into one a browser can open', () => {
+    expect(inboxItemUrl('notion://www.notion.so/abc')).toBe('https://www.notion.so/abc')
+    expect(inboxItemUrl('notion://abc')).toBe('https://www.notion.so/abc')
+  })
+
+  it('adds the scheme to something that is plainly a host and path', () => {
+    expect(inboxItemUrl('www.notion.so/abc')).toBe('https://www.notion.so/abc')
+  })
+
+  it('refuses anything that is not a link at all', () => {
+    for (const bad of ['', '   ', 'see the ticket', 'TBD', 42, null, undefined, {}]) {
+      expect(inboxItemUrl(bad), JSON.stringify(bad)).toBeUndefined()
+    }
+  })
+
+  it('drops the item when its link cannot be salvaged', () => {
+    const items = ok(`[
+      {"title":"Dead","url":"collection://abc","why":"w"},
+      {"title":"Live","url":"https://notion.so/1","why":"w"}
+    ]`)
+    expect(items.map(i => i.title)).toEqual(['Live'])
+  })
+
+  it('normalises before deriving the id, so a dismissal still sticks', () => {
+    const dashed = ok('[{"title":"T","url":"99236f40-a22b-42d8-a1b3-01e899854581","why":"w"}]')[0]!
+    const bare = ok('[{"title":"T","url":"99236f40a22b42d8a1b301e899854581","why":"w"}]')[0]!
+    expect(dashed.id).toBe(bare.id)
+  })
+
+  it('tells both contracts where the URL has to come from', () => {
+    for (const source of INBOX_SOURCES) {
+      expect(source.prompt).toContain('never one you assemble')
+      expect(buildInboxPrompt(source, 'collection://abc')).toContain('never one you assemble')
+    }
   })
 })
