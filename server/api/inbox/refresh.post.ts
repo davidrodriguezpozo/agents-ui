@@ -12,7 +12,6 @@ const STATUS: Record<string, number> = {
   unknown_source: 400,
   no_project: 400,
   source_unavailable: 409,
-  not_headless_capable: 409,
 }
 
 export default defineEventHandler(async (event) => {

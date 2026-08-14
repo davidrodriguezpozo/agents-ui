@@ -23,7 +23,6 @@ export type RefreshRefusal =
   | { error: 'unknown_source'; message: string }
   | { error: 'no_project'; message: string }
   | { error: 'source_unavailable'; message: string }
-  | { error: 'not_headless_capable'; message: string }
 
 export type RefreshResult =
   | { ok: true; state: InboxSourceState }
@@ -89,39 +88,20 @@ export async function refreshInboxSource(
   }
 
   const servers = await listMcpServers(projectDir).catch(() => [])
-  const server = servers.find(s => s.name === source.requires)
-
-  /*
-   * "Connected" turns out to be the third of three different things, and this is
-   * the one that cost the most to learn.
-   *
-   * `claude.ai Slack` reports ✔ Connected and its scope is `claude.ai config`: it
-   * is a connector configured on claude.ai, not a server on this machine. Its
-   * tools arrive through a claude.ai session, so a `claude -p` run started by this
-   * app gets **none of them** — asked to list its own tools from that project, a
-   * run reported 28 from `notion` and zero from Slack.
-   *
-   * Which produced the worst possible failure: a source that looked healthy, took
-   * ninety seconds, spent real tokens, and reported `error_max_turns` — a run
-   * looking for tools it never had. Refused here instead, before anything is
-   * spent, and said in terms that name what would fix it.
-   */
-  if (server?.origin === 'claude.ai') {
-    const message = `${source.requires} is a claude.ai connector, so its tools only exist inside `
-      + 'a claude.ai session — the background runs this app makes cannot see them. '
-      + 'Nothing was spent. It would need the same service added as a local MCP server '
-      + `in this project (\`claude mcp add\`) before ${source.label} could be checked here.`
-
-    await recordRefusal(source.key, message)
-    return { ok: false, refusal: { error: 'not_headless_capable', message } }
-  }
+  // Any of the names is enough — see `InboxSource.requires` for why there is more
+  // than one. Prefer a connected match over a listed-but-broken one.
+  const candidates = source.requires
+    .map(name => servers.find(s => s.name === name))
+    .filter((s): s is NonNullable<typeof s> => Boolean(s))
+  const server = candidates.find(s => s.status === 'connected') ?? candidates[0]
 
   if (!server || server.status !== 'connected') {
+    const wanted = source.requires.join(' or ')
     const reason = !server
-      ? `${source.requires} is not configured in this project.`
+      ? `${wanted} is not configured in this project.`
       : server.status === 'needs-auth'
-        ? `${source.requires} needs signing in to before it will answer.`
-        : `${source.requires} is not answering (${server.status}).`
+        ? `${server.name} needs signing in to before it will answer.`
+        : `${server.name} is not answering (${server.status}).`
 
     const message = `${reason} Nothing was spent. Check it on the MCP page.`
     await recordRefusal(source.key, message)
@@ -132,7 +112,7 @@ export async function refreshInboxSource(
   // the first refresh cost $1.39 rather than cents.
   const previous = (await inboxStore.read()).sources.find(s => s.source === source.key)
   const prompt = buildInboxPrompt(source, previous?.learned)
-  const model = inboxModel(previous?.learned)
+  const model = inboxModel(source, previous?.learned)
 
   const startedAt = Date.now()
   let reply = ''
@@ -154,10 +134,10 @@ export async function refreshInboxSource(
         '--output-format', 'json',
         ...(model ? ['--model', model] : []),
         '--allowedTools', ...source.tools,
-        '--disallowedTools', ...INBOX_DENIED_TOOLS,
-        '--max-turns', String(inboxTurns(previous?.learned)),
+        '--disallowedTools', ...INBOX_DENIED_TOOLS, ...(source.deny ?? []),
+        '--max-turns', String(inboxTurns(source, previous?.learned)),
       ],
-      { cwd: projectDir, timeout: inboxTimeoutMs(previous?.learned) },
+      { cwd: projectDir, timeout: inboxTimeoutMs(source, previous?.learned) },
     )
 
     const envelope = JSON.parse(stdout) as RunEnvelope

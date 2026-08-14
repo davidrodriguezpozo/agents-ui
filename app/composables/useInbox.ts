@@ -10,8 +10,8 @@ export interface InboxItem {
 export interface InboxSourceReading {
   key: string
   label: string
-  /** The MCP server it needs, for explaining why it cannot run. */
-  requires: string
+  /** Server names any one of which would do, for explaining why it cannot run. */
+  requires: string[]
   icon: string
   items: InboxItem[]
   checkedAt?: number

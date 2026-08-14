@@ -288,7 +288,7 @@ describe('buildNowQueue items', () => {
 
 describe('work waiting elsewhere', () => {
   const source = (over = {}) => ({
-    key: 'notion', label: 'Notion', requires: 'notion', icon: 'i-lucide-file-text',
+    key: 'notion', label: 'Notion', requires: ['notion'], icon: 'i-lucide-file-text',
     items: [{ id: 'https://n/1', title: 'Bank reconciliation', url: 'https://n/1', why: 'Assigned to you, still open.' }],
     ...over,
   })

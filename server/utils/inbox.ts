@@ -91,10 +91,52 @@ export interface Inbox {
 export interface InboxSource {
   key: string
   label: string
-  /** The MCP server this needs, as `claude mcp list` names it. */
-  requires: string
+  /**
+   * Server names that indicate this service is set up, as `claude mcp list` writes
+   * them. Any one of them being connected is enough.
+   *
+   * A list rather than a name because the same service can be present twice under
+   * different names, and which one actually answers a headless run is not knowable
+   * from out here. Slack is on this machine as both a claude.ai connector and a
+   * plugin server; the connector's tools answer `claude -p` and the plugin's do
+   * not, while `claude mcp list` shows only the plugin. Neither the list nor the
+   * tool names predicted that, and two wrong conclusions were drawn before a run
+   * was made to *call* one tool at a time and report which worked.
+   */
+  requires: string[]
   /** Pre-approved so an unattended refresh is not waiting on a prompt. */
   tools: string[]
+  /**
+   * Same capability, wrong server — denied so the run cannot reach for it.
+   *
+   * A machine can have two servers offering the same service: this one has Slack
+   * as both a plugin server and a claude.ai connector, and the run reached for the
+   * connector's `slack_search_public_and_private` rather than the plugin's. That
+   * one is not allow-listed, so it hit a permission prompt nobody could answer,
+   * and the refresh failed while holding a perfectly good allow-listed alternative.
+   *
+   * Allow-listing does not settle this on its own — measured, back when the
+   * deny-list was written: a run offered only MCP tools still went off and grepped
+   * `~/.claude/plugins`. Naming what it may not use is the part that binds.
+   */
+  deny?: string[]
+  /**
+   * How much room a run holding a note needs, and whether a cheaper model can do it.
+   *
+   * These were global and should never have been: they encode how mechanical the
+   * cached job is, which differs entirely by source. Notion's is three known SQL
+   * queries against stable ids — eight turns, and a cheap model is plenty. Slack's
+   * cached job is still a fresh search across channels and DMs, because the messages
+   * are the answer and they change; given eight turns it either ran out or, on the
+   * cheaper model, quietly gave up inside the budget and reported an empty inbox
+   * where discovery had found four threads waiting.
+   *
+   * A budget that silently produces "nothing is waiting on you" is the most
+   * expensive kind of wrong, so it is stated per source rather than guessed.
+   */
+  cachedTurns: number
+  /** Whether the cached job is mechanical enough for the cheaper model. */
+  cheapWhenCached: boolean
   prompt: string
   icon: string
 }
@@ -159,6 +201,13 @@ const SHAPE = 'Reply with ONLY a JSON object and nothing else — no prose, no c
  * live up to and re-verified everything before writing a longer one. A cache
  * rewritten on every read is not a cache; it is homework that grows.
  *
+ * What the note caches is *where to look*, never what was found. Those got
+ * conflated and it broke Slack outright: told not to "search again", a cached run
+ * dutifully re-ran nothing and reported an empty inbox, where discovery had found
+ * four threads waiting. Notion's answer hides behind stable database ids and Slack's
+ * behind a search over recent time, so a contract that bans searching fits one and
+ * silently empties the other.
+ *
  * So the note is written once, on discovery, and left alone. The escape hatch is
  * `stale`: a run whose queries error or whose ids no longer resolve says so, and
  * that clears the note for the next run to discover afresh. Without it, a moved
@@ -175,9 +224,11 @@ const SHAPE_CACHED = 'Reply with ONLY a JSON object and nothing else — no pros
   + 'its error verbatim in `blocked` and return items: []. An empty list must only ever '
   + 'mean you looked and nothing was waiting. '
   + '`items` is [] if nothing '
-  + 'is waiting — never guess. Do not re-verify or re-derive the reference data you were '
-  + 'given and do not search for it again: run the queries as supplied and report what they '
-  + 'return. Set `stale` to true ONLY if the reference data itself is wrong — an id that no '
+  + 'is waiting — never guess. Do not re-derive the reference data you were given: do not '
+  + 'search for the ids, the person or the channels again, and do not verify them. Do use '
+  + 'that data to look for the current answer — the messages and rows themselves change '
+  + 'between runs and must be fetched fresh every time. The note tells you where to look, '
+  + 'not what you will find. Set `stale` to true ONLY if the reference data itself is wrong — an id that no '
   + 'longer resolves, a query whose columns have changed — in which case return items: [] '
   + 'and stop, and a later run will rediscover. A tool that refused, errored or hit a '
   + 'rate or usage limit is NOT stale: the ids are fine and the tool is simply '
@@ -188,7 +239,7 @@ export const INBOX_SOURCES: InboxSource[] = [
   {
     key: 'notion',
     label: 'Notion',
-    requires: 'notion',
+    requires: ['notion'],
     /**
      * Checked against the tool names the CLI actually reports, not guessed.
      *
@@ -211,6 +262,10 @@ export const INBOX_SOURCES: InboxSource[] = [
       'mcp__notion__notion-list-recent-pages',
     ],
     icon: 'i-lucide-file-text',
+    // Three known SQL queries against stable ids. Measured: the cheaper model did
+    // it in 29s where the default took 56, returning the same eight items.
+    cachedTurns: 8,
+    cheapWhenCached: true,
     prompt: 'Find up to 8 Notion pages, tickets or tasks that are assigned to me, '
       + 'or where a next step is explicitly waiting on me. Ignore anything already done, '
       + `closed or assigned to somebody else. ${SHAPE}`,
@@ -218,14 +273,49 @@ export const INBOX_SOURCES: InboxSource[] = [
   {
     key: 'slack',
     label: 'Slack',
-    requires: 'claude.ai Slack',
+    /**
+     * The plugin server, not the claude.ai connector.
+     *
+     * Verified by making a headless run *call* a tool rather than by asking it
+     * what tools it has: `slack_search_users` returned the right person from a
+     * plain `claude -p`. That distinction matters more than it sounds — asked to
+     * enumerate its own tools, a run twice answered "NO SLACK TOOLS" while those
+     * same tools were callable. Tool introspection is not evidence; a successful
+     * call is.
+     */
+    requires: ['claude.ai Slack', 'plugin:slack:slack'],
+    /**
+     * Both namings, because either can be the one that exists.
+     *
+     * Measured one tool at a time: `mcp__claude_ai_Slack__slack_search_users`
+     * returned the right person from a plain `claude -p`, and
+     * `mcp__plugin_slack_slack__slack_search_users` did not exist in the same run.
+     * Allow-listing both costs nothing — a name that is not there is simply never
+     * called — and it means the refresh keeps working whichever way Slack is set
+     * up, without this file having to predict it.
+     */
     tools: [
       'mcp__claude_ai_Slack__slack_search_public_and_private',
+      'mcp__claude_ai_Slack__slack_search_public',
       'mcp__claude_ai_Slack__slack_read_thread',
       'mcp__claude_ai_Slack__slack_read_channel',
       'mcp__claude_ai_Slack__slack_read_user_profile',
+      // Who "me" is. Notion failed for want of exactly this, and the question
+      // "is anyone waiting on me" has no subject without it.
+      'mcp__claude_ai_Slack__slack_search_users',
+      'mcp__claude_ai_Slack__slack_search_channels',
+      'mcp__plugin_slack_slack__slack_search_public_and_private',
+      'mcp__plugin_slack_slack__slack_read_thread',
+      'mcp__plugin_slack_slack__slack_read_channel',
+      'mcp__plugin_slack_slack__slack_read_user_profile',
+      'mcp__plugin_slack_slack__slack_search_users',
+      'mcp__plugin_slack_slack__slack_search_channels',
     ],
     icon: 'i-lucide-message-square',
+    // Not mechanical, even with a note: the note holds the person and the channels,
+    // and the messages still have to be searched for and read every time.
+    cachedTurns: 20,
+    cheapWhenCached: false,
     prompt: 'Find up to 8 Slack messages or threads from the last three days where somebody '
       + 'is waiting on a reply from me — I was asked a direct question, mentioned with a '
       + 'request, or am the one holding something up. Ignore anything I have already answered, '
@@ -307,8 +397,9 @@ export function mergeLearned(previous: string | undefined, next: string | undefi
  * same work with the same note, sonnet took 27 seconds where the default took
  * 56, and returned the same eight items.
  */
-export function inboxModel(learned?: string): string | null {
-  return (learned ?? '').trim() ? 'sonnet' : null
+export function inboxModel(source: InboxSource, learned?: string): string | null {
+  const cached = Boolean((learned ?? '').trim())
+  return cached && source.cheapWhenCached ? 'sonnet' : null
 }
 
 /**
@@ -325,8 +416,8 @@ export function inboxModel(learned?: string): string | null {
  * a tight limit. If it needs more than that, something is wrong and stopping
  * early is the right answer rather than an expensive wander.
  */
-export function inboxTurns(learned?: string): number {
-  return (learned ?? '').trim() ? 8 : 30
+export function inboxTurns(source: InboxSource, learned?: string): number {
+  return (learned ?? '').trim() ? source.cachedTurns : 30
 }
 
 /**
@@ -341,8 +432,11 @@ export function inboxTurns(learned?: string): number {
  * The cached path keeps a short deadline on purpose. It has one job, and a cached
  * run that is taking minutes is not being thorough, it is lost.
  */
-export function inboxTimeoutMs(learned?: string): number {
-  return (learned ?? '').trim() ? 180_000 : 540_000
+export function inboxTimeoutMs(source: InboxSource, learned?: string): number {
+  // Paired with the turn budget rather than fixed, so a source allowed more turns
+  // is not killed for using them. Roughly ten seconds a turn, which is what the
+  // measured runs actually took.
+  return Math.max(180_000, inboxTurns(source, learned) * 12_000)
 }
 
 export function buildInboxPrompt(source: InboxSource, learned?: string): string {

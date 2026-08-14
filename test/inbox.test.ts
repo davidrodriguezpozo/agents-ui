@@ -120,14 +120,15 @@ describe('dismissals', () => {
 })
 
 describe('the sources themselves', () => {
-  it('names the MCP server each one needs, so a missing one can be explained', () => {
+  it('names the servers each one needs, so a missing one can be explained', () => {
     for (const source of INBOX_SOURCES) {
-      expect(source.requires, `${source.key} should name its server`).toBeTruthy()
+      expect(source.requires.length, `${source.key} should name at least one server`)
+        .toBeGreaterThan(0)
       expect(source.tools.length, `${source.key} should allow-list its tools`).toBeGreaterThan(0)
     }
   })
 
-  it('allow-lists only tools belonging to the server it needs', () => {
+  it('allow-lists only MCP tools', () => {
     // The spike, restricted with --allowedTools, grepped ~/.claude/plugins to
     // find a database id. Reasonable of it; not something an unattended refresh
     // should be able to do. Every tool here must be an MCP tool.
@@ -288,20 +289,30 @@ describe('the reply envelope', () => {
 })
 
 describe('which model answers', () => {
+  const notion = INBOX_SOURCES.find(s => s.key === 'notion')!
+  const slack = INBOX_SOURCES.find(s => s.key === 'slack')!
+
   /**
-   * Discovery is real reasoning and earns the default model. Once the note
-   * exists the job is mechanical — run three known queries, format the answer.
-   * Measured on the same work with the same note: 27 seconds on sonnet against
-   * 56 on the default, same eight items.
+   * Discovery is real reasoning and earns the default model everywhere. Whether the
+   * *cached* job is mechanical enough for a cheaper one is a property of the source,
+   * which it was not at first — and the global rule silently emptied Slack: on the
+   * cheaper model with a tight budget, a cached run gave up inside its turns and
+   * reported nothing waiting, twenty minutes after discovery found four threads.
    */
   it('uses the default model while there is nothing learned yet', () => {
-    expect(inboxModel()).toBeNull()
-    expect(inboxModel('')).toBeNull()
-    expect(inboxModel('   ')).toBeNull()
+    for (const source of INBOX_SOURCES) {
+      expect(inboxModel(source)).toBeNull()
+      expect(inboxModel(source, '')).toBeNull()
+      expect(inboxModel(source, '   ')).toBeNull()
+    }
   })
 
-  it('drops to a cheaper one once the queries are known', () => {
-    expect(inboxModel('collection://abc · person 123')).toBe('sonnet')
+  it('drops to a cheaper one only where the cached job is mechanical', () => {
+    // Notion: three known SQL queries against stable ids.
+    expect(inboxModel(notion, 'collection://abc · person 123')).toBe('sonnet')
+    // Slack: the note holds the person and channels, but the messages still have
+    // to be searched for and read every time.
+    expect(inboxModel(slack, 'me = U123 · channels C1, C2')).toBeNull()
   })
 })
 
@@ -479,10 +490,12 @@ describe('the note is written once, not on every read', () => {
     expect(prompt).not.toContain('"learned":string')
   })
 
-  it('tells a cached run not to re-verify what it was given', () => {
+  it('tells a cached run not to re-derive what it was given', () => {
+    // Narrowed from "do not re-verify or search again", which banned searching
+    // outright and silently emptied Slack — see 'the note says where to look'.
     const prompt = buildInboxPrompt(notion, note)
     expect(prompt).toContain('do not confirm them first')
-    expect(prompt).toContain('Do not re-verify')
+    expect(prompt).toContain('Do not re-derive the reference data')
   })
 
   it('still frames the note as data rather than instructions', () => {
@@ -828,19 +841,70 @@ describe('the clock has to accommodate the turns', () => {
    * on work discarded for being slow.
    */
   it('gives discovery both more turns and more time than a cached run', () => {
-    expect(inboxTurns(undefined)).toBeGreaterThan(inboxTurns('collection://abc'))
-    expect(inboxTimeoutMs(undefined)).toBeGreaterThan(inboxTimeoutMs('collection://abc'))
+    for (const source of INBOX_SOURCES) {
+      expect(inboxTurns(source)).toBeGreaterThan(inboxTurns(source, 'collection://abc'))
+      expect(inboxTimeoutMs(source))
+        .toBeGreaterThanOrEqual(inboxTimeoutMs(source, 'collection://abc'))
+    }
   })
 
-  it('allows discovery enough seconds to be plausible for its turns', () => {
-    // A turn budget the clock cannot accommodate is a trap, not a budget. The real
-    // failing run managed roughly eight seconds a turn.
-    expect(inboxTimeoutMs(undefined) / inboxTurns(undefined)).toBeGreaterThanOrEqual(8_000)
+  it('allows every budget enough seconds to be plausible for its turns', () => {
+    // A turn budget the clock cannot accommodate is a trap, not a budget.
+    for (const source of INBOX_SOURCES) {
+      for (const note of [undefined, 'collection://abc']) {
+        expect(inboxTimeoutMs(source, note) / inboxTurns(source, note))
+          .toBeGreaterThanOrEqual(8_000)
+      }
+    }
   })
 
-  it('keeps the cached path on a short leash', () => {
-    // A cached run taking minutes is not being thorough, it is lost.
-    expect(inboxTimeoutMs('collection://abc')).toBeLessThanOrEqual(180_000)
+  it('gives a search-based source more cached room than a query-based one', () => {
+    // Eight turns fitted Notion's three SQL queries and starved Slack's search,
+    // which either ran out of turns or quietly returned nothing.
+    const notion = INBOX_SOURCES.find(s => s.key === 'notion')!
+    const slack = INBOX_SOURCES.find(s => s.key === 'slack')!
+    expect(inboxTurns(slack, 'note')).toBeGreaterThan(inboxTurns(notion, 'note'))
+  })
+
+  it('keeps a mechanical cached path on a short leash', () => {
+    // A cached Notion run taking minutes is not being thorough, it is lost.
+    const notion = INBOX_SOURCES.find(s => s.key === 'notion')!
+    expect(inboxTimeoutMs(notion, 'collection://abc')).toBeLessThanOrEqual(180_000)
+  })
+})
+
+describe('what counts as evidence that a source works', () => {
+  /**
+   * A correction worth keeping. Slack was declared unusable here on the strength
+   * of a headless run answering "NO SLACK TOOLS" when asked to list its tools —
+   * twice. Then a run was asked to *call* `slack_search_users` and it returned the
+   * right person immediately.
+   *
+   * Tool introspection is not evidence. A successful call is. The pre-flight that
+   * had been built on the introspection answer was removed, because refusing to
+   * even try — on evidence like that — is worse than trying and reporting a real
+   * failure, which this code can now do legibly.
+   */
+  it('accepts Slack under either naming, because either can be the real one', () => {
+    // Measured one tool at a time: the connector's `slack_search_users` answered a
+    // plain `claude -p` and the plugin's did not exist in the same run — the exact
+    // opposite of what `claude mcp list` suggested, which showed only the plugin.
+    const slack = INBOX_SOURCES.find(s => s.key === 'slack')!
+    expect(slack.requires).toContain('claude.ai Slack')
+    expect(slack.requires).toContain('plugin:slack:slack')
+    expect(slack.tools).toContain('mcp__claude_ai_Slack__slack_search_users')
+    expect(slack.tools).toContain('mcp__plugin_slack_slack__slack_search_users')
+  })
+
+  it('gives every source a way to work out who "me" is', () => {
+    // Notion failed for want of `notion-get-users`; the question "is anyone
+    // waiting on me" has no subject without it.
+    for (const source of INBOX_SOURCES) {
+      expect(
+        source.tools.some(t => /user/i.test(t)),
+        `${source.key} needs a way to identify the person`,
+      ).toBe(true)
+    }
   })
 })
 
@@ -908,5 +972,72 @@ describe('a rate limit is not stale reference data', () => {
     const staleOnly = parseInboxReply('{"items":[],"stale":true}')
     expect('stale' in staleOnly && staleOnly.stale).toBe(true)
     expect('blocked' in staleOnly ? staleOnly.blocked : undefined).toBeUndefined()
+  })
+})
+
+describe('two servers offering the same service', () => {
+  /**
+   * This machine has Slack twice: a plugin server, which works headlessly, and a
+   * claude.ai connector, which is not authorised for it. The run reached for the
+   * connector's `slack_search_public_and_private`, hit a permission prompt nobody
+   * could answer, and failed while holding a working allow-listed alternative.
+   */
+  it('allows rather than denies the alternative naming', () => {
+    // Denying the connector was the wrong move and broke Slack outright: it is the
+    // naming that actually answers a headless run. Allow-listing both costs
+    // nothing, because a tool that is not there is never called.
+    const slack = INBOX_SOURCES.find(s => s.key === 'slack')!
+    expect(slack.deny ?? []).toEqual([])
+  })
+
+  it('never denies a tool it also allows', () => {
+    // The failure mode this guards is a source that can do nothing at all.
+    for (const source of INBOX_SOURCES) {
+      for (const tool of source.tools) {
+        expect(source.deny ?? [], `${tool} must stay available`).not.toContain(tool)
+        expect(INBOX_DENIED_TOOLS, `${tool} must stay available`).not.toContain(tool)
+      }
+    }
+  })
+
+  it('only denies MCP tools there, since the shell is covered globally', () => {
+    for (const source of INBOX_SOURCES) {
+      for (const tool of source.deny ?? []) {
+        expect(tool.startsWith('mcp__'), tool).toBe(true)
+      }
+    }
+  })
+})
+
+describe('the note says where to look, not what will be found', () => {
+  /**
+   * Conflating those broke Slack outright. Told not to "search again", a cached run
+   * re-ran nothing and reported an empty inbox — where the discovery run twenty
+   * minutes earlier had found four threads waiting on a reply. Notion's answer sits
+   * behind stable database ids and Slack's behind a search over recent time, so a
+   * contract that bans searching fits one source and silently empties the other.
+   */
+  const cached = (key: string) =>
+    buildInboxPrompt(INBOX_SOURCES.find(s => s.key === key)!, 'me = U0APG0RECG3')
+
+  it('forbids re-deriving the reference data', () => {
+    for (const key of ['notion', 'slack']) {
+      expect(cached(key)).toContain('Do not re-derive the reference data')
+    }
+  })
+
+  it('requires the answer itself to be fetched fresh', () => {
+    for (const key of ['notion', 'slack']) {
+      const prompt = cached(key)
+      expect(prompt).toContain('must be fetched fresh every time')
+      expect(prompt).toContain('tells you where to look, not what you will find')
+    }
+  })
+
+  it('no longer bans searching outright', () => {
+    // The exact wording that emptied Slack.
+    for (const key of ['notion', 'slack']) {
+      expect(cached(key)).not.toContain('do not search for it again')
+    }
   })
 })
