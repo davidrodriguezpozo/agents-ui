@@ -34,15 +34,8 @@ export async function tickInbox(now = Date.now()): Promise<void> {
       const result = await refreshInboxSource(state.source, state.projectDir)
 
       if (!result.ok) {
-        // A refusal costs nothing, but silently doing nothing every morning
-        // would look identical to an empty inbox. Record it where it shows.
-        await inboxStore.update((current) => {
-          const target = current.sources.find(s => s.source === state.source)
-          if (target) {
-            target.error = result.refusal.message
-            target.checkedAt = Date.now()
-          }
-        })
+        // `refreshInboxSource` has already written the reason onto the source, so
+        // the morning's silence explains itself on the row rather than only here.
         console.log(`[inbox] ${state.source} skipped: ${result.refusal.error}`)
         continue
       }

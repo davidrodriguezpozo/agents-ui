@@ -132,11 +132,15 @@ export const INBOX_DENIED_TOOLS = [
  * What a discovery run is asked for: the answer, plus a note for next time.
  */
 const SHAPE = 'Reply with ONLY a JSON object and nothing else — no prose, no code fence. '
-  + 'Shape: {"items":[{"title":string,"url":string,"why":string}],"learned":string}. '
+  + 'Shape: {"items":[{"title":string,"url":string,"why":string}],"learned":string,'
+  + '"blocked":string}. '
   + '`why` is one sentence saying why it is waiting on this person. '
   + '`url` must be the canonical URL the tool itself returns for that page — never one '
   + 'you assemble, and never a `collection://` reference, which names a data source rather '
   + 'than a page and 404s in a browser. '
+  + 'If a tool errors, is refused, or is rate-limited, do not report an empty list: put '
+  + 'its error verbatim in `blocked` and return items: []. An empty list must only ever '
+  + 'mean you looked and nothing was waiting. '
   + '`items` is [] if nothing '
   + 'is waiting, or if you cannot tell who this person is — never guess. '
   + '`learned` is a note to your future self: the exact ids, collection URLs and query '
@@ -161,28 +165,50 @@ const SHAPE = 'Reply with ONLY a JSON object and nothing else — no prose, no c
  * database would be indistinguishable from an empty inbox — both are `items: []`.
  */
 const SHAPE_CACHED = 'Reply with ONLY a JSON object and nothing else — no prose, no code fence. '
-  + 'Shape: {"items":[{"title":string,"url":string,"why":string}],"stale":boolean}. '
+  + 'Shape: {"items":[{"title":string,"url":string,"why":string}],"stale":boolean,'
+  + '"blocked":string}. '
   + '`why` is one sentence saying why it is waiting on this person. '
   + '`url` must be the canonical URL the tool itself returns for that page — never one '
   + 'you assemble, and never a `collection://` reference, which names a data source rather '
   + 'than a page and 404s in a browser. '
+  + 'If a tool errors, is refused, or is rate-limited, do not report an empty list: put '
+  + 'its error verbatim in `blocked` and return items: []. An empty list must only ever '
+  + 'mean you looked and nothing was waiting. '
   + '`items` is [] if nothing '
   + 'is waiting — never guess. Do not re-verify or re-derive the reference data you were '
   + 'given and do not search for it again: run the queries as supplied and report what they '
-  + 'return. Set `stale` to true only if a query actually errors or an id no longer resolves, '
-  + 'in which case return items: [] and stop — a later run will rediscover. Otherwise omit '
-  + '`stale` or set it to false.'
+  + 'return. Set `stale` to true ONLY if the reference data itself is wrong — an id that no '
+  + 'longer resolves, a query whose columns have changed — in which case return items: [] '
+  + 'and stop, and a later run will rediscover. A tool that refused, errored or hit a '
+  + 'rate or usage limit is NOT stale: the ids are fine and the tool is simply '
+  + 'unavailable, so use `blocked` for that and leave `stale` alone. Getting this the '
+  + 'wrong way round throws away reference data that is still correct.'
 
 export const INBOX_SOURCES: InboxSource[] = [
   {
     key: 'notion',
     label: 'Notion',
     requires: 'notion',
+    /**
+     * Checked against the tool names the CLI actually reports, not guessed.
+     *
+     * Two of these were wrong and the refresh failed because of it:
+     * `notion-query-database-view` does not exist at all, and `notion-get-users`
+     * — which is how a run works out which Notion person "me" is, the single
+     * hardest part of the question — was missing. A tool that is not allow-listed
+     * prompts for permission, and there is nobody present to answer, so the run
+     * spent its turns going around the problem and died reporting
+     * `error_max_turns`.
+     */
     tools: [
       'mcp__notion__notion-search',
       'mcp__notion__notion-fetch',
       'mcp__notion__notion-query-data-sources',
-      'mcp__notion__notion-query-database-view',
+      // Who "me" is. Without this the run cannot answer the question at all.
+      'mcp__notion__notion-get-users',
+      'mcp__notion__notion-get-teams',
+      // A cheaper way in than search when the databases are not obvious.
+      'mcp__notion__notion-list-recent-pages',
     ],
     icon: 'i-lucide-file-text',
     prompt: 'Find up to 8 Notion pages, tickets or tasks that are assigned to me, '
@@ -283,6 +309,40 @@ export function mergeLearned(previous: string | undefined, next: string | undefi
  */
 export function inboxModel(learned?: string): string | null {
   return (learned ?? '').trim() ? 'sonnet' : null
+}
+
+/**
+ * How many turns to allow, which is a different number for the two jobs.
+ *
+ * Discovery is search, then work out who you are, then find the database, then
+ * query it — and it is where a run wanders, because each step can come back
+ * wrong. Twelve was not enough: a real discovery run spent all of them and died
+ * reporting `error_max_turns`, having produced nothing and still cost $0.63. The
+ * cure for that is not fewer turns, it is enough of them, because the run that
+ * finishes writes a note and the next one is cheap.
+ *
+ * A run holding a note has one job — run the queries it was handed — so it gets
+ * a tight limit. If it needs more than that, something is wrong and stopping
+ * early is the right answer rather than an expensive wander.
+ */
+export function inboxTurns(learned?: string): number {
+  return (learned ?? '').trim() ? 8 : 30
+}
+
+/**
+ * How long to wait, which has to follow from how many turns were allowed.
+ *
+ * These two numbers are a pair and were briefly not: discovery was given thirty
+ * turns and left the old four-minute deadline, so a run doing exactly what it was
+ * told was killed at 241 seconds and reported `error_during_execution` — having
+ * spent $1.96 on work that was thrown away for being slow. A turn budget the clock
+ * cannot accommodate is not a budget, it is a trap.
+ *
+ * The cached path keeps a short deadline on purpose. It has one job, and a cached
+ * run that is taking minutes is not being thorough, it is lost.
+ */
+export function inboxTimeoutMs(learned?: string): number {
+  return (learned ?? '').trim() ? 180_000 : 540_000
 }
 
 export function buildInboxPrompt(source: InboxSource, learned?: string): string {
@@ -581,7 +641,8 @@ export function inboxItemUrl(raw: unknown): string | undefined {
  */
 export function parseInboxReply(
   reply: string,
-): { items: InboxItem[]; learned?: string; stale?: boolean } | { error: string } {
+): { items: InboxItem[]; learned?: string; stale?: boolean; blocked?: string }
+  | { error: string } {
   const trimmed = (reply ?? '').trim()
   if (!trimmed) return { error: 'It returned nothing.' }
 
@@ -607,13 +668,31 @@ export function parseInboxReply(
   try {
     parsed = JSON.parse(slice)
   } catch (e) {
-    return { error: `Its answer was not readable JSON (${(e as Error).message}).` }
+    // One bad row must not cost the whole reply. A real discovery run cost $2.06
+    // and had one malformed element at character 1,706; rejecting all of it threw
+    // away both the items and the note that had just been paid for.
+    const rescued = salvageItems(slice)
+    if (rescued.length) {
+      // `learned` is not recovered here even when the note is sitting in the same
+      // broken reply. A half-parsed note would be stored as though it were whole,
+      // and a note that half-works is worse than none: the next run half-skips
+      // discovery and fails in a way nothing reports. Items are independent rows
+      // and survive on their own; the note is one value, all of it or none.
+      parsed = rescued
+    } else {
+      return { error: `Its answer was not readable JSON (${(e as Error).message}).` }
+    }
   }
 
   const envelope = Array.isArray(parsed)
-    ? { items: parsed, learned: undefined as unknown, stale: undefined as unknown }
+    ? {
+        items: parsed,
+        learned: undefined as unknown,
+        stale: undefined as unknown,
+        blocked: undefined as unknown,
+      }
     : (parsed && typeof parsed === 'object')
-        ? (parsed as { items?: unknown; learned?: unknown; stale?: unknown })
+        ? (parsed as { items?: unknown; learned?: unknown; stale?: unknown; blocked?: unknown })
         : null
 
   if (!envelope || !Array.isArray(envelope.items)) {
@@ -626,6 +705,24 @@ export function parseInboxReply(
 
   // Only ever true, never false-y-but-present, so the caller can test it plainly.
   const stale = envelope.stale === true ? true : undefined
+
+  /*
+   * A tool that errored, was refused, or was rate-limited — reported by the run
+   * rather than inferred, because from out here it is invisible.
+   *
+   * The case that forced this: Notion's Query Data Source has a workspace usage
+   * quota, and once it was exhausted the tool returned "Your workspace has reached
+   * the usage limit for Query Data Source". The run had every tool it needed and no
+   * permission was denied, so the CLI reported plain success — and the reply was
+   * `items: []`, which the queue rendered as "Nothing is waiting on you."
+   *
+   * Same false all-clear as a denied tool, one layer down: that one is visible in
+   * the CLI's envelope, this one only in the tool's own result. So the run is asked
+   * to say so, and an empty list is only allowed to mean nothing was waiting.
+   */
+  const blocked = typeof envelope.blocked === 'string' && envelope.blocked.trim()
+    ? envelope.blocked.trim().slice(0, 500)
+    : undefined
 
   const raws = envelope.items
   const items: InboxItem[] = []
@@ -655,6 +752,7 @@ export function parseInboxReply(
     items: items.filter(item => (seen.has(item.id) ? false : seen.add(item.id))),
     learned,
     stale,
+    blocked,
   }
 }
 
@@ -691,6 +789,90 @@ function outermost(text: string, open: string, close: string): string | null {
   }
 
   return null
+}
+
+/**
+ * Every balanced `{…}` in a fragment of text, at any depth.
+ *
+ * The reason this exists is a bill. A discovery run took 154 seconds, cost $2.06,
+ * found the answer, and wrote it as JSON with one malformed element at character
+ * 1,706 — so `JSON.parse` rejected the whole reply, the items were discarded, and
+ * the note the run had just paid to work out went with them. The next refresh
+ * would have paid the same $2 to learn the same thing.
+ *
+ * At any depth, not just the top, because the shape asked for is
+ * `{"items":[{…},{…}]}` — when the *envelope* is what is broken, the only things
+ * left worth having are two levels down. Scanning only the outer layer finds one
+ * unparseable object and calls the reply a loss.
+ *
+ * Depth- and string-aware for the same reason `outermost` is: a `why` sentence can
+ * contain a brace, and counting characters without tracking strings would cut an
+ * object in half at the first `}` inside a quote.
+ */
+function balancedObjects(text: string): string[] {
+  const found: string[] = []
+  const opens: number[] = []
+  let inString = false
+  let escaped = false
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!
+
+    if (escaped) { escaped = false; continue }
+    if (ch === '\\') { escaped = true; continue }
+    if (ch === '"') { inString = !inString; continue }
+    if (inString) continue
+
+    if (ch === '{') opens.push(i)
+    else if (ch === '}') {
+      const start = opens.pop()
+      // A stray `}` with nothing open is noise between objects, not a region.
+      if (start !== undefined) found.push(text.slice(start, i + 1))
+    }
+  }
+
+  return found
+}
+
+/**
+ * The rows that can be read out of a reply that will not parse as a whole.
+ *
+ * Kept only if the object parses *and* looks like an item, because scanning at
+ * every depth also turns up the envelope, and anything nested inside a `why`
+ * string. "Looks like an item" is the same test the caller applies anyway — a
+ * title and somewhere to go — so nothing is admitted here that would not survive
+ * the next step.
+ *
+ * Deliberately no attempt to repair the broken row: guessing where a quote should
+ * have been is how you invent a ticket that does not exist, and a missing row is
+ * much cheaper than a fictional one.
+ */
+function salvageItems(slice: string): unknown[] {
+  const items: unknown[] = []
+  const seen = new Set<string>()
+
+  for (const chunk of balancedObjects(slice)) {
+    let value: unknown
+    try {
+      value = JSON.parse(chunk)
+    } catch {
+      // One malformed row costs one row.
+      continue
+    }
+
+    if (!value || typeof value !== 'object' || Array.isArray(value)) continue
+    const entry = value as Record<string, unknown>
+    if (typeof entry.url !== 'string' || typeof entry.title !== 'string') continue
+
+    // The same page can appear as its own object and inside the envelope's array.
+    const key = `${entry.title}\u0000${entry.url}`
+    if (seen.has(key)) continue
+    seen.add(key)
+
+    items.push(entry)
+  }
+
+  return items
 }
 
 /** The findings a source has, minus anything waved away. */

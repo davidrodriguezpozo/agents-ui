@@ -1,6 +1,6 @@
 import {
   INBOX_DENIED_TOOLS, buildInboxPrompt, describeRunFailure, findInboxSource, inboxModel,
-  inboxStore, mergeLearned, parseInboxReply, salvageEnvelope,
+  inboxStore, inboxTimeoutMs, inboxTurns, mergeLearned, parseInboxReply, salvageEnvelope,
   type InboxSourceState, type RunEnvelope,
 } from './inbox'
 import { listMcpServers } from './mcp'
@@ -23,10 +23,38 @@ export type RefreshRefusal =
   | { error: 'unknown_source'; message: string }
   | { error: 'no_project'; message: string }
   | { error: 'source_unavailable'; message: string }
+  | { error: 'not_headless_capable'; message: string }
 
 export type RefreshResult =
   | { ok: true; state: InboxSourceState }
   | { ok: false; refusal: RefreshRefusal }
+
+/**
+ * Write a refusal where the reader will see it.
+ *
+ * Without this a refusal was only ever a toast, and the row kept whatever it last
+ * said. Slack went on displaying "It ran out of turns before it finished looking"
+ * — an accurate account of a run from before the pre-flight existed, and by then
+ * a completely wrong explanation of why it was not working. Pressing refresh
+ * appeared to change nothing.
+ *
+ * `checkedAt` moves too, because "we looked and were turned away at the door" is
+ * news about now, not about whenever the last real run happened.
+ */
+async function recordRefusal(sourceKey: string, message: string): Promise<void> {
+  await inboxStore.update((inbox) => {
+    const existing = inbox.sources.find(s => s.source === sourceKey)
+    const state = existing ?? { source: sourceKey, items: [] }
+    if (!existing) inbox.sources.push(state)
+
+    state.error = message
+    state.checkedAt = Date.now()
+    // Not a run, so there is nothing to say about duration or cost. Leaving the
+    // last run's numbers here would attribute them to this refusal.
+    state.durationMs = undefined
+    state.costUsd = undefined
+  })
+}
 
 /**
  * Check before spending, because the alternative is two minutes of a model
@@ -63,6 +91,31 @@ export async function refreshInboxSource(
   const servers = await listMcpServers(projectDir).catch(() => [])
   const server = servers.find(s => s.name === source.requires)
 
+  /*
+   * "Connected" turns out to be the third of three different things, and this is
+   * the one that cost the most to learn.
+   *
+   * `claude.ai Slack` reports ✔ Connected and its scope is `claude.ai config`: it
+   * is a connector configured on claude.ai, not a server on this machine. Its
+   * tools arrive through a claude.ai session, so a `claude -p` run started by this
+   * app gets **none of them** — asked to list its own tools from that project, a
+   * run reported 28 from `notion` and zero from Slack.
+   *
+   * Which produced the worst possible failure: a source that looked healthy, took
+   * ninety seconds, spent real tokens, and reported `error_max_turns` — a run
+   * looking for tools it never had. Refused here instead, before anything is
+   * spent, and said in terms that name what would fix it.
+   */
+  if (server?.origin === 'claude.ai') {
+    const message = `${source.requires} is a claude.ai connector, so its tools only exist inside `
+      + 'a claude.ai session — the background runs this app makes cannot see them. '
+      + 'Nothing was spent. It would need the same service added as a local MCP server '
+      + `in this project (\`claude mcp add\`) before ${source.label} could be checked here.`
+
+    await recordRefusal(source.key, message)
+    return { ok: false, refusal: { error: 'not_headless_capable', message } }
+  }
+
   if (!server || server.status !== 'connected') {
     const reason = !server
       ? `${source.requires} is not configured in this project.`
@@ -70,13 +123,9 @@ export async function refreshInboxSource(
         ? `${source.requires} needs signing in to before it will answer.`
         : `${source.requires} is not answering (${server.status}).`
 
-    return {
-      ok: false,
-      refusal: {
-        error: 'source_unavailable',
-        message: `${reason} Nothing was spent. Check it on the MCP page.`,
-      },
-    }
+    const message = `${reason} Nothing was spent. Check it on the MCP page.`
+    await recordRefusal(source.key, message)
+    return { ok: false, refusal: { error: 'source_unavailable', message } }
   }
 
   // What the last run worked out, so this one can skip the discovery that made
@@ -96,8 +145,9 @@ export async function refreshInboxSource(
     // `--allowedTools` is here only so the MCP calls do not sit waiting for a
     // permission prompt nobody is present to answer.
     //
-    // `--max-turns` because this is discovery, and discovery is where a run
-    // wanders. Twelve is enough for search-then-query and short of an afternoon.
+    // `--max-turns` is two numbers, not one: discovery needs room to search, work
+    // out who you are, find the database and query it, while a run holding a note
+    // has one job and should stop early if it cannot do it. See `inboxTurns`.
     const { stdout } = await runClaude(
       [
         '-p', prompt,
@@ -105,9 +155,9 @@ export async function refreshInboxSource(
         ...(model ? ['--model', model] : []),
         '--allowedTools', ...source.tools,
         '--disallowedTools', ...INBOX_DENIED_TOOLS,
-        '--max-turns', '12',
+        '--max-turns', String(inboxTurns(previous?.learned)),
       ],
-      { cwd: projectDir, timeout: 240_000 },
+      { cwd: projectDir, timeout: inboxTimeoutMs(previous?.learned) },
     )
 
     const envelope = JSON.parse(stdout) as RunEnvelope
@@ -140,13 +190,31 @@ export async function refreshInboxSource(
   const parsed = failure ? null : parseInboxReply(reply)
   if (parsed && 'error' in parsed) failure = parsed.error
 
+  /*
+   * The run says a tool would not answer, so this is not an answer.
+   *
+   * Checked here rather than trusted to the envelope because the CLI cannot see
+   * it: Notion's Query Data Source has a workspace usage quota, and an exhausted
+   * one comes back as a perfectly successful run whose tool result happens to say
+   * "your workspace has reached the usage limit". Every tool was allowed, nothing
+   * was denied, `subtype` was success — and the reply was `items: []`, which the
+   * queue rendered as "Nothing is waiting on you."
+   *
+   * Treated as a failure, which means the previous findings stay: yesterday's
+   * eight tickets are a better answer than a confident nothing.
+   */
+  if (parsed && 'items' in parsed && parsed.blocked) {
+    failure = `A tool would not answer, so this is not an answer: ${parsed.blocked}`
+  }
+
   const state: InboxSourceState = await inboxStore.update((inbox) => {
     const existing = inbox.sources.find(s => s.source === source.key)
     const next: InboxSourceState = existing ?? { source: source.key, items: [] }
     if (!existing) inbox.sources.push(next)
 
-    // Only replace the findings when there are new ones to replace them with.
-    if (parsed && 'items' in parsed) {
+    // Only replace the findings when there are new ones to replace them with —
+    // and a blocked run has none, whatever its empty list claims.
+    if (parsed && 'items' in parsed && !parsed.blocked) {
       next.items = parsed.items
 
       // A cached run reported its own reference data dead, so it is dropped and

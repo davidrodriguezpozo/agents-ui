@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   INBOX_DENIED_TOOLS, INBOX_SOURCES, findInboxSource, inboxItemId, inboxItemUrl,
   buildInboxPrompt, describeRunFailure, dueForRefresh, inboxModel, mergeLearned,
-  parseInboxReply, parseTimeOfDay, salvageEnvelope,
+  inboxTimeoutMs, inboxTurns, parseInboxReply, parseTimeOfDay, salvageEnvelope,
   visibleItems,
   type InboxSourceState,
 } from '../server/utils/inbox'
@@ -749,5 +749,164 @@ describe('a row that goes nowhere is worse than no row', () => {
       expect(source.prompt).toContain('never one you assemble')
       expect(buildInboxPrompt(source, 'collection://abc')).toContain('never one you assemble')
     }
+  })
+})
+
+describe('a $2 reply with one bad row in it', () => {
+  /**
+   * A real discovery run took 154 seconds, cost $2.06, found the answer, and wrote
+   * it with one malformed element at character 1,706. `JSON.parse` rejected the
+   * whole reply, so the items were discarded and the note the run had just paid to
+   * work out went with them — and the next refresh would have paid the same $2 to
+   * learn the same thing. All-or-nothing is the wrong bargain at that price.
+   */
+  it('keeps the good rows out of a broken array', () => {
+    const broken = '[{"title":"A","url":"https://n/1","why":"w"},'
+      + '{"title":"B","url":"https://n/2" "why":"missing comma"},'
+      + '{"title":"C","url":"https://n/3","why":"w"}]'
+    const items = ok(broken)
+    expect(items.map(i => i.title)).toEqual(['A', 'C'])
+  })
+
+  it('reaches rows two levels down when the envelope is what broke', () => {
+    // The shape asked for is {"items":[…]} — when the outer object is malformed,
+    // the only things worth having are inside the array.
+    const broken = '{"items":[{"title":"A","url":"https://n/1","why":"w"},'
+      + '{"title":"B","url":"https://n/2","why":"w"}], "learned":"unterminated'
+    expect(ok(broken).map(i => i.title)).toEqual(['A', 'B'])
+  })
+
+  it('does not salvage the note, even when it is sitting in the same reply', () => {
+    // A half-parsed note stored as though whole is worse than none: the next run
+    // half-skips discovery and fails in a way nothing reports.
+    const broken = '{"items":[{"title":"A","url":"https://n/1","why":"w"}],'
+      + '"learned":"collection://abc'
+    const result = parseInboxReply(broken)
+    expect('items' in result && result.items).toHaveLength(1)
+    expect('learned' in result ? result.learned : undefined).toBeUndefined()
+  })
+
+  it('ignores objects that are not items', () => {
+    // Scanning every depth also turns up the envelope and anything nested in a
+    // `why` string, so a row has to look like one to be admitted.
+    const broken = '{"meta":{"count":2},"items":[{"title":"A","url":"https://n/1","why":"w"}],x'
+    expect(ok(broken).map(i => i.title)).toEqual(['A'])
+  })
+
+  it('is not confused by a brace inside a sentence', () => {
+    const broken = '[{"title":"A","url":"https://n/1","why":"it said {done} today"},{bad]'
+    expect(ok(broken).map(i => i.why)).toEqual(['it said {done} today'])
+  })
+
+  it('collapses a row that appears twice while scanning depths', () => {
+    const broken = '{"items":[{"title":"A","url":"https://n/1","why":"w"}],broken'
+    expect(ok(broken)).toHaveLength(1)
+  })
+
+  it('still refuses a reply with nothing recoverable in it', () => {
+    // The property that matters is that salvage never turns "it did not answer"
+    // into a silent empty inbox — an all-clear nobody earned. Which of the two
+    // refusals it is depends on how early the reply falls apart.
+    expect(err('{"items":[{oh dear')).toBeTruthy()
+    expect(err('[{"title":"A" no url or close')).toBeTruthy()
+    expect(err('nothing json about this at all')).toBeTruthy()
+  })
+
+  it('does not salvage when the reply parsed fine', () => {
+    // The happy path is untouched: `learned` survives, as it must.
+    const good = '{"items":[{"title":"A","url":"https://n/1","why":"w"}],"learned":"collection://abc"}'
+    const result = parseInboxReply(good)
+    expect('learned' in result ? result.learned : undefined).toBe('collection://abc')
+  })
+})
+
+describe('the clock has to accommodate the turns', () => {
+  /**
+   * These two were briefly out of step: discovery was given thirty turns and left
+   * the old four-minute deadline, so a run doing exactly what it was told was
+   * killed at 241 seconds reporting `error_during_execution`, having spent $1.96
+   * on work discarded for being slow.
+   */
+  it('gives discovery both more turns and more time than a cached run', () => {
+    expect(inboxTurns(undefined)).toBeGreaterThan(inboxTurns('collection://abc'))
+    expect(inboxTimeoutMs(undefined)).toBeGreaterThan(inboxTimeoutMs('collection://abc'))
+  })
+
+  it('allows discovery enough seconds to be plausible for its turns', () => {
+    // A turn budget the clock cannot accommodate is a trap, not a budget. The real
+    // failing run managed roughly eight seconds a turn.
+    expect(inboxTimeoutMs(undefined) / inboxTurns(undefined)).toBeGreaterThanOrEqual(8_000)
+  })
+
+  it('keeps the cached path on a short leash', () => {
+    // A cached run taking minutes is not being thorough, it is lost.
+    expect(inboxTimeoutMs('collection://abc')).toBeLessThanOrEqual(180_000)
+  })
+})
+
+describe('a tool that would not answer', () => {
+  /**
+   * The third disguise of the same bug, and the hardest to see. Notion's Query
+   * Data Source has a workspace usage quota; once exhausted the tool returns
+   * "Your workspace has reached the usage limit for Query Data Source". The run
+   * had every tool it needed, nothing was denied, the CLI reported plain success —
+   * and the reply was `items: []`, which the queue rendered as "Nothing is waiting
+   * on you."
+   *
+   * A denied tool is visible in the CLI's envelope. This is visible only in the
+   * tool's own result, so the run has to say so.
+   */
+  it('asks both contracts to report it rather than returning an empty list', () => {
+    for (const source of INBOX_SOURCES) {
+      for (const prompt of [buildInboxPrompt(source, undefined), buildInboxPrompt(source, 'collection://abc')]) {
+        expect(prompt).toContain('"blocked"')
+        expect(prompt).toContain('rate-limited')
+        expect(prompt).toContain('An empty list must only ever')
+      }
+    }
+  })
+
+  it('reads the reported error back', () => {
+    const reply = '{"items":[],"blocked":"Your workspace has reached the usage limit."}'
+    const result = parseInboxReply(reply)
+    expect('blocked' in result && result.blocked).toBe('Your workspace has reached the usage limit.')
+  })
+
+  it('is absent on a healthy reply, so nothing false is inferred', () => {
+    for (const reply of ['{"items":[]}', '[]', '{"items":[],"blocked":""}', '{"items":[],"blocked":"   "}']) {
+      const result = parseInboxReply(reply)
+      expect('blocked' in result ? result.blocked : undefined, reply).toBeUndefined()
+    }
+  })
+
+  it('caps a long error rather than storing a wall of it', () => {
+    const reply = JSON.stringify({ items: [], blocked: 'x'.repeat(2000) })
+    const result = parseInboxReply(reply)
+    expect(('blocked' in result ? result.blocked : '')!.length).toBeLessThanOrEqual(500)
+  })
+})
+
+describe('a rate limit is not stale reference data', () => {
+  /**
+   * Conflating these cost real money. Notion's Query Data Source has a workspace
+   * usage quota; when it ran out the tool errored, the run reported `stale`, and a
+   * note that had cost $2 to work out — and was still entirely correct — was thrown
+   * away. The next run paid $2.61 to rediscover and failed, because the quota was
+   * still exhausted.
+   */
+  it('tells a cached run which signal is which, in those terms', () => {
+    const prompt = buildInboxPrompt(INBOX_SOURCES[0]!, 'collection://abc')
+    expect(prompt).toContain('rate or usage limit is NOT stale')
+    expect(prompt).toContain('use `blocked` for that')
+  })
+
+  it('reads them independently, so one cannot be mistaken for the other', () => {
+    const blockedOnly = parseInboxReply('{"items":[],"blocked":"usage limit reached"}')
+    expect('stale' in blockedOnly && blockedOnly.stale).toBeUndefined()
+    expect('blocked' in blockedOnly && blockedOnly.blocked).toBe('usage limit reached')
+
+    const staleOnly = parseInboxReply('{"items":[],"stale":true}')
+    expect('stale' in staleOnly && staleOnly.stale).toBe(true)
+    expect('blocked' in staleOnly ? staleOnly.blocked : undefined).toBeUndefined()
   })
 })
