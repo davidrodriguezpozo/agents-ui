@@ -1,4 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { claudeExecutable } from '../../utils/claudeExecutable'
 
 interface ChatMessage {
   role: 'user' | 'assistant'
@@ -81,6 +82,7 @@ export default defineEventHandler(async (event) => {
     for await (const message of query({
       prompt,
       options: {
+        pathToClaudeCodeExecutable: claudeExecutable(),
         maxTurns: 1,
         allowedTools: [],
         systemPrompt: SYSTEM_PROMPT,

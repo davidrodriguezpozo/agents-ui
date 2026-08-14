@@ -1,4 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { claudeExecutable } from '../../utils/claudeExecutable'
 import { parseJsonFromReply } from '../../utils/extractJson'
 
 interface ImproveRequest {
@@ -38,6 +39,7 @@ export default defineEventHandler(async (event): Promise<ImproveResponse> => {
     for await (const message of query({
       prompt,
       options: {
+        pathToClaudeCodeExecutable: claudeExecutable(),
         maxTurns: 1,
         allowedTools: [],
         systemPrompt: {

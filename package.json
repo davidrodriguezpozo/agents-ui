@@ -46,7 +46,7 @@
     "prepublishOnly": "npm run build",
     "prepack": "node scripts/dereference-output.mjs"
   },
-  "//dependencies": "There are deliberately none. Nitro vendors what the server needs into .output/server/node_modules, so a published install resolves nothing, compiles nothing, and does not drag Nuxt and the whole build toolchain onto a machine that only wants to run the thing. Everything below is needed to build it, which makes it a dev dependency by definition. `prepare` rather than `postinstall` for the same reason: postinstall would run on a user's machine and fail looking for nuxt.",
+  "//dependencies": "There are deliberately none. Nitro vendors what the server needs into .output/server/node_modules, so a published install resolves nothing, compiles nothing, and does not drag Nuxt and the whole build toolchain onto a machine that only wants to run the thing. The one thing it cannot vendor is the Claude Code CLI: from claude-agent-sdk 0.3 that is a ~290MB per-platform native binary in an optional dependency, resolved at runtime, so the build has nothing to spawn and `server/utils/claudeExecutable.ts` finds the Claude Code the machine already has. Everything below is needed to build it, which makes it a dev dependency by definition. `prepare` rather than `postinstall` for the same reason: postinstall would run on a user's machine and fail looking for nuxt.",
   "devDependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.232",
     "@iconify-json/lucide": "^1.2.95",

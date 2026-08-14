@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import type { H3Event } from 'h3'
 import { getClaudeDir } from './claudeDir'
+import { claudeExecutable } from './claudeExecutable'
 import { getProjectDir, getScopeRoots, scopeRootsFor } from './scope'
 import { resolveAgentInRoots, toSdkModel, type ResolvedAgent } from './resolveAgent'
 import { readInstalledPlugins } from './pluginScan'
@@ -216,6 +217,9 @@ export function toQueryOptions(
 ) {
   return {
     cwd: options.cwd,
+    // Resolved rather than left to the SDK, which looks for a native binary
+    // this build does not carry — see `claudeExecutable`.
+    pathToClaudeCodeExecutable: claudeExecutable(),
     ...(maxBudgetUsd && maxBudgetUsd > 0 ? { maxBudgetUsd } : {}),
     ...(options.allowedTools ? { allowedTools: options.allowedTools } : {}),
     ...(options.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),

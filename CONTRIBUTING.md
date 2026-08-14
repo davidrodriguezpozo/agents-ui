@@ -56,6 +56,24 @@ server/
 └── utils/          # Server-side helpers
 ```
 
+## Releasing
+
+Publishing happens only in the `Publish` workflow, which npm authenticates by OIDC —
+there is no token on anyone's laptop. Bump the version in `package.json`, commit, then
+publish a GitHub release tagged `v<version>`; the workflow refuses a tag that disagrees
+with the version, and re-releasing a published version is a quiet no-op.
+
+Two things pass every test and still ship a broken package, because both only exist
+once the tarball is installed. Check them by hand:
+
+1. **A page renders.** `npm pack`, install the tarball somewhere else, start it and open
+   it. Nitro symlinks some vendored dependencies and npm's tarball drops symlinks —
+   see `scripts/dereference-output.mjs`.
+2. **A run actually runs.** Start a session or ask the chat for anything. The Agent SDK
+   spawns a native Claude Code binary that is not part of the build, and an install has
+   none of the `node_modules` a checkout resolves it from — see
+   `server/utils/claudeExecutable.ts`.
+
 ## Questions?
 
 Open an issue or start a discussion. We're happy to help!

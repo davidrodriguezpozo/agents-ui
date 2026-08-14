@@ -1,26 +1,21 @@
 import { execFile, spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import { promisify } from 'node:util'
+import { installCandidates } from './claudeExecutable'
 
 const exec = promisify(execFile)
 
 /**
- * Where the Claude Code CLI commonly lives. A GUI-launched server does not
- * inherit a login shell's PATH, so probing bare `claude` alone is not enough —
- * the official installer puts it in ~/.local/bin, which is rarely on PATH here.
+ * Where the Claude Code CLI commonly lives — PATH first, then the places
+ * installers put it, because a GUI-launched server does not inherit a login
+ * shell's PATH and the official installer's ~/.local/bin is rarely on the one
+ * it does get.
+ *
+ * The list lives in `claudeExecutable`, which asks the same question to decide
+ * which binary runs are spawned from.
  */
 function candidatePaths(): string[] {
-  return [
-    'claude',
-    join(homedir(), '.local', 'bin', 'claude'),
-    join(homedir(), '.claude', 'local', 'claude'),
-    '/usr/local/bin/claude',
-    '/opt/homebrew/bin/claude',
-    join(homedir(), '.bun', 'bin', 'claude'),
-    join(homedir(), '.volta', 'bin', 'claude'),
-  ]
+  return installCandidates()
 }
 
 let cached: string | null | undefined

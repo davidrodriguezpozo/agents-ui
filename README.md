@@ -96,10 +96,11 @@ about 19MB whenever the cache misses, so the global install is the better home f
 something meant to keep running.
 
 > **You'll need:** Node.js 18+, and Claude Code installed and signed in on this machine.
-> Sessions, rituals and workflows run through the Claude Agent SDK and use that login;
-> there is no separate key to set up. Nothing is compiled at install time — the package
-> ships its own build with dependencies already inside it, so `npm install` has nothing
-> to resolve.
+> Sessions, rituals and workflows run through the Claude Agent SDK, which spawns that
+> Claude Code and uses that login; there is no separate key to set up. It is found on
+> your `PATH` or where the installers put it — set `CLAUDE_CODE_EXECUTABLE` if yours
+> lives somewhere unusual. Nothing is compiled at install time — the package ships its
+> own build with dependencies already inside it, so `npm install` has nothing to resolve.
 
 <details>
 <summary>From source instead</summary>

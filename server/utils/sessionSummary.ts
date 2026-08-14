@@ -1,4 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
+import { claudeExecutable } from './claudeExecutable'
 import { patchSession, findSession } from './sessions'
 import { worktreeDiff } from './worktrees'
 import { readRun, getActive } from './runStore'
@@ -125,6 +126,7 @@ export async function summariseSession(
     for await (const message of query({
       prompt: context,
       options: {
+        pathToClaudeCodeExecutable: claudeExecutable(),
         model: SUMMARY_MODEL,
         maxTurns: 1,
         // Nothing to do but write a sentence. Handing it the toolset would let
