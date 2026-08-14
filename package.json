@@ -48,7 +48,7 @@
   },
   "//dependencies": "There are deliberately none. Nitro vendors what the server needs into .output/server/node_modules, so a published install resolves nothing, compiles nothing, and does not drag Nuxt and the whole build toolchain onto a machine that only wants to run the thing. Everything below is needed to build it, which makes it a dev dependency by definition. `prepare` rather than `postinstall` for the same reason: postinstall would run on a user's machine and fail looking for nuxt.",
   "devDependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.2.76",
+    "@anthropic-ai/claude-agent-sdk": "0.3.232",
     "@iconify-json/lucide": "^1.2.95",
     "@nuxt/ui": "^3",
     "@types/node": "^26.1.2",

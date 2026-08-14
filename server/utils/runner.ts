@@ -7,6 +7,7 @@ import { answerPermission, createPermissionBroker } from './permissionBroker'
 import { mergeRules } from './permissionRules'
 import { notify } from './notify'
 import { budgetStoppedMessage } from './budget'
+import { tokenUsageOf } from './usage'
 
 function toolResultText(content: unknown): string {
   return typeof content === 'string'
@@ -190,14 +191,8 @@ export async function executeRun(
        */
       if (message.type === 'result') {
         const subtype = (message as { subtype?: string }).subtype
-        const usage = (message as { usage?: Record<string, number> }).usage ?? {}
         const stats = {
-          usage: {
-            input: usage.input_tokens ?? 0,
-            output: usage.output_tokens ?? 0,
-            cacheRead: usage.cache_read_input_tokens ?? 0,
-            cacheCreation: usage.cache_creation_input_tokens ?? 0,
-          },
+          usage: tokenUsageOf(message),
           costUsd: (message as { total_cost_usd?: number }).total_cost_usd ?? 0,
           durationMs: (message as { duration_ms?: number }).duration_ms ?? 0,
           numTurns: (message as { num_turns?: number }).num_turns ?? 0,

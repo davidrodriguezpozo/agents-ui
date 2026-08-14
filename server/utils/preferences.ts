@@ -54,6 +54,37 @@ export type PullActionIntent = keyof PullActionCommands
 /** The keys, in the order the settings page draws them. */
 export const PULL_ACTION_INTENTS: PullActionIntent[] = ['review', 'address', 'fix', 'update']
 
+/**
+ * How hard a run thinks before it acts — the SDK's `effort`, which is the same
+ * dial the CLI turns for a session you typed into.
+ *
+ * It was never set, and a default nobody has checked is not a default anyone
+ * chose: the same review command produced thirty-seven blocks of reasoning in
+ * a terminal and none at all here, on the same repository, the same minute.
+ * That is the entire difference between a review that finds the hole in a lint
+ * rule and one that lists three cosmetic nits.
+ *
+ * Ordered weakest to hardest, which is the order the settings page draws them.
+ */
+export type RunEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
+export const RUN_EFFORTS: RunEffort[] = ['low', 'medium', 'high', 'xhigh', 'max']
+
+/**
+ * The SDK's own documented default, said out loud rather than left off.
+ *
+ * Not a change of behaviour so much as a refusal to keep depending on one: the
+ * levels above this are not available on every model, and the SDK silently
+ * downgrades what a model cannot do, so asking for more than a model has costs
+ * nothing but is never quietly ignored either.
+ */
+export const DEFAULT_EFFORT: RunEffort = 'high'
+
+/** A stored or hand-edited value, made safe to hand to the SDK. */
+export function sanitiseEffort(value: unknown): RunEffort {
+  return RUN_EFFORTS.includes(value as RunEffort) ? value as RunEffort : DEFAULT_EFFORT
+}
+
 export interface Preferences {
   notifications: NotificationPreferences
   /**
@@ -124,6 +155,15 @@ export interface Preferences {
    * only behaviour before this setting existed.
    */
   pullActions: PullActionCommands
+  /**
+   * How hard every run thinks, unless it was asked for something else.
+   *
+   * One setting for the machine rather than one per session, for the same
+   * reason `maxTurns` is: sessions, rituals and workflows all pass nothing, so
+   * a knob that only the Studio panel could reach would be a knob nobody
+   * actually running work ever turned.
+   */
+  effort: RunEffort
 }
 
 /**
@@ -146,6 +186,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   maxConcurrentRuns: 3,
   pauseOnQuotaWarning: false,
   pullActions: { review: '', address: '', fix: '', update: '' },
+  effort: DEFAULT_EFFORT,
 }
 
 /**
@@ -217,6 +258,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Filled key by key, so a file written before this existed reads as "every
     // action uses its built-in prompt" rather than as undefined.
     pullActions: sanitisePullActions(parsed?.preferences?.pullActions),
+    // Absent means the default, which is also what an unrecognised level means
+    // — a typo here must not hand the SDK a value it will reject.
+    effort: sanitiseEffort(parsed?.preferences?.effort),
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -241,11 +285,12 @@ export async function savePreferences(
     maxConcurrentRuns?: number
     pauseOnQuotaWarning?: boolean
     pullActions?: Partial<PullActionCommands>
+    effort?: RunEffort
   },
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning, pullActions,
+    pauseOnQuotaWarning, pullActions, effort,
     ...notifications
   } = patch
 
@@ -268,6 +313,7 @@ export async function savePreferences(
       pullActions: pullActions === undefined
         ? current.pullActions
         : sanitisePullActions({ ...current.pullActions, ...pullActions }),
+      effort: effort === undefined ? current.effort : sanitiseEffort(effort),
     }
     Object.assign(current, next)
     return next

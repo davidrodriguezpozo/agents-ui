@@ -230,6 +230,12 @@ const summariseSessions = ref(true)
 const repairAttempts = ref(0)
 const maxTurns = ref('')
 const maxConcurrentRuns = ref(3)
+/**
+ * How hard runs think. Mirrors the SDK's `effort`, which is the same dial the
+ * CLI turns — and which this app never set, so every run took whatever the SDK
+ * happened to default to rather than what anyone had chosen.
+ */
+const effort = ref<'low' | 'medium' | 'high' | 'xhigh' | 'max'>('high')
 const dailyCap = ref('')
 const runCap = ref('')
 const spentToday = ref(0)
@@ -282,6 +288,23 @@ function capToNumber(value: string): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : 0
 }
 
+/**
+ * Saved on change rather than behind a button: it is one value, it is not a
+ * limit, and there is nothing to get half-typed.
+ */
+async function saveEffort() {
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { effort: effort.value } })
+    toast.add({
+      title: 'Saved',
+      description: `New runs think at ${effort.value} effort.`,
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
+  }
+}
+
 async function saveCaps() {
   try {
     await $fetch('/api/preferences', {
@@ -329,12 +352,14 @@ onMounted(async () => {
       dailyCapUsd: number
       runCapUsd: number
       pullActions?: Record<PullActionKey, string>
+      effort?: typeof effort.value
     }>('/api/preferences')
     notifications.value = prefs.notifications
     summariseSessions.value = prefs.summariseSessions
     repairAttempts.value = prefs.repairAttempts ?? 0
     maxTurns.value = prefs.maxTurns ? String(prefs.maxTurns) : ''
     maxConcurrentRuns.value = prefs.maxConcurrentRuns ?? 3
+    effort.value = prefs.effort ?? 'high'
     pauseOnQuotaWarning.value = prefs.pauseOnQuotaWarning === true
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
@@ -836,6 +861,34 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           post anything to GitHub — so a command that posts a review will post it. The session still
           starts in a fresh worktree with the branch checked out, the same as before.
         </p>
+      </div>
+
+      <!-- How hard runs think -->
+      <div id="settings-effort" class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">How hard runs think</h3>
+        <p class="fs-sm text-meta">
+          The same dial the terminal turns. It was never set here, so every run took whatever
+          the SDK happened to default to — which is how the same review command could reason
+          at length in a terminal and not at all in a session.
+        </p>
+
+        <div class="field-group">
+          <div class="w-56">
+            <select v-model="effort" class="field-select" @change="saveEffort">
+              <option value="low">Low — barely stops to think</option>
+              <option value="medium">Medium</option>
+              <option value="high">High (default)</option>
+              <option value="xhigh">Higher than high</option>
+              <option value="max">Maximum</option>
+            </select>
+          </div>
+          <p class="field-hint">
+            Applies to everything — sessions, rituals, workflow steps — unless something asked
+            for its own. Thinking is billed like any other output, so the levels above the
+            default cost more and take longer; a model that has no such level is given the
+            highest it does have rather than being refused.
+          </p>
+        </div>
       </div>
 
       <!-- Spending limits -->

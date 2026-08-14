@@ -1,6 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { resolveRunOptions, toQueryOptions } from '../utils/runOptions'
 import { createPermissionBroker, newPermissionOwnerId } from '../utils/permissionBroker'
+import { tokenUsageOf } from '../utils/usage'
 import type { PermissionMode } from '~/types'
 
 interface ChatMessage {
@@ -37,7 +38,13 @@ export default defineEventHandler(async (event) => {
 
   // Shared with the detached runner, so an interactive chat and a scheduled run
   // build byte-identical sessions — agent prompt, model, tool policy, plugins.
-  const options = await resolveRunOptions(event, body)
+  //
+  // `managerChat` is set here rather than by the caller because this endpoint
+  // *is* the Studio's chat: with an agent the agent's prompt wins anyway, and
+  // without one, being told you are an assistant inside the agent manager is
+  // the truth. Everything detached — sessions, rituals, workflow steps — goes
+  // through the run path instead and is no longer told any of it.
+  const options = await resolveRunOptions(event, { ...body, managerChat: true })
   const { agent, plugins, allowedTools, permissionMode, maxTurns, model } = options
 
   setResponseHeaders(event, {
@@ -166,17 +173,11 @@ export default defineEventHandler(async (event) => {
       // Final result — carries usage, cost and any permission denials
       if ('result' in message) {
         resultText = message.result
-        const usage = (message as { usage?: Record<string, number> }).usage ?? {}
         sendEvent('result', {
           text: resultText,
           stopReason: message.stop_reason,
           stats: {
-            usage: {
-              input: usage.input_tokens ?? 0,
-              output: usage.output_tokens ?? 0,
-              cacheRead: usage.cache_read_input_tokens ?? 0,
-              cacheCreation: usage.cache_creation_input_tokens ?? 0,
-            },
+            usage: tokenUsageOf(message),
             costUsd: (message as { total_cost_usd?: number }).total_cost_usd ?? 0,
             durationMs: (message as { duration_ms?: number }).duration_ms ?? 0,
             numTurns: (message as { num_turns?: number }).num_turns ?? 0,

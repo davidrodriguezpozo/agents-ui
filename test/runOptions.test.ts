@@ -7,6 +7,7 @@ const base = {
   additionalDirectories: [],
   sandbox: { enabled: true, allowedDomains: [] },
   unattended: false,
+  effort: 'high' as const,
 }
 
 describe('toQueryOptions', () => {
@@ -80,5 +81,31 @@ describe('toQueryOptions', () => {
     expect(opts.sandbox.network.allowedDomains).toEqual(['registry.npmjs.org'])
     // Binding a port locally is ordinary work, not a way out.
     expect(opts.sandbox.network.allowLocalBinding).toBe(true)
+  })
+
+  /**
+   * This was never sent, and a default nobody checked turned out not to be the
+   * one the terminal uses: the same review command reasoned at length in a
+   * terminal and not at all in a session, on the same repository.
+   */
+  it('tells the SDK how hard to think rather than leaving it to a default', () => {
+    expect((toQueryOptions({ ...base, allowRules: [] }) as any).effort).toBe('high')
+    expect((toQueryOptions({ ...base, allowRules: [], effort: 'max' }) as any).effort).toBe('max')
+  })
+
+  /**
+   * The manager prompt describes a settings screen. A session reviewing a pull
+   * request is not in one, and used to be told it was — so a run with nothing
+   * to add now adds nothing, rather than appending an empty string.
+   */
+  it('leaves the preset alone when there is nothing to append', () => {
+    const opts = toQueryOptions({ ...base, allowRules: [] }) as any
+    expect(opts.systemPrompt).toEqual({ type: 'preset', preset: 'claude_code' })
+    expect('append' in opts.systemPrompt).toBe(false)
+  })
+
+  it('appends what an agent or the manager chat asked for', () => {
+    const opts = toQueryOptions({ ...base, allowRules: [], systemAppend: 'You are Ada.' }) as any
+    expect(opts.systemPrompt.append).toBe('You are Ada.')
   })
 })

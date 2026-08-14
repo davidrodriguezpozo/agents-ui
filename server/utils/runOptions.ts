@@ -6,7 +6,7 @@ import { resolveAgentInRoots, toSdkModel, type ResolvedAgent } from './resolveAg
 import { readInstalledPlugins } from './pluginScan'
 import { resolveEnabledPluginsInRoots } from './pluginState'
 import { toSettingsPermissions } from './permissionRules'
-import { readPreferences } from './preferences'
+import { readPreferences, sanitiseEffort, type RunEffort } from './preferences'
 import { sandboxForProject, toSandboxSettings, type ProjectSandbox } from './sandbox'
 import type { PermissionMode } from '~/types'
 
@@ -55,6 +55,20 @@ export interface RunRequest {
    * typed keeps them, because the trust level you chose promised them.
    */
   unattended?: boolean
+  /**
+   * How hard this run thinks. Absent means whatever this machine was set to.
+   */
+  effort?: RunEffort
+  /**
+   * This run *is* the Agent Studio's own chat, so being told it is an assistant
+   * inside a web interface for managing agents is true.
+   *
+   * Opt-in, because it used to be the fallback for anything without an agent —
+   * which is to say for sessions, rituals and workflow steps, none of which are
+   * managing anything. A pull request review opened believing its job was to
+   * edit files in `~/.claude`.
+   */
+  managerChat?: boolean
 }
 
 export interface ResolvedRunOptions {
@@ -72,6 +86,7 @@ export interface ResolvedRunOptions {
   additionalDirectories: string[]
   sandbox: ProjectSandbox
   unattended: boolean
+  effort: RunEffort
 }
 
 export function managerPrompt(claudeDir: string): string {
@@ -113,14 +128,19 @@ export async function resolveRunOptions(event: H3Event, body: RunRequest): Promi
  */
 export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRunOptions> {
   const claudeDir = getClaudeDir()
+  const preferences = await readPreferences()
   // 0 means "no preference", which must fall through to the default rather
   // than being read as a limit of zero turns.
-  const preferredTurns = (await readPreferences()).maxTurns || undefined
+  const preferredTurns = preferences.maxTurns || undefined
   const projectDir = body.projectDir && existsSync(body.projectDir) ? body.projectDir : null
   const roots = scopeRootsFor(projectDir)
 
   const agent = body.agentSlug ? await resolveAgentInRoots(roots, body.agentSlug) : null
 
+  // The Studio's own chat is the only thing the manager prompt describes. A
+  // run without an agent is not a run that wants to be told it lives in a
+  // settings screen — it is a session working in a repository, and the prompt
+  // was quietly the first thing every one of them read.
   let systemAppend: string
   if (body.systemPromptOverride?.trim()) {
     systemAppend = body.systemPromptOverride
@@ -128,8 +148,10 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     systemAppend = `You are "${agent.name}", a specialized agent.${
       agent.description ? `\n\nYou are used when: ${agent.description}` : ''
     }\n\nFollow these instructions precisely:\n\n${agent.prompt}`
-  } else {
+  } else if (body.managerChat) {
     systemAppend = managerPrompt(claudeDir)
+  } else {
+    systemAppend = ''
   }
 
   // Explicit request wins, then the agent's own `tools:` frontmatter, then
@@ -173,6 +195,9 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     // is one place that decides it.
     sandbox: body.sandbox ?? projectSandbox,
     unattended: body.unattended === true,
+    // Same shape as the turn limit: an explicit request wins, then whatever
+    // this machine was set to. Never left to the SDK to decide.
+    effort: body.effort ? sanitiseEffort(body.effort) : preferences.effort,
   }
 }
 
@@ -216,10 +241,15 @@ export function toQueryOptions(
       ? { sandbox: toSandboxSettings(options.sandbox, { unattended: options.unattended }) }
       : {}),
     includePartialMessages: true,
+    // Passed on every run rather than left to the SDK's default, which is how
+    // the same review command came back having done no reasoning at all.
+    effort: options.effort,
     systemPrompt: {
       type: 'preset' as const,
       preset: 'claude_code' as const,
-      append: options.systemAppend,
+      // Nothing to add is said by leaving it off, not by appending an empty
+      // string to the preset.
+      ...(options.systemAppend ? { append: options.systemAppend } : {}),
     },
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),
   }

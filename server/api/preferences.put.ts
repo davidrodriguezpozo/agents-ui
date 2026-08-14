@@ -1,8 +1,10 @@
 import {
   savePreferences,
   sanitisePullActions,
+  RUN_EFFORTS,
   type NotificationPreferences,
   type PullActionCommands,
+  type RunEffort,
 } from '../utils/preferences'
 
 const KEYS: (keyof NotificationPreferences)[] = ['enabled', 'needsYou', 'failed', 'finished']
@@ -18,6 +20,7 @@ export default defineEventHandler(async (event) => {
     dailyCapUsd?: number
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
+    effort?: RunEffort
   }>(event)
 
   // Only the switches, and only as booleans — nothing else belongs in here.
@@ -30,6 +33,7 @@ export default defineEventHandler(async (event) => {
     dailyCapUsd?: number
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
+    effort?: RunEffort
   } = {}
   for (const key of KEYS) {
     const value = body?.notifications?.[key]
@@ -53,6 +57,10 @@ export default defineEventHandler(async (event) => {
   // 0 is how this returns to the built-in default, so absent is the only skip.
   if (typeof body?.maxTurns === 'number') patch.maxTurns = body.maxTurns
   if (typeof body?.maxConcurrentRuns === 'number') patch.maxConcurrentRuns = body.maxConcurrentRuns
+
+  // Only a level the SDK actually has. Anything else is left alone rather than
+  // saved and silently rejected on the next run.
+  if (RUN_EFFORTS.includes(body?.effort as RunEffort)) patch.effort = body.effort
 
   // A partial is expected — the settings page sends only the action it changed,
   // and `savePreferences` merges it over the three it did not. Sanitised here so
