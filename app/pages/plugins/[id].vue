@@ -471,7 +471,7 @@ if (import.meta.client) {
     <!-- Uninstall confirmation -->
     <UModal v-model:open="showUninstallConfirm">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">Uninstall Plugin</h3>
           <p class="fs-base text-body">
             Uninstall <strong>{{ plugin?.name }}</strong>? The plugin will be removed but its files will remain on your computer.

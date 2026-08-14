@@ -44,7 +44,7 @@ async function run() {
 </script>
 
 <template>
-  <div v-if="command" class="p-6 space-y-5 bg-overlay">
+  <div v-if="command" class="p-6 space-y-5 bg-overlay modal-panel">
     <div class="space-y-1.5">
       <div class="flex items-center gap-2">
         <UIcon name="i-lucide-play" class="size-4 ink-accent" />

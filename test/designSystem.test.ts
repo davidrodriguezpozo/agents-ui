@@ -149,3 +149,41 @@ describe('colour', () => {
     expect([...new Set(missing)]).toEqual([])
   })
 })
+
+describe('dialogs scroll rather than growing past the window', () => {
+  /**
+   * The ritual editor grew taller than the viewport with its Save button below
+   * the bottom edge and no way to scroll to it. Nuxt UI does not constrain the
+   * `#content` slot — it hands you the panel and the height is yours — and every
+   * panel in the app was `p-6 space-y-4 bg-overlay` and nothing else, so all of
+   * them had the bug and only the tallest one showed it.
+   */
+  const files = vueFiles(appDir)
+
+  it('defines the panel constraint once, in the stylesheet', () => {
+    const css = readFileSync(cssPath, 'utf8')
+    expect(css).toContain('.modal-panel')
+    // dvh, because on iOS vh counts the space behind the browser chrome.
+    expect(css).toMatch(/\.modal-panel\s*\{[^}]*dvh/)
+    expect(css).toMatch(/\.modal-panel\s*\{[^}]*overflow-y:\s*auto/)
+  })
+
+  it('constrains every dialog panel in the app', () => {
+    // `bg-overlay` marks a dialog panel and nothing else, which makes it a
+    // reliable way to find one that was added without a height.
+    const offenders: string[] = []
+
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8')
+      for (const match of source.matchAll(/class="([^"]*\bbg-overlay\b[^"]*)"/g)) {
+        const classes = match[1]!
+        if (classes.includes('modal-panel')) continue
+        // A panel running its own scrolling region handles both itself.
+        if (/\boverflow-(hidden|y-auto)\b/.test(classes)) continue
+        offenders.push(`${relative(appDir, file)}: ${classes}`)
+      }
+    }
+
+    expect(offenders, 'these dialog panels can grow past the window').toEqual([])
+  })
+})

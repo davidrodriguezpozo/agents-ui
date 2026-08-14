@@ -34,7 +34,7 @@ watch(() => props.open, (val) => {
 <template>
   <UModal :open="open" @update:open="emit('update:open', $event)">
     <template #content>
-      <div class="p-6 space-y-4 bg-overlay">
+      <div class="p-6 space-y-4 bg-overlay modal-panel">
         <h3 class="text-page-title">Run Workflow</h3>
         <p class="type-detail">
           What should this workflow process? The output of each step becomes the input for the next.

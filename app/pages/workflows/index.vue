@@ -228,7 +228,7 @@ async function createBlank() {
     <!-- Create modal -->
     <UModal v-model:open="showCreateModal">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">New Workflow</h3>
           <form class="space-y-3" @submit.prevent="createBlank">
             <div>

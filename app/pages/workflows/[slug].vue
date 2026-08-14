@@ -393,7 +393,7 @@ function pastFacts(past: { costUsd?: number; durationMs?: number }): string {
     -->
     <UModal v-model:open="picking">
       <template #content>
-        <div class="p-4 space-y-3 bg-overlay">
+        <div class="p-4 space-y-3 bg-overlay modal-panel">
           <h3 class="text-page-title">{{ replacing ? 'Use a different agent' : 'Add a step' }}</h3>
           <input v-model="paletteSearch" placeholder="Search agents..." class="field-search w-full" autofocus />
           <div class="space-y-1 max-h-72 overflow-y-auto">

@@ -1514,7 +1514,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
     <!-- Add Hook Modal -->
     <UModal v-model:open="showAddHookModal">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">Add Automation</h3>
           <p class="fs-sm leading-relaxed text-label">
             Run a shell command automatically when a specific event happens.

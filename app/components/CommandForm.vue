@@ -72,7 +72,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="p-6 space-y-4 bg-overlay">
+  <div class="p-6 space-y-4 bg-overlay modal-panel">
     <h3 class="text-page-title">New Command</h3>
     <p class="fs-sm leading-relaxed text-label">
       Commands are reusable workflows you can trigger with a slash command (e.g., /deploy).

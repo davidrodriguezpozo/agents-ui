@@ -416,7 +416,7 @@ const agentOptions = computed(() =>
     <!-- Delete confirmation -->
     <UModal v-model:open="showDeleteConfirm">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">Delete Skill</h3>
           <p class="type-body">
             Permanently delete <strong>{{ skill?.frontmatter.name }}</strong>? This action cannot be undone.

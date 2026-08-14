@@ -1141,6 +1141,35 @@ body {
 }
 
 /* ============================================
+   Dialog panels
+   ============================================ */
+
+/*
+ * A dialog is as tall as its content, until that would run past the window —
+ * then it scrolls.
+ *
+ * Every panel in the app was `p-6 space-y-4 bg-overlay` and nothing else, so a
+ * tall one (the ritual editor, which has two branching sections) simply grew
+ * past the viewport with its Save button somewhere below the bottom edge and no
+ * way to reach it. Nuxt UI does not constrain the `#content` slot: it hands you
+ * the panel and the height is yours to decide.
+ *
+ * `dvh` rather than `vh` because on iOS `vh` counts the space behind the browser
+ * chrome, which is how you get a panel that is 100% tall and still clipped.
+ *
+ * Kept separate from `.bg-overlay` on purpose — that one is colour, this one is
+ * layout, the same split as `.ink-*` and `.fs-*`. A panel that wants its own
+ * scrolling region (a search dialog with a fixed field above a long list) opts
+ * out by not taking this class and handling both itself.
+ */
+.modal-panel {
+  max-height: min(85dvh, 900px);
+  overflow-y: auto;
+  /* Reaching the end of a dialog should not start scrolling the page behind it. */
+  overscroll-behavior: contain;
+}
+
+/* ============================================
    Badge System
    ============================================ */
 

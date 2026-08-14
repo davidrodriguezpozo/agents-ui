@@ -78,7 +78,7 @@ function reset() {
 </script>
 
 <template>
-  <div class="p-6 space-y-4 bg-overlay min-w-[480px]">
+  <div class="p-6 space-y-4 bg-overlay modal-panel min-w-[480px]">
     <h3 class="text-page-title">Import from GitHub</h3>
 
     <!-- Step 1: URL input -->

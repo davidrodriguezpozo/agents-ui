@@ -291,7 +291,7 @@ async function onSave() {
 </script>
 
 <template>
-  <div class="p-6 space-y-5 bg-overlay">
+  <div class="p-6 space-y-5 bg-overlay modal-panel">
     <div class="flex items-center gap-2">
       <UIcon name="i-lucide-alarm-clock" class="size-4 ink-accent" />
       <h3 class="text-page-title">{{ isEdit ? 'Edit ritual' : 'Make this a daily ritual' }}</h3>

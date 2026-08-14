@@ -78,7 +78,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="p-6 space-y-4 bg-overlay flex flex-col w-fit">
+  <div class="p-6 space-y-4 bg-overlay modal-panel flex flex-col w-fit">
     <h3 class="text-page-title">
       {{ mode === "edit" ? "Edit Agent" : "New Agent" }}
     </h3>

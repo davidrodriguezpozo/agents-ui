@@ -283,7 +283,7 @@ async function confirmDelete() {
     <!-- New file -->
     <UModal v-model:open="showNewFile">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">New supporting file</h3>
           <div class="field-group">
             <label class="field-label">Path</label>
@@ -314,7 +314,7 @@ async function confirmDelete() {
     <!-- Delete -->
     <UModal :open="Boolean(pendingDelete)" @update:open="(v) => { if (!v) pendingDelete = null }">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">
             Delete {{ pendingDelete?.kind === 'directory' ? 'directory' : 'file' }}
           </h3>

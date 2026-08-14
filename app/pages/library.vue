@@ -269,7 +269,7 @@ const canImport = computed(() => activeType.value === 'agent' || activeType.valu
 
     <UModal v-model:open="showImport">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-section-title">Import {{ activeType === 'agent' ? 'an agent' : 'a skill' }}</h3>
           <FileImport
             :type="activeType === 'agent' ? 'agents' : 'skills'"

@@ -76,7 +76,7 @@ const memoryOptions: { value: AgentMemory | undefined; label: string; desc: stri
 </script>
 
 <template>
-  <div class="p-6 space-y-5 bg-overlay w-[480px] max-w-full">
+  <div class="p-6 space-y-5 bg-overlay modal-panel w-[480px] max-w-full">
     <!-- Header with step indicator -->
     <div class="space-y-3">
       <div class="flex items-center justify-between">

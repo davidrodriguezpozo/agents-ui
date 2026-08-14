@@ -1597,7 +1597,7 @@ const totalChanges = computed(() => {
     <!-- Pushing is the moment this leaves your machine, so spell it out -->
     <UModal v-model:open="showPr">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">Open a pull request</h3>
 
           <div v-if="!prPreview" class="flex items-center gap-2 type-detail">
@@ -1684,7 +1684,7 @@ const totalChanges = computed(() => {
     <!-- Merging writes to the real checkout, so show exactly what will happen -->
     <UModal v-model:open="showMerge">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">Merge this session</h3>
 
           <div v-if="!mergePreview" class="flex items-center gap-2 type-detail">
@@ -1804,7 +1804,7 @@ const totalChanges = computed(() => {
     <!-- Closing is where work gets lost, so spell out what happens -->
     <UModal v-model:open="showWatch">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">Keep watching this pull request?</h3>
           <p class="type-body">
             Your checks passed in this workspace. CI runs somewhere else, against a merge
@@ -1846,7 +1846,7 @@ const totalChanges = computed(() => {
 
     <UModal v-model:open="showClose">
       <template #content>
-        <div class="p-6 space-y-4 bg-overlay">
+        <div class="p-6 space-y-4 bg-overlay modal-panel">
           <h3 class="text-page-title">Close this session?</h3>
           <p class="type-body">
             This removes the workspace at

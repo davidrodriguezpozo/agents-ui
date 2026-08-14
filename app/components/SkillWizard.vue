@@ -116,7 +116,7 @@ function back() {
 </script>
 
 <template>
-  <div class="p-6 space-y-5 bg-overlay">
+  <div class="p-6 space-y-5 bg-overlay modal-panel">
     <!-- Progress -->
     <div class="space-y-2">
       <div class="flex items-center gap-2">
