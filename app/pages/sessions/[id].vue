@@ -814,9 +814,10 @@ async function sendReview() {
 /**
  * How much this session may do without asking.
  *
- * Applied to the next turn, not the one running: the SDK is told once when a
- * run starts, and changing the rules underneath a run in flight would be worse
- * than waiting for it to finish.
+ * Choosing Auto applies at once, including to a turn already running — an
+ * unanswered prompt is answered by the level you just picked. Anything else
+ * applies from the next turn, because a run that was told to stop asking has
+ * nothing left to intercept.
  */
 const trust = computed<TrustLevel>(() => session.value?.trust ?? 'edits')
 

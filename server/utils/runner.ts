@@ -8,6 +8,7 @@ import { mergeRules } from './permissionRules'
 import { notify } from './notify'
 import { budgetStoppedMessage } from './budget'
 import { tokenUsageOf } from './usage'
+import { nowTrustedFully } from './liveTrust'
 
 function toolResultText(content: unknown): string {
   return typeof content === 'string'
@@ -41,13 +42,29 @@ export async function executeRun(
   // survives a page refresh and replays for whoever attaches next.
   const broker = createPermissionBroker({
     ownerId: run.id,
-    onRequest: (request) => {
+    onRequest: async (request) => {
       emit(run.id, { type: 'permission_request', request })
 
       // Recorded whether or not anyone is watching: this is what lets a ritual
       // later be granted exactly the permissions it turned out to need.
       if (request.suggestedRules?.length) {
         entry.run.suggestedRules = mergeRules(entry.run.suggestedRules ?? [], request.suggestedRules)
+      }
+
+      // Checked before everything below, including the unattended refusal: a
+      // session someone deliberately set to Auto has said what it wants, and a
+      // repair turn on it should not be refused for the crime of running while
+      // nobody watched.
+      //
+      // `once` rather than `session`: the second hands the CLI's own
+      // suggestions back as permission updates, and those carry a destination
+      // that can be `userSettings` or `projectSettings`. Auto means this
+      // session stops asking, not that every command it happened to run gets
+      // written into settings on disk. Answering each call costs nothing worth
+      // measuring and leaves nothing behind.
+      if (await nowTrustedFully(run.sessionId)) {
+        answerPermission(request.id, { behavior: 'allow', scope: 'once' })
+        return
       }
 
       // Nobody is at the keyboard for a scheduled run. Waiting out the ten

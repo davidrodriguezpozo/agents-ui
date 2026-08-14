@@ -6,9 +6,15 @@ const LEVELS: TrustLevel[] = ['readonly', 'edits', 'full']
 /**
  * Change how much a session is trusted.
  *
- * Takes effect on the next turn rather than the one in flight: the SDK is told
- * once, when a run starts, and quietly changing the rules underneath a run
- * would be worse than waiting.
+ * Takes effect immediately when the change is to Auto, including on a turn
+ * already running: the permission callback re-reads this record on every tool
+ * call, so a prompt that has not been answered yet is answered by the level you
+ * just chose. See `liveTrust.ts` — pressing Auto and then being asked again was
+ * the control lying about its own state.
+ *
+ * The other direction still waits for the next turn, and cannot do otherwise: a
+ * run already told `bypassPermissions` never asks, so there is no request left
+ * to intercept and nothing to tighten.
  */
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
