@@ -51,6 +51,33 @@ describe('one firing, one entry in the history', () => {
     expect(shouldGiveUp(history)).toBeNull()
   })
 
+  it('does not blame the chain when the server died in the middle of it', () => {
+    // What a restart mid-chain actually leaves: the steps that finished, then
+    // the one that was in flight, and nothing after it — the process that would
+    // have started step three went away. The firing is not evidence about the
+    // ritual, so it must not extend the streak.
+    const history = summarizeRitualRuns([
+      run({ id: 'b', chainId: 'x', status: 'failed', interrupted: true, createdAt: 2000 }),
+      run({ id: 'a', chainId: 'x', status: 'completed', createdAt: 1000 }),
+    ])
+
+    expect(history.runs).toHaveLength(1)
+    expect(history.failingStreak).toBe(0)
+  })
+
+  it('takes an interrupted step from any position, not just the deciding one', () => {
+    // `mergeFiring` picks the deciding step by outcome, which is not the step
+    // that lost the process — so reading the flag off that one alone would let
+    // a restart count against the ritual after all.
+    const history = summarizeRitualRuns([
+      run({ id: 'b', chainId: 'x', status: 'completed', createdAt: 2000 }),
+      run({ id: 'a', chainId: 'x', status: 'failed', interrupted: true, createdAt: 1000 }),
+    ])
+
+    expect(history.runs[0]!.interrupted).toBe(true)
+    expect(history.failingStreak).toBe(0)
+  })
+
   it('still gives up after three bad mornings of chains', () => {
     const chain = (id: string, at: number) => [
       run({ id: `${id}b`, chainId: id, status: 'failed', createdAt: at + 1 }),

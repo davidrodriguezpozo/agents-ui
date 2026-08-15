@@ -26,6 +26,8 @@ export interface RitualRun {
   suggestedRules?: string[]
   error?: string
   preview: string
+  /** The process went away mid-run, so this is not evidence about the ritual. */
+  interrupted?: boolean
 }
 
 export interface RitualHistory {
@@ -78,6 +80,7 @@ function toRitualRun(run: RunSummary): RitualRun {
     suggestedRules: run.suggestedRules,
     error: run.error,
     preview: run.preview,
+    interrupted: run.interrupted,
   }
 }
 
@@ -135,6 +138,10 @@ function mergeFiring(steps: RunSummary[]): RunSummary {
     // `status` stays the deciding step's, which is what keeps `outcomeOf` on
     // the merged run agreeing with `chainOutcome` above.
     needsAttention: steps.some(step => step.needsAttention),
+    // Any step losing the process ends the firing, and the deciding step is
+    // picked by outcome rather than by that — so asking it alone would let a
+    // restart mid-chain count against the ritual after all.
+    interrupted: steps.some(step => step.interrupted) || undefined,
     deniedTools: deniedTools.length ? deniedTools : undefined,
     refusedHosts: refusedHosts.length ? refusedHosts : undefined,
     suggestedRules: suggestedRules.length ? suggestedRules : undefined,
@@ -182,7 +189,20 @@ export function summarizeRitualRuns(runs: RunSummary[]): RitualHistory {
   for (const run of history) {
     // In-flight work has not gone wrong yet, and a run someone stopped by hand
     // says nothing about the ritual — neither breaks the streak nor extends it.
-    if (run.outcome === 'running' || run.outcome === 'stopped') continue
+    //
+    // A run the *server* stopped is the same class and was missing from it. A
+    // deploy, a crash or a reboot mid-run marks the record `failed`, and three
+    // of those in a row turned the ritual off — so working on this app was a
+    // way to silently disable the briefing it runs every morning. Found on a
+    // real machine: `Morning brief` sat at two, one restart from being stopped,
+    // with nothing wrong with it.
+    //
+    // The clincher is that the system already disagrees with itself here.
+    // `resumeInterruptedRituals` puts the ritual's clock back so the lost
+    // occurrence fires again — an interruption is explicitly treated as worth
+    // retrying, and counting the same event as evidence the ritual is broken
+    // cannot also be right.
+    if (run.outcome === 'running' || run.outcome === 'stopped' || run.interrupted) continue
     if (run.outcome === 'ok') break
     failingStreak++
   }

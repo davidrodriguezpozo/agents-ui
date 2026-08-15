@@ -63,6 +63,11 @@ export interface Run {
   refusedHosts?: string[]
   /** Set when a limit cut the run short, so the output is not the whole job. */
   stoppedBy?: 'budget' | 'turns'
+  /**
+   * The process went away mid-run, so this failed for a reason that is not the
+   * ritual's. See `closeInterruptedRuns` and `summarizeRitualRuns`.
+   */
+  interrupted?: boolean
   /** Rules that would have let this run through, gathered from its prompts. */
   suggestedRules?: string[]
   /** Set when a ritual started this run, so its allowlist can be updated. */
@@ -336,6 +341,8 @@ export interface RunSummary {
   suggestedRules?: string[]
   /** Why it stopped short, when that was a limit rather than a permission. */
   stoppedBy?: 'budget' | 'turns'
+  /** The process went away mid-run, so this says nothing about the ritual. */
+  interrupted?: boolean
   scheduleId?: string
   /** Which firing of a chained ritual this was a step of, when it was one. */
   chainId?: string
@@ -366,6 +373,7 @@ function summarize(run: Run): RunSummary {
     refusedHosts: run.refusedHosts,
     suggestedRules: run.suggestedRules,
     stoppedBy: run.stoppedBy,
+    interrupted: run.interrupted,
     scheduleId: run.scheduleId,
     chainId: run.chainId,
     stepIndex: run.stepIndex,
@@ -485,6 +493,14 @@ export async function listRunsBySchedule(perSchedule = 10): Promise<Record<strin
  *
  * Called once at boot, when nothing can legitimately be running yet.
  */
+/**
+ * Written on the record, and also the only way to recognise one written before
+ * `interrupted` existed. Changing the wording is safe; it just means older runs
+ * stop being recognised, which is the failure mode you want from a backfill.
+ */
+export const INTERRUPTED_ERROR
+  = 'Interrupted — the server stopped while this was running. Nothing was lost on disk, but the run did not finish.'
+
 export async function closeInterruptedRuns(): Promise<Run[]> {
   const dir = runsDir()
   if (!existsSync(dir)) return []
@@ -501,11 +517,33 @@ export async function closeInterruptedRuns(): Promise<Run[]> {
       continue
     }
 
-    if (run.status !== 'running' && run.status !== 'queued') continue
+    if (run.status !== 'running' && run.status !== 'queued') {
+      /*
+       * Records closed before the flag existed say the same sentence and carry
+       * nothing else, so they still count against their ritual's streak — and
+       * that streak never clears on its own, because these runs are finished
+       * and will not be written again. Matching the exact message we wrote is
+       * narrow enough to be safe and is the only evidence there is.
+       *
+       * Not a migration file, because there is nothing to migrate to: the flag
+       * is derived from the error, so doing it here is idempotent and costs one
+       * comparison per run on a boot that is already reading all of them.
+       */
+      if (run.error === INTERRUPTED_ERROR && !run.interrupted) {
+        run.interrupted = true
+        await writeFile(path, JSON.stringify(run, null, 2), 'utf-8').catch(() => {})
+      }
+      continue
+    }
 
     run.status = 'failed'
     run.completedAt = Date.now()
-    run.error = 'Interrupted — the server stopped while this was running. Nothing was lost on disk, but the run did not finish.'
+    // Marked as well as failed, because the two facts are read by different
+    // people. Activity wants the truth — this run did not finish — while a
+    // ritual's health record must not count it, since nothing here is evidence
+    // about the ritual. See `summarizeRitualRuns`.
+    run.interrupted = true
+    run.error = INTERRUPTED_ERROR
 
     try {
       await writeFile(path, JSON.stringify(run, null, 2), 'utf-8')

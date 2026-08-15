@@ -101,6 +101,45 @@ describe('a ritual that has stopped working', () => {
     expect(failingStreak).toBe(0)
   })
 
+  /**
+   * Found on a real machine: `Morning brief` sat at two failures, one restart
+   * away from turning itself off, and all three records said the same thing —
+   * "Interrupted — the server stopped while this was running." Nothing was
+   * wrong with the ritual. Working on this app was a way to silently disable
+   * the briefing it runs every morning.
+   */
+  it('does not blame the ritual for a run the server stopped', () => {
+    const { failingStreak } = summarizeRitualRuns([
+      run({ status: 'failed', interrupted: true }),
+      run({ status: 'failed', interrupted: true }),
+      run({ status: 'failed', interrupted: true }),
+      run(),
+    ])
+
+    expect(failingStreak).toBe(0)
+  })
+
+  it('still counts real failures either side of a restart', () => {
+    // The restart is not evidence, but it is not an alibi for the runs around
+    // it either — skipped, not treated as a run that worked.
+    const { failingStreak } = summarizeRitualRuns([
+      run({ status: 'failed' }),
+      run({ status: 'failed', interrupted: true }),
+      run({ status: 'failed' }),
+      run(),
+    ])
+
+    expect(failingStreak).toBe(2)
+  })
+
+  it('keeps the run in the history, because Activity should still say it failed', () => {
+    // Only the ritual's health record ignores it. The run genuinely did not
+    // finish, and a list that hid that would be lying about the morning.
+    const { runs } = summarizeRitualRuns([run({ status: 'failed', interrupted: true })])
+
+    expect(runs[0]).toMatchObject({ outcome: 'failed', interrupted: true })
+  })
+
   it('reports when it last produced something usable', () => {
     const worked = run({ createdAt: 500 })
     const { lastOkAt } = summarizeRitualRuns([run({ status: 'failed' }), worked, run()])
