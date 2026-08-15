@@ -97,11 +97,19 @@ export interface InboxSource {
    *
    * A list rather than a name because the same service can be present twice under
    * different names, and which one actually answers a headless run is not knowable
-   * from out here. Slack is on this machine as both a claude.ai connector and a
-   * plugin server; the connector's tools answer `claude -p` and the plugin's do
-   * not, while `claude mcp list` shows only the plugin. Neither the list nor the
+   * from out here. Slack was on this machine as both a claude.ai connector and a
+   * plugin server; the connector's tools answered `claude -p` and the plugin's did
+   * not, while `claude mcp list` showed only the plugin. Neither the list nor the
    * tool names predicted that, and two wrong conclusions were drawn before a run
    * was made to *call* one tool at a time and report which worked.
+   *
+   * **Measured again later, and the answer had moved.** The connectors are now in
+   * the list, report Connected, and hand a headless run nothing — see
+   * `pickInboxServer`, which refuses them before anything is spent. Both readings
+   * were true when taken, which is the actual lesson: this is not a fact about
+   * Slack, it is a fact about a particular machine on a particular day, and it has
+   * to be measured rather than remembered. Keeping both names here costs nothing
+   * and means neither reading has to be right.
    */
   requires: string[]
   /** Pre-approved so an unattended refresh is not waiting on a prompt. */
@@ -325,6 +333,72 @@ export const INBOX_SOURCES: InboxSource[] = [
 
 export function findInboxSource(key: string): InboxSource | undefined {
   return INBOX_SOURCES.find(source => source.key === key)
+}
+
+/** The shape of an MCP server this needs, which is `McpServer` minus what it ignores. */
+export interface InboxServerCandidate {
+  name: string
+  status: string
+  origin: 'plugin' | 'claude.ai' | 'project'
+}
+
+/**
+ * Which server to ask, or why there is nobody to ask.
+ *
+ * Pure and tested because it is a *judgement* — "connected" and "usable by an
+ * unattended run" are different questions, and the whole point of the pre-flight
+ * is to answer the second one before spending anything on it.
+ *
+ * **A claude.ai connector says Connected and hands an unattended run nothing.**
+ * Measured, and it cost $0.37 to learn: `claude mcp list` reported
+ * `claude.ai Gmail: ✔ Connected`, and a `claude -p` run allowed that server got
+ * zero tools and replied "The following MCP servers require authentication
+ * before their tools can be used: claude.ai Gmail". Google Calendar, also
+ * Connected, did the same thing for 5c on the cheap model. A connector's OAuth
+ * belongs to the interactive session; a headless run does not inherit it.
+ *
+ * That is exactly the charge the pre-flight exists to avoid, so `origin` decides
+ * before `status` does. The two sources that work today are both the other kind:
+ * `notion` is a user-scoped HTTP server and `plugin:slack:slack` is a plugin,
+ * and each carries its own credentials rather than borrowing a session's.
+ *
+ * If a connector ever does start answering, the cost of this being wrong is a
+ * refusal that spends nothing and names the fix — which is the right way round.
+ * The fix is worth naming because the app can already do it: add the service as
+ * an HTTP server of its own and sign in to that, the way Notion is set up.
+ */
+export function pickInboxServer(
+  source: InboxSource,
+  servers: InboxServerCandidate[],
+): { server: InboxServerCandidate } | { refusal: string } {
+  const listed = source.requires
+    .map(name => servers.find(s => s.name === name))
+    .filter((s): s is InboxServerCandidate => Boolean(s))
+
+  const usable = listed.filter(s => s.origin !== 'claude.ai')
+  const server = usable.find(s => s.status === 'connected')
+
+  if (server) return { server }
+
+  const wanted = source.requires.join(' or ')
+  const connectors = listed.filter(s => s.origin === 'claude.ai')
+  const broken = usable[0]
+
+  // Ordered by what the reader can do about it. A connector that claims to be
+  // connected is the confusing case and gets the longest answer, because
+  // "it says Connected on the MCP page" is the obvious and reasonable objection.
+  const reason = broken
+    ? broken.status === 'needs-auth'
+      ? `${broken.name} needs signing in to before it will answer.`
+      : `${broken.name} is not answering (${broken.status}).`
+    : connectors.length
+      ? `${connectors.map(c => c.name).join(' and ')} is a claude.ai connector. It reports `
+        + 'Connected, but that sign-in belongs to your interactive session and an '
+        + 'unattended run gets none of its tools. Add the service as its own HTTP server '
+        + 'and sign in to that — the way Notion is set up — and this can use it.'
+      : `${wanted} is not configured in this project.`
+
+  return { refusal: `${reason} Nothing was spent. Check it on the MCP page.` }
 }
 
 /**

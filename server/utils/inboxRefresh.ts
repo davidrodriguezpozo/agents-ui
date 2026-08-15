@@ -1,6 +1,7 @@
 import {
   INBOX_DENIED_TOOLS, buildInboxPrompt, describeRunFailure, findInboxSource, inboxModel,
-  inboxStore, inboxTimeoutMs, inboxTurns, mergeLearned, parseInboxReply, salvageEnvelope,
+  inboxStore, inboxTimeoutMs, inboxTurns, mergeLearned, parseInboxReply, pickInboxServer,
+  salvageEnvelope,
   type InboxSourceState, type RunEnvelope,
 } from './inbox'
 import { listMcpServers } from './mcp'
@@ -89,23 +90,12 @@ export async function refreshInboxSource(
 
   const servers = await listMcpServers(projectDir).catch(() => [])
   // Any of the names is enough — see `InboxSource.requires` for why there is more
-  // than one. Prefer a connected match over a listed-but-broken one.
-  const candidates = source.requires
-    .map(name => servers.find(s => s.name === name))
-    .filter((s): s is NonNullable<typeof s> => Boolean(s))
-  const server = candidates.find(s => s.status === 'connected') ?? candidates[0]
+  // than one, and `pickInboxServer` for why "connected" is not the question.
+  const choice = pickInboxServer(source, servers)
 
-  if (!server || server.status !== 'connected') {
-    const wanted = source.requires.join(' or ')
-    const reason = !server
-      ? `${wanted} is not configured in this project.`
-      : server.status === 'needs-auth'
-        ? `${server.name} needs signing in to before it will answer.`
-        : `${server.name} is not answering (${server.status}).`
-
-    const message = `${reason} Nothing was spent. Check it on the MCP page.`
-    await recordRefusal(source.key, message)
-    return { ok: false, refusal: { error: 'source_unavailable', message } }
+  if ('refusal' in choice) {
+    await recordRefusal(source.key, choice.refusal)
+    return { ok: false, refusal: { error: 'source_unavailable', message: choice.refusal } }
   }
 
   // What the last run worked out, so this one can skip the discovery that made

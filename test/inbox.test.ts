@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import {
   INBOX_DENIED_TOOLS, INBOX_SOURCES, findInboxSource, inboxItemId, inboxItemUrl,
   buildInboxPrompt, describeRunFailure, dueForRefresh, inboxModel, mergeLearned,
-  inboxTimeoutMs, inboxTurns, parseInboxReply, parseTimeOfDay, salvageEnvelope,
-  visibleItems,
+  inboxTimeoutMs, inboxTurns, parseInboxReply, parseTimeOfDay, pickInboxServer,
+  salvageEnvelope, visibleItems,
   type InboxSourceState,
 } from '../server/utils/inbox'
 
@@ -150,6 +150,64 @@ describe('the sources themselves', () => {
   it('can be looked up by key, and says so when there is no such source', () => {
     expect(findInboxSource('notion')?.label).toBe('Notion')
     expect(findInboxSource('nope')).toBeUndefined()
+  })
+})
+
+describe('choosing a server to ask, which is not the same as a connected one', () => {
+  /**
+   * Measured against the real CLI, and the reason this function exists:
+   * `claude mcp list` reported `claude.ai Gmail: ✔ Connected`, and a headless
+   * run allowed exactly that server got zero tools and said so. Google Calendar,
+   * also Connected, did the same. A connector's OAuth is the interactive
+   * session's; `claude -p` inherits none of it.
+   */
+  const source = findInboxSource('slack')!
+
+  const plugin = (status: string) =>
+    ({ name: 'plugin:slack:slack', status, origin: 'plugin' as const })
+  const connector = (status: string) =>
+    ({ name: 'claude.ai Slack', status, origin: 'claude.ai' as const })
+
+  const refusalOf = (servers: Parameters<typeof pickInboxServer>[1]) => {
+    const result = pickInboxServer(source, servers)
+    if (!('refusal' in result)) throw new Error('expected a refusal')
+    return result.refusal
+  }
+
+  it('takes a connected server that carries its own credentials', () => {
+    const result = pickInboxServer(source, [plugin('connected')])
+    expect('server' in result && result.server.name).toBe('plugin:slack:slack')
+  })
+
+  it('refuses a claude.ai connector however connected it claims to be', () => {
+    // The bug this was written for: `status` said connected, so the pre-flight
+    // passed, and the run was charged to discover it had no tools.
+    expect(refusalOf([connector('connected')])).toContain('claude.ai connector')
+    expect(refusalOf([connector('connected')])).toContain('Nothing was spent')
+  })
+
+  it('says what to do about it, because the MCP page will say Connected', () => {
+    expect(refusalOf([connector('connected')])).toContain('its own HTTP server')
+  })
+
+  it('prefers the usable server when both kinds are present', () => {
+    const result = pickInboxServer(source, [connector('connected'), plugin('connected')])
+    expect('server' in result && result.server.name).toBe('plugin:slack:slack')
+  })
+
+  it('reports the real problem when the usable one is the broken one', () => {
+    // The connector is present and "connected", and saying so here would send
+    // the reader to fix the wrong thing.
+    expect(refusalOf([connector('connected'), plugin('needs-auth')]))
+      .toContain('plugin:slack:slack needs signing in')
+  })
+
+  it('says a server is missing when none of the names are there at all', () => {
+    expect(refusalOf([])).toContain('not configured in this project')
+  })
+
+  it('does not offer a server that is listed but not answering', () => {
+    expect(refusalOf([plugin('failed')])).toContain('not answering (failed)')
   })
 })
 
