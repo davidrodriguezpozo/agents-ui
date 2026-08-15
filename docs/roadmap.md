@@ -1,399 +1,245 @@
 # Roadmap
 
-Third pass, August 2026, written the week 0.2.0 went to npm. Against Claude Code 2.1.224
-and the Desktop redesign of April 2026. The public version is
-[launch/roadmap-issue.md](launch/roadmap-issue.md) and should be regenerated from this
-whenever something here moves.
+Fourth pass, August 2026, written at 0.5.3. Against Claude Code 2.1.224, the Desktop
+redesign of April 2026, and the self-hosted environments beta of August 2026. The third
+pass is in git history and worth reading — most of it holds, and the parts that do not are
+named below rather than quietly dropped.
+
+## The audience is one person, and that is now a decision
+
+The first three passes were written as though strangers were about to arrive. They were
+not, and the third pass spent its opening section proving it with a download curve.
+
+**This one starts from the opposite premise: the user is the person writing it.** The tool
+exists to make one engineer, tech lead and manager materially faster at those three jobs.
+If other people find it useful, good — the repository stays public, the licence stays MIT
+— but nothing on this page is chosen because it might attract them.
+
+That retires a great deal:
+
+- The download curve stops being a scoreboard. It was never measuring anything but the
+  publish log anyway.
+- The launch checklist stops being *blocking*. It becomes a chore worth an hour, some day.
+- The "no evidence" problem dissolves. There is evidence, it arrives daily, and it is the
+  question *did this save me time this week*.
+
+It retires nothing about rigour. The working rule from the last three cycles holds and is
+worth restating, because under a one-person audience it is the only quality gate left:
+**for anything that reads somebody else's output, look at the real output before designing
+around it.** That rule is what took an inbox refresh from $1.39 to $0.38. Losing an
+audience is not a licence to lose that.
+
+---
 
 ## Where this actually is
 
-The absorb-the-workbench cycle finished. All five items shipped — a file editor with
-line numbers and colour, a real shell on a pty, the project's dev server running in the
-page, rewind guarded by `baseSha`, and one pane at a time so the four of them fit. Two
-more landed on top: how much a session is trusted before it starts, and telling one event
-firing from another. Eleven versions went out between the 4th and the 10th, ending at
-0.2.0.
+Eleven releases between 0.2.0 and 0.5.3, in five days. Seventy-three commits: 22 fixes, 10
+features, 6 builds, 2 performance. The fix-to-feature ratio is the shape of a product being
+used hard by one person, which is exactly what it is.
 
-**Published is not launched, and the numbers say so plainly.** npm reports ~1,500
-downloads, which looks like an audience until the curve is put beside the publish log:
+**The third pass and the week that followed it disagree about what this product is, and the
+week is right.**
 
-| Day | Publishes | Downloads |
-| --- | --- | --- |
-| Aug 4 | 2 | 208 |
-| Aug 5 | 1 | 213 |
-| Aug 6 | 5 | 666 |
-| Aug 7 | 2 | 311 |
-| Aug 8 | 0 | 61 |
-| Aug 9 | 0 | 17 |
+The third pass says this is a **gate, a governor and a health record** for unattended
+coding work. Every one of its four forward bets is about sessions, rituals, landing order
+and merge safety.
 
-About 130 downloads per publish, decaying to noise the day publishing stopped. That is
-registry mirrors and security scanners doing their rounds, not people installing a thing.
-Everything else agrees: no new star since the 3rd — *before* the first publish — fourteen
-unique repo visitors in fourteen days, no issue opened by anyone, and no comment on the
-pinned roadmap issue.
+The week built something else:
 
-So the second pass's diagnosis survives intact, and now it has a number attached: the
-build is ahead of the evidence, and five more features have since been chosen the same
-way the four before them were. Six of the eight blocking items in
-[launch/CHECKLIST.md](launch/CHECKLIST.md) are still unchecked.
+- an **inbox** spanning Notion and Slack, over MCP, with per-source cost, dismissals and
+  scheduled refresh (`feat: work waiting elsewhere`)
+- **one screen for what needs you** — the Now queue, ahead of everything else in the
+  sidebar (`feat: one screen for what needs you`)
+- **Reviews** pointed at a command of your own, pull requests one press from a session
+- **⌘K that acts** rather than only finding
+- the inbox refresh made four times cheaper, which is what made a *scheduled* refresh a
+  defensible thing to offer at all
 
----
+**The third pass does not mention the inbox once.** It is the newest and most-invested
+surface in the app, and it is absent from the document that was supposed to be deciding
+what got built. That is not a small oversight; it is the thesis being out of date and the
+hands knowing before the plan did.
 
-## What is actually blocking the launch
-
-Not the checklist. The checklist is a week of unglamorous work and none of it is hard.
-
-The blocker is the comment everyone expects in the first ten replies: **"this is Claude
-Code and Claude Desktop with a web page on it."** Going into a Show HN without a true
-answer to that is what makes the thread go badly, and the honest position today is that
-the answer exists but the pitch buries it.
-
-### Concede the part that is true
-
-Claude Code runs on a cron. Routines fire in Anthropic's cloud. Desktop has sessions on
-worktrees, a diff viewer, archive-on-merge, and a workbench that is straightforwardly
-better than this one. Anyone claiming otherwise gets corrected in public, deservedly.
-
-### The answer, stated once
-
-Starting an agent is the easy half. Everything here is the other half — what happens
-after it runs, when nobody is watching:
-
-- A run that fails your test suite does not merge. The verdict expires when the base
-  moves, so a pass from an hour ago does not count for code that changed underneath it.
-- A run that fails its checks fixes itself, up to a limit you set, and then stops.
-- A ritual that has failed `GIVE_UP_AFTER` mornings running turns itself off instead of
-  failing every morning forever.
-- Several finished branches land in an order that accounts for each other, re-checked as
-  the base moves under them.
-- A daily spend cap skips the work rather than billing you for it, and work is held back
-  near the rate limit rather than burning the last of it unattended.
-- An unattended run reaches only the hosts on a list you chose, and says which one it was
-  refused.
-
-None of those are a nicer way to start an agent. They are the layer that decides whether
-what the agent did should land — a gate, a governor, and a health record. That layer is
-what you end up writing by hand once a cron job has merged something red at 3am.
-
-Draft for the reply, to be reused in the posts:
-
-> Yes — you can put Claude Code on a cron, and Desktop gives you sessions on worktrees. I
-> ran it that way for months. What I kept hand-rolling was everything after: a run that
-> fails its own tests shouldn't merge, a pass from before the base moved shouldn't count,
-> a job that's failed three mornings running should stop rather than fail every morning
-> forever, and none of it should quietly spend a day's budget while I'm asleep. That's
-> what this is. Not a nicer way to start an agent — the part that decides whether what it
-> did should land.
-
-### Why the current pitch invites the objection
-
-The README leads with *"Leave Claude Code running — work that fires on a schedule."* That
-is the single row where the comparison is lost on the merits: Routines genuinely fire at
-08:00 in the cloud, and here the deployment is a laptop that is shut. Leading with the
-timer picks the one fight that cannot be won, and buries six rows that cannot be answered
-at all.
-
-**The pitch should lead with the gate and the governor, and let the schedule be a detail.**
-Not "it runs at 08:00" but "it runs your tests before anything merges, and stops when it
-has clearly broken". Same product, no promise the hardware cannot keep.
+New working rule, and this cycle earned it: **when the strategy document does not mention
+the surface you spent the week building, the document is what is wrong.**
 
 ---
 
-## Now — build the answer, then launch
+## What the third pass got wrong
 
-The next cycle has one purpose: make the column Desktop does not have complete enough
-that the objection answers itself, and close the two holes where a first demo falls over.
-Ordered.
+**1. It treated the launch as the gate.** "Build the answer, then launch" put seven items
+in front of a Show HN that was never going to happen, and five days later not one of the
+six blocking checklist items had moved while eleven releases went out. That is not
+weakness of will. It is what happens when the plan's next step is something the author does
+not actually want, and the honest fix is to stop calling it the next step.
 
-### ~~1. The PR after the merge~~ — shipped
+**2. It picked the wrong differentiator to defend.** The nine rows of the README comparison
+table are all forms of *policy about whether work should land*. They are a real lead and
+they are not a moat — Anthropic could ship every one. Defending them was a competitive
+argument, and there is no longer a competition to win.
 
-Watch it, react to red CI, land it when green. The loop closing end to end — event fires,
-work happens, checks gate it, PR opens, CI goes red, the fix happens, it lands green,
-nobody was watching. It compounds rather than adding a surface: event triggers, the check
-queue, expiring verdicts and the lander were all already here.
-
-**Landing is opted into separately from watching, every time.** Fixing red CI pushes to a
-branch that is already yours and is undone by resetting it. Merging is the one action in
-this app that other people can see and that nothing here can take back, so it is never
-inherited from switching watching on, and the checkbox resets each time the dialog opens.
-A checkbox that remembers "yes" is how somebody merges something they did not mean to.
-
-**Silence is not success.** A pull request whose rollup reports nothing has passed
-nothing, and is never landed on that basis — otherwise the merge gate this product is
-built around would quietly stop applying to the one merge anybody else can see. It is
-given five minutes first, because Actions takes a moment to queue and watching a pull
-request the instant it opens is the normal case, not the exception.
-
-Driven by polling on the scheduler's existing event tick, with no hook into the turn
-lifecycle: a fix turn is detached, so the alternative is a completion callback that has to
-survive the process stopping mid-turn. Asking "is this session still busy?" every two
-minutes needs nothing to survive anything. It rides the same timer as the event poll but
-is deliberately not awaited behind it — `pollEventsOnce` can sit for the ten-minute retry
-delay, which is long enough that a pull request going green would go unnoticed while an
-unrelated ritual finished.
-
-**The working rule paid for itself again, and this time it caught a shipped bug rather
-than a design one.** `gh pr view --json statusCheckRollup` on this repository's own pull
-request came back with *two* `CheckRun` entries both named `build`, from workflow runs four
-hours apart, against a single head commit — a re-run leaves the earlier attempt in the
-list. Read flat, any failing row makes the pull request failing, so a check that failed and
-was re-run green would stay red for as long as anyone watched it: the watcher would hand
-the same already-fixed failure back three times, spend every attempt it had, and give up on
-a pull request that was passing throughout. The rollup is now reduced to the latest result
-per check name. One cheap probe, and it was the difference between the feature working and
-the feature confidently doing the wrong thing.
-
-Two smaller things the same review caught before they shipped: `gh pr merge
---delete-branch` exits non-zero *after having merged*, because the branch is checked out in
-the session's worktree and git refuses to delete it — so a successful landing would have
-been reported as refused. And a branch whose pull request was opened by hand has no
-upstream, which made `@{upstream}..HEAD` fail and read as "the turn committed nothing".
-
-### ~~2. Ritual chains~~ — shipped
-
-Triage → fix → verify → open a PR as one unit, with one health record. A ritual can now be
-an ordered list of instructions instead of one, each step told what the last produced,
-stopping at the first that does not work — verifying a fix that failed is a way to spend
-money confirming it.
-
-**The steps are separate runs; the firing is one thing.** Each step gets its own
-transcript, its own cost and its own row, because that is where the detail is useful. They
-carry a `chainId`, and one collapse turns them back into a single firing wherever a
-*judgement* is made. That split is the whole design, and it is load-bearing in two places
-that turn out to be the same place:
-
-- **The failing streak.** `GIVE_UP_AFTER` is three, counted in mornings. Without the
-  collapse a three-step chain failing once contributes three failures, and the ritual turns
-  itself off after a single bad night — the precise behaviour chains exist to avoid.
-- **The morning digest.** One thing happening overnight was about to be three things to
-  read about it, which was the other half of the complaint.
-
-Three defects found reviewing it, all of them the same shape — somewhere a chain quietly
-went back to being N things:
-
-- **`listRunsBySchedule` capped at ten *runs*.** A six-step chain would have given barely
-  one firing of history, and `shouldGiveUp` needs three consecutive bad ones — so a chain
-  long enough would never have been turned off at all. It counts firings now.
-- **What a step was refused was nearly lost.** The digest offers to grant the rules a
-  blocked run asked for; taking them from the deciding step alone would drop a rule asked
-  for by step one, so the offer would never appear for the thing that actually blocked.
-  Unioned across the firing.
-- **A chain trimmed to one step kept its old steps.** `normalizeSteps` returning nothing
-  read as "absent, keep what is stored", so the saved record disagreed with what had just
-  been sent. Present-but-degenerate now clears.
-
-The row says how many steps a ritual has, because one firing of a chain is several agent
-invocations and that is the most expensive fact on the row.
-
-### ~~3. More event kinds~~ — two of three shipped
-
-Issue labelled and review requested. Both fit the deployment better than the clock does:
-an event fires whenever the machine is awake, so there is no window to miss.
-
-**They needed a different source, and that was the whole design.** The first two triggers
-list things that *exist* — open pull requests, finished workflow runs — and key the cursor
-on a number GitHub hands out in order. "Labelled" is not a property of an issue. It is
-something done to one, possibly long after it was opened and possibly more than once, so
-listing issues cannot express it: an old issue labelled today has a low number, and a
-high-water mark on issue numbers steps straight past it. Keying on `updatedAt` instead
-would have fired on every comment and edit as well, which is a trigger that does not do
-what its own sentence says.
-
-`repos/{owner}/{repo}/issues/events` is the event log itself — a monotonically increasing
-`id` per entry, and the kind of thing that happened on each. Both new kinds come from one
-request, and the cursor works unchanged.
-
-**The third one is not built, and the reason is a payload fact.** A `mentioned` event
-exists in that log, and it has **no field saying who was mentioned** — `actor` is whoever
-wrote the comment. Confirmed against a hundred real events from a busy public repository,
-where all three kinds appear. So the endpoint cannot answer "mentions *me*"; a trigger
-built on it would fire on every mention of anybody in the repository, which is a
-different and much noisier feature wearing the wrong name. Doing it properly means the
-search API or the notifications feed, neither of which has a monotonic id, so it needs a
-cursor design of its own rather than a fourth branch in this one. Left undone deliberately
-rather than shipped as something that would look right in a menu and be wrong in use.
-
-The working rule earned its keep for the third cycle running, and this time it changed
-what got built rather than how: **look at the real output before designing around it.**
-An afternoon's assumption would have produced a mentions trigger nobody could rely on.
-
-### ~~4. The event lookback is a silent cap~~ — shipped
-
-Fifty items covers a weekend and does not cover a fortnight, and past it the cursor
-stepped over the difference without a word. Same class of bug as the silently-missed
-ritual, and it got the same treatment: recorded on the schedule, reported in *while you
-were away* and on the row, and deliberately **not** a run — a gap in the failing streak
-would turn a ritual off for coming back from holiday.
-
-The detection is one comparison, and getting it right was about where the numbers come
-from rather than the arithmetic. A poll has a gap when the window came back **full** and
-its oldest item is *newer* than the cursor: everything in between happened unseen. A
-window that was not full saw everything there was, so it cannot have missed anything.
-
-**The oldest item has to come from the raw listing, not from the filtered events.** How
-far back a poll looked is a property of the request. A window of fifty workflow runs
-containing two failures still only reached as far as its fiftieth run, and measuring from
-the two would have claimed a reach the poll never had — reporting no gap in exactly the
-busy repository where gaps happen. Same for the issue event log, which is shared by every
-kind of thing that can happen to an issue: a repository busy with comments and closures
-reaches back far less than its label count suggests.
-
-Also worth writing down, since the comment in the file claimed otherwise for a whole
-cycle: `selectNew` did **not** report this. The docstring said it did. A comment
-describing a feature that was never built is worse than no comment, because it stops
-anyone looking.
-
-One limit this does not remove, and cannot: a pull request opened *and closed* between two
-polls is invisible to `pr list --state open` whatever the window size. That is a property
-of polling for things that exist rather than for things that happened — the shape the two
-new event kinds had to leave behind.
-
-### ~~5. Laptop sleep, decided rather than deferred~~ — shipped, as recommended
-
-Settled the way this argued for: **opt-in per ritual**, off by default, with the run
-labelled late so nothing pretends it happened on time.
-
-Per ritual because the answer genuinely differs by ritual, and that is the whole reason it
-could not be one global setting. A briefing generated at 14:00 about the morning is worse
-than nothing. A triage run over what came in overnight is worth having whenever it
-happens, and skipping it means the work simply never gets done. Neither answer is right
-for the other.
-
-**The window itself does not move.** An occurrence inside two hours is on time and one
-outside it is not, whatever the ritual has asked for — `catchUp` changes only what being
-past it *means*: run anyway, or do not run at all. Keeping that separation is what stops
-the setting from quietly redefining "on time".
-
-The run is told. Most of these instructions are written in the present tense — "what came
-in overnight", "what is on for today" — so a run that does not know it is six hours late
-answers as though it is not. The lateness is appended as trailing context, the way an
-event is, so the instruction somebody wrote is still the instruction that arrives. Chains
-get it on every step, through one shared decorator, so a late chain cannot answer in the
-present tense from step two onward.
-
-This is the row the README's first line was losing, and it is now answerable without
-overclaiming: the schedule still cannot fire while the machine is off — nothing running
-locally can — but the work is no longer silently lost, and for the rituals where late is
-better than never, it is no longer skipped either.
-
-### ~~6. The cold machine~~ — done, and it found the worst bug of the cycle
-
-The install itself is in good shape: two to three seconds, 60 MB, binary on PATH, server
-answering in about a second, every endpoint 200 — on a box with no npm cache, no
-`~/.claude`, and no git, `gh` or Claude Code anywhere. The no-compile install claim holds
-where it matters, which is a machine that has nothing.
-
-**The welcome screen could not appear.** It fires when `~/.claude` is missing, and the
-server writes its own storage into `~/.claude/agents-ui` while booting — so the directory
-always existed by the time a browser connected. In the container the entire directory
-contained `agents-ui` and nothing else, and `exists` came back true. The one screen
-written for somebody with nothing set up was unreachable by anybody with nothing set up.
-
-Behind it, a second one that made it worse. `/api/setup` refused whenever the parent
-existed, so even once the welcome appeared, pressing its button created nothing and
-returned "Directory already exists". That is not an error, so the toast reported success —
-and the next read found nothing configured and showed the welcome again. A loop, on the
-first screen, produced by two functions that were each individually reasonable.
-
-The fix is to stop asking the wrong question. "Does `~/.claude` exist" is not "has this
-person got a Claude Code set-up"; the real question is whether there is anything in there
-that is not ours. And setup now asks per directory rather than about the parent, which is
-both idempotent and the only correct behaviour when the parent is half-made — the normal
-case here rather than an edge one.
-
-**This is the argument for the whole item, and it should have been done a cycle earlier.**
-Nothing about it needed a launch. It needed a machine that had nothing on it, which is the
-one machine a person developing the thing never has. Every test in the suite passed
-throughout, and would have gone on passing.
-
-One more thing it turned up in passing: the `Dockerfile` copied `bun.lock`, and this
-repository has `bun.lockb`. It has never had a `bun.lock` in its history, so the container
-build has been broken since the file was written.
-
-### ~~7. Reviews — the other end of the pull request~~ — shipped
-
-Item 1 followed the pull request *a session opened*. This is the rest of them: what is
-waiting on your review, and where your own work has got to. Two `gh` list calls and one
-GraphQL query, in the project you are already in.
-
-**It is not a GitHub client and declining to be one is the design.** Everything that is
-neither "waiting on me" nor "mine" is absent — no activity feed, no repository browser, no
-team queue. A worse GitHub in a smaller window is not worth building. What is worth
-building is the row that turns into a session, and everything on the page exists to make
-that row's *one* button the right one.
-
-**The verdict is computed once, on the server, and drawn as given.** This is the lesson
-from `mergeTrain` applied ahead of the bug rather than after it: the page could perfectly
-well work out "ready to merge" from four fields, and a second implementation of the same
-judgement is how two numbers on one screen start disagreeing. `verdictFor` is pure and
-tested, and the page renders what it is handed.
-
-Two ordering calls worth naming, because both could reasonably go the other way:
-
-- **A person outranks a robot.** `changes-requested` and `unanswered` are read before the
-  check rollup, so a pull request that is both red and criticised reads as criticised.
-  Somebody is sitting at the other end of one of those, and you fix the build on your way
-  to answering them either way.
-- **Approved-with-nothing-reporting is shown as ready, and says so.** Item 1 refuses to
-  land on an empty rollup, and that rule is about acting *unattended*. A person reading a
-  page and pressing the button themselves is owed the distinction, not a refusal.
-
-**The working rule paid again, and again from real output rather than from thinking about
-it.** Pointed at a real repository for the first time, the page showed a conflicted pull
-request of mine marked as needing me — and it was the only row with no button on it, which
-is the one state where an agent is unambiguously useful. `update` exists because of that
-run. The same probe settled two field choices: `gh pr list --json comments` returns every
-comment body, megabytes to count a number, and `latestReviews` carries the full text of
-each review to count how many said yes. Both are one aliased GraphQL query instead, which
-degrades to null — and null is drawn as nothing rather than as zero, because "we did not
-ask" and "there are none" are different answers.
-
-**Nothing is posted to GitHub by any of it.** A session started from here has `gh` and a
-shell, so leaving a review is one tool call away — and a review under your name that you
-have not read is the worst thing this feature could do. All four prompts end by saying so.
-Merging is the single exception, and is treated like one: only on your own pull request,
-only when a *fresh* read still says ready, and asked twice.
-
-### Then the rest of the checklist, then post
-
-Hero GIF, screenshots, social preview, repo name, rewritten drafts. Mechanical once the
-above is true, and worth doing in that order — the drafts cannot be written until the
-answer above is built and the sleep decision is made.
+**3. It analysed only Anthropic.** Zero mention of the third-party field, which turns out to
+be busy: Nimbalyst (formerly Crystal), `parallel-code`, `ccmanager`, several of them
+multi-model. Under the old framing that was a blind spot. Under the new one it is a
+purchasing decision that has already been made, and its only consequence is *do not build
+there*.
 
 ---
 
-## Deliberately not doing: workbench depth
+## The competitive picture, checked rather than assumed
 
-Find-in-file, bracket matching, a proper diff viewer, arrangeable panes. The README
-concedes Desktop wins here and it is not close, and the temptation after finishing the
-absorb cycle is to close that gap.
+The third pass asserted these from memory. They are now checked, with dates, because two of
+them had moved and one had moved further than the document feared.
 
-**Declining is the answer to the objection, not a retreat from it.** Parity-chasing on the
-workbench is precisely how you become the second-best Desktop, built by one person,
-arriving late — and it spends the cycle making the "it's just Desktop" comment *more*
-true. The absorb bet was always narrow: you never have to leave a session's workspace to
-finish its work. That bar is met. Editing one line and re-running the checks works today.
-
-It comes back if somebody who is actually using this says the editor is why they left.
-
----
-
-## After the launch — bets, and what would settle each
-
-Unchanged from the second pass and still deliberately unordered, minus the three promoted
-above. There is no telemetry here and there never will be, so the evidence is what people
-say in issues and threads.
-
-| Bet | Promote it when somebody says |
+| Claim | Checked |
 | --- | --- |
-| **Event runs that are legible** — partially addressed; each firing now says which event it was | "I still can't tell these three runs apart" |
-| **Configuration that travels through git** — rituals and checks committed to the repo | Anyone describing a second person in the same repo. The entire team story, and it is a file format, not a server |
-| **Landing without colliding** — teammates' open branches, not only our own sessions | Same signal, arriving later |
-| **Which rituals earn their cost** | "I don't know if this is worth what it spends" |
+| Desktop has parallel sessions on worktrees | **True, and more.** The April 14 2026 redesign has a multi-session sidebar, worktree isolation, drag-and-drop panes, three view modes, side chat, and an **integrated terminal and file editor** |
+| Worktrees are a Desktop feature | **False.** Native in the CLI since v2.1.49, February 2026 — `claude -w` |
+| Routines are cloud-only and Team-plus | **False.** Pro, Max, Team and Enterprise, research preview. 15/day on Max, drawing down the same subscription limits |
+| Routines fire on a schedule | **True, and on API calls and GitHub webhooks** — so the event triggers are not unique either |
+| Routines need GitHub | **True, and this is the durable gap.** GitHub repositories only, via the Claude GitHub App, executing in Anthropic's cloud |
+| Self-hosted execution is coming and will close the gap | **Arrived Aug 6 2026, and does not close it.** Public beta, **Team and Enterprise only**, off by default, and Anthropic tells you to expect a platform team to own the runner image and orchestrator |
 
-One debt still demoted: **storage that survives concurrency.** Flat JSON remains the
-permanent design for one person on one machine. It comes back if the run queue actually
-corrupts it, and not before.
+Two conclusions, both of which change what gets built:
+
+**The workbench argument is over and it was lost in April.** The absorb-the-workbench cycle
+— editor, shell, dev server in the page — built toward parity with something Desktop had
+already shipped. The third pass's "deliberately not doing: workbench depth" was right, and
+it should now go further: those panes are a maintenance cost with a better free
+alternative one Cmd-Tab away.
+
+**The scheduling gap is narrower than the README claims and realer than the README
+fears.** "No scheduling" is simply false and should come out of the launch drafts. But
+Routines run in Anthropic's cloud against GitHub repositories. Everything this tool
+schedules runs against a **local working copy** and anything MCP-reachable — no GitHub App,
+no push required, no cloud. And self-hosting is not available on an individual plan and
+will not be soon. That gap is not closing; it is the one to build on.
+
+---
+
+## Now — the control plane
+
+The unit this app is organised around should stop being *a session* and become *an
+obligation*: a thing that needs you, from wherever it came from, with one press to
+discharge it.
+
+That is not a pivot. It is what the last week built, given a name — and it puts the Now
+queue and the inbox at the centre where they already are in use, with sessions demoted from
+"the product" to "how an obligation gets discharged".
+
+### 1. Inbox breadth — and the thing actually blocking it
+
+Notion and Slack today. The obligations of the actual job also arrive from Linear or Jira,
+HubSpot, the calendar and email.
+
+**The code half is done and was checked rather than assumed.** `inboxRefresh.ts` has no
+per-source branching at all: it is driven entirely by the `InboxSource` record, so a new
+source really is a config entry and a prompt. The expensive part is solved too — the first
+Notion refresh cost $1.48 and 82 seconds, almost none of it the query, and caching that
+derivation is the pattern every new source inherits.
+
+**What blocks breadth is MCP setup, and it is not what `claude mcp list` says it is.** Of
+the services on this machine, Linear, Jira, HubSpot, Asana, monday.com and Intercom all
+report *Needs authentication*. Gmail, Google Calendar and Google Drive report **Connected**
+— and are unusable anyway:
+
+> `claude mcp list` → `claude.ai Gmail: ✔ Connected`
+> `claude -p --allowedTools mcp__claude_ai_Gmail` → zero tools, *"The following MCP servers
+> require authentication before their tools can be used: claude.ai Gmail"*
+
+Google Calendar did the same. **A claude.ai connector's OAuth belongs to the interactive
+session and a headless run inherits none of it.** The two sources that work are both the
+other kind — `notion` is a user-scoped HTTP server and `plugin:slack:slack` is a plugin —
+and each carries its own credentials rather than borrowing a session's.
+
+That cost $0.37 to find out, which is precisely the charge the pre-flight exists to
+prevent, because it gated on `status === 'connected'`. Fixed: `pickInboxServer` decides on
+`origin` before `status`, refuses a connector without spending, and says what to do
+instead. The working rule paid for the fourth cycle running, and this time it found a bug
+in shipped code rather than in a design.
+
+**So the route to a new source is a setup step, not a feature:** add the service as its own
+user-scoped HTTP server and `claude mcp login` it — exactly how Notion is set up — then add
+the config entry. The app can already do both halves; the MCP page has the add form and the
+sign-in button. Linear is the obvious first one, and it is an evening's work with no code
+in it.
+
+### 2. The briefing as the front door
+
+`digest.ts`, `NightShift` and `WhileYouWereAway` already exist and are the closest thing
+here to the actual product. A tech lead's 08:00 is: what broke overnight, what is waiting
+on me, what my team is blocked on, what I said I would do.
+
+**This is the one thing Routines structurally cannot do**, and it is worth being precise
+about why: it needs local repositories, Slack and Notion in the same run, on a machine that
+holds all three sets of credentials. A cloud routine against a GitHub repository cannot
+assemble it.
+
+### 3. Close the loop between the halves
+
+The inbox knows what needs you. Sessions know how to do work. Today those are two screens
+and a copy-paste.
+
+"This PR needs review" → a session that reviews it against your standards → **posts nothing
+until you say so.** The prompt discipline for this already exists and is right: all four
+Reviews prompts end by refusing to post under your name, and merging is the single
+exception, asked twice, only on your own pull request, only on a fresh read.
+
+Most of this is built. What is missing is the one button.
+
+### 4. Gate and governor, demoted to infrastructure
+
+Check verdicts that expire when the base moves, the failing streak, spend caps, the
+sandbox, ordered landing. **These stay, and they stop being the headline.** They are what
+makes the unattended half trustworthy enough to leave alone. They do not need features;
+they need to keep working, and a regression in any of them is a P1 in a way that a missing
+inbox source is not.
+
+---
+
+## Deliberately not doing
+
+**Workbench *depth* — now with a stronger reason.** Find-in-file, bracket matching, a diff
+viewer, arrangeable panes. Desktop shipped all of it in April and does it better. The
+absorb bet was always narrow — you never have to leave a session's workspace to finish its
+work — and that bar is met. Editing one line and re-running the checks works today.
+
+**The panes themselves stay, and that is decided rather than drifted into.** The editor,
+the shell and the preview earn their place: the loop they close is *this* app's loop —
+read what a session did, change one line, re-run the checks, land it — and a Cmd-Tab to
+Desktop closes a different loop that ends somewhere else, with the verdict and the merge
+gate left behind. What is declined is chasing Desktop *within* them. They stay as they are:
+enough to finish a piece of work without leaving, and no more.
+
+**The launch.** Demoted from blocker to chore. `docs/launch/` stays; the drafts are stale
+in a specific way — they lead with parallel sessions, which Desktop shipped in April, and
+they claim Desktop has no scheduling, which Routines disproved in April too. Anyone posting
+them as written would be corrected in the first three replies and would deserve it.
+
+The one exception, worth ten minutes some evening: the repo description still sells the
+March pitch, Discussions are off, and there are no topics. That is the entire cost of
+leaving the door open for the "if others find it useful" case. It is not a cycle.
+
+---
+
+## Bets, and what would settle each
+
+The third pass gated every bet on a sentence a stranger might say. No stranger is coming,
+so those conditions could never fire and the table was un-actionable by construction.
+Rewritten as things *you* will notice, which is a signal that actually arrives.
+
+| Bet | Promote it when |
+| --- | --- |
+| **Inbox sources beyond Notion and Slack** | The first morning you check Linear or the calendar by hand *after* reading the queue. That is the queue failing at its one job |
+| **Configuration that travels through git** — rituals and checks committed to the repo | You want the same ritual in a second repository and copy it by hand. Still a file format, not a server — and now also the honest path to a teammate using it |
+| **The briefing as the front door** | Any week you open the app and go somewhere other than Now first. That means the front door is in the wrong place |
+| **Which rituals earn their cost** | The spend page tells you a number you cannot attribute. With rituals cheap this is not urgent; it becomes urgent the moment scheduled inbox refreshes are on for four sources |
+| **Landing without colliding** — teammates' open branches, not only our own sessions | The first landing that conflicts with something a colleague pushed. Genuinely likely now that this is pointed at a work monorepo |
+
+One debt still demoted: **storage that survives concurrency.** Flat JSON remains the right
+design for one person on one machine. It comes back if the run queue actually corrupts it,
+and not before. Eight parallel sessions made every page slow this cycle and the fix was not
+the storage engine.
 
 ---
 
@@ -406,27 +252,37 @@ sandboxed runs that name the host they were refused · rituals that fire when a 
 CI goes red · the rate limit shown beside the spend and enforced against unattended work ·
 a skipped ritual saying so · permission handling for unattended runs · spend tracking and
 hard limits · multi-repository projects · MCP management · GitHub skill import ·
-marketplace and plugin install · workflow builder · relationship graph · backups ·
-**editing a file without leaving the session** · **a real shell in the workspace** ·
-**running the session's app and looking at it** · **rewind, guarded at the branch point** ·
-**one pane at a time** · **choosing how far a session is trusted before it starts** ·
-**following the pull request after it is opened — fixing red CI and landing it when green** ·
-**rituals that are a chain of steps, counted as one firing** · **rituals that fire when an
-issue is labelled or a review is requested** · **picking a branch or pull request from what
-exists, rather than typing it** · **the pull requests waiting on you and the ones you
-opened, each one press from a session that knows why it is there**.
+marketplace and plugin install · workflow builder · relationship graph · backups · editing
+a file without leaving the session · a real shell in the workspace · running the session's
+app and looking at it · rewind, guarded at the branch point · one pane at a time · choosing
+how far a session is trusted before it starts · following the pull request after it is
+opened — fixing red CI and landing it when green · rituals that are a chain of steps,
+counted as one firing · rituals that fire when an issue is labelled or a review is
+requested · picking a branch or pull request from what exists, rather than typing it · the
+pull requests waiting on you and the ones you opened, each one press from a session that
+knows why it is there.
 
-The working rule from last cycle held again and is worth keeping: **for anything that
-reads somebody else's output, look at the real output before designing around it.** Add
-one from this cycle: **a metric that only moves when you act is measuring you, not your
-users** — the download curve tracked publishes, and reading it as demand would have made
-the launch look finished.
+**This cycle**, and the reason the thesis changed: **one screen for what needs you** · **an
+inbox over Notion and Slack, on MCP, with the discovery cached so a refresh costs $0.38
+rather than $1.39** · **work waiting elsewhere folded into the same queue** · **agents,
+commands and skills as one library** · **sessions and runs as one Work list** · **rows you
+can take off that list without losing what they recorded** · **⌘K that does things rather
+than only finding them** · **a Reviews quick action pointed at a command of your own** ·
+**the night as a picture** · **the order six branches will land in, drawn** · **a skill
+treated as the directory it actually is**.
+
+---
 
 ## Still not planned
 
-- **Mobile, remote access, authentication, hosted mode.** One person, one machine.
-- **Webhooks.** Taking them means opening a port to the internet, which is a different
-  product with a different threat model. Polling asks the same question from inside.
-- **Non-Claude model backends.**
-- **Telemetry.** Which is why the table above is written in sentences people might say
-  rather than numbers nobody will ever see.
+- **Mobile, remote access, authentication, hosted mode.** One person, one machine. The
+  tension worth naming: a briefing you cannot read from a phone is a briefing you read at a
+  desk, and the manager half of the job is not always at a desk. `HOST=0.0.0.0` exists and
+  is documented with its threat model. That is the whole answer for now, and "read the
+  digest on your phone" is the first thing that would ever justify revisiting it.
+- **Webhooks.** Taking them means opening a port to the internet — a different product with
+  a different threat model. Polling asks the same question from inside.
+- **Non-Claude model backends.** Several of the third-party tools are multi-model. That was
+  a competitive weakness and is now simply irrelevant: this runs what its author pays for.
+- **Telemetry.** Previously refused on principle. Now also pointless — there is one user and
+  he can be asked directly.
