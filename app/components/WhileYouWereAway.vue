@@ -190,6 +190,34 @@ const money = computed(() => {
               </span>
             </template>
           </div>
+
+          <!--
+            Refusals no rule can reach, said where the offer to grant one is.
+
+            Without this the two read as the same problem with the same fix, and
+            the fix silently does not apply: the rule is granted, the button
+            turns into "Allowed. It will not stop for these again", and the next
+            firing is refused exactly as before. A ritual on this machine had
+            been round that loop twice and was one morning from turning itself
+            off with eight granted rules on it.
+          -->
+          <div v-if="item.unreachable?.length" class="flex items-start gap-2 mt-1.5">
+            <UIcon name="i-lucide-unplug" class="size-3.5 shrink-0 mt-0.5 ink-warn" />
+            <div class="min-w-0">
+              <p class="type-meta ink-warn">
+                {{ item.unreachable.length === 1 ? 'One tool it needs cannot be granted' :
+                  `${item.unreachable.length} of the tools it needs cannot be granted` }}
+              </p>
+              <!--
+                One line per distinct reason rather than per tool: five Slack
+                tools behind one connector is one thing to fix, and saying it
+                five times buries it.
+              -->
+              <p v-for="reason in [...new Set(item.unreachable.map(u => u.reason))]" :key="reason" class="type-meta">
+                {{ reason }}
+              </p>
+            </div>
+          </div>
         </div>
         <span class="type-meta shrink-0">{{ relativeTime(item.at) }}</span>
       </div>

@@ -14,6 +14,8 @@ export interface DigestRitual {
   suggestedRules?: string[]
   /** Blocked at the time, but the rules it needed have since been granted. */
   alreadyAllowed?: boolean
+  /** Refusals granting a rule cannot fix, each with why. */
+  unreachable?: { tool: string; reason: string }[]
 }
 
 export interface DigestSession {

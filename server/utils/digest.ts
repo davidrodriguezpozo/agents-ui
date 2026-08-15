@@ -4,6 +4,7 @@ import { readSchedules } from './schedules'
 import { collapseChainRuns, outcomeOf, type RitualOutcome } from './ritualHistory'
 import { listPending } from './permissionBroker'
 import { spentSince } from './budget'
+import { listMcpServers, ruleWontHelp, type McpServer } from './mcp'
 
 /**
  * What happened while you were away.
@@ -40,6 +41,15 @@ export interface DigestRitual {
    * solved, which is worth reading in a report about a morning that went wrong.
    */
   alreadyAllowed?: boolean
+  /**
+   * Refusals no rule can fix, each with the reason.
+   *
+   * The sibling of `alreadyAllowed`: both say the offer above is not the answer
+   * here. This one is the more expensive case, because granting a rule for a
+   * tool that does not exist for an unattended run *looks* like it worked and
+   * costs another morning to find out otherwise.
+   */
+  unreachable?: { tool: string; reason: string }[]
 }
 
 export interface DigestSession {
@@ -130,6 +140,47 @@ export function stillNeeded(
   return missing.length ? missing : undefined
 }
 
+/**
+ * The tool a permission rule is about. `Bash(gh issue edit:*)` → `Bash`.
+ *
+ * MCP rules carry no argument, so this is mostly a no-op for them — but the
+ * suggestion list holds both kinds and a rule is not always a bare tool name.
+ */
+export function ruleTool(rule: string): string {
+  const paren = rule.indexOf('(')
+  return paren === -1 ? rule : rule.slice(0, paren)
+}
+
+/**
+ * Split what was refused into what a rule would fix and what it would not.
+ *
+ * Pure, and separated from the fetching above it, because this is the judgement
+ * — the same reason `verdictFor` is not computed in a page.
+ */
+export function splitUnreachable(
+  suggested: string[] | undefined,
+  denied: string[] | undefined,
+  servers: McpServer[],
+): { grantable?: string[]; unreachable?: { tool: string; reason: string }[] } {
+  const unreachable: { tool: string; reason: string }[] = []
+
+  // From what was *refused*, not from what was suggested: a tool can be denied
+  // without a rule ever being proposed for it, and that is exactly the case
+  // worth explaining rather than leaving as a silent nothing.
+  for (const tool of new Set(denied ?? [])) {
+    const reason = ruleWontHelp(tool, servers)
+    if (reason) unreachable.push({ tool, reason })
+  }
+
+  const dead = new Set(unreachable.map(entry => entry.tool))
+  const grantable = (suggested ?? []).filter(rule => !dead.has(ruleTool(rule)))
+
+  return {
+    grantable: grantable.length ? grantable : undefined,
+    unreachable: unreachable.length ? unreachable : undefined,
+  }
+}
+
 export function describeIncomplete(run: {
   stoppedBy?: 'budget' | 'turns'
   deniedTools?: string[]
@@ -193,9 +244,39 @@ export async function buildDigest(since: number): Promise<Digest> {
 
   const titleFor = new Map(schedules.map(s => [s.id, s.title]))
   const allowedBy = new Map(schedules.map(s => [s.id, new Set(s.allowRules ?? [])]))
+  const dirFor = new Map(schedules.map(s => [s.id, s.projectDir]))
 
   function stillNeededFor(scheduleId: string, suggested: string[] | undefined): string[] | undefined {
     return stillNeeded(suggested, [...(allowedBy.get(scheduleId) ?? [])])
+  }
+
+  /*
+   * Which MCP servers each blocked ritual could actually reach.
+   *
+   * Only for rituals that were refused a tool. `listMcpServers` spawns a health
+   * check against every server, and a morning where nothing went wrong must not
+   * pay for one — most mornings are that morning. Cached per directory anyway,
+   * so several rituals in one project ask once.
+   *
+   * Failure is silently no servers, which makes `ruleWontHelp` return null for
+   * everything and leaves the offer exactly as it was. A digest that could not
+   * reach the CLI should be a digest without this note, not a missing digest.
+   */
+  const blockedDirs = new Set(
+    runs
+      .filter(run => run.scheduleId && run.deniedTools?.length && outcomeOf(run) === 'blocked')
+      .map(run => dirFor.get(run.scheduleId!))
+      .filter((dir): dir is string => Boolean(dir)),
+  )
+
+  const serversByDir = new Map<string, McpServer[]>()
+  await Promise.all([...blockedDirs].map(async (dir) => {
+    serversByDir.set(dir, await listMcpServers(dir).catch(() => []))
+  }))
+
+  function serversFor(scheduleId: string): McpServer[] {
+    const dir = dirFor.get(scheduleId)
+    return (dir && serversByDir.get(dir)) || []
   }
 
   // Scheduled work only. A session turn is somebody typing, which is not news
@@ -208,6 +289,14 @@ export async function buildDigest(since: number): Promise<Digest> {
   const rituals: DigestRitual[] = collapseChainRuns(runs.filter(run => run.scheduleId))
     .map((run) => {
       const outcome = outcomeOf(run)
+
+      // Sorted out before the offer is built, because it decides what is worth
+      // offering: a rule for a tool the run could never reach is a button that
+      // does nothing and reads as the fix.
+      const split = outcome === 'blocked' && !run.stoppedBy
+        ? splitUnreachable(run.suggestedRules, run.deniedTools, serversFor(run.scheduleId!))
+        : {}
+
       return {
         scheduleId: run.scheduleId!,
         title: titleFor.get(run.scheduleId!) ?? run.title,
@@ -219,8 +308,9 @@ export async function buildDigest(since: number): Promise<Digest> {
         // offer stays off a run that simply ran out of room — and nothing to
         // grant twice, so it comes off once the rules have been given.
         suggestedRules: outcome === 'blocked' && !run.stoppedBy
-          ? stillNeededFor(run.scheduleId!, run.suggestedRules)
+          ? stillNeededFor(run.scheduleId!, split.grantable)
           : undefined,
+        unreachable: split.unreachable,
         /** Already granted since this run was blocked, so it will not recur. */
         alreadyAllowed: outcome === 'blocked'
           && !run.stoppedBy

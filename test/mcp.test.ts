@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { addArgs, invalidName, parseMcpList, parseMcpLine, ptyCommand } from '../server/utils/mcp'
+import {
+  addArgs, invalidName, parseMcpList, parseMcpLine, ptyCommand, ruleWontHelp, serverForTool,
+} from '../server/utils/mcp'
 
 /**
  * Reading `claude mcp list`.
@@ -184,5 +186,87 @@ describe('ptyCommand', () => {
     if (process.platform === 'darwin') return
     const { args } = ptyCommand('script', CLAUDE, ['mcp', 'login', "od'd"])
     expect(args[args.indexOf('-c') + 1]).toContain(`'od'\\''d'`)
+  })
+})
+
+/**
+ * Whether granting a rule would do anything.
+ *
+ * The app's answer to a blocked run is "here is the narrow rule it needed", and
+ * for an MCP tool that can be a lie. Measured on a real machine: `claude mcp
+ * list` reported `claude.ai Gmail: ✔ Connected`, and a headless run allowed
+ * exactly that server got no tools at all. A ritual there had been granted
+ * eight rules over two mornings and was one blocked run from turning itself off.
+ */
+describe('serverForTool', () => {
+  const servers = parseMcpList(REAL_OUTPUT)
+
+  it('maps a connector tool back to the server it came from', () => {
+    // Dots and spaces both become underscores in a tool name, so the match has
+    // to go server → sanitised, never the other way.
+    expect(serverForTool('mcp__claude_ai_Google_Calendar__list_events', servers)?.name)
+      .toBe('claude.ai Google Calendar')
+  })
+
+  it('maps a plugin tool, whose name is full of colons', () => {
+    expect(serverForTool('mcp__plugin_slack_slack__slack_read_channel', servers)?.name)
+      .toBe('plugin:slack:slack')
+  })
+
+  it('is null for a tool that is not an MCP tool at all', () => {
+    expect(serverForTool('Bash', servers)).toBeNull()
+    expect(serverForTool('Bash(gh issue edit:*)', servers)).toBeNull()
+  })
+
+  it('is null for a server this machine does not have', () => {
+    expect(serverForTool('mcp__notion__notion-search', servers)).toBeNull()
+  })
+
+  it('prefers the longer name when one sanitises into a prefix of another', () => {
+    const both = parseMcpList([
+      'acme: https://a.example/mcp - ✔ Connected',
+      'acme_prod: https://b.example/mcp - ✔ Connected',
+    ].join('\n'))
+
+    expect(serverForTool('mcp__acme_prod__query', both)?.name).toBe('acme_prod')
+  })
+})
+
+describe('ruleWontHelp', () => {
+  const servers = parseMcpList(REAL_OUTPUT)
+
+  it('says a connector cannot be granted, however connected it claims to be', () => {
+    // Gmail is ✔ Connected in the fixture, which is the whole point.
+    const reason = ruleWontHelp('mcp__claude_ai_Gmail__search', servers)
+    expect(reason).toContain('claude.ai connector')
+    expect(reason).toContain('no rule')
+  })
+
+  it('says a server needing a sign-in will not be fixed by a rule', () => {
+    expect(ruleWontHelp('mcp__plugin_slack_slack__slack_read_channel', servers))
+      .toContain('needs signing in')
+  })
+
+  it('names a broken server rather than offering a rule for it', () => {
+    expect(ruleWontHelp('mcp__plugin_greptile_greptile__search', servers))
+      .toContain('not answering')
+  })
+
+  it('has no objection to a rule for an ordinary tool', () => {
+    expect(ruleWontHelp('Bash(gh issue edit:*)', servers)).toBeNull()
+  })
+
+  it('says a server that is simply gone is not there to grant', () => {
+    // The case this was found by: rules granted for `claude.ai Slack` over two
+    // mornings, and no such server on the machine by the time anyone looked.
+    expect(ruleWontHelp('mcp__notion__notion-search', servers))
+      .toContain('No MCP server matching notion')
+  })
+
+  it('yields no opinion at all when the server list could not be read', () => {
+    // Empty means `claude mcp list` did not answer, never that nothing is
+    // configured — inventing a verdict from that would blame the ritual for a
+    // CLI that was busy.
+    expect(ruleWontHelp('mcp__claude_ai_Gmail__search', [])).toBeNull()
   })
 })

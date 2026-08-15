@@ -110,6 +110,90 @@ function originOf(name: string): { origin: McpServer['origin']; pluginName?: str
   return { origin: 'project' }
 }
 
+// --- Whether a refused tool is worth granting ------------------------------
+
+/**
+ * The server a tool name came from, or null when nothing matches.
+ *
+ * Tool names are `mcp__<sanitised server>__<tool>`, and the sanitising is lossy:
+ * `claude.ai Slack` and `plugin:slack:slack` both become runs of underscores, so
+ * the name cannot be turned back into a server. It has to go the other way —
+ * sanitise each server we know about and see which one prefixes the tool.
+ *
+ * The rule was read off real tool names rather than guessed: `claude.ai Gmail` →
+ * `mcp__claude_ai_Gmail__…`, `claude.ai Google Calendar` →
+ * `mcp__claude_ai_Google_Calendar__…`, `plugin:slack:slack` →
+ * `mcp__plugin_slack_slack__…`, `notion` → `mcp__notion__…`. Dots, spaces and
+ * colons all become underscores, which is every punctuation these names carry.
+ *
+ * Longest match wins, because one sanitised name can prefix another and the
+ * more specific server is the right answer.
+ */
+export function serverForTool(tool: string, servers: McpServer[]): McpServer | null {
+  if (!tool.startsWith('mcp__')) return null
+
+  const sanitise = (name: string) => name.replace(/[^A-Za-z0-9_]/g, '_')
+
+  return servers
+    .filter(server => tool.startsWith(`mcp__${sanitise(server.name)}__`))
+    .sort((a, b) => b.name.length - a.name.length)[0] ?? null
+}
+
+/**
+ * Why granting a rule for this tool would change nothing, or null if it would.
+ *
+ * The app's answer to a blocked run is "here is the one narrow rule it needed",
+ * and for most refusals that is exactly right. For an MCP tool it can be a lie,
+ * and an expensive one: the rule is granted, the next firing asks for the same
+ * tool, is refused for the same reason, and costs another morning. Found on a
+ * real ritual that had been granted eight rules over two mornings and was one
+ * blocked run from turning itself off.
+ *
+ * A claude.ai connector is the case worth naming outright. It reports Connected
+ * and hands an unattended run nothing — measured; see `pickInboxServer` — so no
+ * rule can reach it and the fix is a different kind of server entirely.
+ *
+ * A server that is *gone* is worth saying too, and it is the case this was
+ * actually found by: the ritual had been granted `mcp__claude_ai_Slack__…`
+ * rules over two mornings, and by the time anyone looked there was no
+ * `claude.ai Slack` on the machine at all. Granting a rule for a tool that does
+ * not exist is the same futility as granting one for a connector.
+ *
+ * The one thing that must not happen is inventing that verdict out of a failed
+ * read. An empty list means `claude mcp list` did not answer, never that
+ * nothing is configured — so it yields no opinion at all.
+ */
+export function ruleWontHelp(tool: string, servers: McpServer[]): string | null {
+  if (!tool.startsWith('mcp__')) return null
+  if (!servers.length) return null
+
+  const server = serverForTool(tool, servers)
+
+  if (!server) {
+    // The sanitised segment, since the real name cannot be recovered from it.
+    // Recognisable enough to search for, which is all it needs to be.
+    const named = tool.slice('mcp__'.length).split('__')[0]
+    return `No MCP server matching ${named} is configured in this project, so there is `
+      + 'no tool for a rule to grant. It may have been removed since this ran.'
+  }
+
+  if (server.origin === 'claude.ai') {
+    return `${server.name} is a claude.ai connector. Its sign-in belongs to your `
+      + 'interactive session, so an unattended run gets none of its tools and no rule '
+      + 'can grant them. Add the service as its own HTTP server and sign in to that.'
+  }
+
+  if (server.status === 'needs-auth') {
+    return `${server.name} needs signing in to. Granting the rule will not do it.`
+  }
+
+  if (server.status === 'failed' || server.status === 'pending') {
+    return `${server.name} is not answering (${server.status}), so the tool is not there to grant.`
+  }
+
+  return null
+}
+
 /** Everything `claude mcp list` printed, minus the noise. */
 export function parseMcpList(stdout: string): McpServer[] {
   return stdout
