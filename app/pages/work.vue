@@ -28,6 +28,16 @@ const existingRef = ref('')
 const startingFrom = ref(false)
 
 /**
+ * The second way in, folded away until it is wanted.
+ *
+ * Starting from a branch or a pull request is a real entry point, but it is the
+ * rarer one, and left open it costs a field, a button and a paragraph of
+ * explanation above every session on the page. One word in the hint line opens
+ * it, and the explanation comes with it rather than sitting there permanently.
+ */
+const showExisting = ref(false)
+
+/**
  * Starting several at once is its own mode rather than a clever reading of the
  * main box. One instruction per line is only obvious once you have been told;
  * inferred from a multi-line paste it would turn one carefully written prompt
@@ -136,6 +146,16 @@ async function onStartFrom() {
 let poll: ReturnType<typeof setInterval> | null = null
 
 const adopting = ref<string | null>(null)
+const showTranscripts = ref(false)
+
+/**
+ * The ones offered, which is also the number the header says.
+ *
+ * The list has always stopped at five. Folding it put a count on the header,
+ * and counting all of them there would have promised twelve and opened onto
+ * five — a disclosure that lies about what is behind it is worse than no count.
+ */
+const recentTranscripts = computed(() => transcripts.value.slice(0, 5))
 
 /**
  * Continue a terminal conversation here. It resumes exactly where it left off,
@@ -216,14 +236,6 @@ async function onCreate() {
   } finally {
     creating.value = false
   }
-}
-
-function relative(ts: number) {
-  const seconds = Math.floor((Date.now() - ts) / 1000)
-  if (seconds < 60) return 'just now'
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 /**
@@ -796,11 +808,25 @@ async function switchTo(path: string) {
               @click="onCreate"
             />
           </div>
-          <p class="type-meta">
-            Branches from <span class="font-mono">{{ displayPath }}</span> — its own workspace, its own
-            branch — and starts work straight away.
+          <!--
+            One line for what was three paragraphs: where it branches from, and
+            the two other ways in. Explaining every path permanently, above a
+            page you open several times a day, pushed the work itself off the
+            first screen — and the labels on the controls already say most of it.
+          -->
+          <p class="type-meta flex items-center gap-x-2 gap-y-0.5 flex-wrap">
+            <span>
+              Branches from <span class="font-mono">{{ displayPath }}</span> into its own workspace.
+            </span>
             <button class="underline underline-offset-2 hover:text-label" @click="batchMode = true">
-              Start several at once
+              Start several
+            </button>
+            <span class="ink-4">·</span>
+            <button
+              class="underline underline-offset-2 hover:text-label"
+              @click="showExisting = !showExisting"
+            >
+              {{ showExisting ? 'Hide' : 'Start from a branch or PR' }}
             </button>
           </p>
 
@@ -901,6 +927,12 @@ async function switchTo(path: string) {
               {{ choice.label }}
             </button>
           </div>
+          <!--
+            Only the one with consequences says anything. Each pill carries its
+            own hint on hover, so spelling all three out in a sentence beside
+            them was a line of text that never changed and never told you
+            anything the label had not.
+          -->
           <span
             v-if="startTrust === 'full'"
             class="type-detail flex items-center gap-1.5"
@@ -909,46 +941,42 @@ async function switchTo(path: string) {
             <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
             Runs commands without asking, sandboxed, in its own workspace.
           </span>
-          <span v-else-if="startTrust === 'readonly'" class="type-meta">
-            It will propose changes rather than make them.
-          </span>
-          <span v-else class="type-meta">
-            Writes files freely; stops to ask before anything riskier.
-          </span>
         </div>
 
         <!-- Or start on something that already exists -->
-        <div v-if="!batchMode" class="flex gap-2 pt-1">
-          <!--
-            Open pull requests and recent branches, offered rather than
-            remembered. Free text is kept because the useful paste is often a
-            URL from somebody's message, for a pull request on a fork this
-            checkout has no remote for.
-          -->
-          <RefPicker
-            v-model="existingRef"
-            class="flex-1"
-            input-class="field-input"
-            placeholder="…or pick a pull request or branch, or paste a URL"
-            with-pull-requests
-            :disabled="startingFrom"
-            @enter="onStartFrom"
-          />
-          <UButton
-            label="Work on it"
-            icon="i-lucide-git-pull-request-arrow"
-            size="sm"
-            variant="soft"
-            color="neutral"
-            :loading="startingFrom"
-            :disabled="!existingRef.trim()"
-            @click="onStartFrom"
-          />
+        <div v-if="!batchMode && showExisting" class="space-y-1.5 pt-1">
+          <div class="flex gap-2">
+            <!--
+              Open pull requests and recent branches, offered rather than
+              remembered. Free text is kept because the useful paste is often a
+              URL from somebody's message, for a pull request on a fork this
+              checkout has no remote for.
+            -->
+            <RefPicker
+              v-model="existingRef"
+              class="flex-1"
+              input-class="field-input"
+              placeholder="Pick a pull request or branch, or paste a URL"
+              with-pull-requests
+              :disabled="startingFrom"
+              @enter="onStartFrom"
+            />
+            <UButton
+              label="Work on it"
+              icon="i-lucide-git-pull-request-arrow"
+              size="sm"
+              variant="soft"
+              color="neutral"
+              :loading="startingFrom"
+              :disabled="!existingRef.trim()"
+              @click="onStartFrom"
+            />
+          </div>
+          <p class="type-meta">
+            Checks the branch out in its own workspace. What you change from there is
+            this session's, shown separately from what the branch already had.
+          </p>
         </div>
-        <p v-if="!batchMode" class="type-meta">
-          Checks the branch out in its own workspace. What you change from there is
-          this session's, shown separately from what the branch already had.
-        </p>
       </div>
 
       <div
@@ -962,37 +990,56 @@ async function switchTo(path: string) {
         </span>
       </div>
 
-      <!-- Work already started in the terminal, which this can pick up -->
-      <div v-if="workingDir && transcripts.length" class="order-4 space-y-2">
-        <h2 class="text-section-label">Continue from your terminal</h2>
-        <p class="type-meta">
-          Conversations you had with Claude Code here. Continuing one resumes it in a
-          workspace of its own, so what it does next is reviewable before it lands.
-          The workspace is a clean copy of the branch — uncommitted work from the terminal
-          stays where it is.
-        </p>
-        <div
-          v-for="transcript in transcripts.slice(0, 5)"
-          :key="transcript.sdkSessionId"
-          class="flex items-center gap-3 px-3 py-2.5 rounded-md"
-          style="border: 1px dashed var(--border-subtle);"
+      <!--
+        Work already started in the terminal, which this can pick up.
+
+        Folded, because five dashed rows and a paragraph explaining them is a
+        third of the first screen spent on something you reach for occasionally —
+        and it sat between the composer and the actual list of work. The header
+        still says how many are there, which is the part worth seeing every time.
+      -->
+      <div v-if="workingDir && transcripts.length" class="order-4">
+        <button
+          class="flex items-center gap-2 py-1 focus-ring rounded"
+          @click="showTranscripts = !showTranscripts"
         >
-          <UIcon name="i-lucide-terminal" class="size-4 shrink-0 ink-4" />
-          <div class="flex-1 min-w-0">
-            <div class="type-strong truncate text-body">{{ transcript.title }}</div>
-            <div class="type-mono-meta">
-              {{ transcript.turnCount }} turn{{ transcript.turnCount === 1 ? '' : 's' }}
-              · {{ relative(transcript.updatedAt) }}
-            </div>
-          </div>
-          <UButton
-            label="Continue here"
-            size="xs"
-            variant="soft"
-            :loading="adopting === transcript.sdkSessionId"
-            :disabled="Boolean(adopting)"
-            @click="onAdopt(transcript.sdkSessionId)"
+          <UIcon
+            :name="showTranscripts ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+            class="size-3 ink-4"
           />
+          <span class="text-section-label">Continue from your terminal</span>
+          <span class="type-mono-meta">{{ recentTranscripts.length }}</span>
+        </button>
+
+        <div v-if="showTranscripts" class="space-y-2 pt-2">
+          <p class="type-meta">
+            Conversations you had with Claude Code here. Continuing one resumes it in a
+            clean copy of the branch, so what it does next is reviewable before it lands —
+            uncommitted work from the terminal stays where it is.
+          </p>
+          <div
+            v-for="transcript in recentTranscripts"
+            :key="transcript.sdkSessionId"
+            class="flex items-center gap-3 px-3 py-2.5 rounded-md"
+            style="border: 1px dashed var(--border-subtle);"
+          >
+            <UIcon name="i-lucide-terminal" class="size-4 shrink-0 ink-4" />
+            <div class="flex-1 min-w-0">
+              <div class="type-strong truncate text-body">{{ transcript.title }}</div>
+              <div class="type-mono-meta">
+                {{ transcript.turnCount }} turn{{ transcript.turnCount === 1 ? '' : 's' }}
+                · {{ relativeTime(transcript.updatedAt) }}
+              </div>
+            </div>
+            <UButton
+              label="Continue here"
+              size="xs"
+              variant="soft"
+              :loading="adopting === transcript.sdkSessionId"
+              :disabled="Boolean(adopting)"
+              @click="onAdopt(transcript.sdkSessionId)"
+            />
+          </div>
         </div>
       </div>
 
@@ -1066,47 +1113,21 @@ async function switchTo(path: string) {
         />
 
         <!--
-          Offered for everything on screen that came to nothing, rather than one
-          project at a time. One at a time is the tax that makes people stop
-          clearing up at all.
-        -->
-        <div v-if="emptySessionIds.length" class="flex items-center gap-2">
-          <span class="type-meta flex-1">
-            {{ emptySessionIds.length }} of these left no changes behind.
-          </span>
-          <template v-if="confirmingClose">
-            <span class="fs-mono text-label">
-              Close {{ emptySessionIds.length }} and delete their branches?
-            </span>
-            <UButton
-              label="Close them"
-              size="xs"
-              color="error"
-              :loading="closing"
-              @click="closeEmpty('visible', emptySessionIds)"
-            />
-            <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="() => { confirmingClose = null }" />
-          </template>
-          <UButton
-            v-else
-            label="Close these"
-            icon="i-lucide-trash-2"
-            size="xs"
-            variant="ghost"
-            color="neutral"
-            @click="() => { confirmingClose = 'visible' }"
-          />
-        </div>
+          Tidying the list: one row rather than two.
 
-        <!--
-          Clearing the list, and the way back from it.
+          Closing what came to nothing and removing finished rows are the same
+          job — keeping the list readable — and they were two stacked rows of
+          sentence-plus-button sitting between the search box and the work. The
+          counts moved into the button labels, which is where they were needed:
+          "Close 5 empty" says as much as a sentence explaining that five of
+          these left no changes behind, and the confirmation still spells out
+          that branches go with them.
 
-          Says what it will take and how many, because a clear whose scope you
-          cannot predict is one nobody presses twice. Scoped to what is on screen:
-          the filters decide it, so narrowing them narrows this.
+          Both are scoped to what is on screen — the filters decide it — because
+          a clear whose reach you cannot predict is one nobody presses twice.
         -->
         <div
-          v-if="clearable.length || removedCount || viewingRemoved"
+          v-if="emptySessionIds.length || clearable.length || removedCount || viewingRemoved"
           class="flex items-center justify-between gap-3 flex-wrap"
         >
           <p v-if="viewingRemoved" class="type-detail ink-2">
@@ -1122,7 +1143,7 @@ async function switchTo(path: string) {
           </button>
           <span v-else />
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap justify-end">
             <UButton
               v-if="viewingRemoved"
               label="Back to the list"
@@ -1131,29 +1152,63 @@ async function switchTo(path: string) {
               color="neutral"
               @click="toggleRemovedView"
             />
-            <template v-else-if="clearable.length">
-              <template v-if="confirmingClear">
-                <span class="type-meta ink-2">
-                  Remove {{ clearable.length }} finished {{ clearable.length === 1 ? 'row' : 'rows' }}?
-                </span>
-                <UButton label="Remove" size="xs" variant="soft" @click="clearVisible" />
+            <template v-else>
+              <!-- One question at a time: two confirmations in one row read as one -->
+              <template v-if="emptySessionIds.length && !confirmingClear">
+                <template v-if="confirmingClose">
+                  <span class="type-meta ink-2">
+                    Close {{ emptySessionIds.length }} and delete their branches?
+                  </span>
+                  <UButton
+                    label="Close them"
+                    size="xs"
+                    color="error"
+                    :loading="closing"
+                    @click="closeEmpty('visible', emptySessionIds)"
+                  />
+                  <UButton
+                    label="Cancel"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    @click="() => { confirmingClose = null }"
+                  />
+                </template>
                 <UButton
-                  label="Cancel"
+                  v-else
+                  :label="`Close ${emptySessionIds.length} empty`"
+                  icon="i-lucide-trash-2"
                   size="xs"
                   variant="ghost"
                   color="neutral"
-                  @click="() => { confirmingClear = false }"
+                  @click="() => { confirmingClose = 'visible' }"
                 />
               </template>
-              <UButton
-                v-else
-                :label="`Clear ${clearable.length} finished`"
-                size="xs"
-                variant="ghost"
-                color="neutral"
-                icon="i-lucide-x"
-                @click="() => { confirmingClear = true }"
-              />
+
+              <template v-if="clearable.length && !confirmingClose">
+                <template v-if="confirmingClear">
+                  <span class="type-meta ink-2">
+                    Remove {{ clearable.length }} finished {{ clearable.length === 1 ? 'row' : 'rows' }}?
+                  </span>
+                  <UButton label="Remove" size="xs" variant="soft" @click="clearVisible" />
+                  <UButton
+                    label="Cancel"
+                    size="xs"
+                    variant="ghost"
+                    color="neutral"
+                    @click="() => { confirmingClear = false }"
+                  />
+                </template>
+                <UButton
+                  v-else
+                  :label="`Clear ${clearable.length} finished`"
+                  size="xs"
+                  variant="ghost"
+                  color="neutral"
+                  icon="i-lucide-x"
+                  @click="() => { confirmingClear = true }"
+                />
+              </template>
             </template>
           </div>
         </div>
