@@ -62,6 +62,13 @@ export interface Schedule {
   permission: SchedulePermission
   /** Permanent permission rules, e.g. `Bash(gh:*)`. */
   allowRules?: string[]
+  /**
+   * Rules among those that cannot do anything, with why.
+   *
+   * Computed per request from the MCP servers reachable now, not stored — so
+   * signing a server in clears the warning without rewriting the ritual.
+   */
+  deadRules?: { rule: string; reason: string }[]
   enabled: boolean
   origin: 'user' | 'team'
   pluginName?: string

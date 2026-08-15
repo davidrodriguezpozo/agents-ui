@@ -93,6 +93,22 @@ async function onRevoke(schedule: Schedule, rule: string) {
   }
 }
 
+/**
+ * Why a granted rule can do nothing, or empty when it can.
+ *
+ * The server decides this — the page only draws it. A second implementation
+ * here would be the `mergeTrain` lesson all over again: two readings of the
+ * same judgement is how one screen starts disagreeing with another.
+ */
+function deadReason(schedule: Schedule, rule: string): string {
+  return schedule.deadRules?.find(dead => dead.rule === rule)?.reason ?? ''
+}
+
+/** The distinct reasons, since several rules usually share one cause. */
+function deadReasons(schedule: Schedule): string[] {
+  return [...new Set((schedule.deadRules ?? []).map(dead => dead.reason))]
+}
+
 const unadopted = computed(() => suggested.value.filter(s => !s.alreadyAdded))
 
 /** A ritual runs unwatched, so each outcome has to say what it cost you. */
@@ -325,14 +341,27 @@ function nextLabel(schedule: Schedule) {
 
               <!-- What this ritual has been allowed to do without asking -->
               <div v-if="schedule.allowRules?.length" class="flex items-center gap-1.5 flex-wrap mt-1.5">
+                <!--
+                  A rule that cannot do anything must not wear the same green
+                  shield as one that can. Eight granted rules on the briefing
+                  here were four real ones and four for tools no unattended run
+                  could reach, and nothing on the page distinguished them —
+                  which is how the same four got granted twice.
+                -->
                 <span
                   v-for="rule in schedule.allowRules"
                   :key="rule"
                   class="inline-flex items-center gap-1 fs-micro px-1.5 py-px rounded-md group/rule"
-                  style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
-                  :title="rule"
+                  :style="deadReason(schedule, rule)
+                    ? 'background: var(--warning-wash); color: var(--warning);'
+                    : 'background: var(--badge-subtle-bg); color: var(--text-secondary);'"
+                  :title="deadReason(schedule, rule) || rule"
                 >
-                  <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0 ink-ok" />
+                  <UIcon
+                    :name="deadReason(schedule, rule) ? 'i-lucide-unplug' : 'i-lucide-shield-check'"
+                    class="size-2.5 shrink-0"
+                    :class="deadReason(schedule, rule) ? 'ink-warn' : 'ink-ok'"
+                  />
                   {{ describeRule(rule) }}
                   <button
                     class="opacity-0 group-hover/rule:opacity-100 transition-opacity"
@@ -343,6 +372,20 @@ function nextLabel(schedule: Schedule) {
                     <UIcon name="i-lucide-x" class="size-2.5" />
                   </button>
                 </span>
+              </div>
+
+              <!--
+                Said once per reason rather than once per rule: five Slack tools
+                behind one missing server is one thing to fix, and repeating it
+                five times buries what to do about it.
+              -->
+              <div
+                v-for="reason in deadReasons(schedule)"
+                :key="reason"
+                class="flex items-start gap-1.5 mt-1.5 type-meta"
+              >
+                <UIcon name="i-lucide-unplug" class="size-3 shrink-0 mt-0.5 ink-warn" />
+                <span>{{ reason }}</span>
               </div>
             </div>
 
