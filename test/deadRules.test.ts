@@ -17,7 +17,7 @@ vi.mock('../server/utils/mcp', async () => {
   return { ...actual, listMcpServers }
 })
 
-const { deadRulesFor } = await import('../server/utils/deadRules')
+const { deadRulesFor, deadRulesForDir, deadRulesIn } = await import('../server/utils/deadRules')
 const { parseMcpList } = await import('../server/utils/mcp')
 
 const SERVERS = parseMcpList(`claude.ai Linear: https://mcp.linear.app/mcp - ! Needs authentication
@@ -125,5 +125,54 @@ describe('deadRulesFor', () => {
     ])
 
     expect(dead.size).toBe(0)
+  })
+})
+
+describe('deadRulesIn', () => {
+  it('is the one place the judgement is made, and needs no fetching', () => {
+    // Pure, so both the ritual page and the session page get the same answer.
+    // Two implementations of "is this rule real" is how one screen starts
+    // disagreeing with another.
+    const dead = deadRulesIn(
+      ['Bash(gh api:*)', 'mcp__claude_ai_Linear__list_issues', 'mcp__notion__notion-search'],
+      SERVERS,
+    )
+
+    expect(dead.map(d => d.rule)).toEqual(['mcp__claude_ai_Linear__list_issues'])
+  })
+
+  it('condemns nothing when handed no servers', () => {
+    expect(deadRulesIn(['mcp__claude_ai_Linear__list_issues'], [])).toEqual([])
+  })
+})
+
+describe('deadRulesForDir', () => {
+  it('names a project grant that no run there could use', async () => {
+    const dead = await deadRulesForDir('/repo', ['mcp__claude_ai_Linear__list_issues'])
+
+    expect(dead).toHaveLength(1)
+    expect(dead[0]!.reason).toContain('claude.ai connector')
+  })
+
+  it('asks nothing when every grant is an ordinary tool', async () => {
+    // Reached from a session page on a poll, so the common case — grants that
+    // are all `Bash(…)` — must not health-check every MCP server.
+    const dead = await deadRulesForDir('/repo', ['Bash(npm test:*)', 'Bash(gh pr:*)'])
+
+    expect(dead).toEqual([])
+    expect(listMcpServers).not.toHaveBeenCalled()
+  })
+
+  it('asks nothing when there is no project directory', async () => {
+    const dead = await deadRulesForDir(undefined, ['mcp__claude_ai_Linear__list_issues'])
+
+    expect(dead).toEqual([])
+    expect(listMcpServers).not.toHaveBeenCalled()
+  })
+
+  it('condemns nothing when the directory will not answer', async () => {
+    listMcpServers.mockRejectedValue(new Error('claude not found'))
+
+    expect(await deadRulesForDir('/repo', ['mcp__claude_ai_Linear__list_issues'])).toEqual([])
   })
 })

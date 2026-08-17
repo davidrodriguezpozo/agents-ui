@@ -19,7 +19,10 @@ const {
   updateFromBase, close,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
-const { rules: projectRules, load: loadProjectRules, allowRule, revokeRule } = useProjectRules(() => session.value?.repoDir)
+const {
+  rules: projectRules, deadReason, deadReasons,
+  load: loadProjectRules, allowRule, revokeRule,
+} = useProjectRules(() => session.value?.repoDir)
 const { describeRule } = usePermissionRuleLabels()
 const { commands, fetchAll: fetchCommands } = useCommands()
 const toast = useToast()
@@ -1041,14 +1044,25 @@ const totalChanges = computed(() => {
               <!-- What it will not stop to ask about, and how to take that back -->
               <div v-if="projectRules.length" class="flex items-center gap-1.5 flex-wrap pl-6 pt-0.5">
                 <span class="type-meta">Always allowed here</span>
+                <!--
+                  A grant for a tool no run here can reach is drawn as what it
+                  is. It looked identical to a working one, which is how a
+                  ritual elsewhere in this app collected four of them.
+                -->
                 <span
                   v-for="rule in projectRules"
                   :key="rule"
                   class="inline-flex items-center gap-1 fs-micro px-1.5 py-px rounded-md group/rule"
-                  style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
-                  :title="rule"
+                  :style="deadReason(rule)
+                    ? 'background: var(--warning-wash); color: var(--warning);'
+                    : 'background: var(--badge-subtle-bg); color: var(--text-secondary);'"
+                  :title="deadReason(rule) || rule"
                 >
-                  <UIcon name="i-lucide-shield-check" class="size-2.5 shrink-0 ink-ok" />
+                  <UIcon
+                    :name="deadReason(rule) ? 'i-lucide-unplug' : 'i-lucide-shield-check'"
+                    class="size-2.5 shrink-0"
+                    :class="deadReason(rule) ? 'ink-warn' : 'ink-ok'"
+                  />
                   {{ describeRule(rule) }}
                   <button
                     class="opacity-0 group-hover/rule:opacity-100 transition-opacity focus-ring rounded"
@@ -1059,6 +1073,17 @@ const totalChanges = computed(() => {
                     <UIcon name="i-lucide-x" class="size-2.5" />
                   </button>
                 </span>
+              </div>
+
+              <!-- Once per reason, not once per rule: five tools behind one
+                   missing server is one thing to fix. -->
+              <div
+                v-for="reason in deadReasons"
+                :key="reason"
+                class="flex items-start gap-1.5 pl-6 pt-0.5 type-meta"
+              >
+                <UIcon name="i-lucide-unplug" class="size-3 shrink-0 mt-0.5 ink-warn" />
+                <span>{{ reason }}</span>
               </div>
             </div>
 
