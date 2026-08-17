@@ -65,6 +65,7 @@ const sectionNav = [
   { id: 'sandbox', label: 'Sandbox' },
   { id: 'statusline', label: 'Status line' },
   { id: 'notifications', label: 'Notifications' },
+  { id: 'digest', label: 'Morning message' },
   { id: 'marketplaces', label: 'Marketplaces' },
   { id: 'imports', label: 'GitHub imports' },
   { id: 'automations', label: 'Automations' },
@@ -1367,6 +1368,14 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           </label>
         </div>
       </div>
+
+      <!--
+        Beside notifications rather than in its own place, because it answers the
+        same question they do: how work that carries on without you reaches you.
+        A desktop notification catches you at the machine; this one catches you
+        anywhere else.
+      -->
+      <DigestDelivery />
 
       <!-- Plugins -->
       <div

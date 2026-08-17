@@ -287,6 +287,33 @@ Script Editor's — its icon, and a click that opened an empty script window.
 Meanwhile the sidebar counts what is stuck rather than what you own, and the tab title
 carries that count too, so it's readable from another window.
 
+### The morning message
+
+A notification catches you at the machine. The report it points at is a page in a browser
+that is usually shut — which is the same sentence, aimed at the thing it was meant to fix.
+
+So the report can be **sent to Slack**: what needs you, what came out of it, what it cost,
+in one message, through the Slack MCP server you already have set up. No token to paste,
+nothing new stored, and the destination is somewhere you name — a channel, or a direct
+message to yourself.
+
+Four things it is careful about:
+
+- **Nothing goes out on a quiet morning.** No runs, nothing missed, nothing waiting means
+  no message. A daily "all quiet" is how a channel gets muted, and a muted channel is the
+  whole feature lost. A skip is recorded and says so, rather than looking like a failure.
+- **The schedule does not start until a send has worked.** Send one by hand first: that is
+  what resolves your description of the destination into an actual channel, and it is the
+  moment to notice it is the wrong one. Nothing gets automated before it is known to work.
+- **The destination cannot drift.** After the first send, the channel *id* is what is used
+  — the same words re-read on a different morning is exactly how a private report ends up
+  somewhere public. Changing the destination means proving it again by hand.
+- **It covers everything since you were last told**, not a fixed day, so a gap between
+  messages does not become a gap in what you know. At least a day, at most a week.
+
+The message is composed here and sent verbatim; the run that posts it is denied every other
+way of writing to Slack, including scheduling a message that would outlive this app.
+
 ---
 
 ## Sessions
@@ -494,6 +521,37 @@ read is the worst thing this could possibly do for you.
 Merging is the exception and is treated like one: it only appears on your own pull
 request, only when it is genuinely ready, and the page re-reads GitHub at the moment you
 press it rather than trusting what it drew ten minutes ago.
+
+---
+
+## What a run knows before it starts
+
+The most expensive thing about work that runs without you is that every run begins knowing
+nothing. A morning ritual rediscovers which branches are yours, what yesterday decided and
+which of six sessions is the one that matters — every morning, at your expense, and it gets
+it slightly differently right each time.
+
+The **standing brief** is one page of that, handed to every run that starts cold. Work in
+flight and what each session did, with the run's own repository first. Scheduled work that
+has stopped working. How much is waiting elsewhere. And above all of it, the half you write:
+the standing facts nothing on this machine can derive — Ana is out until September, the
+release goes out on Thursdays — which is never overwritten by an assembly.
+
+It is **read off files this machine already keeps, not written by a model**. That decides
+two things. It cannot invent a branch, which a summary of your week eventually would; and it
+is free, which is what lets it be attached to every run rather than to the ones something
+decided were worth it. You can read the exact text a run receives, from the panel on Now,
+because a description of what runs are told is a thing that can be wrong about it.
+
+It is left off a conversation already under way. Prompt caching is prefix-based, so changing
+the system prompt on turn nine means re-reading the whole conversation at full price — to
+buy a fact the session was told on turn one. Rituals, workflow steps and the first turn of a
+session are the cold starts, and they are what this is for.
+
+One line it does not carry: the titles of what is waiting in Slack or Notion. Those are
+written by anyone with access to a channel you are in, and this text goes into the system
+prompt of a run that can edit files and execute commands. Counts cross that line; prose from
+outside does not.
 
 ---
 

@@ -13,6 +13,8 @@ import { RETRY_DELAY_MS, shouldGiveUp, shouldRetry } from './ritualHealth'
 import { checkBudget } from './budget'
 import { describeIncomplete } from './digest'
 import { tickInbox } from './inboxTick'
+import { tickDigestDelivery } from './digestSend'
+import { refreshBrief } from './brief'
 import { withRunSlot } from './runQueue'
 import { pollPullRequests } from './prWatchRunner'
 
@@ -108,6 +110,8 @@ export function startScheduler(): void {
     void pollEvents()
     void pollWatchedPullRequests()
     void tickInbox()
+    void tickDigestDelivery()
+    void refreshBrief()
   }, 15_000)
 
   pollTimer = setInterval(() => {
@@ -118,6 +122,14 @@ export function startScheduler(): void {
     // Un-awaited alongside the others for the same reason they are: one slow
     // source must not delay a pull request going green from being noticed.
     void tickInbox()
+    // One message a day at most, and `dueForDelivery` is a file read until the
+    // minute it is due — so riding this timer costs nothing on every other tick.
+    void tickDigestDelivery()
+    // Not a schedule and not a run: the brief is assembled from files this
+    // machine already has, so it is rebuilt on the poll rather than at the
+    // moment a run needs it. A run that had to wait for it would be paying for
+    // the assembly in latency, every time.
+    void refreshBrief()
   }, POLL_MS)
 
   console.log('[scheduler] started')

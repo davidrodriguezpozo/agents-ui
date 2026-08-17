@@ -92,6 +92,16 @@ const hasContent = computed(
       -->
       <NightShift v-if="hasContent" />
 
+      <!--
+        And what all of that looks like from the inside of a run.
+
+        Last, and collapsed: it is the same work described above, so reading it
+        twice is not the point. What it is here for is the note — the standing
+        facts about your week that nothing on this machine can derive, which every
+        run then starts from instead of rediscovering.
+      -->
+      <StandingBrief v-if="hasContent" />
+
       <!-- Welcome onboarding (first-run) -->
       <WelcomeOnboarding
         v-if="!hasContent"

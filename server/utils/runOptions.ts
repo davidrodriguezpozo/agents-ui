@@ -9,6 +9,7 @@ import { resolveEnabledPluginsInRoots } from './pluginState'
 import { toSettingsPermissions } from './permissionRules'
 import { readPreferences, sanitiseEffort, type RunEffort } from './preferences'
 import { sandboxForProject, toSandboxSettings, type ProjectSandbox } from './sandbox'
+import { briefForRun } from './brief'
 import type { PermissionMode } from '~/types'
 
 export const DEFAULT_MAX_TURNS = 40
@@ -88,6 +89,16 @@ export interface ResolvedRunOptions {
   sandbox: ProjectSandbox
   unattended: boolean
   effort: RunEffort
+  /**
+   * What is going on around this machine, for a run that is starting cold.
+   *
+   * Resolved here because reading it is I/O and this is the layer that does I/O.
+   * *Applied* in `toQueryOptions`, which is the only layer that knows whether
+   * this run is a fresh start or the continuation of a conversation — and that
+   * distinction turns out to decide whether attaching it is nearly free or
+   * genuinely expensive. See the note there.
+   */
+  standingBrief: string
 }
 
 export function managerPrompt(claudeDir: string): string {
@@ -165,11 +176,15 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
 
   // Without these the SDK cannot resolve plugin slash commands, skills or
   // subagents — they'd be visible in the UI but unusable in a run.
-  const [installed, isEnabled, projectSandbox] = await Promise.all([
+  const [installed, isEnabled, projectSandbox, standingBrief] = await Promise.all([
     readInstalledPlugins(roots[0]!.dir),
     resolveEnabledPluginsInRoots(roots),
     // Keyed by repository, never by the working directory — see `repoDir`.
     sandboxForProject(body.repoDir ?? projectDir ?? undefined),
+    // Asked about the repository rather than the worktree: a session's own
+    // sessions are the repository's, and `projectDir` here is a checkout that
+    // exists for one session and is deleted with it.
+    briefForRun(body.repoDir ?? projectDir ?? undefined).catch(() => ''),
   ])
   const plugins = installed
     .filter(p => isEnabled(p.id) && existsSync(p.entry.installPath))
@@ -199,7 +214,34 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     // Same shape as the turn limit: an explicit request wins, then whatever
     // this machine was set to. Never left to the SDK to decide.
     effort: body.effort ? sanitiseEffort(body.effort) : preferences.effort,
+    standingBrief,
   }
+}
+
+/**
+ * The system prompt this run actually gets.
+ *
+ * The brief is appended *after* the agent's own instructions, never before: what
+ * a run is for outranks what is going on around it, and a subagent that read
+ * three paragraphs of context before being told its job answered as though the
+ * context were the job.
+ *
+ * **It is left off a resumed conversation, and that is the whole reason this is
+ * a function.** Prompt caching is prefix-based: change the system prompt and
+ * everything after it misses, which on turn nine of a long session means
+ * re-reading the entire conversation at full price. The brief is rebuilt every
+ * couple of minutes, so attaching it to every turn would quietly guarantee that
+ * miss on every turn of every session — paying for the whole history to buy a
+ * fact the session was already told on turn one.
+ *
+ * Which is also why it is not a loss. A resumed session has the brief in its
+ * context already; a ritual, a workflow step and the first turn of a session are
+ * all cold starts, and they are exactly the runs this was built for.
+ */
+export function systemPromptFor(options: ResolvedRunOptions, resuming: boolean): string {
+  if (resuming || !options.standingBrief) return options.systemAppend
+
+  return [options.systemAppend, options.standingBrief].filter(Boolean).join('\n\n---\n\n')
 }
 
 /**
@@ -252,8 +294,11 @@ export function toQueryOptions(
       type: 'preset' as const,
       preset: 'claude_code' as const,
       // Nothing to add is said by leaving it off, not by appending an empty
-      // string to the preset.
-      ...(options.systemAppend ? { append: options.systemAppend } : {}),
+      // string to the preset. What is added includes the standing brief on a
+      // cold start and deliberately not on a resume — see `systemPromptFor`.
+      ...(systemPromptFor(options, Boolean(resumeSessionId))
+        ? { append: systemPromptFor(options, Boolean(resumeSessionId)) }
+        : {}),
     },
     ...(resumeSessionId ? { resume: resumeSessionId } : {}),
   }

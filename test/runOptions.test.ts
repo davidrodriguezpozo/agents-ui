@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { toQueryOptions } from '../server/utils/runOptions'
+import { systemPromptFor, toQueryOptions } from '../server/utils/runOptions'
 
 const base = {
   cwd: '/tmp', permissionMode: 'acceptEdits' as const, maxTurns: 10,
@@ -8,6 +8,7 @@ const base = {
   sandbox: { enabled: true, allowedDomains: [] },
   unattended: false,
   effort: 'high' as const,
+  standingBrief: '',
 }
 
 describe('toQueryOptions', () => {
@@ -107,5 +108,53 @@ describe('toQueryOptions', () => {
   it('appends what an agent or the manager chat asked for', () => {
     const opts = toQueryOptions({ ...base, allowRules: [], systemAppend: 'You are Ada.' }) as any
     expect(opts.systemPrompt.append).toBe('You are Ada.')
+  })
+
+  it('carries the standing brief into a cold start and not into a resume', () => {
+    const options = { ...base, allowRules: [], standingBrief: '# Standing brief\n\nthings' }
+
+    expect((toQueryOptions(options) as any).systemPrompt.append).toContain('# Standing brief')
+    expect((toQueryOptions(options, 'sdk-session-1') as any).systemPrompt.append)
+      .toBeUndefined()
+  })
+})
+
+/**
+ * What a run is told about the world around it, and when.
+ *
+ * Two decisions live here and both are about cost or precedence rather than
+ * wording — see the note on `systemPromptFor` for the prefix-caching arithmetic
+ * that makes the resume case the expensive one.
+ */
+describe('systemPromptFor', () => {
+  const brief = '# Standing brief\n\n- `feat/x` — something'
+
+  it('puts the agent instructions first and the brief after them', () => {
+    const prompt = systemPromptFor(
+      { ...base, allowRules: [], systemAppend: 'You are Ada.', standingBrief: brief },
+      false,
+    )
+
+    expect(prompt.indexOf('You are Ada.')).toBeLessThan(prompt.indexOf('# Standing brief'))
+    expect(prompt).toContain('\n\n---\n\n')
+  })
+
+  it('leaves a resumed conversation exactly as it was', () => {
+    const prompt = systemPromptFor(
+      { ...base, allowRules: [], systemAppend: 'You are Ada.', standingBrief: brief },
+      true,
+    )
+
+    expect(prompt).toBe('You are Ada.')
+  })
+
+  it('adds no separator when the brief is all there is', () => {
+    expect(systemPromptFor({ ...base, allowRules: [], standingBrief: brief }, false)).toBe(brief)
+  })
+
+  it('adds nothing at all when there is no brief', () => {
+    expect(systemPromptFor({ ...base, allowRules: [], systemAppend: 'You are Ada.' }, false))
+      .toBe('You are Ada.')
+    expect(systemPromptFor({ ...base, allowRules: [] }, false)).toBe('')
   })
 })
