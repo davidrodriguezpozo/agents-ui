@@ -155,7 +155,10 @@ export interface WorktreeRecovery {
   worktreePath: string
   sdkSessionId?: string
   turnCount: number
+  /** Whether the directory is on disk. Not whether there is anything to recover. */
   exists: boolean
+  /** Whether there is a conversation to bring back, which is the other question. */
+  hasConversation: boolean
   /** Commits that exist nowhere else — what deleting it would cost. */
   unmergedCommits: number
 }
@@ -686,8 +689,13 @@ export function useWorktrees() {
 
   const orphans = computed(() => data.value.worktrees.filter(w => w.orphaned))
 
-  /** Orphans whose directory is still there, so there is something to restore. */
-  const restorable = computed(() => orphans.value.filter(w => w.recovery?.exists))
+  // Both take their answer from `orphanKind`, so the two lists cannot overlap
+  // and cannot disagree with whatever the panel decides to draw.
+  const restorable = computed(() =>
+    orphans.value.filter(w => orphanKind(w.recovery) === 'restorable'))
 
-  return { data, orphans, restorable, fetchAll, prune, recover }
+  const strays = computed(() =>
+    orphans.value.filter(w => orphanKind(w.recovery) === 'stray'))
+
+  return { data, orphans, restorable, strays, fetchAll, prune, recover }
 }

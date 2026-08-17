@@ -12,7 +12,7 @@ import { errorMessage } from '~/utils/errors'
  * its record still holds the work and the conversation, so deleting it is
  * rarely what someone means, and it is the one action that cannot be undone.
  */
-const { data, orphans, restorable, fetchAll, prune, recover } = useWorktrees()
+const { data, orphans, restorable, strays, fetchAll, prune, recover } = useWorktrees()
 const { workingDir } = useWorkingDir()
 const router = useRouter()
 const toast = useToast()
@@ -30,8 +30,16 @@ onMounted(fetchAll)
 // otherwise picking a project leaves the panel showing nothing.
 watch(workingDir, () => fetchAll())
 
-// Something recoverable is a problem the user should see, not one hidden
-// behind a collapsed panel.
+/*
+ * A lost conversation is a problem the user should see, not one hidden behind a
+ * collapsed panel.
+ *
+ * Keyed on `restorable` and therefore on a transcript existing. It used to be
+ * keyed on the directory existing, which meant every orphaned worktree forced
+ * this open — twelve of them on a real machine, none of them a session of ours,
+ * every single load. An alarm that is always on is one nobody reads, which costs
+ * the actual case this exists for.
+ */
 watch(restorable, (list) => { if (list.length) open.value = true }, { immediate: true })
 
 async function onRestore(path?: string) {
@@ -100,12 +108,24 @@ function shortPath(path: string): string {
       <UIcon name="i-lucide-git-branch" class="size-3.5 ink-3" />
       <span class="type-detail ink-2">Workspaces on disk</span>
       <span class="type-mono-meta">{{ data.worktrees.length }}</span>
+      <!--
+        Ordered by how much it wants you. A lost conversation is the only one of
+        the three worth accent colour; a branch nobody owns is a fact, and a
+        leftover is housekeeping.
+      -->
       <span
         v-if="restorable.length"
         class="type-mono-meta px-1.5 py-px rounded-full"
         style="background: var(--accent-muted); color: var(--accent);"
       >
         {{ restorable.length }} to restore
+      </span>
+      <span
+        v-else-if="strays.length"
+        class="type-mono-meta px-1.5 py-px rounded-full"
+        style="background: var(--badge-subtle-bg);"
+      >
+        {{ strays.length }} not from a session
       </span>
       <span
         v-else-if="orphans.length"
@@ -132,7 +152,7 @@ function shortPath(path: string): string {
           :key="worktree.path"
           class="flex items-center gap-2.5 px-3 py-2 rounded-md"
           :style="`background: var(--surface-raised); border: 1px solid ${
-            worktree.recovery?.exists ? 'var(--accent-glow)' : 'var(--border-subtle)'
+            worktree.recovery?.hasConversation ? 'var(--accent-glow)' : 'var(--border-subtle)'
           };`"
         >
           <UIcon
@@ -153,10 +173,18 @@ function shortPath(path: string): string {
               >
                 your repo
               </span>
+              <!--
+                True of both kinds, so only the colour separates them: accent
+                where a conversation is waiting to be brought back, plain where
+                the branch is all there ever was. Twelve accent badges taught
+                the reader to stop seeing the colour.
+              -->
               <span
                 v-else-if="worktree.orphaned"
                 class="type-mono-meta px-1.5 py-px rounded-full shrink-0"
-                style="background: var(--accent-muted); color: var(--accent);"
+                :style="worktree.recovery?.hasConversation
+                  ? 'background: var(--accent-muted); color: var(--accent);'
+                  : 'background: var(--badge-subtle-bg);'"
               >
                 no session
               </span>
@@ -187,10 +215,16 @@ function shortPath(path: string): string {
             Open
           </NuxtLink>
 
+          <!--
+            "Restore" only where there is a conversation to restore. The same
+            call on a branch with no transcript still gives you a usable session
+            — the branch, its commits, its checks — so it is offered, under a
+            word that does not promise the part that is missing.
+          -->
           <UButton
             v-else-if="worktree.recovery?.exists"
-            label="Restore"
-            icon="i-lucide-rotate-ccw"
+            :label="worktree.recovery.hasConversation ? 'Restore' : 'Adopt'"
+            :icon="worktree.recovery.hasConversation ? 'i-lucide-rotate-ccw' : 'i-lucide-git-branch-plus'"
             size="xs"
             variant="soft"
             class="shrink-0"
@@ -214,6 +248,23 @@ function shortPath(path: string): string {
             Brings back the conversation and changes. Nothing is re-run.
           </span>
         </div>
+      </div>
+
+      <!--
+        Branches in here that were never sessions of ours.
+
+        Said rather than bulk-offered: this is where a dozen unmerged commits
+        were sitting, and "adopt all twelve" is not a decision anybody can make
+        from one line. Each row has its own button, which is the right grain.
+      -->
+      <div v-if="strays.length" class="flex items-start gap-2 pt-1">
+        <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0 mt-0.5 ink-4" />
+        <span class="type-meta">
+          {{ strays.length === 1 ? 'One workspace here has' : `${strays.length} workspaces here have` }}
+          no conversation behind {{ strays.length === 1 ? 'it' : 'them' }} — a branch and its
+          commits, but nothing this app started. Adopting one gives you a session on that
+          branch; there is no conversation to pick up.
+        </span>
       </div>
 
       <div v-if="orphans.length" class="flex items-center gap-2" :class="restorable.length ? '' : 'pt-1'">

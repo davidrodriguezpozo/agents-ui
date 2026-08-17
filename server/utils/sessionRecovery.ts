@@ -91,10 +91,33 @@ export async function readTranscriptMeta(cwd: string): Promise<TranscriptMeta | 
 }
 
 /** Last resort when there is no transcript: unpick the branch name. */
+/**
+ * A session id as this app makes them: lowercase alphanumeric, never hyphenated
+ * (`msnr2w23ne1i`). The distinction matters because `id` is a directory basename,
+ * and for a worktree this app did not create that basename is the branch's own
+ * last segment — so `fix/authorization-gaps` in a directory of the same name had
+ * its entire meaning stripped as if it were an id, and was titled "Fix/".
+ */
+function looksLikeSessionId(id: string): boolean {
+  return /^[a-z0-9]+$/.test(id)
+}
+
+/** So a directory containing `.` or `+` cannot change what the pattern means. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function titleFromBranch(branch: string, id: string): string {
-  const slug = branch
+  const withoutId = looksLikeSessionId(id)
+    ? branch.replace(new RegExp(`-?${escapeRegExp(id)}$`), '')
+    : branch
+
+  const slug = withoutId
     .replace(/^agents-ui\//, '')
-    .replace(new RegExp(`-?${id}$`), '')
+    // Any other prefix is meaning rather than noise: `fix/` and `refactor/` say
+    // what the branch is for, and a slash in the middle of a sentence reads as
+    // the accident it is.
+    .replace(/\//g, ' ')
     .replace(/-+/g, ' ')
     .trim()
 
@@ -113,6 +136,23 @@ export interface RecoveryCandidate {
   turnCount: number
   /** False for a worktree git still tracks but whose directory is gone. */
   exists: boolean
+  /**
+   * Whether there is a conversation to bring back, as opposed to a directory.
+   *
+   * `exists` answers a question about the filesystem and was being read as an
+   * answer about recovery — so twelve worktrees on a real machine were counted
+   * as twelve lost sessions and the panel offered to restore conversations that
+   * had never happened. None of them had a transcript, and their branch names
+   * (`fix/authorization-gaps`) were not this app's slug-plus-id shape, so they
+   * were never its sessions at all: foreign worktrees living in its directory.
+   *
+   * They are still worth showing — several carried more than a dozen unmerged
+   * commits — but as a branch nothing here owns, not as a session to resume.
+   * A resume needs the id; without it `recoveredSessionFrom` produces a session
+   * with an empty conversation, which is a fine thing to offer and the wrong
+   * thing to promise.
+   */
+  hasConversation: boolean
 }
 
 export async function inspectForRecovery(
@@ -130,6 +170,9 @@ export async function inspectForRecovery(
     sdkSessionId: transcript?.sdkSessionId,
     turnCount: transcript?.turnCount ?? 0,
     exists: existsSync(worktreePath),
+    // The id is what `resume` needs, so it is the only honest test. A transcript
+    // with zero turns is a file that exists and a conversation that does not.
+    hasConversation: Boolean(transcript?.sdkSessionId && transcript.turnCount > 0),
   }
 }
 
