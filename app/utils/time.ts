@@ -7,6 +7,23 @@ export function relativeTime(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
+/**
+ * How long something has been sitting, when that is the point rather than when
+ * it happened.
+ *
+ * `relativeTime` answers "when", and past a day it answers it as a date —
+ * "Apr 20", which is a fact you have to do arithmetic on before it means
+ * anything. For a row whose whole news is that nothing has happened, the
+ * duration *is* the news, so it is given directly.
+ */
+export function agedFor(ts: number, now = Date.now()): string {
+  const days = Math.floor((now - ts) / 86_400_000)
+  if (days < 1) return 'today'
+  if (days < 60) return `${days}d`
+  const months = Math.round(days / 30)
+  return months < 24 ? `${months}mo` : `${Math.round(days / 365)}y`
+}
+
 export function formatDuration(ms?: number): string | null {
   if (!ms) return null
   if (ms < 1000) return `${ms}ms`

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
-import { relativeTime, formatDuration, formatCost } from '../app/utils/time'
+import { relativeTime, agedFor, formatDuration, formatCost } from '../app/utils/time'
 
 describe('relativeTime', () => {
   afterEach(() => vi.useRealTimers())
@@ -32,6 +32,31 @@ describe('relativeTime', () => {
     expect(result).not.toContain('ago')
     expect(result).not.toBe('just now')
     expect(result).toMatch(/\w+ \d+/)
+  })
+})
+
+describe('agedFor', () => {
+  const DAY = 86_400_000
+  const now = 400 * DAY
+
+  it('counts days up to two months', () => {
+    expect(agedFor(now - 1 * DAY, now)).toBe('1d')
+    expect(agedFor(now - 18 * DAY, now)).toBe('18d')
+    expect(agedFor(now - 59 * DAY, now)).toBe('59d')
+  })
+
+  it('switches to months once days stop reading as a duration', () => {
+    // "119d" is a number you have to divide; "4mo" is the one the reader wanted.
+    expect(agedFor(now - 60 * DAY, now)).toBe('2mo')
+    expect(agedFor(now - 119 * DAY, now)).toBe('4mo')
+  })
+
+  it('switches to years past two of them', () => {
+    expect(agedFor(now - 800 * DAY, now)).toBe('2y')
+  })
+
+  it('says "today" rather than "0d"', () => {
+    expect(agedFor(now - 3600_000, now)).toBe('today')
   })
 })
 

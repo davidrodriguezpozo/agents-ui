@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { buildNowQueue, NOW_LOOK, type NowItem } from '~/utils/nowQueue'
 import { errorMessage } from '~/utils/errors'
-import { relativeTime } from '~/utils/time'
+import { agedFor, relativeTime } from '~/utils/time'
 
 /**
  * What needs you, in one place, ranked.
@@ -212,7 +212,18 @@ async function resolve(item: NowItem) {
         </div>
 
         <div class="flex items-center gap-2 shrink-0">
-          <span v-if="item.at" class="type-mono-meta hidden sm:inline">{{ relativeTime(item.at) }}</span>
+          <!--
+            For a live row, when. For one that has gone quiet, how long — and
+            not hidden on a narrow screen, because on that row it is the fact
+            that decides whether you look at it at all. "Apr 20" in a right-hand
+            column is arithmetic; "quiet 4mo" is an answer.
+          -->
+          <span
+            v-if="item.at && item.quiet"
+            class="type-mono-meta text-meta"
+            :title="`Nothing has moved on it since ${new Date(item.at).toLocaleDateString()}.`"
+          >quiet {{ agedFor(item.at) }}</span>
+          <span v-else-if="item.at" class="type-mono-meta hidden sm:inline">{{ relativeTime(item.at) }}</span>
           <UButton
             v-if="item.action"
             :label="item.action.label"

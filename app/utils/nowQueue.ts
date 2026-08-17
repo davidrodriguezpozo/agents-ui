@@ -71,7 +71,25 @@ export interface NowItem {
   action?: NowAction
   /** For ordering within a rank, and for "3h ago". */
   at?: number
+  /**
+   * Nothing has moved on it in a fortnight, so it sinks and says how long.
+   *
+   * Set here rather than read in the template, because it changes the order and
+   * the order is the design.
+   */
+  quiet?: boolean
 }
+
+/**
+ * When a row stops being news.
+ *
+ * A fortnight, and the number matters less than what it separates. Inside one
+ * it is ordinary for a thing to wait: a review lands after a holiday, a branch
+ * sits over a weekend. Past one, whatever this is, it is not what is stopping
+ * you today — it has been offered every morning for two weeks and passed over
+ * every time, and that is an answer.
+ */
+export const QUIET_AFTER = 14 * 24 * 60 * 60 * 1000
 
 /** Mirrors `INTENT_LABELS` on the server, which is what the prompt is built from. */
 const INTENT_LABELS: Record<WorkIntent, string> = {
@@ -169,6 +187,8 @@ export interface NowInput {
    * finding them is a job that runs on its own, not a request this makes.
    */
   inbox?: InboxSourceReading[]
+  /** Passed in so that "has gone quiet" stays part of a pure function. */
+  now?: number
 }
 
 /**
@@ -177,8 +197,21 @@ export interface NowInput {
  * Within a rank, oldest first: a thing that has been blocked since 02:00 has
  * been blocked longer than one blocked ten minutes ago, and the longer it has
  * been stuck the more likely it is the reason your morning is not going well.
+ *
+ * That reasoning holds for a morning and breaks over a season, which is how
+ * this screen came to lead with a pull request nobody had touched since April,
+ * drawn above a review somebody had asked for three days earlier. Elapsed time
+ * means two opposite things: on a session frozen mid-turn it is the measure of
+ * how stuck you are, and on a pull request it is the measure of how little
+ * anyone cares. So past `QUIET_AFTER` a row sinks within its rank instead of
+ * rising, and among the sunk ones the most recently touched leads — once
+ * "longest stuck is most urgent" has stopped being true, its opposite is.
+ *
+ * Nothing is dropped. It is still open, it still conflicts, it still says so
+ * and still has its button; it just stops claiming to be this morning's
+ * problem. An expiring queue would be the same lie in the other direction.
  */
-export function buildNowQueue({ attention, pulls, digest, inbox }: NowInput): NowItem[] {
+export function buildNowQueue({ attention, pulls, digest, inbox, now = Date.now() }: NowInput): NowItem[] {
   const items: NowItem[] = []
 
   // Current state first, and the only source for these two kinds.
@@ -286,8 +319,17 @@ export function buildNowQueue({ attention, pulls, digest, inbox }: NowInput): No
     items.push(pullItem(pull))
   }
 
+  // Marked in one place, after everything is collected, so no source of rows
+  // can forget to do it and no two can decide it differently.
+  for (const item of items) {
+    if (item.at !== undefined && now - item.at > QUIET_AFTER) item.quiet = true
+  }
+
   return items.sort((a, b) =>
-    a.urgency - b.urgency || (a.at ?? 0) - (b.at ?? 0) || a.title.localeCompare(b.title),
+    a.urgency - b.urgency
+    || Number(Boolean(a.quiet)) - Number(Boolean(b.quiet))
+    || (a.quiet ? (b.at ?? 0) - (a.at ?? 0) : (a.at ?? 0) - (b.at ?? 0))
+    || a.title.localeCompare(b.title),
   )
 }
 

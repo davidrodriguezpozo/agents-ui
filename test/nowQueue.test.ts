@@ -95,6 +95,7 @@ describe('buildNowQueue ranking', () => {
         pull({ number: 1, title: 'older', updatedAt: 100 }),
       ],
       digest: digest(),
+      now: 1000,
     })
     expect(items.map(i => i.title)).toEqual(['older', 'newer'])
   })
@@ -106,6 +107,100 @@ describe('buildNowQueue ranking', () => {
   it('survives having no digest yet', () => {
     const items = buildNowQueue({ attention: [blockedSession()], pulls: [pull()], digest: null })
     expect(kinds(items)).toEqual(['blocked-session', 'review'])
+  })
+})
+
+describe('what has gone quiet', () => {
+  /**
+   * The real one, from the queue this was written against: pull request #2850,
+   * approved, conflicting, and untouched since 20 April. It led "Needs you"
+   * every morning for four months — above a conflict from last week and above
+   * a review a colleague had asked for three days earlier — because oldest-first
+   * was reading four months of silence as four months of urgency.
+   */
+  const DAY = 24 * 60 * 60 * 1000
+  const now = 200 * DAY
+
+  it('sinks the four-month-old pull request below this week’s work', () => {
+    const items = buildNowQueue({
+      attention: [],
+      pulls: [
+        pull({ number: 2850, title: 'drop is_paid', updatedAt: now - 119 * DAY, mine: true }),
+        pull({ number: 5288, title: 'remediation script', updatedAt: now - 10 * DAY, mine: true }),
+        pull({ number: 5442, title: 'thread traceparent', updatedAt: now - 3 * DAY }),
+      ],
+      digest: null,
+      now,
+    })
+
+    expect(items.map(i => i.title)).toEqual([
+      'remediation script', 'thread traceparent', 'drop is_paid',
+    ])
+  })
+
+  it('keeps it, with its reason and its button intact', () => {
+    // Sinking is not hiding. It is still open and it still conflicts; it has
+    // only stopped claiming to be this morning's problem.
+    const [item] = buildNowQueue({
+      attention: [],
+      pulls: [pull({
+        number: 2850, mine: true, updatedAt: now - 119 * DAY, intent: 'update',
+        verdict: { state: 'conflicted', label: 'Conflicts', detail: 'Conflicts with master', onYou: true },
+      })],
+      digest: null,
+      now,
+    })
+
+    expect(item!.quiet).toBe(true)
+    expect(item!.because).toBe('#2850 · Conflicts with master')
+    expect(item!.action).toEqual({ label: 'Resolve conflicts', kind: 'work-on-pull', target: 2850 })
+  })
+
+  it('leaves a fortnight-old row alone, and calls the day after it quiet', () => {
+    const of = (ago: number) => buildNowQueue({
+      attention: [], pulls: [pull({ updatedAt: now - ago })], digest: null, now,
+    })[0]!.quiet
+
+    expect(of(14 * DAY)).toBeUndefined()
+    expect(of(14 * DAY + 1)).toBe(true)
+  })
+
+  it('orders the quiet ones the other way round, least dead first', () => {
+    // Once "longest stuck is most urgent" has stopped being true, its opposite
+    // is: the more recently something moved, the more likely it still matters.
+    const items = buildNowQueue({
+      attention: [],
+      pulls: [
+        pull({ number: 1, title: 'april', updatedAt: now - 119 * DAY }),
+        pull({ number: 2, title: 'june', updatedAt: now - 60 * DAY }),
+      ],
+      digest: null,
+      now,
+    })
+    expect(items.map(i => i.title)).toEqual(['june', 'april'])
+  })
+
+  it('never lets a quiet row outrank a kind above it', () => {
+    // Sinking happens within a rank. A blocked session from this morning is
+    // still the first thing on the screen, and a quiet one is still a blocked
+    // session — above every pull request, however fresh.
+    const items = buildNowQueue({
+      attention: [blockedSession({ id: 'old', title: 'stale block', at: now - 90 * DAY })],
+      pulls: [pull({ title: 'fresh pull', updatedAt: now - DAY })],
+      digest: null,
+      now,
+    })
+    expect(kinds(items)).toEqual(['blocked-session', 'review'])
+  })
+
+  it('says nothing about a row that carries no time at all', () => {
+    // A stopped ritual has no `at`. Absent is not old, and guessing would put
+    // the strongest claim on the screen on the flimsiest evidence.
+    const [item] = buildNowQueue({
+      attention: [], pulls: [], now,
+      digest: digest({ stopped: [{ id: 's', title: 'stopped', reason: 'gave up' }] }),
+    })
+    expect(item!.quiet).toBeUndefined()
   })
 })
 
