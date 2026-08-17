@@ -4,6 +4,7 @@ import { defineJsonStore } from './jsonStore'
 import { readSessions } from './sessions'
 import { readSchedules } from './schedules'
 import { inboxStore, findInboxSource, visibleItems } from './inbox'
+import { describeLanded, landedSince } from './landed'
 
 /**
  * What is going on around here, handed to every run that starts.
@@ -70,12 +71,31 @@ export interface BriefWaitingFact {
   count: number
 }
 
+export interface BriefLandedFact {
+  title: string
+  branch: string
+  repo: string
+  /** How it got in, in words — see `describeLanded`. */
+  how: string
+  at: number
+}
+
 export interface BriefFacts {
   sessions: BriefSessionFact[]
   rituals: BriefRitualFact[]
   waiting: BriefWaitingFact[]
   /** How many sessions were left out of the list above. */
   moreSessions: number
+  /**
+   * What shipped recently.
+   *
+   * The line this file was written without, because nothing recorded a merge —
+   * the note where it was missing said so. It matters more than most of what is
+   * here: a run told what landed yesterday can tell that the branch it is about
+   * to describe as in-flight is already in the base, and that the base it is
+   * working against moved.
+   */
+  landed: BriefLandedFact[]
 }
 
 export interface Brief {
@@ -95,7 +115,9 @@ export interface Brief {
   updatedAt?: number
 }
 
-export const EMPTY_FACTS: BriefFacts = { sessions: [], rituals: [], waiting: [], moreSessions: 0 }
+export const EMPTY_FACTS: BriefFacts = {
+  sessions: [], rituals: [], waiting: [], moreSessions: 0, landed: [],
+}
 
 export const DEFAULT_BRIEF: Brief = { enabled: true, pinned: '', facts: EMPTY_FACTS }
 
@@ -126,6 +148,9 @@ export const briefStore = defineJsonStore<Brief>({
       rituals: Array.isArray(parsed?.brief?.facts?.rituals) ? parsed.brief.facts.rituals : [],
       waiting: Array.isArray(parsed?.brief?.facts?.waiting) ? parsed.brief.facts.waiting : [],
       moreSessions: Number(parsed?.brief?.facts?.moreSessions) || 0,
+      // Absent in a file written before landings were recorded, which is not the
+      // same as a week in which nothing shipped.
+      landed: Array.isArray(parsed?.brief?.facts?.landed) ? parsed.brief.facts.landed : [],
     },
     updatedAt: parsed?.brief?.updatedAt,
   }),
@@ -144,6 +169,12 @@ export async function readBrief(): Promise<Brief> {
 
 /** Long enough ago that mentioning it would be describing history, not context. */
 const STALE_SESSION_MS = 14 * 24 * 60 * 60 * 1000
+
+/** How far back "what shipped" reaches. See the note where it is used. */
+const LANDED_WINDOW_MS = 2 * 24 * 60 * 60 * 1000
+
+/** Enough to see the shape of a night's work without becoming a changelog. */
+export const MAX_LANDED = 6
 
 /**
  * Read the state of your work off this machine.
@@ -167,6 +198,14 @@ export async function collectBriefFacts(now = Date.now()): Promise<BriefFacts> {
   const live = sessions
     .filter(session => session.status !== 'archived')
     .filter(session => now - session.updatedAt < STALE_SESSION_MS)
+    /*
+     * A session that has landed is not in flight, and this is the fix rather
+     * than a nicety. Merging leaves the record otherwise untouched — idle,
+     * checks passing — so without this line the brief goes on describing work
+     * that is already in the base branch as work in progress, which is a run's
+     * cue to go and finish it.
+     */
+    .filter(session => !session.landed)
     // What needs you first, then what is running, then the rest by recency —
     // the same order the app itself sorts by, so the brief agrees with the page.
     .sort((a, b) => rank(a.check?.status) - rank(b.check?.status) || b.updatedAt - a.updatedAt)
@@ -200,6 +239,25 @@ export async function collectBriefFacts(now = Date.now()): Promise<BriefFacts> {
         trouble: schedule.pausedReason
           ? `stopped firing. ${schedule.pausedReason}`
           : 'its last turn came round while nothing was running',
+      })),
+
+    /*
+     * What shipped, over a shorter window than everything else here.
+     *
+     * Two days rather than the fortnight in-flight sessions get, because this
+     * is the one section that stops being context and becomes history. Last
+     * Tuesday's merge is not something a run starting now needs to know; last
+     * night's is the difference between describing the base branch correctly
+     * and describing it as it was.
+     */
+    landed: landedSince(sessions, now - LANDED_WINDOW_MS)
+      .slice(0, MAX_LANDED)
+      .map(session => ({
+        title: session.title,
+        branch: session.branch,
+        repo: basename(session.repoDir || ''),
+        how: describeLanded(session.landed!),
+        at: session.landed!.at,
       })),
 
     // Counts only. See `BriefWaitingFact` for why no title from outside this
@@ -287,6 +345,25 @@ export function renderBrief(
       parts.push('', `And ${facts.moreSessions} more session${facts.moreSessions === 1 ? '' : 's'} `
         + 'not listed here.')
     }
+  }
+
+  /*
+   * Before the broken rituals and after the work in flight, which is where it
+   * belongs in a sentence: this is what the in-flight list was, yesterday. A run
+   * reading down the page sees what is open, then what closed.
+   */
+  // Tolerant of a facts object written before landings were recorded — this
+  // renders into every prompt, and a missing key must not throw there.
+  const landed = facts.landed ?? []
+
+  if (landed.length) {
+    parts.push('', '## Landed in the last two days', '',
+      ...landed.map(entry =>
+        `- \`${entry.branch}\` — ${entry.title} (${entry.how})`
+        + (here && entry.repo !== here ? ` [in ${entry.repo}]` : '')),
+      '',
+      'Their branches are in the base already. Do not treat any of this as outstanding, '
+      + 'and expect the base branch to have moved.')
   }
 
   if (facts.rituals.length) {
@@ -383,6 +460,7 @@ export function briefIsEmpty(brief: Brief): boolean {
   return !facts.sessions.length
     && !facts.rituals.length
     && !facts.waiting.length
+    && !(facts.landed ?? []).length
     && !(brief.pinned ?? '').trim()
 }
 

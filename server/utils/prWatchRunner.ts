@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs'
 import { findSession, patchSession, readSessions, type Session } from './sessions'
+import { recordLanded } from './landed'
 import {
   decideWatch, fixPrompt, landPullRequest, pushFix, readPrStatus,
   type SessionPrWatch,
@@ -47,10 +48,28 @@ async function conclude(
   state: 'landed' | 'stopped',
   reason: string,
   kind: 'finished' | 'needsYou' = 'needsYou',
+  /**
+   * How it got in, for the two ways this ends in a landing.
+   *
+   * Recorded here rather than at the call sites so that "the watcher decided
+   * this is in" and "the session says it is in" cannot come apart — they are
+   * one event, and a `landed` pull request whose session showed no landing was
+   * the state of the world before this.
+   *
+   * The two differ in a way worth keeping: one is this app merging a green pull
+   * request, the other is finding that somebody merged it on github.com while
+   * we were watching. Only one of those is work this machine did.
+   */
+  how?: 'pull-request' | 'elsewhere',
 ): Promise<void> {
   await patchSession(session.id, {
     prWatch: { ...watch, state, reason, updatedAt: Date.now() },
   })
+
+  if (state === 'landed' && how) {
+    await recordLanded(session.id, { at: Date.now(), how, pr: watch.number })
+  }
+
   await notify(kind, `${session.title} — #${watch.number}`, reason, `/sessions/${session.id}`)
 }
 
@@ -122,6 +141,10 @@ async function advance(session: Session): Promise<void> {
       landed ? 'landed' : 'stopped',
       decision.reason!,
       landed ? 'finished' : 'needsYou',
+      // Nothing here merged it. It was already `MERGED` when we asked, which
+      // means a person did it on github.com — worth telling apart from the
+      // branch below, which is this app doing the merging.
+      landed ? 'elsewhere' : undefined,
     )
     return
   }
@@ -145,6 +168,7 @@ async function advance(session: Session): Promise<void> {
       'landed',
       `#${watch.number} passed CI and has been merged.`,
       'finished',
+      'pull-request',
     )
     return
   }

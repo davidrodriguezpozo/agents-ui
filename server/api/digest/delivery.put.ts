@@ -20,6 +20,7 @@ export default defineEventHandler(async (event) => {
     enabled?: boolean
     at?: string | null
     destination?: string
+    commands?: boolean
   }
 
   const body = await readBody<Patch>(event).catch(() => ({} as Patch))
@@ -50,12 +51,24 @@ export default defineEventHandler(async (event) => {
   return deliveryStore.update((state) => {
     if (body?.enabled !== undefined) state.enabled = body.enabled === true
     if (body?.at !== undefined) state.at = body.at == null || body.at === '' ? undefined : String(body.at)
+    if (body?.commands !== undefined) state.commands = body.commands === true
 
     if (destination !== undefined && destination !== state.destination) {
       state.destination = destination
       // See the note above: a new description must not inherit the old id.
       state.channelId = undefined
       state.channelLabel = undefined
+
+      /*
+       * And the thread with them, which matters more than the label does.
+       *
+       * `threadTs` names a message in the channel that is being left behind.
+       * Kept, it would point the remote control at a thread in a conversation the
+       * report no longer goes to — so replies would be read from somewhere the
+       * reader has stopped looking, and the new destination's would be ignored.
+       */
+      state.threadTs = undefined
+      state.commandsCursor = undefined
     }
 
     // A change is the moment the previous complaint stops being about now.

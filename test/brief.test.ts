@@ -121,11 +121,60 @@ describe('renderBrief', () => {
     expect(text).toContain('And 7 more sessions not listed here.')
   })
 
+  /**
+   * The line the brief shipped without, because nothing recorded a merge. It is
+   * worth more than most of what is here: a run told what landed last night can
+   * tell that the base branch moved, and that a branch it might describe as
+   * outstanding is already in.
+   */
+  it('says what landed, where it went, and that it is not outstanding', () => {
+    const text = renderBrief(brief({
+      facts: facts({
+        landed: [{
+          title: 'Add rate limiting to uploads',
+          branch: 'feat/rate-limit',
+          repo: 'agents-ui',
+          how: 'merged into main',
+          at: Date.now(),
+        }],
+      }),
+    }), { projectDir: '/code/agents-ui' })
+
+    expect(text).toContain('Landed in the last two days')
+    expect(text).toContain('`feat/rate-limit` — Add rate limiting to uploads (merged into main)')
+    expect(text).toContain('Do not treat any of this as outstanding')
+    expect(text).toContain('expect the base branch to have moved')
+  })
+
+  it('marks a landing from another repository as being from there', () => {
+    const text = renderBrief(brief({
+      facts: facts({
+        landed: [{
+          title: 'Port the billing report',
+          branch: 'feat/billing',
+          repo: 'other-app',
+          how: '#42 passed CI and was merged',
+          at: Date.now(),
+        }],
+      }),
+    }), { projectDir: '/code/agents-ui' })
+
+    expect(text).toContain('[in other-app]')
+  })
+
+  it('reads a facts object written before landings were recorded', () => {
+    // The stored shape gained a key. A brief that throws here is a brief missing
+    // from every prompt on the machine.
+    const stale = { sessions: [session], rituals: [], waiting: [], moreSessions: 0 } as any
+    expect(() => renderBrief(brief({ facts: stale }))).not.toThrow()
+  })
+
   it('writes no empty headings when a section has nothing in it', () => {
     const text = renderBrief(brief({ facts: facts({ sessions: [session] }) }))
 
     expect(text).not.toContain('Waiting elsewhere')
     expect(text).not.toContain('Scheduled work that is not working')
+    expect(text).not.toContain('Landed in the last two days')
     expect(text).not.toContain('remember')
   })
 

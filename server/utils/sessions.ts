@@ -3,6 +3,7 @@ import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
 import type { SessionCheck } from './checks'
 import type { SessionSummary } from './sessionSummary'
+import type { SessionLanded } from './landed'
 import type { SessionRepair } from './sessionRepair'
 import type { SessionPrWatch } from './prWatch'
 import type { TrustLevel } from './trust'
@@ -60,6 +61,13 @@ export interface Session {
   check?: SessionCheck
   /** What this session did, in a sentence, written by a small model. */
   summary?: SessionSummary
+  /**
+   * That its work is in, and how it got there.
+   *
+   * Absent means it has not landed — which, before this existed, was what a
+   * landed session looked like too. See `landed.ts` for the three routes in.
+   */
+  landed?: SessionLanded
   /**
    * Whether this session is trying to fix its own failing checks, and how far
    * it has got. Absent means it is not, and never has been on this instruction.

@@ -114,6 +114,40 @@ describe('renderDigest', () => {
     expect(text).toContain('Upload now rejects files over 5MB.')
     expect(text).toContain('_checks pass_')
     expect(text).toContain('_behind its base_')
+    // Passing the renderer straight to `map` handed it the array index as the
+    // bullet, so the line came out led by "0".
+    expect(text).toContain('• *Add rate limiting*')
+  })
+
+  /**
+   * The strongest line a report about last night can carry, and it could not be
+   * written until landings were recorded — a merged session was reported as
+   * "ready to look at", indistinguishable from one waiting to be read.
+   */
+  it('puts what shipped at the top of the second band, with where it went', () => {
+    const text = renderDigest(digest({
+      sessions: [
+        {
+          id: 'a', title: 'Ready thing', check: 'passing', behindBase: false, state: 'ready',
+        },
+        {
+          id: 'b',
+          title: 'Landed thing',
+          summary: 'Upload now rejects files over 5MB.',
+          check: 'failing',
+          behindBase: true,
+          state: 'landed',
+          landed: 'merged into main, over a failing check',
+        },
+      ],
+    }), { now: NOW })
+
+    expect(text).toContain('*Came out of it (2)*')
+    expect(text.indexOf('Landed thing')).toBeLessThan(text.indexOf('Ready thing'))
+    expect(text).toContain(':ship: _merged into main, over a failing check_')
+    // Neither applies to work that is already in.
+    expect(text).not.toContain('_checks failed_')
+    expect(text).not.toContain('_behind its base_')
   })
 
   it('counts a failing session as needing you rather than as an outcome', () => {

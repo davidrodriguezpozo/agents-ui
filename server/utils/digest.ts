@@ -6,6 +6,7 @@ import { listPending } from './permissionBroker'
 import { spentSince } from './budget'
 import { listMcpServers, ruleWontHelp, type McpServer } from './mcp'
 import { describeSkipped, type SkippedSource } from './selfReported'
+import { describeLanded } from './landed'
 
 /**
  * What happened while you were away.
@@ -73,8 +74,17 @@ export interface DigestSession {
   summary?: string
   check?: 'passing' | 'failing' | 'errored' | 'running'
   behindBase: boolean
-  /** Ready to look at, or waiting on you, or still going. */
-  state: 'needs-you' | 'ready' | 'working' | 'nothing-yet'
+  /** Ready to look at, or waiting on you, or still going, or already in. */
+  state: 'needs-you' | 'landed' | 'ready' | 'working' | 'nothing-yet'
+  /**
+   * How it got in, in words, when it did.
+   *
+   * The strongest line a report about last night can carry, and until landings
+   * were recorded it could not be written at all: a merged session looked
+   * exactly like one waiting to be read, so the best outcome this app has was
+   * filed under "ready to look at".
+   */
+  landed?: string
 }
 
 export interface Digest {
@@ -236,6 +246,15 @@ export function describeDenied(tools: string[]): string {
 function sessionState(session: Session, blocked: boolean, working: boolean): DigestSession['state'] {
   if (blocked) return 'needs-you'
   if (working) return 'working'
+  /*
+   * Ahead of the check verdict, deliberately.
+   *
+   * A landed session's verdict is about a workspace whose work is now in the
+   * base branch, and a failing one does not mean "go and fix this" — it means
+   * the branch that merged had a red suite, which is a fact about history. What
+   * is not in question is that it is in, and that is the useful thing to say.
+   */
+  if (session.landed) return 'landed'
   if (session.check?.status === 'failing' || session.check?.status === 'errored') return 'needs-you'
   if (session.check?.status === 'passing') return 'ready'
   // No verdict, but it wrote a sentence about what it did — which it only does
@@ -360,6 +379,7 @@ export async function buildDigest(since: number): Promise<Digest> {
       // Filled by the endpoint, which is the layer that knows about git.
       behindBase: false,
       state: sessionState(session, blocked, session.status === 'running'),
+      landed: session.landed ? describeLanded(session.landed) : undefined,
     })
   }
 

@@ -7,7 +7,7 @@ import { studioUrl } from './notify'
 import {
   buildDeliveryPrompt, deliveryModel, deliveryStore, deliveryTimeoutMs, deliveryTurns,
   DELIVERY_DENIED_TOOLS, DELIVERY_TOOLS, dueForDelivery, parseDeliveryReply, readDelivery,
-  windowFor, type DigestDelivery,
+  windowFor, type DeliveryReply, type DigestDelivery,
 } from './digestDelivery'
 
 /**
@@ -34,6 +34,98 @@ export type SendOutcome =
   /** It looked, and there was nothing worth saying. Nothing was spent. */
   | { ok: true; sent: false; because: string; state: DigestDelivery }
   | { ok: false; refusal: SendRefusal }
+
+export interface PostResult {
+  sent: boolean
+  parsed: DeliveryReply
+  /** Trouble worth reporting, whether or not the message went out. */
+  error?: string
+  costUsd?: number
+  durationMs: number
+}
+
+/**
+ * Put one message into Slack and say what happened.
+ *
+ * Extracted from the send because there are two things to post now: the report,
+ * and the note confirming a reply to it was acted on. Both are text this app
+ * composed, both go through the same narrow run with the same deny-list, and
+ * neither is a place where a second implementation should be allowed to grow.
+ *
+ * Deliberately does not touch the store. What a post *means* differs between the
+ * callers — one moves the schedule on and repoints the thread, the other must not
+ * — so the writing belongs to them.
+ */
+export async function postToSlack(
+  state: DigestDelivery,
+  message: string,
+  projectDir: string,
+  opts: { threadTs?: string } = {},
+): Promise<PostResult> {
+  const prompt = buildDeliveryPrompt(state, message, opts)
+  const startedAt = Date.now()
+
+  let reply = ''
+  let costUsd: number | undefined
+  let failure: string | undefined
+
+  try {
+    const { stdout } = await runClaude(
+      [
+        '-p', prompt,
+        '--output-format', 'json',
+        ...(deliveryModel(state) ? ['--model', deliveryModel(state)!] : []),
+        // Allow-listed so the send does not sit waiting for a permission prompt
+        // nobody is present to answer; denied so that being confused about the
+        // job cannot turn into a canvas, a new channel or a message that
+        // outlives this app. See `DELIVERY_DENIED_TOOLS`.
+        '--allowedTools', ...DELIVERY_TOOLS,
+        '--disallowedTools', ...DELIVERY_DENIED_TOOLS,
+        '--max-turns', String(deliveryTurns(state)),
+      ],
+      { cwd: projectDir, timeout: deliveryTimeoutMs(state) },
+    )
+
+    const envelope = JSON.parse(stdout) as RunEnvelope
+    reply = envelope.result ?? ''
+    costUsd = envelope.total_cost_usd
+
+    // Read against the write tool alone. A run refused `slack_search_channels`
+    // when it already had an id was refused something it did not need, and
+    // counting that would report a successful send as a failure.
+    failure = describeRunFailure(envelope, DELIVERY_TOOLS.filter(t => t.endsWith('slack_send_message')))
+  } catch (e: any) {
+    const salvaged = salvageEnvelope(e?.data?.stdout)
+    failure = (salvaged && describeRunFailure(salvaged, DELIVERY_TOOLS))
+      || e?.data?.message
+      || e?.message
+      || 'The send did not finish.'
+    costUsd = salvaged?.total_cost_usd ?? costUsd
+    reply = salvaged?.result ?? reply
+  }
+
+  const parsed = parseDeliveryReply(reply)
+
+  /*
+   * A run that failed *and* claims to have sent is believed about the sending.
+   *
+   * The order matters and it is not obvious. If a run posts the message and then
+   * dies formatting its reply, treating that as "not sent" leaves `lastSentAt`
+   * unwritten — and the schedule sends the same report again tomorrow on top of
+   * the one already in the channel. A duplicate is the one failure mode this
+   * cannot correct for you, so a claimed send with a channel id is taken at its
+   * word and the trouble is reported beside it.
+   */
+  const sent = parsed.sent && Boolean(parsed.channel)
+
+  return {
+    sent,
+    parsed,
+    error: sent ? failure : (failure ?? parsed.error),
+    costUsd,
+    durationMs: Date.now() - startedAt,
+  }
+}
 
 /**
  * Write a refusal where it will be read.
@@ -122,66 +214,13 @@ export async function sendDigest(
   }
 
   const message = renderDigest(digest, { now, url: studioUrl('/') })
-  const prompt = buildDeliveryPrompt(state, message)
+  const post = await postToSlack(state, message, projectDir)
 
-  const startedAt = Date.now()
-  let reply = ''
-  let costUsd: number | undefined
-  let failure: string | undefined
-
-  try {
-    const { stdout } = await runClaude(
-      [
-        '-p', prompt,
-        '--output-format', 'json',
-        ...(deliveryModel(state) ? ['--model', deliveryModel(state)!] : []),
-        // Allow-listed so the send does not sit waiting for a permission prompt
-        // nobody is present to answer; denied so that being confused about the
-        // job cannot turn into a canvas, a new channel or a message that
-        // outlives this app. See `DELIVERY_DENIED_TOOLS`.
-        '--allowedTools', ...DELIVERY_TOOLS,
-        '--disallowedTools', ...DELIVERY_DENIED_TOOLS,
-        '--max-turns', String(deliveryTurns(state)),
-      ],
-      { cwd: projectDir, timeout: deliveryTimeoutMs(state) },
-    )
-
-    const envelope = JSON.parse(stdout) as RunEnvelope
-    reply = envelope.result ?? ''
-    costUsd = envelope.total_cost_usd
-
-    // Read against the write tool alone. A run refused `slack_search_channels`
-    // when it already had an id was refused something it did not need, and
-    // counting that would report a successful send as a failure.
-    failure = describeRunFailure(envelope, DELIVERY_TOOLS.filter(t => t.endsWith('slack_send_message')))
-  } catch (e: any) {
-    const salvaged = salvageEnvelope(e?.data?.stdout)
-    failure = (salvaged && describeRunFailure(salvaged, DELIVERY_TOOLS))
-      || e?.data?.message
-      || e?.message
-      || 'The send did not finish.'
-    costUsd = salvaged?.total_cost_usd ?? costUsd
-    reply = salvaged?.result ?? reply
-  }
-
-  const parsed = parseDeliveryReply(reply)
-
-  /*
-   * A run that failed *and* claims to have sent is believed about the sending.
-   *
-   * The order matters and it is not obvious. If a run posts the message and then
-   * dies formatting its reply, treating that as "not sent" leaves `lastSentAt`
-   * unwritten — and the schedule sends the same report again tomorrow on top of
-   * the one already in the channel. A duplicate is the one failure mode this
-   * cannot correct for you, so a claimed send with a channel id is taken at its
-   * word and the trouble is reported beside it.
-   */
-  const sent = parsed.sent && Boolean(parsed.channel)
-  const error = sent ? failure : (failure ?? parsed.error)
+  const { sent, error, parsed, costUsd, durationMs } = post
 
   const next = await deliveryStore.update((current) => {
     current.projectDir = projectDir
-    current.durationMs = Date.now() - startedAt
+    current.durationMs = durationMs
     current.costUsd = costUsd
     current.lastError = error
 
@@ -192,6 +231,23 @@ export async function sendDigest(
       current.channelId = parsed.channel
       current.channelLabel = parsed.channelLabel ?? current.channelLabel
       current.lastSkippedWhy = undefined
+
+      /*
+       * The new report becomes the live thread, and the old one goes dead.
+       *
+       * Which is the boundary that keeps the remote control small: an instruction
+       * typed under yesterday's report is not picked up today. The cursor is
+       * cleared with it, because it refers to positions in a thread nothing is
+       * reading any more.
+       */
+      if (parsed.ts) {
+        current.threadTs = parsed.ts
+        current.commandsCursor = undefined
+      }
+
+      // Refreshed on every send rather than only the first, so an account that
+      // has been re-resolved is the one a reply is checked against.
+      current.userId = parsed.userId ?? current.userId
     }
 
     return { ...current }

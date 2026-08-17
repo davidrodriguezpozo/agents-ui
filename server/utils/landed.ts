@@ -1,0 +1,111 @@
+import { patchSession } from './sessions'
+
+/**
+ * What shipped.
+ *
+ * Nothing recorded a merge. The branch went into `main`, the session record was
+ * touched to say `updatedAt` and otherwise looked exactly as it had a minute
+ * before — idle, checks passing, work in flight. So every surface that asks
+ * "what came out of last night" had to answer with sessions that were *ready*,
+ * and the one thing anybody actually wants to know first was unanswerable: what
+ * landed. The standing brief shipped without that line for exactly this reason.
+ *
+ * **Three ways in, one record.** This is the part worth being careful about,
+ * because a field called `mergedAt` written in one of them would have been worse
+ * than nothing — a session that landed by another route would read as one that
+ * never landed at all:
+ *
+ *   - `mergeSession` merges the branch into its base here, on this machine.
+ *     Recorded inside that function rather than by its callers, because there are
+ *     two of them and a third will be along.
+ *   - the pull request watcher merges the pull request itself once CI is green.
+ *   - the watcher finds the pull request already `MERGED`, which means a person
+ *     merged it on github.com and nothing here did anything at all.
+ *
+ * The third is why `how` exists rather than a boolean. "It is in" and "we put it
+ * in" are different facts, and only one of them is this app taking credit.
+ */
+
+export type LandedHow =
+  /** A git merge into the base branch, by this machine. */
+  | 'merged'
+  /** This app merged the pull request once it was green. */
+  | 'pull-request'
+  /** Found already merged. Somebody did it on github.com. */
+  | 'elsewhere'
+
+export interface SessionLanded {
+  at: number
+  how: LandedHow
+  /** The branch it went into. Only known when this machine did the merge. */
+  into?: string
+  /** How many commits came across, same caveat. */
+  commits?: number
+  /**
+   * It went in over a failing check.
+   *
+   * Kept because it is a decision somebody made with reasons, and the question
+   * "was this known to be broken when it landed" deserves an answer six months
+   * later. The merge commit says so too — this is the same fact where a list can
+   * read it without parsing git history.
+   */
+  overrodeChecks?: boolean
+  /** The pull request, when that is what landed. */
+  pr?: number
+}
+
+/**
+ * File the landing against the session.
+ *
+ * Never throws, and deliberately so. A merge that has already happened must not
+ * be reported as failed because the bookkeeping afterwards did — the branch is
+ * in, and the caller telling somebody otherwise would send them to undo a merge
+ * that was fine. A landing this fails to record is a missing line in a report,
+ * which is the smaller loss by a wide margin.
+ */
+export async function recordLanded(sessionId: string, landed: SessionLanded): Promise<void> {
+  try {
+    await patchSession(sessionId, { landed })
+  } catch (e: any) {
+    console.log(`[landed] could not record ${sessionId}: ${e?.message ?? e}`)
+  }
+}
+
+/**
+ * Landings inside a window, newest first.
+ *
+ * The presence of the record is checked separately from its timestamp, rather
+ * than defaulting the missing one to zero and comparing. `0 >= 0` is true, so a
+ * window of "since the beginning of time" quietly returned every session that
+ * had never landed — as a list of landings.
+ */
+export function landedSince<T extends { landed?: SessionLanded }>(sessions: T[], since: number): T[] {
+  return sessions
+    .filter((session): session is T & { landed: SessionLanded } => Boolean(session.landed))
+    .filter(session => session.landed.at >= since)
+    .sort((a, b) => b.landed.at - a.landed.at)
+}
+
+/**
+ * How it got in, in words, for a line somebody reads.
+ *
+ * The base branch is named where it is known, because "landed" without a
+ * destination is only half a fact on a machine with several long-lived branches
+ * — and it is exactly the half that matters when something lands in the wrong
+ * one.
+ */
+export function describeLanded(landed: SessionLanded): string {
+  if (landed.how === 'elsewhere') {
+    return landed.pr
+      ? `#${landed.pr} was merged on GitHub — not by this machine`
+      : 'merged somewhere else, not by this machine'
+  }
+
+  if (landed.how === 'pull-request') {
+    return `#${landed.pr} passed CI and was merged`
+  }
+
+  const into = landed.into ? ` into ${landed.into}` : ''
+  const over = landed.overrodeChecks ? ', over a failing check' : ''
+  return `merged${into}${over}`
+}

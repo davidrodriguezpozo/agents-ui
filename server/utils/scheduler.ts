@@ -14,6 +14,7 @@ import { checkBudget } from './budget'
 import { describeIncomplete } from './digest'
 import { tickInbox } from './inboxTick'
 import { tickDigestDelivery } from './digestSend'
+import { tickDigestCommands } from './digestCommands'
 import { refreshBrief } from './brief'
 import { withRunSlot } from './runQueue'
 import { pollPullRequests } from './prWatchRunner'
@@ -111,6 +112,7 @@ export function startScheduler(): void {
     void pollWatchedPullRequests()
     void tickInbox()
     void tickDigestDelivery()
+    void tickDigestCommands()
     void refreshBrief()
   }, 15_000)
 
@@ -125,6 +127,11 @@ export function startScheduler(): void {
     // One message a day at most, and `dueForDelivery` is a file read until the
     // minute it is due — so riding this timer costs nothing on every other tick.
     void tickDigestDelivery()
+    // The return leg: replies to that message, read on the same interval the
+    // event triggers use. `commandsRefusal` is a file read and refuses until
+    // somebody has switched it on and pointed it at a direct message, so on
+    // almost every machine this costs one `readDelivery` every two minutes.
+    void tickDigestCommands()
     // Not a schedule and not a run: the brief is assembled from files this
     // machine already has, so it is rebuilt on the poll rather than at the
     // moment a run needs it. A run that had to wait for it would be paying for

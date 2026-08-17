@@ -74,8 +74,18 @@ export interface LandingInput {
    * queue, had their checks re-run at length, and were then refused for having
    * "nothing to merge" — which stopped the run before it reached the two that
    * still needed it.
+   *
+   * Named for where the work is rather than for what happened to it, because
+   * `Session` now carries a `landed` record of its own — when a merge happened,
+   * by which of three routes — and this input is built by spreading a session.
+   * Two different meanings of the same word on one object is how the wrong one
+   * gets read.
+   *
+   * This one is the authority on the question it answers: it is what git says
+   * now, where the record is what this app remembers doing. A branch merged by
+   * hand in a terminal is `inBase` with no record at all.
    */
-  landed: boolean
+  inBase: boolean
 }
 
 function needOf(session: LandingInput): LandingCandidate {
@@ -107,7 +117,7 @@ function needOf(session: LandingInput): LandingCandidate {
    * in the base. Running its checks to find that out is minutes spent to learn
    * nothing.
    */
-  if (session.landed) {
+  if (session.inBase) {
     return { ...head, need: 'landed', reason: 'Its work is in the base branch.' }
   }
 

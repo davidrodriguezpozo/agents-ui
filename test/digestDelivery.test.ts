@@ -29,6 +29,7 @@ function delivery(patch: Partial<DigestDelivery> = {}): DigestDelivery {
     at: '08:15',
     projectDir: '/repo',
     channelId: 'D123',
+    commands: false,
     ...patch,
   }
 }

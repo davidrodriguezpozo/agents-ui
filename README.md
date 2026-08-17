@@ -314,6 +314,33 @@ Four things it is careful about:
 The message is composed here and sent verbatim; the run that posts it is denied every other
 way of writing to Slack, including scheduling a message that would outlive this app.
 
+### Replying to it
+
+The report arrives on a phone, on a train. The useful answer to *the rate limiting session's
+checks are failing* is a sentence you could type there — so **a reply becomes a session**:
+a branch, a worktree and an agent, started on the machine at home, with a note posted back
+under your instruction saying what it started.
+
+This is the most powerful thing in the app and it is off until you turn it on. A reply
+becomes an agent with a shell on your repository, so the boundaries are the feature:
+
+- **Only in a direct message.** Slack channel ids say what kind of conversation they are.
+  In a DM with yourself there is no other author, so a command cannot be forged — by a
+  colleague, or by text in a message crafted to make the reading model misreport who sent
+  it. A channel can receive the report and can never command this. It refuses in words.
+- **Only your own replies, only to the newest report.** The run that reads the thread holds
+  one read tool and is denied every way of writing anywhere, Slack included; it is asked to
+  transcribe rather than to interpret. Which replies count is then decided by code — author,
+  cursor, and not-the-report-itself — never by a model.
+- **Three at a time, ten a day**, and the daily spending cap applies as it does to any
+  unattended work.
+- **It lands in a session**, which is this app's existing answer to an agent nobody is
+  watching: its own branch, its own checkout, nothing merged and nothing pushed until you
+  say so.
+
+What it cannot protect you from is your own instruction. A reply is treated exactly as
+though you had typed it into the app, because that is what it is.
+
 ---
 
 ## Sessions
@@ -522,6 +549,19 @@ Merging is the exception and is treated like one: it only appears on your own pu
 request, only when it is genuinely ready, and the page re-reads GitHub at the moment you
 press it rather than trusting what it drew ten minutes ago.
 
+### When it lands
+
+However it gets in, the session says so and says which way — merged into its base here, a
+pull request this app merged once CI went green, or one you merged on github.com yourself
+while it was watching. Three routes, one record, and the third is deliberately not reported
+as work this machine did.
+
+That sounds like bookkeeping and is the difference between a report you can read and one you
+cannot. Nothing recorded a merge before: the branch went into `main` and the session went on
+looking exactly as it had — idle, checks passing, work in flight — so *what shipped last
+night*, the first thing anybody asks, was the one question with no answer anywhere. It is now
+the top line of what came out of a night, in the app and in the message.
+
 ---
 
 ## What a run knows before it starts
@@ -532,10 +572,11 @@ which of six sessions is the one that matters — every morning, at your expense
 it slightly differently right each time.
 
 The **standing brief** is one page of that, handed to every run that starts cold. Work in
-flight and what each session did, with the run's own repository first. Scheduled work that
-has stopped working. How much is waiting elsewhere. And above all of it, the half you write:
-the standing facts nothing on this machine can derive — Ana is out until September, the
-release goes out on Thursdays — which is never overwritten by an assembly.
+flight and what each session did, with the run's own repository first. What shipped in the
+last two days, and by which route. Scheduled work that has stopped working. How much is
+waiting elsewhere. And above all of it, the half you write: the standing facts nothing on
+this machine can derive — Ana is out until September, the release goes out on Thursdays —
+which is never overwritten by an assembly.
 
 It is **read off files this machine already keeps, not written by a model**. That decides
 two things. It cannot invent a branch, which a summary of your week eventually would; and it

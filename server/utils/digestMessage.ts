@@ -164,6 +164,24 @@ function sessionLine(item: DigestSession, lead = '•'): string {
 }
 
 /**
+ * It shipped.
+ *
+ * Its own line rather than a variant of the one below, because none of what that
+ * one says applies: the check verdict describes a workspace whose work is now in
+ * the base, and how far behind its base it was stopped mattering when it went in.
+ * What is worth reading is the sentence about what it did, and where it went.
+ */
+function landedLine(item: DigestSession): string {
+  const summary = item.summary ? ` — ${escapeMrkdwn(oneLine(item.summary, 100))}` : ''
+  const how = ` :ship: _${escapeMrkdwn(oneLine(item.landed ?? 'landed', 60))}_`
+
+  // Bullet-led with the marker where a verdict would sit, which is the shape
+  // every other line in this band has. The first band leads with symbols and
+  // this one leads with bullets; mixing them inside a band reads as two lists.
+  return `• *${escapeMrkdwn(item.title)}*${summary}${how}`
+}
+
+/**
  * What marks a session out in the first band.
  *
  * Every line in that band leads with a symbol rather than a bullet, and the
@@ -232,7 +250,13 @@ export function renderDigest(digest: Digest, opts: { now?: number; url?: string 
    * not need to read.
    */
   const produced = [
-    ...digest.sessions.filter(s => s.state === 'ready').map(sessionLine),
+    // Landed first, and above everything else in the band. It is the only line
+    // here that describes work that is finished rather than work that is
+    // waiting to be read.
+    ...digest.sessions.filter(s => s.state === 'landed').map(landedLine),
+    // Wrapped rather than passed by reference: `map` hands the callback an index
+    // as its second argument, which `sessionLine` would take as the bullet.
+    ...digest.sessions.filter(s => s.state === 'ready').map(session => sessionLine(session)),
     ...digest.rituals.filter(r => !r.problem).map(ritualFine),
   ]
 

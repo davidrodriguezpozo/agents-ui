@@ -31,7 +31,9 @@ export interface DigestSession {
   summary?: string
   check?: 'passing' | 'failing' | 'errored' | 'running'
   behindBase: boolean
-  state: 'needs-you' | 'ready' | 'working' | 'nothing-yet'
+  state: 'needs-you' | 'landed' | 'ready' | 'working' | 'nothing-yet'
+  /** How it got in, in words, when it has. */
+  landed?: string
 }
 
 export interface Digest {

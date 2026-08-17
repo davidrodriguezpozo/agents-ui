@@ -25,12 +25,20 @@ interface Delivery {
   lastError?: string
   costUsd?: number
   durationMs?: number
+  /** Read replies to the report and act on them. */
+  commands: boolean
+  /** Why replies are not being read, from the server that decides it. */
+  commandsRefusal?: string
+  commandsLeftToday?: number
+  commandsError?: string
+  lastCommandAt?: number
 }
 
 const state = ref<Delivery | null>(null)
 const loading = ref(true)
 const saving = ref(false)
 const sending = ref(false)
+const checking = ref(false)
 const toast = useToast()
 
 /** Local copies, so typing a time does not save on every keystroke. */
@@ -98,6 +106,44 @@ async function onSendNow() {
     await load()
   } finally {
     sending.value = false
+  }
+}
+
+/**
+ * Read replies now.
+ *
+ * Here rather than only on the poll because the first time anybody turns this on
+ * they want to watch one reply become a session, rather than find out two minutes
+ * later from a notification that something has already started.
+ */
+async function onCheckNow() {
+  checking.value = true
+  try {
+    const outcome = await $fetch<{
+      result: { started: { title: string }[]; skipped: { because: string }[]; error?: string }
+      state: Delivery
+    }>('/api/digest/commands', { method: 'POST' })
+
+    state.value = { ...state.value, ...outcome.state } as Delivery
+
+    const started = outcome.result.started
+    toast.add({
+      title: started.length
+        ? `Started ${started.length} ${started.length === 1 ? 'session' : 'sessions'}`
+        : 'Nothing new to act on',
+      description: started.length
+        ? started.map(entry => entry.title).join(', ')
+        : outcome.result.error ?? outcome.result.skipped[0]?.because
+          ?? 'No replies since the last time this looked.',
+      color: started.length ? 'success' : outcome.result.error ? 'warning' : 'neutral',
+    })
+
+    // The counts and the cursor moved, and the reply may have named a new error.
+    await load()
+  } catch (e) {
+    toast.add({ title: 'Could not read replies', description: errorMessage(e), color: 'error' })
+  } finally {
+    checking.value = false
   }
 }
 
@@ -236,6 +282,75 @@ const changed = computed(() =>
         <div class="space-y-1">
           <div class="type-strong">The last attempt did not go through</div>
           <div class="type-detail ink-2">{{ state.lastError }}</div>
+        </div>
+      </div>
+
+      <!--
+        The return leg, kept visually below the switch that makes the report
+        happen at all, because it depends on it: there is nothing to reply to
+        until something has been sent.
+      -->
+      <div class="space-y-2 pt-1">
+        <label
+          class="flex items-start justify-between gap-4 py-2 px-3 rounded-md cursor-pointer"
+          style="background: var(--input-bg);"
+          :style="{ opacity: state.commandsRefusal && !state.commands ? 0.6 : 1 }"
+        >
+          <span>
+            <span class="type-strong text-body block">Act on my replies to it</span>
+            <span class="type-meta">
+              Reply to the report and it becomes a session here — its own branch, its own
+              checkout, nothing merged or pushed without you. Only in a direct message, only
+              your own replies, and a few at a time.
+            </span>
+          </span>
+          <span class="field-toggle shrink-0 mt-0.5">
+            <input
+              type="checkbox"
+              :checked="state.commands"
+              @change="save({ commands: ($event.target as HTMLInputElement).checked })"
+            />
+            <span class="field-toggle__track">
+              <span class="field-toggle__thumb" />
+            </span>
+          </span>
+        </label>
+
+        <!--
+          Shown whenever it would refuse, including while the switch is on: "on
+          but pointed at a channel" is exactly the state somebody needs to be
+          told about, and it is silent otherwise.
+        -->
+        <div
+          v-if="state.commandsRefusal && state.commands"
+          class="type-meta px-3"
+        >
+          {{ state.commandsRefusal }}
+        </div>
+
+        <div class="flex items-center gap-3 px-3">
+          <UButton
+            v-if="state.commands && !state.commandsRefusal"
+            label="Check for replies now"
+            icon="i-lucide-inbox"
+            size="xs"
+            variant="ghost"
+            :loading="checking"
+            @click="onCheckNow"
+          />
+          <span
+            v-if="state.commands && !state.commandsRefusal"
+            class="type-meta"
+          >
+            {{ state.commandsLeftToday }} left today
+          </span>
+        </div>
+
+        <div
+          v-if="state.commandsError"
+          class="type-meta px-3 ink-warn"
+        >
+          {{ state.commandsError }}
         </div>
       </div>
 

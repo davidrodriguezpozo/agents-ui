@@ -59,6 +59,10 @@ const RITUAL: Record<DigestRitual['outcome'], { icon: string; colour: string }> 
 
 const SESSION: Record<DigestSession['state'], { label: string; colour: string }> = {
   'needs-you': { label: 'needs you', colour: 'var(--error)' },
+  // The best outcome this app has, and until landings were recorded it was
+  // reported as "ready to look at" — a merged session was indistinguishable
+  // from one waiting to be read.
+  landed: { label: 'landed', colour: 'var(--success)' },
   ready: { label: 'ready to look at', colour: 'var(--success)' },
   working: { label: 'still going', colour: 'var(--accent)' },
   'nothing-yet': { label: 'nothing yet', colour: 'var(--text-disabled)' },
@@ -82,7 +86,17 @@ const partial = computed(() =>
 const worked = computed(() =>
   digest.value?.rituals.filter(r => !r.problem && !r.skipped?.length) ?? [])
 const wanted = computed(() => digest.value?.sessions.filter(s => s.state === 'needs-you') ?? [])
-const produced = computed(() => digest.value?.sessions.filter(s => s.state === 'ready') ?? [])
+/**
+ * What came out of it, with what shipped at the top of it.
+ *
+ * One band rather than two: "landed" and "ready to look at" are the same
+ * question — what did this produce — and each row says which it is. Splitting
+ * them would make the shorter list look like the whole answer.
+ */
+const produced = computed(() => [
+  ...(digest.value?.sessions.filter(s => s.state === 'landed') ?? []),
+  ...(digest.value?.sessions.filter(s => s.state === 'ready') ?? []),
+])
 
 const money = computed(() => {
   const total = digest.value?.costUsd ?? 0
@@ -275,11 +289,21 @@ const money = computed(() => {
            work that went well needs acknowledging, not reading. -->
       <div v-if="produced.length" class="pt-1 space-y-2">
         <div v-for="item in produced" :key="item.id" class="flex items-start gap-2.5">
-          <UIcon name="i-lucide-circle-check" class="size-4 shrink-0 mt-0.5 ink-ok" />
+          <UIcon
+            :name="item.state === 'landed' ? 'i-lucide-git-merge' : 'i-lucide-circle-check'"
+            class="size-4 shrink-0 mt-0.5 ink-ok"
+          />
           <div class="flex-1 min-w-0">
             <NuxtLink :to="`/sessions/${item.id}`" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
             <p v-if="item.summary" class="type-detail">{{ item.summary }}</p>
-            <p v-if="item.behindBase" class="type-detail ink-warn">
+            <!--
+              Where it went, for a session that is in. The base-branch warning
+              below is about work that has yet to land, so a landed row must not
+              carry it — being behind a base you have already merged into is not
+              a thing to go and fix.
+            -->
+            <p v-if="item.landed" class="type-detail ink-2">{{ item.landed }}</p>
+            <p v-else-if="item.behindBase" class="type-detail ink-warn">
               Verified before its base moved on — worth bringing it up to date first.
             </p>
           </div>

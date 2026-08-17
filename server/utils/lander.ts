@@ -37,9 +37,10 @@ export function isLanding(repoDir: string): boolean {
 }
 
 function toInput(
-  session: Session & {
+  session: Omit<Session, 'landed'> & {
     worktree: Awaited<ReturnType<typeof worktreeStatus>>
-    landed: boolean
+    /** What git says now — see `LandingInput.inBase`, which it becomes. */
+    inBase: boolean
   },
 ): LandingInput {
   return {
@@ -48,7 +49,7 @@ function toInput(
     status: session.status,
     check: session.check ?? null,
     worktree: session.worktree,
-    landed: session.landed,
+    inBase: session.inBase,
   }
 }
 
@@ -74,7 +75,7 @@ export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
       session.baseBranch,
     )
 
-    return toInput({ ...session, worktree, landed: hasLanded(session.branch, worktree.ahead, merged) })
+    return toInput({ ...session, worktree, inBase: hasLanded(session.branch, worktree.ahead, merged) })
   }))
 }
 

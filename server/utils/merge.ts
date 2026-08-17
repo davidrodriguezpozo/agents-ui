@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { isStale, worktreeFingerprint, type SessionCheck } from './checks'
+import { recordLanded } from './landed'
 import type { Session } from './sessions'
 
 const exec = promisify(execFile)
@@ -312,6 +313,27 @@ export async function mergeSession(
       },
     })
   }
+
+  /*
+   * Filed here rather than by the caller, and that is deliberate.
+   *
+   * Both callers already patch the session immediately after this returns, so
+   * the record could have gone there — and then the next caller to be written
+   * would merge a branch that nothing reported as landed, which is precisely
+   * the hole this whole field exists to close. A merge that happened is a fact
+   * about the repository; recording it is not the caller's business to
+   * remember.
+   *
+   * `recordLanded` cannot throw. A merge that has already gone through must not
+   * come back as a failure because the bookkeeping afterwards did.
+   */
+  await recordLanded(session.id, {
+    at: Date.now(),
+    how: 'merged',
+    into: session.baseBranch,
+    commits: preview.commits,
+    ...(overruled ? { overrodeChecks: true } : {}),
+  })
 
   return { merged: true, commitsBrought: preview.commits, message, overrodeChecks: Boolean(overruled) }
 }
