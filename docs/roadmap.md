@@ -159,13 +159,29 @@ stay trustworthy.
 
 ### 2. Make the next Morning brief run count
 
-The rules are fixed — 8 to 14, none dead, verified through the app's own check — but the
-streak still reads 2 because those two blocked runs are real history. `GIVE_UP_AFTER` is 3,
-so **the next firing decides whether the ritual survives.** Worth running by hand rather
-than finding out at 08:45. If it comes back blocked, the schedules page now names the tool
-and the reason instead of offering a rule that does nothing.
+**Settled: it ran on 17 August, `ok`, $1.67, and the streak is broken.** The ritual
+survives and the permission work behind it held.
 
-### 3. Gate and governor, still infrastructure
+What it exposed instead was the next thing, and it was sitting in plain sight — the run
+came back complete-looking and was *not* complete. Its first three lines were
+`[SKIP] Google Calendar`, `[SKIP] Gmail`, and `[SKIP] Notion tasks DB — workspace hit its
+Query Data Source usage limit mid-pull`, and one of the six priorities it then ranked came
+from Notion. The digest filed it as "1 scheduled run went through without trouble", because
+nothing was denied and nothing was refused: **every other kind of half-done run is visible
+from outside it, and this one is only ever written down in prose.** Now read off the
+output, and the promotion condition on the partial-briefing bet turned out to be this run
+rather than a future one.
+
+### 3. Watch what the skips turn out to be
+
+Two of the three are the vendor boundary above and will skip every morning for good.
+The third — a Notion workspace hitting a query limit *mid-pull* — is a different animal:
+transient, silent, and it truncates rather than fails. It is deliberately not counted in
+"needs you" yet, because a badge permanently at 2 is a badge nobody reads. **If a source
+starts skipping most mornings, that is a ritual quietly degrading and the schedules page is
+where it should say so** — which is a bet below rather than work now.
+
+### 4. Gate and governor, still infrastructure
 
 Unchanged from the fourth pass and now with evidence behind it. Check verdicts that expire,
 the failing streak, spend caps, the sandbox, ordered landing. They do not need features;
@@ -205,11 +221,11 @@ Promotion conditions are things *you* will notice, since no stranger is coming t
 
 | Bet | Promote it when |
 | --- | --- |
-| **A briefing that admits it is partial** — saying which sources it could not reach, rather than a section quietly missing | The first morning you read it and cannot tell whether Slack was empty or absent. The skill prints `[SKIP]`; the app does not surface it |
 | **Inbox sources beyond Notion and Slack** | The first morning you check something by hand *after* reading the queue. Bounded by the vendor boundary above, so the next candidate is whichever service supports dynamic client registration |
 | **Configuration that travels through git** — rituals and checks committed to the repo | You want the same ritual in a second repository and copy it by hand. Still a file format, not a server |
 | **Which rituals earn their cost** | The spend page tells you a number you cannot attribute. Not urgent while rituals are cheap; urgent the moment scheduled inbox refreshes are on for several sources |
 | **Landing without colliding** — teammates' open branches, not only our own sessions | The first landing that conflicts with something a colleague pushed. Likely, now that this is pointed at a work monorepo |
+| **A source that keeps going missing is the ritual degrading** — skips counted across firings, on the schedules page beside the failing streak | The first time you read the same `[SKIP]` for a week and it is a transient one. A connector that is permanently out of reach is not this; a Notion query limit hit most mornings is |
 
 One debt still demoted: **storage that survives concurrency.** Flat JSON remains right for
 one person on one machine. It comes back if the run queue corrupts it, and not before.
@@ -236,6 +252,10 @@ session · one screen for what needs you · an inbox over Notion and Slack with 
 cached so a refresh costs $0.38 rather than $1.39 · agents, commands and skills as one
 library · sessions and runs as one Work list · ⌘K that does things · the night as a picture
 · the order six branches will land in, drawn.
+
+**Since**: **a run that reached three of its six sources no longer reports as trouble-free**
+— the `[SKIP]` lines it wrote about itself are read, named, and said to mean *missing rather
+than empty*, which is the difference between "Slack is quiet" and never having asked Slack.
 
 **This cycle**, all of it from following one alarm: **an inbox source that says Connected
 and cannot answer is refused before it costs anything** · **a restart no longer counts as

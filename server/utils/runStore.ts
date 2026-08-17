@@ -4,6 +4,7 @@ import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { matchesFilter, sourceOf, type RunFilter, type RunSource } from './runFilter'
+import { parseSkipped, withoutSkipped, type SkippedSource } from './selfReported'
 import type { RunStats } from '~/types'
 
 export type RunKind = 'command' | 'chat' | 'agent'
@@ -341,6 +342,15 @@ export interface RunSummary {
   suggestedRules?: string[]
   /** Why it stopped short, when that was a limit rather than a permission. */
   stoppedBy?: 'budget' | 'turns'
+  /**
+   * Sources the run itself said it could not read.
+   *
+   * The only half-done that does not arrive through the harness: nothing was
+   * denied and nothing was refused, the connector simply answered with an
+   * authorization error. Read off the output because that is the sole place it
+   * is written down.
+   */
+  skipped?: SkippedSource[]
   /** The process went away mid-run, so this says nothing about the ritual. */
   interrupted?: boolean
   scheduleId?: string
@@ -353,7 +363,11 @@ export interface RunSummary {
 }
 
 function summarize(run: Run): RunSummary {
-  const preview = run.output.replace(/[\s#*`>-]+/g, ' ').trim().slice(0, 160)
+  const skipped = parseSkipped(run.output)
+  // Previewed without them, because they are shown as themselves now. A row
+  // whose 160 characters go on a connector caveat is a row that does not say
+  // what the run produced.
+  const preview = withoutSkipped(run.output).replace(/[\s#*`>-]+/g, ' ').trim().slice(0, 160)
   return {
     id: run.id,
     kind: run.kind,
@@ -373,6 +387,7 @@ function summarize(run: Run): RunSummary {
     refusedHosts: run.refusedHosts,
     suggestedRules: run.suggestedRules,
     stoppedBy: run.stoppedBy,
+    skipped: skipped.length ? skipped : undefined,
     interrupted: run.interrupted,
     scheduleId: run.scheduleId,
     chainId: run.chainId,

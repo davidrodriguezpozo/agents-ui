@@ -66,7 +66,21 @@ const SESSION: Record<DigestSession['state'], { label: string; colour: string }>
 
 /** Problems first, and only what is worth reading. */
 const troubled = computed(() => digest.value?.rituals.filter(r => r.problem) ?? [])
-const worked = computed(() => digest.value?.rituals.filter(r => !r.problem) ?? [])
+
+/**
+ * Ran, cost money, and answered with sources missing.
+ *
+ * Its own band between the two that existed, because it is neither. Nothing
+ * went wrong — no rule was refused, nothing to approve, and the outcome really
+ * is `ok`. But it is not what "went through without trouble" means either, and
+ * that is the sentence this morning's brief was filed under while three of its
+ * sources, one of them mid-pull, were named at the top of its own output.
+ */
+const partial = computed(() =>
+  digest.value?.rituals.filter(r => !r.problem && r.skipped?.length) ?? [])
+
+const worked = computed(() =>
+  digest.value?.rituals.filter(r => !r.problem && !r.skipped?.length) ?? [])
 const wanted = computed(() => digest.value?.sessions.filter(s => s.state === 'needs-you') ?? [])
 const produced = computed(() => digest.value?.sessions.filter(s => s.state === 'ready') ?? [])
 
@@ -218,6 +232,29 @@ const money = computed(() => {
               </p>
             </div>
           </div>
+
+          <!-- A blocked run can also have lost a source, and the two are not
+               the same problem: one is a permission, the other is an answer
+               written without something in it. -->
+          <DigestSkipped v-if="item.skipped?.length" :item="item" class="mt-1.5" />
+        </div>
+        <span class="type-meta shrink-0">{{ relativeTime(item.at) }}</span>
+      </div>
+
+      <!--
+        It ran, it cost money, and it answered with sources missing.
+
+        Between the problems and the quiet acknowledgement, because it is
+        genuinely between them. Nothing here needs approving and nothing is
+        broken — what needs saying is that a section you cannot see is absent
+        rather than empty, which is the one thing a summary cannot tell you and
+        the difference between "Slack is quiet" and never having asked Slack.
+      -->
+      <div v-for="item in partial" :key="`partial-${item.scheduleId}-${item.at}`" class="flex items-start gap-2.5">
+        <UIcon name="i-lucide-cloud-off" class="size-4 shrink-0 mt-0.5 ink-warn" />
+        <div class="flex-1 min-w-0">
+          <NuxtLink to="/schedules" class="type-strong hover:underline">{{ item.title }}</NuxtLink>
+          <DigestSkipped :item="item" class="mt-0.5" />
         </div>
         <span class="type-meta shrink-0">{{ relativeTime(item.at) }}</span>
       </div>

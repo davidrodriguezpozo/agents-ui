@@ -16,6 +16,13 @@ export interface DigestRitual {
   alreadyAllowed?: boolean
   /** Refusals granting a rule cannot fix, each with why. */
   unreachable?: { tool: string; reason: string }[]
+  /**
+   * Sources the run said it could not read. Nothing was denied and nothing was
+   * refused — so the outcome is `ok`, and the answer was written without them.
+   */
+  skipped?: { source: string; reason: string }[]
+  /** The sentence that goes above them. */
+  partial?: string
 }
 
 export interface DigestSession {

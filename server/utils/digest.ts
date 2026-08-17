@@ -5,6 +5,7 @@ import { collapseChainRuns, outcomeOf, type RitualOutcome } from './ritualHistor
 import { listPending } from './permissionBroker'
 import { spentSince } from './budget'
 import { listMcpServers, ruleWontHelp, type McpServer } from './mcp'
+import { describeSkipped, type SkippedSource } from './selfReported'
 
 /**
  * What happened while you were away.
@@ -50,6 +51,19 @@ export interface DigestRitual {
    * costs another morning to find out otherwise.
    */
   unreachable?: { tool: string; reason: string }[]
+  /**
+   * Sources the run reported it could not read, in its own words.
+   *
+   * The third way a run comes back half-done, and the only one the harness
+   * cannot see: nothing was denied and nothing was refused, so the outcome is
+   * `ok` and the report used to say it went through without trouble. This
+   * morning that sentence sat over a briefing that had been written without
+   * Calendar, without Gmail, and with the Notion tasks table cut off mid-pull —
+   * one of whose six ranked priorities came from Notion.
+   */
+  skipped?: SkippedSource[]
+  /** The sentence that goes above them, built once here. */
+  partial?: string
 }
 
 export interface DigestSession {
@@ -311,6 +325,11 @@ export async function buildDigest(since: number): Promise<Digest> {
           ? stillNeededFor(run.scheduleId!, split.grantable)
           : undefined,
         unreachable: split.unreachable,
+        // Reported whatever the outcome. A blocked run that also lost a
+        // connector has two things wrong with it, and the one the harness saw
+        // is not necessarily the one that spoiled the answer.
+        skipped: run.skipped,
+        partial: run.skipped?.length ? describeSkipped(run.skipped) : undefined,
         /** Already granted since this run was blocked, so it will not recur. */
         alreadyAllowed: outcome === 'blocked'
           && !run.stoppedBy
@@ -362,6 +381,12 @@ export async function buildDigest(since: number): Promise<Digest> {
   // Deliberately not counted in `needsYou`. Nothing is blocked and there is
   // nothing to approve — the machine was off. It is worth reading, not worth
   // a number that means "go and do something".
+  //
+  // A partial run is out for the same reason and it is a closer call, because
+  // one of its sources may well be worth chasing. But most of them are not:
+  // Calendar and Gmail are connector-only for an unattended run and will skip
+  // every morning for good, and a badge that is permanently at 2 is a badge
+  // nobody reads. It is shown, in its own words, and not counted.
   const needsYou = digestSessions.filter(s => s.state === 'needs-you').length
     + rituals.filter(r => r.problem).length
     + stopped.length

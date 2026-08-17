@@ -126,6 +126,13 @@ function mergeFiring(steps: RunSummary[]): RunSummary {
   const refusedHosts = union(step => step.refusedHosts)
   const suggestedRules = union(step => step.suggestedRules)
 
+  // Unioned for the same reason as the refusals above, and deduplicated by
+  // source: a chain whose every step opens by reading the calendar reports one
+  // missing calendar, not one per step.
+  const skipped = [...new Map(
+    steps.flatMap(step => step.skipped ?? []).map(entry => [entry.source.toLowerCase(), entry]),
+  ).values()].slice(0, 8)
+
   return {
     ...deciding,
     createdAt: inOrder[0]!.createdAt,
@@ -145,6 +152,7 @@ function mergeFiring(steps: RunSummary[]): RunSummary {
     deniedTools: deniedTools.length ? deniedTools : undefined,
     refusedHosts: refusedHosts.length ? refusedHosts : undefined,
     suggestedRules: suggestedRules.length ? suggestedRules : undefined,
+    skipped: skipped.length ? skipped : undefined,
   }
 }
 
