@@ -157,7 +157,7 @@ const nothingAnywhere = computed(() =>
 
 <template>
   <div>
-    <PageHeader title="Land">
+    <PageHeader title="Land" measure>
       <template #trailing>
         <span v-if="summary.onYou" class="fs-mono font-mono ink-accent">
           {{ summary.onYou }} on you
@@ -194,10 +194,18 @@ const nothingAnywhere = computed(() =>
         @dismiss="dismissLanding"
       />
 
-      <!-- Ready here — branches this machine can land without asking GitHub -->
+      <!--
+        Ready here — branches this machine can land without asking GitHub.
+
+        Folded, because nine rows of order is a thing you open when you are about
+        to land rather than something to read past on every visit. It unfolds
+        itself while a landing is actually running, which is `inFlight` in
+        MergeTrain: at that point it is the news rather than a tool.
+      -->
       <section v-if="showTrain && workingDir" class="space-y-2">
         <h2 class="text-section-label">Ready here</h2>
         <MergeTrain
+          collapsible
           :plan="landingPlan"
           :sessions="trainSessions"
           :base-branch="activeProject?.branch || 'your current branch'"

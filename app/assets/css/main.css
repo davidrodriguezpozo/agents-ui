@@ -73,9 +73,9 @@
   --radius-lg: 12px;
 
   /* The page frame. One width for every view — see .page-container. */
-  --page-max: 1240px;
+  --page-max: 1320px;
   --page-gutter: 32px;
-  --measure-max: 900px;
+  --measure-max: 1080px;
 
   /* Every page header is this tall, including the ones over a canvas. */
   --header-h: 64px;
@@ -1066,12 +1066,22 @@ body {
 }
 
 /**
- * A narrow measure *inside* the frame, for pages that are mostly prose and
- * lists. The frame itself is untouched — only the content within it is capped,
- * and it stays flush to the frame's left edge, so it lines up under the page
- * title instead of drifting away from it.
+ * A narrower frame, for pages that are mostly prose and lists.
+ *
+ * This used to cap each child at the measure while leaving the frame at the full
+ * width, so the column sat flush against the frame's left edge — which is what
+ * kept it under the page title. That was the right trade while the sidebar was a
+ * fixed 200px: the content had one resting place and stayed in it.
+ *
+ * It stopped being right when the sidebar started collapsing. Every 144px the
+ * sidebar gives back went to empty space on the right, so the same page drifted
+ * further off-centre exactly when it got more room to be centred in.
+ *
+ * So the measure is a frame now, centred like every other one. The title lines up
+ * because `PageHeader` takes the same frame — see its `measure` prop, which is
+ * the only reason this alignment survives the change.
  */
-.page-container--measure > * {
+.page-container--measure {
   max-width: var(--measure-max);
 }
 

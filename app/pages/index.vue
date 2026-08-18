@@ -13,26 +13,12 @@ const { isSimple } = useUiMode();
 const dirInput = ref("");
 const settingDir = ref(false);
 
-interface Suggestion {
-  type: string;
-  severity: "warning" | "info";
-  message: string;
-  target: { type: "agent" | "command" | "skill"; slug: string };
-}
-const suggestions = ref<Suggestion[]>([]);
-
 onMounted(async () => {
   dirInput.value = claudeDir.value || "";
   // Sessions are not fetched here: app.vue loads them before any page renders
   // and reloads them on a project switch, which is what keeps the running count
   // honest about which project it is describing.
   await Promise.all([loadSettings(), fetchPlugins(), fetchSkills(), fetchImports()]);
-
-  try {
-    suggestions.value = await $fetch<Suggestion[]>("/api/suggestions");
-  } catch {
-    // Non-critical
-  }
 });
 
 async function changeDir() {
@@ -103,6 +89,11 @@ const otherwise = computed(() => Boolean(running.value || landed.value || money.
         /land, the standing brief to /settings — and what is left of them is the
         line underneath, which is a reassurance rather than a section.
         
+        The suggestions panel went too. "Skill X is not linked to any agent" is a
+        true observation about your configuration and never once the reason
+        somebody opened this page; it sat under the queue being read past. Config
+        advice belongs where the config is, not in the morning's to-do list.
+        
         An empty Now is the product working. It should look like it.
       -->
       <NowQueue v-if="hasContent" />
@@ -143,64 +134,6 @@ const otherwise = computed(() => Boolean(running.value || landed.value || money.
         v-if="!hasContent"
         @created="(agent) => navigateTo(`/agents/${agent.slug}`)"
       />
-
-      <!-- Suggestions -->
-      <div
-        v-if="suggestions.length && hasContent"
-        class="rounded-lg overflow-hidden"
-        style="border: 1px solid var(--border-subtle)"
-      >
-        <div
-          class="flex items-center justify-between px-4 py-3"
-          style="
-            background: var(--surface-raised);
-            border-bottom: 1px solid var(--border-subtle);
-          "
-        >
-          <h3 class="text-section-title flex items-center gap-2">
-            <UIcon
-              name="i-lucide-lightbulb"
-              class="size-4"
-              style="color: var(--accent)"
-            />
-            Suggestions
-          </h3>
-          <span class="type-mono-meta">{{
-            suggestions.length
-          }}</span>
-        </div>
-        <div
-          class="divide-y"
-          style="divide-color: var(--border-subtle)"
-        >
-          <NuxtLink
-            v-for="(s, idx) in suggestions.slice(0, 5)"
-            :key="idx"
-            :to="`/${s.target.type}s/${s.target.slug}`"
-            class="flex items-center gap-3 px-4 py-3 hover-bg group"
-          >
-            <UIcon
-              :name="
-                s.severity === 'warning'
-                  ? 'i-lucide-alert-triangle'
-                  : 'i-lucide-info'
-              "
-              class="size-4 shrink-0"
-              :style="{
-                color:
-                  s.severity === 'warning'
-                    ? 'var(--warning, #eab308)'
-                    : 'var(--text-disabled)',
-              }"
-            />
-            <span class="type-detail flex-1">{{ s.message }}</span>
-            <UIcon
-              name="i-lucide-chevron-right"
-              class="size-3.5 text-meta opacity-0 group-hover:opacity-100 transition-opacity"
-            />
-          </NuxtLink>
-        </div>
-      </div>
 
       <!-- Advanced: directory picker -->
       <details>

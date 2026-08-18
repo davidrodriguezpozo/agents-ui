@@ -239,7 +239,7 @@ function pastFacts(past: { costUsd?: number; durationMs?: number }): string {
 
 <template>
   <div class="flex flex-col h-full">
-    <PageHeader :title="name || 'Untitled Workflow'">
+    <PageHeader :title="name || 'Untitled Workflow'" measure>
       <template #leading>
         <NuxtLink to="/workflows" class="p-1.5 -ml-1.5 rounded-md hover-bg focus-ring">
           <UIcon name="i-lucide-arrow-left" class="size-4 text-meta" />

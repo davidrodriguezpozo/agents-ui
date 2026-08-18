@@ -14,14 +14,23 @@
  *
  * `overlay` floats the header over the body instead of stacking above it, for
  * a canvas that should run under it. Height and type never vary.
+ *
+ * `measure` is the narrower of the two document frames, for pages that are
+ * mostly prose and lists. It exists as a prop rather than being decided in CSS
+ * because the header and the body are separate elements: the body sets its own
+ * frame, and a title centred in a 1320px frame above content centred in a 1080px
+ * one is two columns that never line up. Whichever frame the body takes, the
+ * header has to take the same one.
  */
 withDefaults(defineProps<{
   title: string
   bleed?: boolean
   overlay?: boolean
+  measure?: boolean
 }>(), {
   bleed: false,
   overlay: false,
+  measure: false,
 })
 </script>
 
@@ -33,7 +42,7 @@ withDefaults(defineProps<{
   >
     <div
       class="h-full flex items-center gap-3"
-      :class="bleed || overlay ? 'px-8' : 'page-container'"
+      :class="bleed || overlay ? 'px-8' : ['page-container', { 'page-container--measure': measure }]"
     >
       <slot name="leading" />
       <h1 class="text-page-title flex-1 flex items-center gap-2.5 min-w-0">

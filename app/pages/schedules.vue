@@ -162,7 +162,7 @@ function nextLabel(schedule: Schedule) {
 
 <template>
   <div>
-    <PageHeader title="Daily rituals">
+    <PageHeader title="Daily rituals" measure>
       <template #trailing>
         <span v-if="schedules.length" class="font-mono fs-sm text-meta">{{ schedules.length }}</span>
       </template>

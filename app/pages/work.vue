@@ -613,7 +613,7 @@ async function switchTo(path: string) {
 
 <template>
   <div>
-    <PageHeader title="Work">
+    <PageHeader title="Work" measure>
       <template #trailing>
         <!--
           Only worth a control when there is somewhere else to look. One project
