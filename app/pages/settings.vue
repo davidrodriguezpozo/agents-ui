@@ -892,6 +892,16 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         </div>
       </div>
 
+      <!--
+        The other thing every run is handed, next to the dial that decides how
+        hard it thinks about it.
+
+        It was the fifth band on Now, collapsed — which is to say it was a
+        configuration surface filed under "what needs me this morning", where it
+        never once did.
+      -->
+      <StandingBrief id="settings-brief" />
+
       <!-- Spending limits -->
       <div id="settings-limits" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Limits</h3>

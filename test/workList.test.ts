@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildWorkList, fromRun, fromSession, removableRuns, statusCounts, type WorkItem,
+  buildWorkList, fromRun, fromSession, onTab, removableRuns, statusCounts, tabOf,
+  type WorkItem,
 } from '~/utils/workList'
 import type { Session } from '~/composables/useSessions'
 import type { RunSummary } from '~/composables/useRuns'
@@ -252,5 +253,33 @@ describe('what a bulk clear is allowed to take', () => {
   it('takes only from the list it is given, which is the filtered one', () => {
     const shown = [fromRun(run({ id: 'shown', status: 'failed' }))]
     expect(removableRuns(shown).map(i => i.runId)).toEqual(['shown'])
+  })
+})
+
+describe('which half of /work a row belongs to', () => {
+  it('puts what you could still interrupt on one tab and what is over on the other', () => {
+    expect(tabOf('running')).toBe('flight')
+    expect(tabOf('needs-you')).toBe('flight')
+    expect(tabOf('done')).toBe('history')
+    expect(tabOf('failed')).toBe('history')
+  })
+
+  it('covers every status, so no row can fall between the two tabs', () => {
+    // A status added later and forgotten would make rows invisible on both
+    // tabs, which is far worse than showing them on the wrong one.
+    const items = [
+      fromRun(run({ id: 'r-run', status: 'running' })),
+      fromRun(run({ id: 'r-done', status: 'completed' })),
+      fromRun(run({ id: 'r-fail', status: 'failed' })),
+      fromSession(session({ id: 'blocked', activity: 'awaiting-permission' })),
+    ]
+    const split = [...onTab(items, 'flight'), ...onTab(items, 'history')]
+    expect(split).toHaveLength(items.length)
+  })
+
+  it('keeps a blocked session out of history, however long it has been stuck', () => {
+    const stuck = fromSession(session({ id: 'x', activity: 'awaiting-permission', updatedAt: 1 }))
+    expect(onTab([stuck], 'history')).toEqual([])
+    expect(onTab([stuck], 'flight')).toEqual([stuck])
   })
 })

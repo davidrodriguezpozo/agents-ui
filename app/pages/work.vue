@@ -6,8 +6,8 @@ import type { RunQuery } from '~/composables/useRuns'
 import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type { Session } from '~/composables/useSessions'
 import {
-  buildWorkList, removableRuns, statusCounts, WORK_ORIGIN, WORK_STATUS,
-  type WorkItem, type WorkOrigin, type WorkStatus,
+  buildWorkList, onTab, removableRuns, statusCounts, tabOf, WORK_ORIGIN, WORK_STATUS,
+  type WorkItem, type WorkOrigin, type WorkStatus, type WorkTab,
 } from '~/utils/workList'
 
 const {
@@ -323,6 +323,29 @@ const batchDuplicates = computed(() =>
 
 const scope = useState<'here' | 'all'>('sessions-scope', () => 'here')
 
+/**
+ * Which half of the page you are on.
+ *
+ * Shared state for the same reason `scope` is: opening a session and coming back
+ * should not quietly put you on the other tab. Defaults to what is happening
+ * now, because that is what somebody who typed /work came for — history is a
+ * thing you go and look at.
+ */
+const tab = useState<WorkTab>('work-tab', () => 'flight')
+
+/**
+ * A status chip is only meaningful on the tab that owns it, so choosing one on
+ * the other tab moves you there rather than filtering to nothing.
+ */
+function chooseStatus(value: WorkStatus) {
+  if (status.value === value) {
+    status.value = null
+    return
+  }
+  status.value = value
+  tab.value = tabOf(value)
+}
+
 // With no project selected there is no "here" to narrow to, and the toggle
 // would be a control with one working position.
 watchEffect(() => { if (!workingDir.value) scope.value = 'all' })
@@ -382,24 +405,44 @@ function clearFilters() {
 
 const visibleSessions = computed(() => (scope.value === 'here' ? here.value : sessions.value))
 
-/** Unfiltered, so the chip counts describe the pile rather than the slice. */
-const allWork = computed(() => buildWorkList({
+/** Everything, both tabs, unfiltered — what the tab counts are read from. */
+const everything = computed(() => buildWorkList({
   sessions: visibleSessions.value,
   runs: runs.value,
 }))
 
-const work = computed(() => buildWorkList(
-  { sessions: visibleSessions.value, runs: runs.value },
-  { status: status.value, origin: origin.value, query: search.value },
+/** This tab's pile, unfiltered, so the chip counts describe it rather than a slice. */
+const allWork = computed(() => onTab(everything.value, tab.value))
+
+const work = computed(() => onTab(
+  buildWorkList(
+    { sessions: visibleSessions.value, runs: runs.value },
+    { status: status.value, origin: origin.value, query: search.value },
+  ),
+  tab.value,
 ))
 
+const tabCounts = computed(() => {
+  const counts = statusCounts(everything.value)
+  return {
+    flight: counts.running + counts['needs-you'],
+    history: counts.done + counts.failed,
+  }
+})
+
 const statusChips = computed(() => {
-  const counts = statusCounts(allWork.value)
+  const counts = statusCounts(everything.value)
   return WORK_STATUS
+    .filter(s => tabOf(s.value) === tab.value)
     .map(s => ({ ...s, count: counts[s.value] }))
     // A chip with nothing behind it is a dead end, unless it is the one you have
     // already pressed — removing that under your cursor is worse.
     .filter(s => s.count > 0 || status.value === s.value)
+})
+
+// A filter left behind on the tab that owned it hides the whole of this one.
+watch(tab, () => {
+  if (status.value && tabOf(status.value) !== tab.value) status.value = null
 })
 
 /**
@@ -604,6 +647,36 @@ async function switchTo(path: string) {
     </PageHeader>
 
     <!--
+      Two tabs, because they are two jobs.
+
+      In flight is a thing you might interrupt: the composer, what is running,
+      what is stuck, and the workspaces they are sitting in. History is a thing
+      you read: last night as a picture, and every finished row underneath it.
+      Held in one list the finished rows win on volume — forty of them, and the
+      two you could act on at the bottom.
+    -->
+    <div class="page-container page-container--measure pt-3">
+      <div class="flex items-center gap-0.5 p-0.5 rounded-md w-fit" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
+        <button
+          v-for="option in [
+            { value: 'flight' as const, label: 'In flight', count: tabCounts.flight },
+            { value: 'history' as const, label: 'History', count: tabCounts.history },
+          ]"
+          :key="option.value"
+          class="px-2.5 py-1 rounded fs-mono font-medium transition-all focus-ring flex items-center gap-1.5"
+          :style="{
+            background: tab === option.value ? 'var(--accent-muted)' : 'transparent',
+            color: tab === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+          }"
+          @click="tab = option.value"
+        >
+          {{ option.label }}
+          <span v-if="option.count" class="font-mono fs-micro opacity-70">{{ option.count }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!--
       Ordered by what you came to do: start something, then see what happened to
       what is already going.
 
@@ -626,7 +699,7 @@ async function switchTo(path: string) {
         usually sitting one directory down.
       -->
       <div
-        v-if="notARepo"
+        v-if="notARepo && tab === 'flight'"
         class="order-1 rounded-lg p-4 space-y-3"
         style="background: var(--warning-wash); border: 1px solid var(--warning-edge);"
       >
@@ -671,7 +744,7 @@ async function switchTo(path: string) {
       </div>
 
       <!-- Start a session -->
-      <div v-if="workingDir" class="order-3 space-y-1.5">
+      <div v-if="workingDir && tab === 'flight'" class="order-3 space-y-1.5">
         <!-- One session, told what to do in the same breath -->
         <template v-if="!batchMode">
           <div class="flex gap-2 items-start">
@@ -864,7 +937,7 @@ async function switchTo(path: string) {
       </div>
 
       <div
-        v-else
+        v-else-if="tab === 'flight'"
         class="rounded-md px-4 py-3 flex items-start gap-3"
         style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
       >
@@ -882,7 +955,7 @@ async function switchTo(path: string) {
         and it sat between the composer and the actual list of work. The header
         still says how many are there, which is the part worth seeing every time.
       -->
-      <div v-if="workingDir && transcripts.length" class="order-4">
+      <div v-if="workingDir && transcripts.length && tab === 'flight'" class="order-4">
         <button
           class="flex items-center gap-2 py-1 focus-ring rounded"
           @click="showTranscripts = !showTranscripts"
@@ -949,6 +1022,15 @@ async function switchTo(path: string) {
         A row is one piece of work you would act on. Activity listed one row per
         run, so a four-turn session appeared four times, competing with itself.
       -->
+      <!--
+        The night as a picture, before the same night as rows.
+
+        It was on Now, where it was the third of five bands on a page whose job
+        is "what needs me" — and a timeline of what already finished is the one
+        thing that never does. Here it is the heading of the tab it describes.
+      -->
+      <NightShift v-if="tab === 'history'" class="order-5" />
+
       <div class="order-5 space-y-3">
         <div class="flex items-center gap-1.5 flex-wrap">
           <button
@@ -959,7 +1041,7 @@ async function switchTo(path: string) {
               background: status === chip.value ? 'var(--accent-muted)' : 'transparent',
               color: status === chip.value ? 'var(--accent)' : 'var(--text-tertiary)',
             }"
-            @click="status = status === chip.value ? null : chip.value"
+            @click="chooseStatus(chip.value)"
           >
             {{ chip.label }}
             <span class="font-mono fs-micro ml-1 opacity-70">{{ chip.count }}</span>
@@ -1011,7 +1093,7 @@ async function switchTo(path: string) {
           a clear whose reach you cannot predict is one nobody presses twice.
         -->
         <div
-          v-if="emptySessionIds.length || clearable.length || removedCount || viewingRemoved"
+          v-if="tab === 'history' && (emptySessionIds.length || clearable.length || removedCount || viewingRemoved)"
           class="flex items-center justify-between gap-3 flex-wrap"
         >
           <p v-if="viewingRemoved" class="type-detail ink-2">
@@ -1127,9 +1209,13 @@ async function switchTo(path: string) {
       <EmptyState
         v-if="workingDir && !work.length && !hasFilters && !loading"
         class="order-5"
-        icon="i-lucide-git-branch"
-        :title="scope === 'here' ? 'Nothing has run in this project' : 'Nothing has run yet'"
-        description="Start a session above to give Claude its own copy of this project. Rituals and commands you run turn up here too, alongside it."
+        :icon="tab === 'flight' ? 'i-lucide-git-branch' : 'i-lucide-history'"
+        :title="tab === 'flight'
+          ? 'Nothing is running'
+          : (scope === 'here' ? 'Nothing has finished in this project' : 'Nothing has finished yet')"
+        :description="tab === 'flight'
+          ? 'Start a session above to give Claude its own copy of this project. It turns up here while it works, and moves to History when it is done.'
+          : 'Sessions, rituals and commands land here once they have finished, with what each of them came to.'"
       />
 
       <!--
@@ -1154,8 +1240,11 @@ async function switchTo(path: string) {
         <span class="ml-auto type-meta ink-accent">Show</span>
       </button>
 
-      <!-- Always visible, so worktrees never accumulate unnoticed -->
-      <WorktreePanel class="order-8" />
+      <!--
+        Always visible on this tab, so worktrees never accumulate unnoticed. Not
+        on History: a checkout that still exists is not history.
+      -->
+      <WorktreePanel v-if="tab === 'flight'" class="order-8" />
     </div>
   </div>
 </template>

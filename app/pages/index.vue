@@ -4,8 +4,10 @@ const { agents, fetchAll: fetchAgents } = useAgents();
 const { commands, fetchAll: fetchCommands } = useCommands();
 const { plugins, fetchAll: fetchPlugins } = usePlugins();
 const { skills, fetchAll: fetchSkills } = useSkills();
-const { imports: githubImports, fetchImports } = useGithubImports();
+const { fetchImports } = useGithubImports();
 const { settings, load: loadSettings } = useSettings();
+const { sessions } = useSessions();
+const { digest } = useDigest();
 const { isSimple } = useUiMode();
 
 const dirInput = ref("");
@@ -22,8 +24,8 @@ const suggestions = ref<Suggestion[]>([]);
 onMounted(async () => {
   dirInput.value = claudeDir.value || "";
   // Sessions are not fetched here: app.vue loads them before any page renders
-  // and reloads them on a project switch, which is what keeps the Running and
-  // Settled bands honest about which project they are describing.
+  // and reloads them on a project switch, which is what keeps the running count
+  // honest about which project it is describing.
   await Promise.all([loadSettings(), fetchPlugins(), fetchSkills(), fetchImports()]);
 
   try {
@@ -56,6 +58,26 @@ const hasContent = computed(
     skills.value.length > 0 ||
     plugins.value.length > 0,
 );
+
+/**
+ * The one line that used to be three bands.
+ *
+ * Running, landed and what it cost were `NowRunning`, `NowSettled` and the spend
+ * figure inside `NightShift` — three sections, each with a heading and a list, on
+ * a page whose question is "what needs me". None of them is an answer to that
+ * question: they are the reassurance that the *rest* is fine, and reassurance is
+ * a sentence, not a section. Each half links to the page that owns it in full.
+ */
+const running = computed(() => sessions.value.filter(s => s.activity === 'working').length);
+const landed = computed(() => sessions.value.filter(s => s.landed).length);
+
+const money = computed(() => {
+  const total = digest.value?.costUsd ?? 0;
+  if (!total) return null;
+  return total < 0.01 ? '<$0.01' : `$${total.toFixed(2)}`;
+});
+
+const otherwise = computed(() => Boolean(running.value || landed.value || money.value));
 </script>
 
 <template>
@@ -67,40 +89,54 @@ const hasContent = computed(
 
     <div class="page-container py-6 stagger-section space-y-7">
       <!--
-        Three bands, in the order the questions get asked: what needs me, what
-        is still going, what went through without me.
-
+        One band, and it is meant to empty.
+        
         This was a dashboard — four counters, a model-distribution bar, and
-        partial lists of agents and commands duplicating their own pages. None of
-        it answered a question anybody arrives with. Worse, the one question
-        everybody arrives with had no home at all: blocked sessions lived on
-        /sessions, reviews on /pulls, broken rituals on /schedules, the morning
-        report here. The four red counters in the sidebar were the app admitting
-        it, and a badge that stands in for a missing view is a missing view.
+        partial lists of agents and commands duplicating their own pages. Then it
+        was five bands: the queue, what was running, what had settled, the night
+        as a chart, and the standing brief. Which is a better dashboard, and still
+        a dashboard — four of the five described work that was going fine, on the
+        one page in the app whose entire job is work that is not.
+        
+        So: what needs you, ranked, resolvable here. Everything else moved to the
+        page that owns it — running work and the night chart to /work, landing to
+        /land, the standing brief to /settings — and what is left of them is the
+        line underneath, which is a reassurance rather than a section.
+        
+        An empty Now is the product working. It should look like it.
       -->
       <NowQueue v-if="hasContent" />
 
-      <NowRunning v-if="hasContent" />
-
-      <NowSettled v-if="hasContent" />
-
-      <!--
-        And then the same night as a picture. The bands above answer "what do I
-        do" in sentences; this answers "when" — which hours the machine was
-        working, what overlapped what, and whether the money arrived in one lump
-        or spread across the night.
-      -->
-      <NightShift v-if="hasContent" />
-
-      <!--
-        And what all of that looks like from the inside of a run.
-
-        Last, and collapsed: it is the same work described above, so reading it
-        twice is not the point. What it is here for is the note — the standing
-        facts about your week that nothing on this machine can derive, which every
-        run then starts from instead of rediscovering.
-      -->
-      <StandingBrief v-if="hasContent" />
+      <!-- What is fine, in one line, since none of it needs you -->
+      <div
+        v-if="hasContent && otherwise"
+        class="flex items-center gap-x-4 gap-y-1 flex-wrap type-detail"
+      >
+        <NuxtLink
+          v-if="running"
+          to="/work"
+          class="flex items-center gap-1.5 hover:underline underline-offset-2"
+        >
+          <UIcon name="i-lucide-loader-2" class="size-3.5 shrink-0 animate-spin ink-accent" />
+          {{ running }} running
+        </NuxtLink>
+        <NuxtLink
+          v-if="landed"
+          to="/land"
+          class="flex items-center gap-1.5 hover:underline underline-offset-2"
+        >
+          <UIcon name="i-lucide-git-merge" class="size-3.5 shrink-0" style="color: var(--success);" />
+          {{ landed }} landed
+        </NuxtLink>
+        <NuxtLink
+          v-if="money"
+          to="/work"
+          class="flex items-center gap-1.5 hover:underline underline-offset-2 text-meta"
+        >
+          <UIcon name="i-lucide-receipt" class="size-3.5 shrink-0" />
+          {{ money }} today
+        </NuxtLink>
+      </div>
 
       <!-- Welcome onboarding (first-run) -->
       <WelcomeOnboarding

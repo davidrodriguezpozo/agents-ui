@@ -60,6 +60,35 @@ export const WORK_STATUS: { value: WorkStatus; label: string }[] = [
   { value: 'failed', label: 'failed' },
 ]
 
+/**
+ * The two halves of the list, and the only reason /work has tabs.
+ *
+ * A session that is running and a ritual that failed on Tuesday are both "work",
+ * but nobody is ever looking for both at once: one is a thing you might
+ * interrupt, the other is a thing you are reading about. Held in one list they
+ * fight — the finished rows are the overwhelming majority, so the two you could
+ * act on sit at the bottom of forty you cannot.
+ *
+ * The tab is the coarse cut and the chips are the fine one *within* it, which is
+ * why this lives beside `WORK_STATUS` rather than being a fifth chip: a chip you
+ * have to press to stop seeing last week is a default that is wrong.
+ */
+export type WorkTab = 'flight' | 'history'
+
+export const TAB_STATUSES: Record<WorkTab, WorkStatus[]> = {
+  flight: ['running', 'needs-you'],
+  history: ['done', 'failed'],
+}
+
+export function tabOf(status: WorkStatus): WorkTab {
+  return TAB_STATUSES.flight.includes(status) ? 'flight' : 'history'
+}
+
+/** The rows one tab is responsible for. Origin and search still apply on top. */
+export function onTab(items: WorkItem[], tab: WorkTab): WorkItem[] {
+  return items.filter(item => tabOf(item.status) === tab)
+}
+
 export const WORK_ORIGIN: { value: WorkOrigin; label: string; icon: string }[] = [
   { value: 'session', label: 'yours', icon: 'i-lucide-git-branch' },
   { value: 'ritual', label: 'rituals', icon: 'i-lucide-alarm-clock' },
