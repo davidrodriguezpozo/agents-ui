@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ContextMenuItem } from '@nuxt/ui'
 import { describeToolCall, presentVerb } from '~/utils/toolCalls'
 import { sessionBadge } from '~/utils/sessionBadge'
 import { elapsedLabel, landedLabel, urgencyOf, type WallPrompt, type WallRowData } from '~/utils/wall'
@@ -21,6 +22,12 @@ import { elapsedLabel, landedLabel, urgencyOf, type WallPrompt, type WallRowData
  * turn is here for the same reason: it is the brake, and a brake you have to
  * navigate to is not a brake.
  *
+ * **And right-clicked.** The buttons on the row are the two or three things worth
+ * a permanent target; the rest of what you might want to do with a session —
+ * open its pull request, take the branch name, go to the project it is in — are
+ * real wants that do not each deserve a column on a row twenty of which have to
+ * fit on a screen. A context menu is where those go.
+ *
  * Nothing here decides anything: the row emits, and the page owns the requests. So
  * a row cannot answer a prompt twice, and the busy state belongs to whoever is
  * doing the waiting.
@@ -32,11 +39,23 @@ const props = defineProps<{
   /** Ids of prompts currently being answered, and whether a stop is in flight. */
   busy?: string[]
   stopping?: boolean
+  /**
+   * The right-click menu, built by the page.
+   *
+   * Built there and not here for the same reason nothing else on this row
+   * decides anything: half the entries need facts a row does not carry — which
+   * checkout a repository name refers to, whether that project is the one
+   * currently selected — and all of the ones that write need the page to own the
+   * request. See `sessionMenu` in `wall.vue`.
+   */
+  menu?: ContextMenuItem[][]
 }>()
 
 const emit = defineEmits<{
   answer: [prompt: WallPrompt, decision: { behavior: 'allow' | 'deny'; scope?: 'once' | 'session' }]
   stop: []
+  /** Told to the page so Escape closes the menu instead of leaving the screen. */
+  'menu-open': [open: boolean]
 }>()
 
 const urgency = computed(() => urgencyOf(props.row))
@@ -108,86 +127,93 @@ function answer(behavior: 'allow' | 'deny', scope?: 'once' | 'session') {
 </script>
 
 <template>
-  <div class="row" :class="[`is-${urgency}`, { 'is-open': prompt }]" :style="{ '--row-tone': TONES[urgency] }">
-    <div class="row-line">
-      <UIcon
-        :name="badge.icon"
-        class="row-glyph"
-        :class="{ 'animate-spin': badge.spin }"
-        :style="{ color: TONES[urgency] }"
-      />
+  <UContextMenu
+    :items="menu"
+    :disabled="!menu?.length"
+    :content="{ collisionPadding: 8 }"
+    @update:open="open => emit('menu-open', open)"
+  >
+    <div class="row" :class="[`is-${urgency}`, { 'is-open': prompt }]" :style="{ '--row-tone': TONES[urgency] }">
+      <div class="row-line">
+        <UIcon
+          :name="badge.icon"
+          class="row-glyph"
+          :class="{ 'animate-spin': badge.spin }"
+          :style="{ color: TONES[urgency] }"
+        />
 
-      <NuxtLink :to="`/sessions/${row.sessionId}`" class="row-where" :title="`${row.repo} · ${row.branch}`">
-        <span class="row-repo">{{ row.repo }}</span>
-        <span class="row-branch">{{ row.branch }}</span>
-      </NuxtLink>
+        <NuxtLink :to="`/sessions/${row.sessionId}`" class="row-where" :title="`${row.repo} · ${row.branch}`">
+          <span class="row-repo">{{ row.repo }}</span>
+          <span class="row-branch">{{ row.branch }}</span>
+        </NuxtLink>
 
-      <NuxtLink :to="`/sessions/${row.sessionId}`" class="row-title" :title="row.title">
-        {{ row.title }}
-      </NuxtLink>
+        <NuxtLink :to="`/sessions/${row.sessionId}`" class="row-title" :title="row.title">
+          {{ row.title }}
+        </NuxtLink>
 
-      <span class="row-activity" :class="{ 'is-live': activity.live }" :title="activity.text">
-        <UIcon :name="activity.icon" class="row-activity-icon" />
-        <span class="row-activity-text">{{ activity.text }}</span>
-      </span>
+        <span class="row-activity" :class="{ 'is-live': activity.live }" :title="activity.text">
+          <UIcon :name="activity.icon" class="row-activity-icon" />
+          <span class="row-activity-text">{{ activity.text }}</span>
+        </span>
+
+        <!--
+          The numbers, in fixed columns so twenty rows read down as well as across.
+          A dash is not zero: it is "the slower poll has not answered", and on a
+          screen used to choose what to look at next those are different facts.
+        -->
+        <span class="row-num" :title="row.detail?.changedFiles === undefined ? 'Not asked yet' : 'Files changed'">
+          {{ row.detail?.changedFiles === undefined ? '·' : row.detail.changedFiles || '—' }}
+        </span>
+        <span
+          class="row-num"
+          :class="{ 'is-warn': (row.detail?.behind ?? 0) > 0 }"
+          :title="row.detail?.behind ? `${row.detail.behind} commits behind its base` : 'Level with its base'"
+        >{{ row.detail?.behind ? `↓${row.detail.behind}` : '·' }}</span>
+        <span class="row-num" :title="`${row.turns} turns`">{{ row.turns }}</span>
+
+        <span class="row-clock">{{ elapsed || '' }}</span>
+
+        <span class="row-actions">
+          <a v-if="row.prUrl" :href="row.prUrl" target="_blank" rel="noopener" class="row-action" title="Pull request">
+            <UIcon name="i-lucide-git-pull-request" class="size-3.5" />
+          </a>
+          <button
+            v-if="row.activity === 'working'"
+            class="row-action"
+            :disabled="stopping"
+            title="Stop this turn — what it has written stays"
+            @click.stop.prevent="emit('stop')"
+          >
+            <UIcon :name="stopping ? 'i-lucide-loader-2' : 'i-lucide-square'" class="size-3.5" :class="{ 'animate-spin': stopping }" />
+          </button>
+        </span>
+      </div>
 
       <!--
-        The numbers, in fixed columns so twenty rows read down as well as across.
-        A dash is not zero: it is "the slower poll has not answered", and on a
-        screen used to choose what to look at next those are different facts.
+        The second line, only for a row that is waiting on a person: what it wants,
+        and the answer. `Always` appears only when the CLI proposed a narrow rule for
+        it — inventing one from the arguments is how somebody grants more than they
+        meant, which is the reasoning the session page's prompt already follows.
       -->
-      <span class="row-num" :title="row.detail?.changedFiles === undefined ? 'Not asked yet' : 'Files changed'">
-        {{ row.detail?.changedFiles === undefined ? '·' : row.detail.changedFiles || '—' }}
-      </span>
-      <span
-        class="row-num"
-        :class="{ 'is-warn': (row.detail?.behind ?? 0) > 0 }"
-        :title="row.detail?.behind ? `${row.detail.behind} commits behind its base` : 'Level with its base'"
-      >{{ row.detail?.behind ? `↓${row.detail.behind}` : '·' }}</span>
-      <span class="row-num" :title="`${row.turns} turns`">{{ row.turns }}</span>
+      <div v-if="prompt" class="row-prompt">
+        <UIcon name="i-lucide-hand" class="row-prompt-icon" />
+        <span class="row-prompt-text" :title="promptText">wants to {{ promptText }}</span>
+        <span v-if="row.pending > 1" class="row-prompt-more">+{{ row.pending - 1 }} more</span>
 
-      <span class="row-clock">{{ elapsed || '' }}</span>
-
-      <span class="row-actions">
-        <a v-if="row.prUrl" :href="row.prUrl" target="_blank" rel="noopener" class="row-action" title="Pull request">
-          <UIcon name="i-lucide-git-pull-request" class="size-3.5" />
-        </a>
-        <button
-          v-if="row.activity === 'working'"
-          class="row-action"
-          :disabled="stopping"
-          title="Stop this turn — what it has written stays"
-          @click.stop.prevent="emit('stop')"
-        >
-          <UIcon :name="stopping ? 'i-lucide-loader-2' : 'i-lucide-square'" class="size-3.5" :class="{ 'animate-spin': stopping }" />
-        </button>
-      </span>
+        <span class="row-prompt-actions">
+          <button class="row-answer is-allow" :disabled="answering" @click.stop="answer('allow', 'once')">Allow</button>
+          <button
+            v-if="prompt.canRemember && prompt.rule"
+            class="row-answer"
+            :disabled="answering"
+            :title="`Allow ${prompt.rule} for the rest of this run`"
+            @click.stop="answer('allow', 'session')"
+          >Always</button>
+          <button class="row-answer is-deny" :disabled="answering" @click.stop="answer('deny')">Deny</button>
+        </span>
+      </div>
     </div>
-
-    <!--
-      The second line, only for a row that is waiting on a person: what it wants,
-      and the answer. `Always` appears only when the CLI proposed a narrow rule for
-      it — inventing one from the arguments is how somebody grants more than they
-      meant, which is the reasoning the session page's prompt already follows.
-    -->
-    <div v-if="prompt" class="row-prompt">
-      <UIcon name="i-lucide-hand" class="row-prompt-icon" />
-      <span class="row-prompt-text" :title="promptText">wants to {{ promptText }}</span>
-      <span v-if="row.pending > 1" class="row-prompt-more">+{{ row.pending - 1 }} more</span>
-
-      <span class="row-prompt-actions">
-        <button class="row-answer is-allow" :disabled="answering" @click.stop="answer('allow', 'once')">Allow</button>
-        <button
-          v-if="prompt.canRemember && prompt.rule"
-          class="row-answer"
-          :disabled="answering"
-          :title="`Allow ${prompt.rule} for the rest of this run`"
-          @click.stop="answer('allow', 'session')"
-        >Always</button>
-        <button class="row-answer is-deny" :disabled="answering" @click.stop="answer('deny')">Deny</button>
-      </span>
-    </div>
-  </div>
+  </UContextMenu>
 </template>
 
 <style scoped>

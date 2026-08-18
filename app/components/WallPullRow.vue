@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ContextMenuItem } from '@nuxt/ui'
 import { PULL_TONES, sinceLabel, type WallPull, type WallTone } from '~/utils/wall'
 
 /**
@@ -9,12 +10,17 @@ import { PULL_TONES, sinceLabel, type WallPull, type WallTone } from '~/utils/wa
  * first line is which and what; the second is where it has got to, in the words
  * the reviews page uses.
  *
- * **It links to GitHub and not into this app.** The reviews page can turn a pull
- * request into a session with the branch checked out, and that is the right home
- * for it — it knows which project it is in, it can name the agent, and it reports
- * a budget refusal properly. This row is up to a minute old and may belong to a
- * repository other than the one selected, so the honest destination is the pull
- * request itself.
+ * **Clicking it goes to GitHub. Right-clicking it can do more.** The reading
+ * behind this row is up to a minute old and may belong to a repository other
+ * than the one selected, so the destination of a plain click is the pull request
+ * itself — never a session started off a stale fact.
+ *
+ * That was read for a while as "this screen cannot start work", which was always
+ * too strong. What it cannot do is start work *from this row's copy of the
+ * facts*. The menu does not: every entry that writes goes through the same
+ * refresh-then-act call /land uses, which selects the right project first and
+ * re-reads the pull request on the server before it builds a prompt. So the
+ * stale reading decides what to offer, and never what to do.
  *
  * **The age is how long it has been sitting, not when it last moved.** A pull
  * request nobody has touched in a week is the one going bad, and `updatedAt` hides
@@ -24,6 +30,13 @@ import { PULL_TONES, sinceLabel, type WallPull, type WallTone } from '~/utils/wa
 const props = defineProps<{
   pull: WallPull
   now: number
+  /** The right-click menu, built by the page — see `pullMenu` in `wall.vue`. */
+  menu?: ContextMenuItem[][]
+}>()
+
+const emit = defineEmits<{
+  /** Told to the page so Escape closes the menu instead of leaving the screen. */
+  'menu-open': [open: boolean]
 }>()
 
 const TONES: Record<WallTone, string> = {
@@ -57,34 +70,41 @@ const unresolved = computed(() => {
 </script>
 
 <template>
-  <a
-    class="pull"
-    :href="pull.url"
-    target="_blank"
-    rel="noopener"
-    :title="`${pull.repo} #${pull.number} — ${pull.title}\n${pull.label}: ${pull.detail}`"
+  <UContextMenu
+    :items="menu"
+    :disabled="!menu?.length"
+    :content="{ collisionPadding: 8 }"
+    @update:open="open => emit('menu-open', open)"
   >
-    <span class="pull-dot" :style="{ background: tone }" />
+    <a
+      class="pull"
+      :href="pull.url"
+      target="_blank"
+      rel="noopener"
+      :title="`${pull.repo} #${pull.number} — ${pull.title}\n${pull.label}: ${pull.detail}`"
+    >
+      <span class="pull-dot" :style="{ background: tone }" />
 
-    <span class="pull-body">
-      <span class="pull-line">
-        <span class="pull-where">{{ pull.repo }} <span class="pull-num">#{{ pull.number }}</span></span>
-        <span class="pull-title">{{ pull.title }}</span>
-        <span class="pull-age" :class="{ 'is-loud': pull.onYou }">{{ sinceLabel(pull.createdAt, now) }}</span>
-      </span>
+      <span class="pull-body">
+        <span class="pull-line">
+          <span class="pull-where">{{ pull.repo }} <span class="pull-num">#{{ pull.number }}</span></span>
+          <span class="pull-title">{{ pull.title }}</span>
+          <span class="pull-age" :class="{ 'is-loud': pull.onYou }">{{ sinceLabel(pull.createdAt, now) }}</span>
+        </span>
 
-      <span class="pull-line is-under">
-        <span class="pull-state" :style="{ color: tone }">{{ pull.label }}</span>
-        <span class="pull-sep">·</span>
-        <span class="pull-who">{{ who }}</span>
-        <template v-if="unresolved">
+        <span class="pull-line is-under">
+          <span class="pull-state" :style="{ color: tone }">{{ pull.label }}</span>
           <span class="pull-sep">·</span>
-          <span class="pull-threads">{{ unresolved }}</span>
-        </template>
-        <span class="pull-files">{{ pull.changedFiles }}f</span>
+          <span class="pull-who">{{ who }}</span>
+          <template v-if="unresolved">
+            <span class="pull-sep">·</span>
+            <span class="pull-threads">{{ unresolved }}</span>
+          </template>
+          <span class="pull-files">{{ pull.changedFiles }}f</span>
+        </span>
       </span>
-    </span>
-  </a>
+    </a>
+  </UContextMenu>
 </template>
 
 <style scoped>

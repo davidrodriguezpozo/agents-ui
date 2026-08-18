@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ContextMenuItem } from '@nuxt/ui'
 import {
   URGENCY_LABELS,
   asOfLabel,
@@ -18,6 +19,8 @@ import {
   withDetail,
   type WallDetail,
   type WallPrompt,
+  type WallPull,
+  type WallRowData,
   type WallTile,
   type WallTone,
   type WallUrgency,
@@ -60,11 +63,19 @@ import {
  * and looks again. Everything else reports, and reporting is fine — but a screen
  * where nothing can be done is a screen you leave to go and do it somewhere else.
  *
- * **What it will not do is start work off a stale reading.** Pull request rows
- * link to GitHub rather than turning into sessions, deliberately: the reviews page
- * re-reads the pull request before it acts, knows which project it belongs to and
- * reports a budget refusal properly, and none of that is true of a row that may be
- * a minute old and may belong to a repository this screen does not have selected.
+ * **And right-clicked.** A row is one line and can hold about three buttons, which
+ * is nowhere near the number of reasonable things to want from it — its pull
+ * request, its branch name, the project it lives in, the review it is asking for.
+ * Those are in a context menu, built by `sessionMenu` and `pullMenu` below.
+ *
+ * **What it will not do is act off a stale reading.** That used to be enforced by
+ * refusing to act at all: pull request rows linked to GitHub and nothing else,
+ * because a row may be a minute old and may belong to a repository this screen
+ * does not have selected. But the constraint was never "this screen cannot start
+ * work" — it was "this screen's copy of the facts cannot decide what the work is".
+ * So the menu selects the right project first and then calls the same route /land
+ * calls, which re-reads the pull request on the server before it builds a prompt.
+ * The stale reading decides what to offer; the server decides what to do.
  *
  * **It says when it has stopped knowing.** The characteristic failure of a screen
  * left open is not being wrong, it is being nine minutes old while looking exactly
@@ -433,6 +444,184 @@ async function stopRow(row: { sessionId: string; runId?: string }) {
   }
 }
 
+/* ------------------------------------------------------------ right-click -- */
+
+/**
+ * What you can do to a row without leaving the screen.
+ *
+ * The buttons on a row are the two or three things worth a permanent target on a
+ * line twenty of which have to fit. Everything else you might reasonably want —
+ * its pull request, its branch name, the project it lives in, the review it
+ * needs — is a real want that does not deserve a column, and until now the
+ * answer to all of them was "go to another page and find it again".
+ *
+ * Built here rather than in the rows because half the entries need facts a row
+ * does not carry. A row knows its repository's *folder name*; which checkout
+ * that is, and whether it is the one currently selected, is `useSessions` and
+ * `useProjects`, both of which live up here.
+ *
+ * **Nothing here acts on this screen's copy of anything.** The reading behind a
+ * pull request row is up to a minute old and may belong to a repository this
+ * screen does not have selected, so every entry that writes selects the project
+ * first and then calls the same server route /land calls — which re-reads the
+ * pull request before it builds a prompt. The stale reading decides what to
+ * offer; it never decides what to do.
+ */
+const { work: workOnPull } = useGithubPulls()
+const { projects, activate, ensureLoaded: loadProjects } = useProjects()
+const { workingDir } = useWorkingDir()
+
+/**
+ * Whether a right-click menu is open.
+ *
+ * Only so Escape can mean the nearer thing. This screen's Escape leaves for Now,
+ * which is right when the screen is all there is and wrong the moment something
+ * is open on top of it — the same reading `pending` already gets a few lines
+ * down. Reka closes one menu when another opens, so a boolean is the whole state.
+ */
+const menuOpen = ref(false)
+
+/** Told, rather than silently nothing: a clipboard can be refused. */
+async function copy(text: string, what: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    report(`Copied ${what}`)
+  } catch {
+    report(`Could not copy ${what}`)
+  }
+}
+
+/**
+ * Make a repository the selected one, if it is not already.
+ *
+ * Every write below goes through this first. `/api/github/pulls/work` reads the
+ * project from the request's own header, so acting on a pull request in a
+ * repository that is not selected would have started a session in the wrong
+ * checkout — which is the failure this screen used to avoid by refusing to act
+ * at all.
+ */
+async function ensureProject(repoDir: string | undefined): Promise<boolean> {
+  if (!repoDir) {
+    report('That row does not say which checkout it belongs to')
+    return false
+  }
+  if (workingDir.value === repoDir) return true
+
+  try {
+    await activate(repoDir)
+    return true
+  } catch (e: unknown) {
+    report(errorMessage(e))
+    return false
+  }
+}
+
+/** Start a session on a pull request, from the server's reading and not this one. */
+async function startOnPull(pull: WallPull, intent?: 'review' | 'address' | 'fix' | 'update') {
+  if (!await ensureProject(pull.repoDir)) return
+
+  try {
+    const session = await workOnPull(pull.number, intent)
+    await router.push(`/sessions/${session.id}`)
+  } catch (e: unknown) {
+    report(errorMessage(e))
+  }
+}
+
+/** The checkout a session row belongs to, which the snapshot does not carry. */
+function repoDirOf(sessionId: string): string | undefined {
+  return sessions.value.find(s => s.id === sessionId)?.repoDir
+}
+
+function sessionMenu(row: WallRowData) {
+  const repoDir = repoDirOf(row.sessionId)
+  const prompt = row.prompts[0]
+
+  const open: ContextMenuItem[] = [
+    { label: 'Open session', icon: 'i-lucide-arrow-right', to: `/sessions/${row.sessionId}` },
+  ]
+  if (row.detail?.prUrl ?? row.prUrl) {
+    open.push({
+      label: 'Open pull request',
+      icon: 'i-lucide-git-pull-request',
+      to: row.detail?.prUrl ?? row.prUrl,
+      target: '_blank',
+    })
+  }
+
+  // Only what this row can actually do right now. An "Allow" on a row nothing is
+  // asking about is a menu teaching you not to read it.
+  const act: ContextMenuItem[] = []
+  if (prompt) {
+    act.push(
+      {
+        label: 'Allow once',
+        icon: 'i-lucide-check',
+        disabled: answeringIds.value.includes(prompt.id),
+        onSelect: () => void answerPrompt(prompt, { behavior: 'allow', scope: 'once' }),
+      },
+      {
+        label: 'Deny',
+        icon: 'i-lucide-x',
+        color: 'error' as const,
+        disabled: answeringIds.value.includes(prompt.id),
+        onSelect: () => void answerPrompt(prompt, { behavior: 'deny' }),
+      },
+    )
+  }
+  if (row.activity === 'working' && row.runId) {
+    act.push({
+      label: 'Stop this turn',
+      icon: 'i-lucide-square',
+      disabled: stoppingIds.value.includes(row.sessionId),
+      onSelect: () => void stopRow(row),
+    })
+  }
+
+  const where: ContextMenuItem[] = [
+    { label: 'Copy branch', icon: 'i-lucide-copy', onSelect: () => void copy(row.branch, 'the branch name') },
+  ]
+  if (repoDir && repoDir !== workingDir.value) {
+    where.push({
+      label: `Switch to ${row.repo}`,
+      icon: 'i-lucide-folder-git-2',
+      onSelect: () => void ensureProject(repoDir),
+    })
+  }
+
+  return [open, act, where].filter(group => group.length)
+}
+
+function pullMenu(pull: WallPull) {
+  const open: ContextMenuItem[] = [
+    { label: 'Open on GitHub', icon: 'i-lucide-external-link', to: pull.url, target: '_blank' },
+  ]
+
+  // One entry, worded by whose it is. Somebody else's pull request is a review;
+  // your own is whatever the server decides it needs when it re-reads it, which
+  // is the same judgement the badge on this row came from.
+  const act: ContextMenuItem[] = [
+    {
+      label: pull.mine ? 'Start a session on it' : 'Review it here',
+      icon: 'i-lucide-git-branch',
+      onSelect: () => void startOnPull(pull, pull.mine ? undefined : 'review'),
+    },
+  ]
+
+  const where: ContextMenuItem[] = [
+    { label: 'Copy link', icon: 'i-lucide-copy', onSelect: () => void copy(pull.url, 'the link') },
+  ]
+  if (pull.repoDir && pull.repoDir !== workingDir.value) {
+    where.push({
+      label: `Switch to ${pull.repo}`,
+      icon: 'i-lucide-folder-git-2',
+      onSelect: () => void ensureProject(pull.repoDir),
+    })
+  }
+
+  return [open, act, where]
+}
+
 /**
  * Go and look elsewhere, because somebody pressed the button.
  *
@@ -493,8 +682,6 @@ watch(snapshot, (next, previous) => {
  * actually does on this machine.
  */
 const voice = useVoice()
-const { projects, ensureLoaded: loadProjects } = useProjects()
-const { workingDir } = useWorkingDir()
 
 /** A command that will start or stop work, waiting for a keypress. */
 const pending = ref<VoiceCommand | null>(null)
@@ -668,6 +855,10 @@ function onKey(event: KeyboardEvent) {
    * safer reading of the same key: somebody who has just heard it offer to start
    * an agent and hits Escape is cancelling, not navigating.
    */
+  // An open menu owns Escape, and handles it itself. Falling through to the
+  // switch below closed the menu and left the screen in one keypress.
+  if (menuOpen.value && event.key === 'Escape') return
+
   if (pending.value) {
     if (event.key === 'Enter') {
       event.preventDefault()
@@ -869,8 +1060,10 @@ onUnmounted(() => {
               :now="now"
               :busy="answeringIds"
               :stopping="stoppingIds.includes(row.sessionId)"
+              :menu="sessionMenu(row)"
               @answer="(prompt, decision) => answerPrompt(prompt, decision)"
               @stop="stopRow(row)"
+              @menu-open="open => { menuOpen = open }"
             />
           </div>
         </div>
@@ -941,7 +1134,14 @@ onUnmounted(() => {
           </template>
 
           <div v-if="reviewQueue.shown.length" class="wall-pulls">
-            <WallPullRow v-for="pull in reviewQueue.shown" :key="pull.url" :pull="pull" :now="now" />
+            <WallPullRow
+              v-for="pull in reviewQueue.shown"
+              :key="pull.url"
+              :pull="pull"
+              :now="now"
+              :menu="pullMenu(pull)"
+              @menu-open="open => { menuOpen = open }"
+            />
           </div>
           <p v-else-if="pulls.repos" class="wall-panel-empty">No review has been asked of you.</p>
           <p v-else class="wall-panel-empty">No repository here could be read.</p>
@@ -1009,7 +1209,14 @@ onUnmounted(() => {
           :hidden="myPulls.hidden"
         >
           <div v-if="myPulls.shown.length" class="wall-pulls">
-            <WallPullRow v-for="pull in myPulls.shown" :key="pull.url" :pull="pull" :now="now" />
+            <WallPullRow
+              v-for="pull in myPulls.shown"
+              :key="pull.url"
+              :pull="pull"
+              :now="now"
+              :menu="pullMenu(pull)"
+              @menu-open="open => { menuOpen = open }"
+            />
           </div>
           <p v-else class="wall-panel-empty">Nothing of yours is open.</p>
         </WallPanel>
