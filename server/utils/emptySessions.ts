@@ -1,5 +1,5 @@
 import type { Session } from './sessions'
-import { worktreeStatus } from './worktrees'
+import { diffBase, worktreeStatus } from './worktrees'
 
 /**
  * Closing out sessions that produced nothing.
@@ -38,7 +38,7 @@ export async function verifyEmpty(session: Session): Promise<EmptyVerdict> {
   if (session.status === 'archived') return { ...head, empty: false, reason: 'archived' }
   if (session.status === 'running') return { ...head, empty: false, reason: 'busy' }
 
-  const status = await worktreeStatus(session.worktreePath, session.baseSha, session.baseBranch)
+  const status = await worktreeStatus(session.worktreePath, await diffBase(session), session.baseBranch)
 
   // Already gone. Not something to clean up, and not something to report as
   // cleaned up either — the record needs a different decision from you.

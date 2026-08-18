@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { inFlight } from './pool'
 
 const exec = promisify(execFile)
 
@@ -151,6 +152,91 @@ export async function commitsBetween(cwd: string, baseRef: string, branch: strin
       return { sha, subject }
     })
     .filter(commit => commit.sha)
+}
+
+/**
+ * The pull request a session's branch has, if it has one.
+ *
+ * `prUrl` on the session record only knows about pull requests this app opened.
+ * An agent that ran `gh pr create` itself, or a session picked up from a branch
+ * somebody else had already proposed, has one that the record has never heard
+ * of — and that pull request is the thing that says what this branch is really
+ * targeting, which is the other half of "what is the base branch here".
+ *
+ * Answered from a cache and refreshed behind the answer, because this is read
+ * on a polled endpoint and `gh` is a network call. The first poll after a cold
+ * start says "none" and the next one says the truth; a wrong answer for four
+ * seconds is worth more than a page that waits on GitHub every time it renders.
+ */
+export interface BranchPullRequest {
+  number: number
+  url: string
+  title: string
+  /** What GitHub says it merges into — the base that will actually be used. */
+  baseBranch: string
+  state: 'OPEN' | 'MERGED' | 'CLOSED'
+  isDraft: boolean
+}
+
+/** Long enough that polling costs nothing; short enough to notice a new one. */
+const BRANCH_PR_TTL_MS = 60_000
+
+const branchPrs = new Map<string, { at: number; value: BranchPullRequest | null }>()
+const askingBranchPr = inFlight<string, BranchPullRequest | null>()
+
+async function readBranchPullRequest(cwd: string, branch: string): Promise<BranchPullRequest | null> {
+  try {
+    const raw = await gh(cwd, [
+      'pr', 'view', branch,
+      '--json', 'number,url,title,baseRefName,state,isDraft',
+    ])
+    const parsed = JSON.parse(raw) as {
+      number?: number
+      url?: string
+      title?: string
+      baseRefName?: string
+      state?: string
+      isDraft?: boolean
+    }
+    if (typeof parsed.number !== 'number' || !parsed.url) return null
+
+    return {
+      number: parsed.number,
+      url: parsed.url,
+      title: parsed.title ?? '',
+      baseBranch: parsed.baseRefName ?? '',
+      state: (parsed.state ?? 'OPEN').toUpperCase() as BranchPullRequest['state'],
+      isDraft: Boolean(parsed.isDraft),
+    }
+  } catch {
+    // No pull request, no remote branch, no `gh`, no network. Cached as "none"
+    // either way, so a repository without GitHub does not spawn one per poll.
+    return null
+  }
+}
+
+export function branchPullRequest(
+  cwd: string,
+  branch: string,
+  now: () => number = Date.now,
+): BranchPullRequest | null {
+  if (!branch) return null
+
+  const key = `${cwd}\u0000${branch}`
+  const entry = branchPrs.get(key)
+
+  if (!entry || now() - entry.at >= BRANCH_PR_TTL_MS) {
+    void askingBranchPr(key, () => readBranchPullRequest(cwd, branch))
+      .then((value) => { branchPrs.set(key, { at: now(), value }) })
+      .catch(() => {})
+  }
+
+  return entry?.value ?? null
+}
+
+/** Test seam: the cache is process-wide and would leak between cases. */
+export function forgetBranchPullRequests(): void {
+  branchPrs.clear()
 }
 
 /** Read-only: asks GitHub whether this branch already has one open. */

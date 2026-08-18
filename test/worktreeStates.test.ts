@@ -31,6 +31,9 @@ vi.mock('../server/utils/worktrees', () => ({
       behind: 0,
     }
   }),
+  // Resolving the base costs a `git` invocation, and this suite is about how
+  // often the worktree is read rather than about what it is read against.
+  diffBase: vi.fn(async (session: { baseSha: string }) => session.baseSha),
 }))
 
 vi.mock('../server/utils/checks', () => ({

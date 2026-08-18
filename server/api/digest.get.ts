@@ -1,6 +1,6 @@
 import { buildDigest, DEFAULT_WINDOW_MS } from '../utils/digest'
 import { findSession } from '../utils/sessions'
-import { worktreeStatus } from '../utils/worktrees'
+import { diffBase, worktreeStatus } from '../utils/worktrees'
 
 /**
  * What happened while you were away.
@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
     const status = await worktreeStatus(
       session.worktreePath,
-      session.baseSha || session.baseBranch,
+      await diffBase(session),
       session.baseBranch,
     ).catch(() => null)
 

@@ -1,5 +1,5 @@
 import { findSession, patchSession, readSessions, type Session } from './sessions'
-import { updateFromBase, worktreeStatus } from './worktrees'
+import { diffBase, updateFromBase, worktreeStatus } from './worktrees'
 import {
   baseCheckoutState, commitSessionWork, mergedBranches, mergeSession, previewMerge,
 } from './merge'
@@ -71,7 +71,7 @@ export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
   return Promise.all(sessions.map(async (session) => {
     const worktree = await worktreeStatus(
       session.worktreePath,
-      session.baseSha || session.baseBranch,
+      await diffBase(session),
       session.baseBranch,
     )
 
@@ -108,7 +108,7 @@ async function land(sessionId: string): Promise<LandingStepResult> {
   // the agent had not committed, which is rarely what anybody means.
   await commitSessionWork(session, `${session.title} (uncommitted work)`)
 
-  const status = await worktreeStatus(session.worktreePath, session.baseSha || session.baseBranch, session.baseBranch)
+  const status = await worktreeStatus(session.worktreePath, await diffBase(session), session.baseBranch)
 
   if (status.behind) {
     const update = await updateFromBase(session.worktreePath, session.baseBranch)

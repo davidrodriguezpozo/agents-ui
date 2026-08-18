@@ -1,8 +1,9 @@
 import { findSession } from '../../../utils/sessions'
-import { worktreeStatus } from '../../../utils/worktrees'
+import { diffBase, worktreeStatus } from '../../../utils/worktrees'
 import { getActive, readRun, type RunSummary } from '../../../utils/runStore'
 import { toolCallsFromEvents } from '../../../utils/turnActivity'
 import { checkCommandFor, isStale, worktreeFingerprint } from '../../../utils/checks'
+import { branchPullRequest } from '../../../utils/pullRequest'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -12,7 +13,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: `Session not found: ${id}` })
   }
 
-  const worktree = await worktreeStatus(session.worktreePath, session.baseSha || session.baseBranch, session.baseBranch)
+  const worktree = await worktreeStatus(session.worktreePath, await diffBase(session), session.baseBranch)
 
   // The turns, oldest first, so the page can render the conversation.
   const turns = []
@@ -49,5 +50,11 @@ export default defineEventHandler(async (event) => {
     checkStale,
     /** Null when this project has no checks, which the page says rather than hides. */
     checkCommand: (await checkCommandFor(session.repoDir))?.command ?? null,
+    /**
+     * The pull request this branch has on GitHub, including one this app never
+     * opened. Cached and refreshed behind the answer, so it costs nothing on
+     * the poll; null means "none that we know of yet", not "none".
+     */
+    pr: branchPullRequest(session.worktreePath, session.branch),
   }
 })

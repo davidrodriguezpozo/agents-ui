@@ -71,6 +71,7 @@ export default defineEventHandler(async (event) => {
     worktreePath: session.worktreePath,
     baseRef: session.baseSha || session.baseBranch,
     baseBranch: session.baseBranch,
+    branch: session.branch,
     version: session.updatedAt,
     live: runs[index]!.live,
     // Everything `activity === 'idle'` needs except whether the worktree is

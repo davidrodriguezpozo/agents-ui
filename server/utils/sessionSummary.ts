@@ -1,7 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk'
 import { claudeExecutable } from './claudeExecutable'
 import { patchSession, findSession } from './sessions'
-import { worktreeDiff } from './worktrees'
+import { diffBase, worktreeDiff } from './worktrees'
 import { readRun, getActive } from './runStore'
 import { readPreferences } from './preferences'
 
@@ -76,7 +76,7 @@ async function gatherContext(sessionId: string): Promise<string | null> {
   const session = await findSession(sessionId)
   if (!session) return null
 
-  const { files } = await worktreeDiff(session.worktreePath, session.baseSha || session.baseBranch)
+  const { files } = await worktreeDiff(session.worktreePath, await diffBase(session))
   if (!files.length) return null
 
   const changed = files

@@ -229,6 +229,53 @@ export async function mergeBase(repoDir: string, a: string, b: string): Promise<
   return git(repoDir, ['merge-base', a, b]).catch(() => '')
 }
 
+/**
+ * What a session's work should be measured against.
+ *
+ * `baseSha` is where the branch was cut, and it is the right answer only until
+ * the session catches up with its base. `updateFromBase` merges the base branch
+ * in, and from that moment `baseSha..HEAD` carries every commit that came along
+ * for the ride — so the diff shows somebody else's fifty files, the "ahead"
+ * count is their commits plus yours, and the pull request body lists both.
+ *
+ * Naming the base *branch* instead fixes all three at once: `branch...HEAD`
+ * re-derives the merge base each time, so it moves forward exactly when the
+ * base is merged in and stays put when it is not. The branch is whatever this
+ * session was cut from — routinely not `main`, and on stacked work it is
+ * another session's branch.
+ *
+ * The recorded sha wins in the two cases where the branch would lie:
+ *
+ *   - It is not an ancestor of the base branch. A session started on an
+ *     existing branch or a pull request records that branch's head as its base
+ *     precisely so the diff excludes what the branch already had; the merge
+ *     base with `main` is far behind it. A force-pushed or rewritten base lands
+ *     here too.
+ *   - The base branch *is* the session's branch, which is what a session
+ *     adopted from the checkout it was started in looks like. That base moves
+ *     with HEAD, so measuring against it reports no work, forever.
+ */
+export async function diffBase(session: {
+  worktreePath: string
+  branch: string
+  baseBranch: string
+  baseSha: string
+}): Promise<string> {
+  const { worktreePath, branch, baseBranch, baseSha } = session
+
+  if (!baseBranch || baseBranch === branch) return baseSha || baseBranch || 'HEAD'
+  if (!baseSha) return baseBranch
+
+  try {
+    // Exits zero for "yes" and for "same commit"; non-zero for both "no" and
+    // "that branch is gone", which want the same fallback.
+    await git(worktreePath, ['merge-base', '--is-ancestor', baseSha, baseBranch])
+    return baseBranch
+  } catch {
+    return baseSha
+  }
+}
+
 /** Commits on `branch` that exist nowhere else — what deleting it would destroy. */
 export async function unmergedCommits(repoDir: string, branch: string): Promise<number> {
   const base = await mergeBase(repoDir, 'HEAD', branch)
@@ -512,11 +559,13 @@ export function parseStatusBranch(header: string): string | null {
 }
 
 /**
- * `baseRef` is what this session branched from — usually the sha, so the diff
- * is against the code as it was. `baseBranch` is where that branch has got to
- * since, which is a different question and the only one that can tell you a
- * green check has gone out of date. Passing the sha for both would always
- * report zero, because a sha does not move.
+ * `baseRef` is what this session's work is measured from — `diffBase` works it
+ * out, and it is the base branch wherever naming the branch is safe, so a
+ * session that has merged its base in is not counted as ahead by its base's
+ * commits. `baseBranch` is where that branch has got to since, which is a
+ * different question and the only one that can tell you a green check has gone
+ * out of date. Passing the sha for both would always report zero, because a sha
+ * does not move.
  *
  * The four questions are asked concurrently, and the caller is expected to
  * bound how many worktrees it asks about at once — see `mapLimit`. Firing every

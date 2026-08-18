@@ -1,6 +1,6 @@
 import { inFlight, mapLimit } from './pool'
 import { worktreeFingerprint } from './checks'
-import { worktreeStatus, type WorktreeStatus } from './worktrees'
+import { diffBase, worktreeStatus, type WorktreeStatus } from './worktrees'
 
 /**
  * The worktree state behind a polled list, without paying for all of it every
@@ -57,6 +57,12 @@ export interface WorktreeStateRequest {
   baseRef: string
   baseBranch?: string
   /**
+   * The session's own branch, so `diffBase` can tell a real base branch from
+   * one that is this branch — a base that moves with HEAD reports every session
+   * on it as having done nothing.
+   */
+  branch?: string
+  /**
    * Bumped whenever the session record is written, which every mutation does.
    * A merge, a finished turn or a check therefore invalidates immediately
    * rather than waiting the window out.
@@ -94,7 +100,7 @@ const cache = new Map<string, Cached>()
 const reading = inFlight<string, WorktreeState>()
 
 function versionOf(request: WorktreeStateRequest): string {
-  return `${request.baseRef} ${request.baseBranch ?? ''} ${request.version}`
+  return `${request.baseRef} ${request.baseBranch ?? ''} ${request.branch ?? ''} ${request.version}`
 }
 
 /**
@@ -145,7 +151,19 @@ export async function worktreeStates(
     const state = await reading(
       `${request.worktreePath} ${version} ${request.fingerprint ? 'fp' : ''}`,
       async () => ({
-        status: await worktreeStatus(request.worktreePath, request.baseRef, request.baseBranch),
+        // Resolved here rather than by the caller: it costs a `git` invocation
+        // per session, and inside the cache it is paid on a miss rather than on
+        // every poll of every row.
+        status: await worktreeStatus(
+          request.worktreePath,
+          await diffBase({
+            worktreePath: request.worktreePath,
+            branch: request.branch ?? '',
+            baseBranch: request.baseBranch ?? '',
+            baseSha: request.baseRef,
+          }),
+          request.baseBranch,
+        ),
         fingerprint: request.fingerprint
           ? await worktreeFingerprint(request.worktreePath).catch(() => '')
           : null,

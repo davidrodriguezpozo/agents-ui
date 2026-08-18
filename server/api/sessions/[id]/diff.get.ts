@@ -1,5 +1,5 @@
 import { findSession } from '../../../utils/sessions'
-import { worktreeDiff } from '../../../utils/worktrees'
+import { diffBase, worktreeDiff } from '../../../utils/worktrees'
 
 /** Everything the session changed, committed or not, against where it branched. */
 export default defineEventHandler(async (event) => {
@@ -10,5 +10,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: `Session not found: ${id}` })
   }
 
-  return worktreeDiff(session.worktreePath, session.baseSha || session.baseBranch)
+  return worktreeDiff(session.worktreePath, await diffBase(session))
 })

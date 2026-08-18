@@ -6,7 +6,8 @@ import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolC
 import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
 import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type {
-  DiffFile, MergePreview, PullRequestPreview, Session, SessionTurn, TranscriptMessage,
+  BranchPullRequest, DiffFile, MergePreview, PullRequestPreview, Session, SessionTurn,
+  TranscriptMessage,
 } from '~/composables/useSessions'
 
 const route = useRoute()
@@ -31,6 +32,7 @@ const session = ref<(Session & {
   turns: SessionTurn[]
   checkStale: boolean
   checkCommand: string | null
+  pr: BranchPullRequest | null
 }) | null>(null)
 const checking = ref(false)
 const repairing = ref(false)
@@ -395,6 +397,50 @@ const watchLabel = computed(() => {
 
 const watchActive = computed(() =>
   session.value?.prWatch?.state === 'watching' || session.value?.prWatch?.state === 'fixing'
+)
+
+/**
+ * The pull request this branch has, from whichever half of the app knows about
+ * one.
+ *
+ * `prUrl` is what this app opened; `pr` is what GitHub says about the branch,
+ * which also covers one the agent opened itself with `gh` and one that was
+ * already there when the session picked the branch up. GitHub wins where both
+ * exist, because it is the half that knows the state and the number.
+ */
+const pullRequest = computed(() => {
+  const known = session.value?.pr
+  if (known) return known
+
+  const url = session.value?.prUrl
+  if (!url) return null
+
+  return {
+    number: Number(/\/pull\/(\d+)/.exec(url)?.[1] ?? 0),
+    url,
+    title: '',
+    baseBranch: '',
+    state: 'OPEN' as const,
+    isDraft: false,
+  }
+})
+
+/**
+ * Where this branch is really going.
+ *
+ * The session records what it was cut from; an open pull request can target
+ * something else entirely, and it is the one that decides where the work lands.
+ * Neither is usually `main`, which is the whole reason this is shown at all.
+ */
+const baseBranch = computed(() => {
+  const pr = pullRequest.value
+  if (pr && pr.state === 'OPEN' && pr.baseBranch) return pr.baseBranch
+  return session.value?.baseBranch ?? ''
+})
+
+/** Set when the pull request retargeted, so the header does not quietly lie. */
+const retargeted = computed(() =>
+  Boolean(session.value && baseBranch.value && baseBranch.value !== session.value.baseBranch)
 )
 
 /**
@@ -904,8 +950,44 @@ const totalChanges = computed(() => {
         </NuxtLink>
       </template>
       <template #trailing>
-        <span v-if="session" class="font-mono type-detail ink-accent">
-          {{ session.branch }}
+        <!--
+          Branch, what it merges into, and the pull request it has. The base was
+          only readable three panels down, which is fine while every session is
+          cut from `main` and useless the moment they are not — stacked work is
+          based on another session's branch, and a retargeted pull request lands
+          somewhere the session record never heard of.
+        -->
+        <span v-if="session" class="flex items-center gap-1.5 min-w-0">
+          <span class="font-mono type-detail ink-accent truncate">{{ session.branch }}</span>
+          <template v-if="baseBranch">
+            <UIcon name="i-lucide-arrow-right" class="size-3 shrink-0 ink-4" />
+            <span
+              class="font-mono type-detail ink-3 truncate"
+              :title="retargeted
+                ? `The pull request targets ${baseBranch}. This session was cut from ${session.baseBranch}.`
+                : `Branched from ${baseBranch}`"
+            >{{ baseBranch }}</span>
+          </template>
+          <a
+            v-if="pullRequest"
+            :href="pullRequest.url"
+            target="_blank"
+            rel="noopener"
+            class="focus-ring inline-flex items-center gap-1 px-1.5 py-px rounded-md type-detail shrink-0"
+            :style="pullRequest.state === 'MERGED'
+              ? 'background: var(--success-wash); color: var(--text-secondary);'
+              : pullRequest.state === 'CLOSED'
+                ? 'background: var(--badge-subtle-bg); color: var(--text-disabled);'
+                : 'background: var(--accent-muted); color: var(--text-secondary);'"
+            :title="pullRequest.title || 'Open the pull request on GitHub'"
+          >
+            <UIcon
+              :name="pullRequest.state === 'MERGED' ? 'i-lucide-git-merge' : 'i-lucide-git-pull-request'"
+              class="size-3.5 shrink-0"
+            />
+            <span v-if="pullRequest.number">#{{ pullRequest.number }}</span>
+            <span v-if="pullRequest.isDraft" class="fs-micro">draft</span>
+          </a>
         </span>
       </template>
       <template #right>
@@ -1036,7 +1118,30 @@ const totalChanges = computed(() => {
                   branched from <span class="font-mono">{{ session.baseBranch }}</span>
                 </span>
               </div>
+
               <div class="type-mono-meta pl-6 truncate">{{ session.worktreePath }}</div>
+
+              <!--
+                The pull request and, when it disagrees with the record, where it
+                is actually going. A session whose request was retargeted after
+                it started is measured against one branch and merged into
+                another, and nothing else on the page would say so.
+              -->
+              <div v-if="pullRequest" class="flex items-center gap-2">
+                <UIcon name="i-lucide-git-pull-request" class="size-3.5 shrink-0 ink-4" />
+                <span class="type-detail ink-2">
+                  <a
+                    :href="pullRequest.url"
+                    target="_blank"
+                    rel="noopener"
+                    class="focus-ring font-mono ink-accent underline-offset-2 hover:underline"
+                  >{{ pullRequest.number ? `#${pullRequest.number}` : 'Pull request' }}</a>
+                  <template v-if="retargeted">
+                    targets <span class="font-mono">{{ baseBranch }}</span>, not what this branched from
+                  </template>
+                  <template v-else-if="pullRequest.title">— {{ pullRequest.title }}</template>
+                </span>
+              </div>
               <div v-if="!session.worktree.exists" class="type-meta pl-6 ink-error">
                 This workspace is missing from disk — it was removed outside the app.
               </div>

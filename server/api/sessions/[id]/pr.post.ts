@@ -1,5 +1,6 @@
 import { findSession, patchSession } from '../../../utils/sessions'
 import { commitsBetween, defaultRemote, ghReady, openPullRequest } from '../../../utils/pullRequest'
+import { diffBase } from '../../../utils/worktrees'
 
 /**
  * Push the branch and open the pull request.
@@ -42,7 +43,9 @@ export default defineEventHandler(async (event) => {
 
   // Checked again here rather than trusted from the preview: the preview may
   // be minutes old, and pushing a branch with nothing on it helps nobody.
-  const commits = await commitsBetween(cwd, session.baseSha || session.baseBranch, 'HEAD')
+  // Measured from the same place the preview measured from, so the body it
+  // suggested and the body it opens with describe the same set of commits.
+  const commits = await commitsBetween(cwd, await diffBase(session), 'HEAD')
   if (!commits.length && !body.commitFirst) {
     throw createError({
       statusCode: 409,

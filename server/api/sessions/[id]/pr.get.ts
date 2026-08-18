@@ -1,5 +1,5 @@
 import { findSession } from '../../../utils/sessions'
-import { worktreeDiff } from '../../../utils/worktrees'
+import { diffBase, worktreeDiff } from '../../../utils/worktrees'
 import {
   commitsBetween,
   defaultRemote,
@@ -23,7 +23,9 @@ export default defineEventHandler(async (event): Promise<PullRequestPreview> => 
   }
 
   const cwd = session.worktreePath
-  const baseRef = session.baseSha || session.baseBranch
+  // The base branch wherever naming it is safe, so a session that has caught
+  // up with its base does not propose a pull request listing its base's commits.
+  const baseRef = await diffBase(session)
 
   const [commits, diff, remote, gh] = await Promise.all([
     commitsBetween(cwd, baseRef, 'HEAD'),

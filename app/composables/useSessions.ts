@@ -104,6 +104,23 @@ export interface Session {
   inCurrentProject: boolean
 }
 
+/**
+ * The pull request a session's branch has on GitHub, whoever opened it.
+ *
+ * Null while nothing is known — a cold cache, no `gh`, no remote — which is not
+ * the same as "there is none", so the page draws nothing rather than "no pull
+ * request".
+ */
+export interface BranchPullRequest {
+  number: number
+  url: string
+  title: string
+  /** What it merges into, which is the base that will actually be used. */
+  baseBranch: string
+  state: 'OPEN' | 'MERGED' | 'CLOSED'
+  isDraft: boolean
+}
+
 export type TrustLevel = 'readonly' | 'edits' | 'full'
 
 /** What each level means for a session you are watching, in its own words. */
@@ -282,6 +299,7 @@ export function useSessions() {
       turns: SessionTurn[]
       checkStale: boolean
       checkCommand: string | null
+      pr: BranchPullRequest | null
     }>(`/api/sessions/${encodeURIComponent(id)}`)
   }
 
