@@ -26,14 +26,6 @@ import {
   type WallUrgency,
 } from '~/utils/wall'
 import { errorMessage } from '~/utils/errors'
-import { SOUND_LABELS, diffSounds } from '~/utils/sound'
-import {
-  describe as describeVoice,
-  matchProject,
-  needsConfirmation,
-  parseCommand,
-  type VoiceCommand,
-} from '~/utils/voice'
 
 /**
  * Fleet — mission control.
@@ -82,7 +74,17 @@ import {
  * as it did when it was right. So a poll that throws is remembered and the page
  * says so in words.
  *
- * Escape goes back, `F` fills the screen, `S` is sound, held `V` is voice. The
+ * **It is an ordinary page.** It had no shell for a long time — no sidebar, no
+ * setup wizard, nothing but the fleet — on the reasoning that navigation is
+ * wasted on a screen nobody is going to navigate from. That stopped being true
+ * when this became the page the app is opened *to*: the cost was that it was the
+ * one screen you could only leave by knowing about Escape. The sidebar collapses
+ * to its icons instead, which buys back the same width everywhere rather than
+ * only here.
+ *
+ * `F` fills the screen. Two behaviours are a
+ * wall's and not a page's — the cursor hiding itself after four still seconds,
+ * and Escape meaning "out" — so both now happen only while `F` is in effect. The
  * cinema rotation that used to live here is gone: an act at a time was the right
  * answer for an audience across a room and the wrong one for the person actually
  * using this, who needs all of it visible at once.
@@ -476,8 +478,8 @@ const { workingDir } = useWorkingDir()
  *
  * Only so Escape can mean the nearer thing. This screen's Escape leaves for Now,
  * which is right when the screen is all there is and wrong the moment something
- * is open on top of it — the same reading `pending` already gets a few lines
- * down. Reka closes one menu when another opens, so a boolean is the whole state.
+ * is open on top of it. Reka closes one menu when another opens, so a boolean is
+ * the whole state.
  */
 const menuOpen = ref(false)
 
@@ -637,282 +639,48 @@ async function lookAgain(key: string, label: string) {
 }
 
 /**
- * The sound of the fleet.
+ * What just happened, in a line, for a few seconds.
  *
- * Driven off the same snapshots the screen draws, diffed rather than streamed:
- * what plays is what *changed* between two polls, which is the only definition
- * under which silence means "nothing happened" rather than "nothing is connected".
- * `utils/sound.ts` decides what that is; this only hands it the pair.
+ * The screen has a handful of controls that can fail in ways worth saying out
+ * loud — a clipboard the browser refused, a project that would not activate, an
+ * inbox source that is not configured. A toast would be wrong here: this is a
+ * screen that gets left open, and a stack of dismissables accumulating in the
+ * corner of one is its own kind of mess.
  */
-const sound = useSound()
-
-/**
- * What the noises mean, on the control that makes them.
- *
- * A screen left running in a shared room makes sounds other people hear, and the
- * first question is always "what was that?". The vocabulary is six lines, which is
- * short enough to answer that in a tooltip and too long to put on the screen
- * permanently.
- */
-const soundLegend = computed(() => {
-  const vocabulary = Object.values(SOUND_LABELS).join('\n')
-  return sound.enabled.value
-    ? `Sound on — S\n\n${vocabulary}`
-    : 'Turn on sound — S'
-})
-
-/** The newest tick already accounted for, so the same one is never played twice. */
-let heardTickAt = 0
-
-watch(snapshot, (next, previous) => {
-  if (!next) return
-
-  const { events, tickAt } = diffSounds(previous ?? null, next, heardTickAt)
-  heardTickAt = tickAt
-  sound.emit(events)
-})
-
-/**
- * Speaking to the screen.
- *
- * Off until switched on, held down to be heard, and confirmed by hand before
- * anything runs. The grammar and — more to the point — what it refuses live in
- * `utils/voice.ts`; the microphone and the privacy caveat that comes with it live
- * in `useVoice`. What is left here is the wiring: what each understood command
- * actually does on this machine.
- */
-const voice = useVoice()
-
-/** A command that will start or stop work, waiting for a keypress. */
-const pending = ref<VoiceCommand | null>(null)
-/** What the last one did, shown for a few seconds and then forgotten. */
 const outcome = ref<string | null>(null)
 let outcomeTimer: ReturnType<typeof setTimeout> | null = null
 
-function report(text: string, spoken = text) {
+function report(text: string) {
   outcome.value = text
-  voice.speak(spoken)
   if (outcomeTimer) clearTimeout(outcomeTimer)
   outcomeTimer = setTimeout(() => { outcome.value = null }, 8000)
 }
 
 /**
- * Asked once, before the microphone is ever opened.
+ * `F` fills the screen, and that is the whole keyboard now.
  *
- * Chrome's speech recognition sends the audio to Google. Everything else this app
- * does is local, so switching this on is a decision somebody should make knowing
- * that — not something to discover in a network tab afterwards. Remembered, so it
- * is asked once per machine rather than nagging a display every morning.
- */
-const CONSENT_KEY = 'agents-ui:wall-voice-consent'
-const askingConsent = ref(false)
-
-function toggleVoice() {
-  if (voice.enabled.value) {
-    voice.setEnabled(false)
-    pending.value = null
-    return
-  }
-
-  if (import.meta.client && localStorage.getItem(CONSENT_KEY) !== '1') {
-    askingConsent.value = true
-    return
-  }
-
-  voice.setEnabled(true)
-}
-
-function acceptConsent() {
-  localStorage.setItem(CONSENT_KEY, '1')
-  askingConsent.value = false
-  voice.setEnabled(true)
-}
-
-/** Held: listen. Released: parse once, and act or ask. */
-function heard(transcript: string) {
-  const command = parseCommand(transcript)
-
-  if (command.kind === 'unknown') {
-    report(describeVoice(command), 'I did not catch that')
-    return
-  }
-
-  if (command.kind === 'refused') {
-    // Said out loud as well as shown. A room that hears *why* learns the
-    // boundary; a room that watches nothing happen learns the thing is broken.
-    report(command.why)
-    return
-  }
-
-  if (needsConfirmation(command)) {
-    pending.value = command
-    voice.speak(describeVoice(command))
-    return
-  }
-
-  runCommand(command)
-}
-
-async function runCommand(command: VoiceCommand) {
-  pending.value = null
-
-  switch (command.kind) {
-    case 'session':
-      await startSpokenSession(command.instruction, command.project)
-      return
-
-    case 'stop':
-      await stopWork(command.project)
-      return
-  }
-}
-
-/**
- * A spoken instruction becomes a session, exactly as though it had been typed.
- *
- * The repository is resolved against the projects already registered and never
- * against the filesystem — see `matchProject` — and falls back to the one this
- * app is pointed at rather than guessing. A named project that matches nothing is
- * refused in words instead of quietly landing in the wrong repo, which is the one
- * mistake here that would be expensive.
- */
-async function startSpokenSession(instruction: string, spokenProject?: string) {
-  const named = matchProject(spokenProject, projects.value)
-
-  if (spokenProject && !named) {
-    report(`No project here is called ${spokenProject}.`)
-    return
-  }
-
-  const repoDir = named?.path ?? workingDir.value
-  if (!repoDir) {
-    report('Pick a project first — a session needs a repository to branch from.')
-    return
-  }
-
-  try {
-    const session = await $fetch<{ id: string; title: string }>('/api/sessions', {
-      method: 'POST',
-      body: { prompt: instruction, repoDir },
-    })
-
-    report(`Started: ${session.title}`, `Started a session: ${instruction}`)
-  } catch (e: unknown) {
-    const message = (e as { data?: { data?: { message?: string } } })?.data?.data?.message
-    report(message ?? 'That session could not be started.')
-  }
-}
-
-/**
- * The brake. Cancels the turn each live session is on, which keeps everything
- * already written — stopping ends the turn, not the work, exactly as the button
- * on a session does.
- */
-async function stopWork(spokenProject?: string) {
-  const named = matchProject(spokenProject, projects.value)
-
-  if (spokenProject && !named) {
-    report(`No project here is called ${spokenProject}.`)
-    return
-  }
-
-  const targets = current.value.filter(tile =>
-    tile.runId && tile.activity === 'working' && (!named || tile.repo === named.name),
-  )
-
-  if (!targets.length) {
-    report('Nothing is running.')
-    return
-  }
-
-  const stopped = await Promise.all(targets.map(async (tile) => {
-    try {
-      await $fetch(`/api/runs/${encodeURIComponent(tile.runId!)}/cancel`, { method: 'POST' })
-      return true
-    } catch {
-      return false
-    }
-  }))
-
-  const count = stopped.filter(Boolean).length
-  report(count
-    ? `Stopped ${count} ${count === 1 ? 'turn' : 'turns'}. What they wrote is still there.`
-    : 'Nothing could be stopped.')
-}
-
-/**
- * Escape leaves, `F` fills the screen, `S` is sound, held `V` is voice.
- *
- * On the page rather than as buttons only, because the machine driving a screen
+ * On the page rather than as a button only, because the machine driving a screen
  * like this is often not the one you are sitting at — a keyboard reachable once,
  * during setup, is the whole interaction it expects to have.
  */
 function onKey(event: KeyboardEvent) {
-  /**
-   * A command waiting for a hand owns the keyboard until it is answered.
-   *
-   * Escape means "not that" here rather than "leave the screen", which is the
-   * safer reading of the same key: somebody who has just heard it offer to start
-   * an agent and hits Escape is cancelling, not navigating.
-   */
   // An open menu owns Escape, and handles it itself. Falling through to the
   // switch below closed the menu and left the screen in one keypress.
   if (menuOpen.value && event.key === 'Escape') return
 
-  if (pending.value) {
-    if (event.key === 'Enter') {
-      event.preventDefault()
-      void runCommand(pending.value)
-      return
-    }
-
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      pending.value = null
-      report('Dropped.')
-      return
-    }
-  }
-
-  // Held rather than pressed: the microphone is open only while the key is down.
-  // `repeat` is what a held key sends after the first event, and starting the
-  // recogniser again on each of those would abort the utterance in progress.
-  if ((event.key === 'v' || event.key === 'V') && !event.repeat) {
-    if (voice.enabled.value) voice.start()
-    return
-  }
-
   switch (event.key) {
+    // Escape used to navigate to Now, because with no sidebar it was the only
+    // way off this screen. There is a sidebar now, and a page that leaves itself
+    // when you dismiss something is a page that loses your place. All it does
+    // here is give the screen back.
     case 'Escape':
-      void router.push('/')
+      if (isFullscreen.value) void document.exitFullscreen().catch(() => {})
       return
     case 'f':
     case 'F':
       void toggleFullscreen()
       return
-    case 's':
-    case 'S':
-      sound.toggle()
-      return
   }
-}
-
-/** The key coming up is what ends the utterance, and the only thing that does. */
-function onKeyUp(event: KeyboardEvent) {
-  if (event.key !== 'v' && event.key !== 'V') return
-  if (!voice.enabled.value) return
-
-  const transcript = voice.stop()
-
-  // Silence after a key press reads as a broken microphone. It is usually a
-  // press too short to catch a word, and saying so is the difference between
-  // "try again" and "this does not work".
-  if (!transcript) {
-    report('Nothing heard.', '')
-    return
-  }
-
-  heard(transcript)
 }
 
 async function toggleFullscreen() {
@@ -925,20 +693,46 @@ async function toggleFullscreen() {
   }
 }
 
-/** Hidden after a few still seconds, restored the moment the mouse moves. */
+/**
+ * Whether this is currently a wall or currently a page.
+ *
+ * The distinction did not exist while Fleet had no shell, because it was only
+ * ever the first. Now it is an ordinary screen with the sidebar next to it until
+ * somebody presses `F`, and two of the behaviours below are right in one of
+ * those states and wrong in the other.
+ */
+const isFullscreen = ref(false)
+
+function readFullscreen() {
+  isFullscreen.value = Boolean(document.fullscreenElement)
+}
+
+/**
+ * Hidden after a few still seconds, restored the moment the mouse moves — and
+ * only while this is filling a screen.
+ *
+ * On a display across a room a cursor parked in the middle of the fleet is
+ * litter. At a desk it is your cursor: you move it to the sidebar, pause four
+ * seconds to read a row, and it disappears out from under you.
+ */
 const cursorHidden = ref(false)
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 
 function stirCursor() {
   cursorHidden.value = false
   if (idleTimer) clearTimeout(idleTimer)
+  if (!isFullscreen.value) return
   idleTimer = setTimeout(() => { cursorHidden.value = true }, 4000)
 }
 
+// Leaving fullscreen with the cursor already hidden would strand it hidden.
+watch(isFullscreen, () => stirCursor())
+
 onMounted(() => {
   document.addEventListener('keydown', onKey)
-  document.addEventListener('keyup', onKeyUp)
+  document.addEventListener('fullscreenchange', readFullscreen)
   window.addEventListener('mousemove', stirCursor)
+  readFullscreen()
   stirCursor()
   // Needed before a spoken project name can be matched against anything.
   void loadProjects()
@@ -946,7 +740,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('keydown', onKey)
-  document.removeEventListener('keyup', onKeyUp)
+  document.removeEventListener('fullscreenchange', readFullscreen)
   window.removeEventListener('mousemove', stirCursor)
   if (idleTimer) clearTimeout(idleTimer)
   if (outcomeTimer) clearTimeout(outcomeTimer)
@@ -957,17 +751,6 @@ onUnmounted(() => {
   <div class="wall" :class="{ 'is-idle': cursorHidden }">
     <header class="wall-header">
       <div class="wall-head">
-        <!--
-          Out, and back to the app. Top left because that is where a back arrow
-          lives in every other piece of software somebody has ever used, and this
-          is the one control on the screen that has to be findable without being
-          looked for — the sidebar is suppressed on this route, so it is the only
-          way out that does not involve knowing about Escape.
-        -->
-        <NuxtLink to="/" class="wall-back" title="Back to Now — Esc" aria-label="Back to Now">
-          <UIcon name="i-lucide-arrow-left" class="size-4" />
-        </NuxtLink>
-
         <span class="wall-mood" :style="{ background: MOOD_TONES[mood] }" :title="MOOD_LABEL[mood]" />
         <h1 class="wall-brand">Fleet</h1>
 
@@ -1282,23 +1065,6 @@ onUnmounted(() => {
       <WallTicker class="wall-tape-feed" line :ticks="snapshot?.ticker ?? []" :now="now" />
 
       <div class="wall-tools">
-        <button
-          v-if="sound.supported.value"
-          class="wall-control"
-          :class="{ 'is-on': sound.enabled.value }"
-          :title="soundLegend"
-          @click="sound.toggle()"
-        >
-          <UIcon :name="sound.enabled.value ? 'i-lucide-volume-2' : 'i-lucide-volume-x'" class="size-4" />
-        </button>
-        <button
-          class="wall-control"
-          :class="{ 'is-on': voice.enabled.value }"
-          :title="voice.enabled.value ? 'Voice on — hold V to speak' : 'Turn on voice'"
-          @click="toggleVoice"
-        >
-          <UIcon :name="voice.enabled.value ? 'i-lucide-mic' : 'i-lucide-mic-off'" class="size-4" />
-        </button>
         <button class="wall-control" title="Fullscreen — F" @click="toggleFullscreen">
           <UIcon name="i-lucide-maximize" class="size-4" />
         </button>
@@ -1306,36 +1072,13 @@ onUnmounted(() => {
     </section>
 
     <!--
-      The disclosure, before the microphone is ever opened. Worded as the
-      exception it is: this app is otherwise entirely local.
+      What just happened, when something did. This used to be a corner of the
+      voice panel; it outlived it, because the menus and the inbox button both
+      have failures worth a sentence.
     -->
-    <div v-if="askingConsent" class="wall-consent">
-      <UIcon name="i-lucide-mic" class="size-5 shrink-0" />
-      <div class="min-w-0">
-        <p class="wall-consent-line">
-          Speech is transcribed by Google, not on this machine.
-        </p>
-        <p class="wall-consent-detail">
-          Chrome sends the audio captured while you hold <kbd>V</kbd> to its own
-          speech service. Nothing is listened to between key presses, and this is
-          the only part of this app that leaves your computer.
-        </p>
-      </div>
-      <div class="wall-consent-actions">
-        <button class="wall-consent-button is-primary" @click="acceptConsent">Turn it on</button>
-        <button class="wall-consent-button" @click="askingConsent = false">Not now</button>
-      </div>
-    </div>
-
-    <WallVoice
-      v-if="voice.enabled.value || outcome"
-      class="wall-voice"
-      :state="voice.state.value"
-      :transcript="voice.transcript.value"
-      :pending="pending"
-      :outcome="outcome"
-      :error="voice.error.value"
-    />
+    <Transition name="fade">
+      <p v-if="outcome" class="wall-outcome">{{ outcome }}</p>
+    </Transition>
 
     <!--
       No chart of last night here any more.
@@ -1352,7 +1095,10 @@ onUnmounted(() => {
 
 <style scoped>
 .wall {
-  height: 100vh;
+  /* The shell's main area, not the viewport: there is a sidebar beside this now
+     and a 100vh child inside a full-height main is a scrollbar waiting to
+     happen. Fullscreen makes the two the same thing again. */
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: clamp(6px, 0.8vh, 12px);
@@ -1387,31 +1133,6 @@ onUnmounted(() => {
   align-items: baseline;
   gap: 10px;
   min-width: 0;
-}
-
-/*
- * The way out. Quiet, and never faint: this is the only exit on a route with no
- * sidebar, so the hover-to-reveal treatment the old control cluster had would be
- * wrong here — a back arrow you have to find by waving a mouse at the corner is
- * not a back arrow.
- */
-.wall-back {
-  display: grid;
-  place-items: center;
-  width: 26px;
-  height: 26px;
-  border-radius: 6px;
-  flex-shrink: 0;
-  /* No text of its own, so it centres on the line rather than sitting on the
-     baseline the words share. */
-  align-self: center;
-  color: var(--text-tertiary);
-  border: 1px solid var(--border-subtle);
-}
-
-.wall-back:hover {
-  background: var(--surface-hover);
-  color: var(--text-primary);
 }
 
 .wall-mood {
@@ -1982,70 +1703,17 @@ onUnmounted(() => {
   opacity: 0.7;
 }
 
-/* ── Voice ───────────────────────────────────────────────────────────────── */
+/* ── The line that says what just happened ───────────────────────────────── */
 
-.wall-voice {
+.wall-outcome {
   flex-shrink: 0;
-}
-
-.wall-consent {
-  display: flex;
-  align-items: flex-start;
-  gap: clamp(10px, 1.2vw, 20px);
-  flex-shrink: 0;
-  padding: clamp(10px, 1.2vh, 18px) clamp(12px, 1.4vw, 22px);
-  border-radius: 10px;
+  padding: clamp(6px, 0.7vh, 10px) clamp(10px, 1.1vw, 16px);
+  border-radius: 8px;
   background: var(--surface-raised);
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
-  color: var(--text-secondary);
-}
-
-.wall-consent-line {
-  font-family: var(--font-sans);
-  font-size: clamp(13px, 1.05vw, 19px);
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.wall-consent-detail {
-  margin-top: 4px;
-  font-family: var(--font-sans);
-  font-size: clamp(11px, 0.9vw, 16px);
-  color: var(--text-tertiary);
-  max-width: 90ch;
-}
-
-.wall-consent-detail kbd {
-  font-family: var(--font-mono);
-  padding: 1px 5px;
-  border-radius: 4px;
-  background: var(--badge-subtle-bg);
-}
-
-.wall-consent-actions {
-  margin-left: auto;
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.wall-consent-button {
-  padding: 6px 12px;
-  border-radius: 7px;
+  border: 1px solid var(--border-subtle);
   font-family: var(--font-sans);
   font-size: clamp(11px, 0.9vw, 15px);
-  border: 1px solid var(--border-subtle);
   color: var(--text-secondary);
-  cursor: pointer;
 }
 
-.wall-consent-button:hover {
-  background: var(--surface-hover);
-}
-
-.wall-consent-button.is-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: white;
-}
 </style>

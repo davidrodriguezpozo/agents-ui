@@ -28,16 +28,49 @@ function toggleTheme() {
 watch(() => route.path, () => { sidebarOpen.value = false })
 
 /**
- * The one route that gets no shell.
+ * How wide the navigation is, and whether it says anything.
  *
- * Fleet is meant to be left on a screen nobody is sitting at, so a sidebar on it
- * is 200px of navigation for a reader who is not going to navigate — and the
- * setup wizard, which every other page waits behind, would be a modal nobody is
- * there to dismiss. It renders immediately for the same reason: a wall whose
- * machine has just rebooted should come back to the wall, not to a spinner
- * waiting on a config read.
+ * Fleet used to get no shell at all: it was a wall left on a screen nobody was
+ * sitting at, so 200px of navigation was 200px spent on a reader who was not
+ * going to navigate. It stopped being that a while ago — it is the page this app
+ * gets opened *to*, read at a desk, and the price of no shell was that it was
+ * the one screen you could not leave except by knowing about Escape.
+ *
+ * So it is an ordinary page, and the sidebar collapses to its icons instead —
+ * which is the same 150px back on a dense screen, available everywhere, and
+ * reversible by a person who can see the control that did it.
+ *
+ * Remembered, because a width is a preference and re-collapsing it on every load
+ * is the kind of small tax that gets a feature turned off and left off.
  */
-const bare = computed(() => route.path === '/wall')
+const COLLAPSED_KEY = 'agents-ui:sidebar-collapsed'
+const sidebarCollapsed = ref(false)
+
+onMounted(() => {
+  try {
+    sidebarCollapsed.value = localStorage.getItem(COLLAPSED_KEY) === '1'
+  } catch {
+    // A blocked store costs the memory, not the control.
+  }
+})
+
+function toggleSidebar() {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  try {
+    localStorage.setItem(COLLAPSED_KEY, sidebarCollapsed.value ? '1' : '0')
+  } catch {
+    // As above.
+  }
+}
+
+/**
+ * The drawer wins over the preference.
+ *
+ * On a phone the sidebar is a drawer you slid open on purpose, and honouring a
+ * collapse there would answer that with 56px of icons — the one width that is
+ * useless when you have just asked to see the navigation.
+ */
+const narrow = computed(() => sidebarCollapsed.value && !sidebarOpen.value)
 
 /**
  * Sessions are in here for a reason. `inCurrentProject` is worked out on the
@@ -272,9 +305,7 @@ function badgeFor(to: string) {
 
 <template>
   <UApp>
-    <NuxtPage v-if="bare" />
-
-    <div v-else class="flex h-screen overflow-hidden" style="background: var(--surface-base);">
+    <div class="flex h-screen overflow-hidden" style="background: var(--surface-base);">
       <!-- Mobile hamburger (md:hidden) -->
       <button
         class="fixed top-4 left-4 z-30 md:hidden p-2 rounded-md cursor-pointer press-scale"
@@ -296,20 +327,20 @@ function badgeFor(to: string) {
 
       <!-- Sidebar -->
       <aside
-        class="sidebar w-[200px] shrink-0 flex flex-col relative h-full overflow-hidden fixed inset-y-0 left-0 z-40 -translate-x-full md:relative md:z-auto md:translate-x-0 transition-transform duration-200"
-        :class="{ 'translate-x-0': sidebarOpen }"
+        class="sidebar shrink-0 flex flex-col relative h-full overflow-hidden fixed inset-y-0 left-0 z-40 -translate-x-full md:relative md:z-auto md:translate-x-0 transition-[transform,width] duration-200"
+        :class="[narrow ? 'w-[56px]' : 'w-[200px]', { 'translate-x-0': sidebarOpen }]"
         style="background: var(--sidebar-bg); border-right: 1px solid var(--border-subtle);"
       >
 
         <!-- Brand -->
-        <div class="h-[56px] flex items-center gap-2.5 px-4 relative">
+        <div class="h-[56px] flex items-center gap-2.5 relative" :class="narrow ? 'px-3.5 justify-center' : 'px-4'">
           <div
-            class="size-7 rounded-md flex items-center justify-center relative"
+            class="size-7 rounded-md flex items-center justify-center relative shrink-0"
             style="background: var(--accent); border: 1px solid var(--accent);"
           >
             <UIcon name="i-lucide-bot" class="size-3.5" style="color: #ffffff;" />
           </div>
-          <div class="flex flex-col">
+          <div v-if="!narrow" class="flex flex-col">
             <span class="fs-sm font-semibold tracking-tight" style="color: var(--text-primary); font-family: var(--font-display);">
               Agents Studio
             </span>
@@ -320,13 +351,14 @@ function badgeFor(to: string) {
         </div>
 
         <!-- Primary Nav -->
-        <nav class="flex-1 px-2.5 pt-1 space-y-0.5 overflow-y-auto">
+        <nav class="flex-1 pt-1 space-y-0.5 overflow-y-auto overflow-x-hidden" :class="narrow ? 'px-2' : 'px-2.5'">
           <NuxtLink
             v-for="link in navLinks"
             :key="link.to"
             :to="link.to"
-            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
-            :class="{ 'nav-item--active': isActive(link.to) }"
+            class="nav-item group flex items-center gap-2.5 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
+            :class="[{ 'nav-item--active': isActive(link.to) }, narrow ? 'px-0 justify-center' : 'px-3']"
+            :title="narrow ? (attentionFor(link.to)?.title ?? link.label) : undefined"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
               fontWeight: isActive(link.to) ? '500' : '400',
@@ -339,24 +371,40 @@ function badgeFor(to: string) {
               class="absolute left-0 top-1/2 -translate-y-1/2 w-[2.5px] h-4 rounded-r-full"
               style="background: var(--accent);"
             />
-            <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
-            <span class="flex-1" style="font-family: var(--font-sans);">{{ link.label }}</span>
-            <!-- Something blocked outranks how many of a thing you own -->
-            <span
-              v-if="attentionFor(link.to)"
-              class="font-mono fs-micro tabular-nums px-1.5 rounded-full"
-              :style="attentionFor(link.to)!.style"
-              :title="attentionFor(link.to)!.title"
-            >
-              {{ attentionFor(link.to)!.count }}
+            <!--
+              Narrow keeps the icon and, on top of it, the one number that means
+              "look at this". A count that only exists at 200px would make the
+              collapsed sidebar quietly worse than the wide one at the single job
+              the badge is for.
+            -->
+            <span class="relative shrink-0 flex items-center justify-center">
+              <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
+              <span
+                v-if="narrow && attentionFor(link.to)"
+                class="absolute -top-1 -right-1.5 font-mono tabular-nums rounded-full px-1"
+                style="font-size: 8.5px; line-height: 1.35;"
+                :style="attentionFor(link.to)!.style"
+              >{{ attentionFor(link.to)!.count }}</span>
             </span>
-            <span
-              v-else-if="badgeFor(link.to)"
-              class="font-mono fs-micro tabular-nums transition-colors duration-150"
-              :style="{ color: isActive(link.to) ? 'var(--accent)' : 'var(--text-disabled)' }"
-            >
-              {{ badgeFor(link.to) }}
-            </span>
+            <template v-if="!narrow">
+              <span class="flex-1" style="font-family: var(--font-sans);">{{ link.label }}</span>
+              <!-- Something blocked outranks how many of a thing you own -->
+              <span
+                v-if="attentionFor(link.to)"
+                class="font-mono fs-micro tabular-nums px-1.5 rounded-full"
+                :style="attentionFor(link.to)!.style"
+                :title="attentionFor(link.to)!.title"
+              >
+                {{ attentionFor(link.to)!.count }}
+              </span>
+              <span
+                v-else-if="badgeFor(link.to)"
+                class="font-mono fs-micro tabular-nums transition-colors duration-150"
+                :style="{ color: isActive(link.to) ? 'var(--accent)' : 'var(--text-disabled)' }"
+              >
+                {{ badgeFor(link.to) }}
+              </span>
+            </template>
           </NuxtLink>
 
           <!-- Separator -->
@@ -366,7 +414,9 @@ function badgeFor(to: string) {
             v-for="link in navSecondary"
             :key="link.to"
             :to="link.to"
-            class="nav-item group flex items-center gap-2.5 px-3 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
+            class="nav-item group flex items-center gap-2.5 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
+            :class="narrow ? 'px-0 justify-center' : 'px-3'"
+            :title="narrow ? link.label : undefined"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
               fontWeight: isActive(link.to) ? '500' : '400',
@@ -379,29 +429,35 @@ function badgeFor(to: string) {
               style="background: var(--accent);"
             />
             <UIcon :name="link.icon" class="size-[15px] shrink-0 transition-colors duration-150" :style="{ color: isActive(link.to) ? 'var(--accent)' : undefined }" />
-            <span style="font-family: var(--font-sans);">{{ link.label }}</span>
+            <span v-if="!narrow" style="font-family: var(--font-sans);">{{ link.label }}</span>
           </NuxtLink>
         </nav>
 
         <!-- Search shortcut -->
-        <div class="px-2.5 pb-2.5">
+        <div class="pb-2.5" :class="narrow ? 'px-2' : 'px-2.5'">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer press-scale"
+            class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer press-scale"
+            :class="narrow ? 'px-0 justify-center' : 'px-3'"
+            :title="narrow ? 'Search — ⌘K' : undefined"
             style="color: var(--text-disabled); background: var(--input-bg); border: 1px solid var(--border-subtle);"
             @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-tertiary)'"
             @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-disabled)'"
             @click="showSearch = true"
           >
-            <UIcon name="i-lucide-search" class="size-3.5" />
-            <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Search</span>
-            <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘K</kbd>
+            <UIcon name="i-lucide-search" class="size-3.5 shrink-0" />
+            <template v-if="!narrow">
+              <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Search</span>
+              <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘K</kbd>
+            </template>
           </button>
         </div>
 
         <!-- Chat with Claude -->
-        <div class="px-2.5 pb-1">
+        <div class="pb-1" :class="narrow ? 'px-2' : 'px-2.5'">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer press-scale"
+            class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer press-scale"
+            :class="narrow ? 'px-0 justify-center' : 'px-3'"
+            :title="narrow ? 'Claude — ⌘J' : undefined"
             :style="{
               color: chatOpen ? 'var(--accent)' : 'var(--text-tertiary)',
               background: chatOpen ? 'var(--accent-muted)' : 'transparent',
@@ -416,42 +472,90 @@ function badgeFor(to: string) {
                 style="background: var(--accent);"
               />
             </div>
-            <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
-            <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘J</kbd>
+            <template v-if="!narrow">
+              <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
+              <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘J</kbd>
+            </template>
           </button>
         </div>
 
         <!-- Simple / advanced -->
-        <div class="px-2.5 pb-1">
+        <div class="pb-1" :class="narrow ? 'px-2' : 'px-2.5'">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
+            class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
+            :class="narrow ? 'px-0 justify-center' : 'px-3'"
             style="color: var(--text-tertiary);"
             :title="isSimple ? 'Show agents, commands, workflows and the graph' : 'Hide the advanced authoring tools'"
             @click="toggleMode"
           >
-            <UIcon :name="isSimple ? 'i-lucide-settings-2' : 'i-lucide-minimize-2'" class="size-4" />
-            <span class="fs-sm" style="font-family: var(--font-sans);">
+            <UIcon :name="isSimple ? 'i-lucide-settings-2' : 'i-lucide-minimize-2'" class="size-4 shrink-0" />
+            <span v-if="!narrow" class="fs-sm" style="font-family: var(--font-sans);">
               {{ isSimple ? 'Advanced tools' : 'Simple view' }}
             </span>
           </button>
         </div>
 
         <!-- Theme toggle -->
-        <div class="px-2.5 pb-1">
+        <div class="pb-1" :class="narrow ? 'px-2' : 'px-2.5'">
           <button
-            class="w-full flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
+            class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
+            :class="narrow ? 'px-0 justify-center' : 'px-3'"
             style="color: var(--text-tertiary);"
+            :title="narrow ? (colorMode.value === 'dark' ? 'Light mode' : 'Dark mode') : undefined"
             @click="toggleTheme"
           >
-            <UIcon :name="colorMode.value === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'" class="size-4" />
-            <span class="fs-sm" style="font-family: var(--font-sans);">
+            <UIcon :name="colorMode.value === 'dark' ? 'i-lucide-sun' : 'i-lucide-moon'" class="size-4 shrink-0" />
+            <span v-if="!narrow" class="fs-sm" style="font-family: var(--font-sans);">
               {{ colorMode.value === 'dark' ? 'Light mode' : 'Dark mode' }}
             </span>
           </button>
         </div>
 
-        <!-- Footer: working directory -->
-        <div class="px-2.5 pb-2.5" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
+        <!--
+          The control that did it, always visible.
+
+          Hidden behind a keyboard shortcut this would be a sidebar some people
+          discover is missing and cannot get back — which is the failure mode of
+          every collapsible panel, and the reason Fleet's no-shell version had to
+          go in the first place.
+        -->
+        <div class="pb-1 md:block hidden" :class="narrow ? 'px-2' : 'px-2.5'">
+          <button
+            class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
+            :class="narrow ? 'px-0 justify-center' : 'px-3'"
+            style="color: var(--text-tertiary);"
+            :title="narrow ? 'Widen the sidebar' : 'Collapse to icons'"
+            @click="toggleSidebar"
+          >
+            <UIcon
+              :name="narrow ? 'i-lucide-panel-left-open' : 'i-lucide-panel-left-close'"
+              class="size-4 shrink-0"
+            />
+            <span v-if="!narrow" class="fs-sm" style="font-family: var(--font-sans);">Collapse</span>
+          </button>
+        </div>
+
+        <!--
+          Footer: which project, and what this build is.
+
+          Collapsed it becomes one button, because every control in here needs
+          words to mean anything — a repository name, a scope, a version. An icon
+          for "Personal / Project" is a guess, and a sidebar that makes you guess
+          about where new files get written is worse than one that asks you to
+          widen it first.
+        -->
+        <div v-if="narrow" class="px-2 pb-2.5" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
+          <button
+            class="w-full flex items-center justify-center py-2 rounded-md transition-all duration-150 focus-ring press-scale"
+            style="color: var(--text-tertiary);"
+            :title="`${workingDir || 'No project'} — widen the sidebar to change it`"
+            @click="toggleSidebar"
+          >
+            <UIcon name="i-lucide-folder-git-2" class="size-4 shrink-0" />
+          </button>
+        </div>
+
+        <div v-else class="px-2.5 pb-2.5" style="border-top: 1px solid var(--border-subtle); padding-top: 0.75rem;">
           <!-- Only ever shown when the running build is behind what you have -->
           <div
             v-if="isStale"
