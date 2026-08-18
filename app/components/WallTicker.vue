@@ -23,12 +23,12 @@ const props = withDefaults(defineProps<{
   ticks: WallTick[]
   now: number
   /**
-   * One row instead of a column, for the strip under a cinema act.
+   * One row instead of a column, for the tape along the bottom of the wall.
    *
-   * The heartbeat has to survive every act, including the ones that are about
-   * last night — otherwise a rotation reads as a slideshow of a machine that has
-   * stopped. A single line of the newest few is the smallest thing that still
-   * says "this is happening now".
+   * The column version is the whole feed; this is the newest few on a single line,
+   * which is the smallest thing that still says "this is happening now". It exists
+   * because the wall's rail has no room for a column and still needs the
+   * heartbeat — without it a quiet minute reads as a machine that has stopped.
    */
   line?: boolean
 }>(), { line: false })
@@ -60,7 +60,13 @@ const lines = computed(() => (props.line ? props.ticks.slice(0, LINE_MAX) : prop
       </p>
     </TransitionGroup>
 
-    <p v-if="!lines.length" class="wall-tick-empty">Nothing is running.</p>
+    <!--
+      "No tool calls" rather than "nothing is running": a live run between two
+      calls — thinking, or waiting on a process — produces no ticks, and this sat
+      next to a table saying a session was working. A heartbeat that contradicts
+      the thing it is under is worse than a quiet one.
+    -->
+    <p v-if="!lines.length" class="wall-tick-empty">No tool calls right now.</p>
   </div>
 </template>
 

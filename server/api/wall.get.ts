@@ -8,7 +8,7 @@ import { readPreferences } from '../utils/preferences'
 import { describeWindow, isStale, readQuota, resetsAtMs } from '../utils/quota'
 import { readSchedules } from '../utils/schedules'
 import { mapLimit } from '../utils/pool'
-import { SETTLED_WINDOW_MS, type WallPrompt, type WallSnapshot, type WallTick, type WallTile } from '~/utils/wall'
+import { SETTLED_WINDOW_MS, type WallDay, type WallPrompt, type WallRitual, type WallSnapshot, type WallTick, type WallTile } from '~/utils/wall'
 
 /**
  * One poll for a screen that is never looked away from.
@@ -33,8 +33,11 @@ import { SETTLED_WINDOW_MS, type WallPrompt, type WallSnapshot, type WallTick, t
  * survives that gets read from disk.
  *
  * What it deliberately does not carry: anything that would need a model, and
- * anything from outside this machine. The inbox and reviews are somebody else's
- * poll budget, and neither belongs on a wall whose whole claim is immediacy.
+ * anything from outside this machine. Both of those are now *on* the wall — pull
+ * requests from `wallPulls.ts`, the inbox from its own store — and neither is
+ * here, which is the point. They arrive on their own far slower clock and stamped
+ * with their age, so this endpoint keeps the one property its poll rate depends
+ * on: everything in it is true of this second, and free to find out.
  */
 
 /** Enough to keep the disk busy, few enough to leave the server responsive. */
@@ -61,8 +64,15 @@ const NIGHT_WINDOW_MS = 24 * 3_600_000
 interface Money {
   at: number
   todayUsd: number
-  /** Runs in the last day — whether the night has anything in it to draw. */
-  runsLastDay: number
+  /**
+   * The last day, counted.
+   *
+   * Derived from the same read as the money rather than from a second one: the
+   * expensive part is collecting every run file, and once they are in hand
+   * counting how many failed is free. Asking twice for two figures out of one
+   * list would double the only costly thing this endpoint does.
+   */
+  day: WallDay
 }
 
 /**
@@ -82,7 +92,19 @@ async function readMoney(now: number, dayStart: number): Promise<Money> {
     runsSince(now - NIGHT_WINDOW_MS),
   ])
 
-  money = { at: now, todayUsd, runsLastDay: lastDay.length }
+  const hourAgo = now - 3_600_000
+
+  money = {
+    at: now,
+    todayUsd,
+    day: {
+      runs: lastDay.length,
+      failed: lastDay.filter(run => run.status === 'failed').length,
+      // `startedAt` rather than `createdAt`: runs queue per repository, and one
+      // asked for at breakfast that began ten minutes ago is throughput now.
+      lastHour: lastDay.filter(run => (run.startedAt ?? run.createdAt) >= hourAgo).length,
+    },
+  }
   return money
 }
 
@@ -98,6 +120,9 @@ const TICKER_MAX = 14
  * true count beside them.
  */
 const PROMPTS_PER_SESSION = 3
+
+/** Enough of the clock to plan the next hour by, and not a schedule listing. */
+const UPCOMING_MAX = 5
 
 /**
  * Whether this session could possibly be part of *now*, decided without
@@ -222,20 +247,25 @@ export default defineEventHandler(async (): Promise<WallSnapshot> => {
     .sort((a, b) => b.at - a.at)
 
   /**
-   * The next thing due on the clock. Triggered rituals are left out: they carry
-   * a recurrence so that removing the trigger leaves something behind, but the
-   * time on it is not when they will fire, and counting down to it would be a
-   * countdown to nothing.
+   * What the clock has queued, soonest first. Triggered rituals are left out:
+   * they carry a recurrence so that removing the trigger leaves something behind,
+   * but the time on it is not when they will fire, and counting down to it would
+   * be a countdown to nothing.
+   *
+   * Five rather than one. A screen read to decide what to do next has to tell
+   * "nothing until this evening" from "three things inside ten minutes", and the
+   * next item alone says the same thing in both cases.
    */
-  const nextRitual = schedules
+  const upcoming: WallRitual[] = schedules
     .filter(schedule => schedule.enabled && !schedule.trigger && schedule.nextRunAt && schedule.nextRunAt > now)
     .sort((a, b) => a.nextRunAt! - b.nextRunAt!)
+    .slice(0, UPCOMING_MAX)
     .map(schedule => ({
       id: schedule.id,
       title: schedule.title,
       at: schedule.nextRunAt!,
       repo: schedule.projectDir ? basename(schedule.projectDir) : undefined,
-    }))[0] ?? null
+    }))
 
   return {
     at: now,
@@ -247,7 +277,7 @@ export default defineEventHandler(async (): Promise<WallSnapshot> => {
     // The cap is read fresh — it is one small file, and a limit somebody has
     // just set should not take half a minute to appear on the screen.
     spend: { todayUsd: spent.todayUsd, capUsd: preferences.dailyCapUsd },
-    runsLastDay: spent.runsLastDay,
+    day: spent.day,
     quota: quota
       ? {
           status: quota.status,
@@ -257,7 +287,10 @@ export default defineEventHandler(async (): Promise<WallSnapshot> => {
           stale: isStale(quota, now),
         }
       : null,
-    nextRitual,
+    upcoming,
     pausedRituals: schedules.filter(schedule => !schedule.enabled && schedule.pausedReason).length,
+    // The denominator the table is a slice of: it draws *now*, and this says how
+    // much there is. A quiet screen reads the same with three sessions or thirty.
+    liveSessions: live.length,
   }
 })

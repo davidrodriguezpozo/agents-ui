@@ -141,16 +141,30 @@ export interface WallQuota {
   stale: boolean
 }
 
+/**
+ * The last day, counted.
+ *
+ * `failed` is here rather than left to be read off the chart because it is the
+ * one figure on this screen that is bad news, and bad news that has to be
+ * inferred from a colour is bad news nobody acts on.
+ */
+export interface WallDay {
+  runs: number
+  failed: number
+  /** Runs begun in the last hour, which is throughput now rather than average. */
+  lastHour: number
+}
+
 export interface WallSnapshot {
   at: number
   /**
    * The whole current fleet, uncapped.
    *
-   * Capping is the page's decision — it is the only party that knows how much
-   * room the screen has — and `takeTiles` reports what it could not fit. This
-   * carries everything so that count is honest: a wall showing twelve of
-   * nineteen sessions while looking exactly like a wall showing all twelve is
-   * the one failure that would make the whole thing untrustworthy.
+   * The table draws all of them and scrolls, which is what the screen turned out
+   * to be for. Anything that does cap a list — the panels in the rail — reports
+   * what it left out, and that is the rule this field exists to make possible: a
+   * screen showing four of eleven while looking exactly like a screen showing all
+   * four is the one failure that would make the whole thing untrustworthy.
    */
   tiles: WallTile[]
   ticker: WallTick[]
@@ -164,18 +178,32 @@ export interface WallSnapshot {
    */
   spend: { todayUsd: number; capUsd: number }
   /**
-   * Runs in the last day.
+   * The last day's work as figures rather than as a shape.
    *
-   * Only ever used to decide whether the night is worth a screen of its own in
-   * cinema mode. Answered here rather than by asking the chart, because the chart
-   * only knows once it has been drawn — and in a rotation it is not drawn until
-   * this has already decided to include it.
+   * These are what is left of the chart that used to run along the bottom of the
+   * wall. A picture answers *when*, which is a retrospective question and belongs
+   * on Now; three figures answer *how many* and *how many came to nothing*, which
+   * is all a screen about the present needs from yesterday.
    */
-  runsLastDay: number
+  day: WallDay
   quota: WallQuota | null
-  nextRitual: WallRitual | null
+  /**
+   * What the clock has queued, soonest first.
+   *
+   * More than the next one, because a screen read to plan the next hour needs to
+   * tell "nothing until six" from "three things in the next ten minutes", and
+   * only a list can say which of those it is.
+   */
+  upcoming: WallRitual[]
   /** Rituals the scheduler turned off because they had stopped working. */
   pausedRituals: number
+  /**
+   * Live sessions on this machine, including the ones too old to earn a row.
+   *
+   * The table shows *now*; this is the denominator it is a slice of. Without it a
+   * quiet screen reads the same whether there are three sessions or thirty.
+   */
+  liveSessions: number
 }
 
 /**
@@ -196,12 +224,6 @@ export const URGENCY_LABELS: Record<WallUrgency, string> = {
   working: 'Working',
   settled: 'Settled',
 }
-
-/**
- * A wall holds what a wall holds. Twelve tiles is about the point where a
- * 1080p screen at four feet stops being glanceable and starts being a table.
- */
-export const TILE_CAP = 12
 
 /** How long since it moved before a session stops being part of "now". */
 export const SETTLED_WINDOW_MS = 12 * 3_600_000
@@ -251,11 +273,6 @@ export function orderTiles<T extends WallTile>(tiles: T[]): T[] {
     if (byUrgency !== 0) return byUrgency
     return b.updatedAt - a.updatedAt
   })
-}
-
-export function takeTiles<T extends WallTile>(tiles: T[], cap = TILE_CAP): { shown: T[]; hidden: number } {
-  const ordered = orderTiles(tiles)
-  return { shown: ordered.slice(0, cap), hidden: Math.max(0, ordered.length - cap) }
 }
 
 /**
@@ -380,7 +397,9 @@ export function moneyLabel(usd: number): string {
  */
 export function spendMeter(todayUsd: number, capUsd: number): Meter {
   if (!capUsd || capUsd <= 0) {
-    return { fraction: 0, label: `${moneyLabel(todayUsd)} today`, tone: 'quiet' }
+    // No "today" on the end: the meter this fills is captioned Today, and the
+    // header read "TODAY $48 today".
+    return { fraction: 0, label: moneyLabel(todayUsd), tone: 'quiet' }
   }
 
   const fraction = Math.max(0, Math.min(1, todayUsd / capUsd))
@@ -475,4 +494,206 @@ export function untilLabel(at: number, now: number): string {
   if (hours < 24) return `in ${hours}h`
 
   return `in ${Math.round(hours / 24)}d`
+}
+
+/**
+ * What is waiting for you somewhere that is not this machine.
+ *
+ * The snapshot above is deliberately parochial: everything in it is a field on a
+ * record or a run already in memory, which is what lets it be polled every couple
+ * of seconds forever. None of that is true of a pull request. It lives on
+ * github.com, it costs four `gh` calls per repository to read, and it changes on
+ * somebody else's schedule rather than this machine's.
+ *
+ * That is an argument for reading it *differently*, not for leaving it off. Most
+ * of what actually stops a day is not in a session at all — a review requested
+ * while you were inside something else, your own branch red for two hours, a
+ * thread in Slack somebody is waiting on. A screen that reports twenty agents in
+ * detail and none of that is a screen you still have to check four tabs beside.
+ *
+ * So it arrives on its own clock: cached on the server for a minute, polled once
+ * a minute rather than every two seconds, and stamped so the screen can say how
+ * old it is instead of implying it is now.
+ */
+
+/**
+ * Where a pull request has got to, in one word.
+ *
+ * Mirrors `PullState` in `server/utils/reviews.ts` — deliberately, and safely:
+ * `wallPulls.ts` assigns the server's own verdict into this field, so the two
+ * drifting apart is a type error at build time rather than a wrong badge.
+ */
+export type WallPullState =
+  | 'draft'
+  | 'conflicted'
+  | 'changes-requested'
+  | 'unanswered'
+  | 'checks-failing'
+  | 'checks-running'
+  | 'ready'
+  | 'awaiting-review'
+
+/**
+ * One pull request, flattened for a row.
+ *
+ * The verdict is not recomputed here. It arrives already decided by the same
+ * function the reviews page draws, because two implementations of "is this on me"
+ * on one screen is how a wall and the page it links to start disagreeing.
+ */
+export interface WallPull {
+  /** The project's name on this machine, which is what the table's rows say too. */
+  repo: string
+  /** Its path, so a row can be told which checkout it belongs to. */
+  repoDir: string
+  number: number
+  title: string
+  url: string
+  author: string
+  /** Whether you opened it. The two lists read completely differently. */
+  mine: boolean
+  draft: boolean
+  state: WallPullState
+  /** The badge, two or three words, as the reviews page words it. */
+  label: string
+  /** The line under it, when there is more to say. */
+  detail: string
+  /** Whether this does not move until you do something. */
+  onYou: boolean
+  createdAt: number
+  updatedAt: number
+  changedFiles: number
+  checks: 'pending' | 'passing' | 'failing' | 'none'
+  /** Review comments nobody resolved, or null when GitHub could not be asked. */
+  unresolved: number | null
+  /** Who has been asked and has not answered. Logins and team slugs. */
+  awaiting: string[]
+}
+
+/** A repository that could not be read, and why — never silently absent. */
+export interface WallPullProblem {
+  repo: string
+  reason: string
+}
+
+export interface WallPullsReading {
+  /** When this was read. The screen says it, because it is up to a minute old. */
+  at: number
+  /** How many projects answered. Zero with problems is very different from zero. */
+  repos: number
+  /**
+   * Projects passed over because they are not GitHub repositories at all.
+   *
+   * Counted rather than listed, and kept apart from `problems`: a notes folder
+   * registered as a project is not a failure to read, and a screen that warns
+   * about it every minute is a screen whose warnings get ignored.
+   */
+  skipped: number
+  problems: WallPullProblem[]
+  /** Asked of you, across every project. */
+  reviewing: WallPull[]
+  /** Yours, still open. */
+  mine: WallPull[]
+  summary: WallPullsSummary
+}
+
+export interface WallPullsSummary {
+  /** Will not move until you do something, either list. */
+  onYou: number
+  toReview: number
+  /** Yours, approved and green. */
+  toMerge: number
+  /** Yours, waiting on somebody else. */
+  waiting: number
+  /** Yours with CI red, which is the one worth a colour of its own. */
+  failing: number
+}
+
+export const EMPTY_PULLS: WallPullsReading = {
+  at: 0,
+  repos: 0,
+  skipped: 0,
+  problems: [],
+  reviewing: [],
+  mine: [],
+  summary: { onYou: 0, toReview: 0, toMerge: 0, waiting: 0, failing: 0 },
+}
+
+/**
+ * The colour a state earns.
+ *
+ * Coarser than the eight states, for the reason `WallUrgency` is coarser than the
+ * session badge: across a room, or down a list of nine rows, more than four
+ * meanings in a colour is not a code any more.
+ */
+export type WallTone = 'quiet' | 'accent' | 'success' | 'warning' | 'error'
+
+export const PULL_TONES: Record<WallPullState, WallTone> = {
+  conflicted: 'error',
+  'checks-failing': 'error',
+  'changes-requested': 'warning',
+  unanswered: 'warning',
+  'awaiting-review': 'accent',
+  ready: 'success',
+  'checks-running': 'quiet',
+  draft: 'quiet',
+}
+
+/**
+ * On you first, then whichever has been sitting longest.
+ *
+ * Age rather than last activity, and the reviews page makes the same call for the
+ * same reason: a pull request nobody has touched in a week is the one going bad,
+ * and sorting by activity buries it under whatever somebody pushed to five
+ * minutes ago.
+ */
+export function orderPulls(pulls: WallPull[]): WallPull[] {
+  return [...pulls].sort((a, b) => (Number(b.onYou) - Number(a.onYou)) || (a.createdAt - b.createdAt))
+}
+
+/**
+ * As many as the panel has room for, and how many it could not fit.
+ *
+ * The count is the whole point — see `WallSnapshot.tiles`. A panel showing four
+ * of eleven reviews looks exactly like a panel showing all four, and that is the
+ * one failure that would make somebody stop believing the screen.
+ */
+export function takeSome<T>(items: T[], cap: number): { shown: T[]; hidden: number } {
+  return { shown: items.slice(0, cap), hidden: Math.max(0, items.length - cap) }
+}
+
+/** `20m`, `5h`, `3d` — how long something has been sitting, in one column. */
+export function sinceLabel(at: number, now: number): string {
+  const ms = Math.max(0, now - at)
+  const minutes = Math.floor(ms / 60_000)
+  if (minutes < 1) return 'now'
+  if (minutes < 60) return `${minutes}m`
+
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h`
+
+  return `${Math.floor(hours / 24)}d`
+}
+
+/**
+ * How long ago somebody last went and looked.
+ *
+ * Says "never" rather than nothing, because an inbox that has never been checked
+ * and an inbox with nothing in it look identical on a screen and are opposite
+ * facts: one is good news and the other is a feature that was never switched on.
+ */
+export function checkedLabel(at: number | undefined, now: number): string {
+  return at ? `checked ${sinceLabel(at, now)} ago` : 'never checked'
+}
+
+/**
+ * How stale a reading off the network is, in the words a stamp wants.
+ *
+ * Everything else on this screen is a couple of seconds old and does not have to
+ * say so. This is up to a minute old by design, and a panel that does not admit
+ * that is a panel claiming a review request arrived the moment it appeared.
+ */
+export function asOfLabel(at: number, now: number): string {
+  if (!at) return 'not read yet'
+  const seconds = Math.floor(Math.max(0, now - at) / 1000)
+  return seconds < 60 ? `as of ${seconds}s ago` : `as of ${sinceLabel(at, now)} ago`
 }

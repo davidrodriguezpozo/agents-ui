@@ -4,7 +4,6 @@ import {
   countUrgency,
   groupByRepo,
   withDetail,
-  TILE_CAP,
   elapsedLabel,
   isCurrent,
   landedLabel,
@@ -12,9 +11,15 @@ import {
   orderTiles,
   quotaMeter,
   spendMeter,
-  takeTiles,
+  takeSome,
+  asOfLabel,
+  checkedLabel,
+  orderPulls,
+  sinceLabel,
+  PULL_TONES,
   untilLabel,
   urgencyOf,
+  type WallPull,
   type WallTile,
 } from '../app/utils/wall'
 
@@ -28,6 +33,8 @@ import {
 
 const NOW = new Date(2026, 7, 17, 9, 0, 0).getTime()
 const MINUTE = 60_000
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
 
 function tile(over: Partial<WallTile> = {}): WallTile {
   return {
@@ -120,26 +127,27 @@ describe('orderTiles', () => {
   })
 })
 
-describe('takeTiles', () => {
+describe('takeSome', () => {
   it('reports what it could not show rather than dropping it silently', () => {
-    const tiles = Array.from({ length: TILE_CAP + 7 }, () => tile({ activity: 'working' }))
-    const { shown, hidden } = takeTiles(tiles)
+    const { shown, hidden } = takeSome(Array.from({ length: 12 }, (_, i) => i), 5)
 
-    expect(shown).toHaveLength(TILE_CAP)
+    expect(shown).toHaveLength(5)
     expect(hidden).toBe(7)
   })
 
-  it('keeps the urgent ones when it has to choose', () => {
-    const working = Array.from({ length: TILE_CAP }, () => tile({ activity: 'working', updatedAt: NOW }))
+  it('keeps the urgent ones when a capped panel has to choose', () => {
+    // The cap is only safe because whatever is being capped was ordered first:
+    // five working rows and a blocked one, cut to five, must keep the blocked one.
+    const working = Array.from({ length: 5 }, () => tile({ activity: 'working', updatedAt: NOW }))
     const blocked = tile({ activity: 'awaiting-permission', pending: 1, updatedAt: NOW - 60 * MINUTE, title: 'blocked' })
 
-    const { shown, hidden } = takeTiles([...working, blocked])
+    const { shown, hidden } = takeSome(orderTiles([...working, blocked]), 5)
     expect(shown[0]!.title).toBe('blocked')
     expect(hidden).toBe(1)
   })
 
   it('never reports a negative remainder', () => {
-    expect(takeTiles([tile()]).hidden).toBe(0)
+    expect(takeSome([tile()], 5).hidden).toBe(0)
   })
 })
 
@@ -162,7 +170,8 @@ describe('spendMeter', () => {
   it('draws nothing against a cap nobody set', () => {
     const meter = spendMeter(1.24, 0)
     expect(meter.fraction).toBe(0)
-    expect(meter.label).toBe('$1.24 today')
+    // Just the figure: the meter it fills is already captioned "Today".
+    expect(meter.label).toBe('$1.24')
     expect(meter.tone).toBe('quiet')
   })
 
@@ -183,7 +192,7 @@ describe('spendMeter', () => {
   })
 
   it('says what a fraction of a cent is rather than rounding it to nothing', () => {
-    expect(spendMeter(0.004, 0).label).toBe('<$0.01 today')
+    expect(spendMeter(0.004, 0).label).toBe('<$0.01')
   })
 })
 
@@ -331,5 +340,110 @@ describe('attaching what git knows', () => {
     const rows = withDetail([tile({ sessionId: 'a', activity: 'working' })], new Map([['a', { changedFiles: 1 }]]))
     expect(rows[0]!.activity).toBe('working')
     expect(rows[0]!.detail?.changedFiles).toBe(1)
+  })
+})
+
+/**
+ * The half of the screen that comes off the network.
+ *
+ * Two decisions matter here and neither is about pull requests. The first is
+ * ordering: a panel with room for five rows is only safe if the five it keeps are
+ * the five that need somebody, and that is `orderPulls` rather than the panel. The
+ * second is time — this data is up to a minute old, and every label that could
+ * make it look current is tested for the case where it should not.
+ */
+
+function pull(over: Partial<WallPull> = {}): WallPull {
+  return {
+    repo: 'agents-ui',
+    repoDir: '/repos/agents-ui',
+    number: 7,
+    title: 'Make it faster',
+    url: `https://github.com/o/r/pull/${over.number ?? 7}`,
+    author: 'someone',
+    mine: false,
+    draft: false,
+    state: 'awaiting-review',
+    label: 'Your review',
+    detail: 'Nobody has reviewed it yet',
+    onYou: false,
+    createdAt: NOW - 60 * MINUTE,
+    updatedAt: NOW - MINUTE,
+    changedFiles: 3,
+    checks: 'passing',
+    unresolved: 0,
+    awaiting: [],
+    ...over,
+  }
+}
+
+describe('orderPulls', () => {
+  it('puts what is on you first, whatever its age', () => {
+    const old = pull({ number: 1, onYou: false, createdAt: NOW - 20 * DAY })
+    const mine = pull({ number: 2, onYou: true, createdAt: NOW - MINUTE })
+
+    expect(orderPulls([old, mine]).map(p => p.number)).toEqual([2, 1])
+  })
+
+  it('breaks ties by which has been sitting longest, not by last activity', () => {
+    // A stale review request somebody rebased five minutes ago must not read as
+    // the freshest thing in the list.
+    const stale = pull({ number: 1, createdAt: NOW - 9 * DAY, updatedAt: NOW })
+    const recent = pull({ number: 2, createdAt: NOW - HOUR, updatedAt: NOW - HOUR })
+
+    expect(orderPulls([recent, stale]).map(p => p.number)).toEqual([1, 2])
+  })
+
+  it('does not mutate what it was given', () => {
+    const pulls = [pull({ number: 1 }), pull({ number: 2, onYou: true })]
+    orderPulls(pulls)
+    expect(pulls.map(p => p.number)).toEqual([1, 2])
+  })
+})
+
+describe('PULL_TONES', () => {
+  it('reserves red for the two states nothing downstream of is reliable', () => {
+    expect(PULL_TONES.conflicted).toBe('error')
+    expect(PULL_TONES['checks-failing']).toBe('error')
+  })
+
+  it('does not colour the states there is nothing to do about', () => {
+    expect(PULL_TONES['checks-running']).toBe('quiet')
+    expect(PULL_TONES.draft).toBe('quiet')
+  })
+})
+
+describe('sinceLabel', () => {
+  it('reads in the largest unit that still says something', () => {
+    expect(sinceLabel(NOW - 20 * MINUTE, NOW)).toBe('20m')
+    expect(sinceLabel(NOW - 5 * HOUR, NOW)).toBe('5h')
+    expect(sinceLabel(NOW - 3 * DAY, NOW)).toBe('3d')
+  })
+
+  it('says now rather than a fraction of a minute', () => {
+    expect(sinceLabel(NOW - 3_000, NOW)).toBe('now')
+  })
+
+  it('never counts backwards off a clock that is slightly ahead', () => {
+    expect(sinceLabel(NOW + 5_000, NOW)).toBe('now')
+  })
+})
+
+describe('checkedLabel', () => {
+  it('tells never-asked apart from nothing-found', () => {
+    // The two look identical in an empty panel and are opposite facts.
+    expect(checkedLabel(undefined, NOW)).toBe('never checked')
+    expect(checkedLabel(NOW - 3 * HOUR, NOW)).toBe('checked 3h ago')
+  })
+})
+
+describe('asOfLabel', () => {
+  it('counts seconds while the reading is fresh, so a minute-old one is legible', () => {
+    expect(asOfLabel(NOW - 12_000, NOW)).toBe('as of 12s ago')
+    expect(asOfLabel(NOW - 4 * MINUTE, NOW)).toBe('as of 4m ago')
+  })
+
+  it('says it has not been read rather than claiming it was read at the epoch', () => {
+    expect(asOfLabel(0, NOW)).toBe('not read yet')
   })
 })

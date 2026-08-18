@@ -10,29 +10,22 @@ import { describe as say, matchProject, needsConfirmation, parseCommand } from '
  * an allowed one.
  */
 
-describe('moving the wall', () => {
-  it('takes the acts by several names', () => {
-    expect(parseCommand('show me the fleet')).toEqual({ kind: 'act', act: 'fleet' })
-    expect(parseCommand('show the night')).toEqual({ kind: 'act', act: 'night' })
-    expect(parseCommand('show what landed')).toEqual({ kind: 'act', act: 'landed' })
-    expect(parseCommand('show me what needs me')).toEqual({ kind: 'act', act: 'needs-you' })
+describe('what it no longer answers', () => {
+  /**
+   * The rotation went with cinema mode, and its phrases went with it. Asserted
+   * rather than deleted, because the important half is what these must *not*
+   * become: a phrase that used to move a screen and now falls through to the
+   * rest of the grammar is one that could land somewhere that acts.
+   */
+  it('reports a request to look at something as not understood', () => {
+    for (const said of ['show me the fleet', 'show the night', 'next', 'go back', 'carry on']) {
+      expect(parseCommand(said).kind, said).toBe('unknown')
+    }
   })
 
-  it('ignores the way people address a screen', () => {
-    expect(parseCommand('Hey Claude, show the fleet.')).toEqual({ kind: 'act', act: 'fleet' })
-    expect(parseCommand('ok fleet — show me the night')).toEqual({ kind: 'act', act: 'night' })
-  })
-
-  it('steps and pauses the rotation', () => {
-    expect(parseCommand('next')).toEqual({ kind: 'rotation', move: 'next' })
-    expect(parseCommand('go back')).toEqual({ kind: 'rotation', move: 'previous' })
-    expect(parseCommand('pause')).toEqual({ kind: 'rotation', move: 'pause' })
-    expect(parseCommand('carry on')).toEqual({ kind: 'rotation', move: 'resume' })
-  })
-
-  it('does not ask permission to do something a wait would undo', () => {
-    expect(needsConfirmation(parseCommand('next'))).toBe(false)
+  it('does not ask a hand to confirm something it will not do anyway', () => {
     expect(needsConfirmation(parseCommand('show the fleet'))).toBe(false)
+    expect(needsConfirmation(parseCommand('next'))).toBe(false)
   })
 })
 
@@ -119,9 +112,11 @@ describe('what it will not do', () => {
   })
 
   it('tells a question about landing apart from an order to land', () => {
-    // The past tense is how people ask; the imperative is the thing refused.
-    expect(parseCommand('what landed today')).toEqual({ kind: 'act', act: 'landed' })
-    expect(parseCommand('whats running')).toEqual({ kind: 'act', act: 'fleet' })
+    // The past tense is how people ask, and asking is not refused — which is why
+    // `landed` is deliberately missing from the merge pattern. Nothing answers the
+    // question any more, so "not understood" is the honest outcome; being *refused*
+    // would not be, and that is what this guards.
+    expect(parseCommand('what landed today').kind).not.toBe('refused')
     expect(parseCommand('land it').kind).toBe('refused')
     expect(parseCommand('land the billing branch').kind).toBe('refused')
   })

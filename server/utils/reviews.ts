@@ -643,10 +643,35 @@ async function readThreadCounts(
   return out
 }
 
+/**
+ * Why a reading could not be taken, as something other than prose.
+ *
+ * The reason is written for a person and is the only thing the reviews page needs.
+ * A caller reading *several* repositories needs to tell these apart rather than
+ * match on the sentence: `not-github` is an ordinary fact about a folder that
+ * happens not to be a GitHub project, and `no-auth` is something somebody has to
+ * go and fix. See `wallPulls.ts`, which reports the second and stays quiet about
+ * the first — a screen that warns about a repository forever, for a state that is
+ * not a fault, is a screen whose warnings get ignored.
+ */
+export type PullsRefusal =
+  /** No project directory was given. */
+  | 'no-project'
+  /** `gh` is not installed. */
+  | 'no-gh'
+  /** `gh` is installed and not signed in. */
+  | 'no-auth'
+  /** The folder has no GitHub repository behind it. Not a fault. */
+  | 'not-github'
+  /** GitHub itself could not be reached. */
+  | 'unreachable'
+
 export interface PullsReading {
   /** False when the question could not be asked, with `reason` saying why. */
   ok: boolean
   reason?: string
+  /** Which kind of refusal it was, for a caller reading more than one repository. */
+  refusal?: PullsRefusal
   /** `owner/name`, so the page can say which repository it is talking about. */
   repo: string | null
   /** Your login, which is what "mine" is decided against. */
@@ -660,8 +685,8 @@ export interface PullsReading {
 
 const EMPTY_SUMMARY: PullsSummary = { onYou: 0, toReview: 0, toMerge: 0, waiting: 0 }
 
-function unavailable(reason: string): PullsReading {
-  return { ok: false, reason, repo: null, viewer: null, reviewing: [], mine: [], summary: EMPTY_SUMMARY, readAt: Date.now() }
+function unavailable(refusal: PullsRefusal, reason: string): PullsReading {
+  return { ok: false, refusal, reason, repo: null, viewer: null, reviewing: [], mine: [], summary: EMPTY_SUMMARY, readAt: Date.now() }
 }
 
 /**
@@ -673,27 +698,27 @@ function unavailable(reason: string): PullsReading {
  */
 export async function readPulls(repoDir: string | null): Promise<PullsReading> {
   if (!repoDir || !existsSync(repoDir)) {
-    return unavailable('Pick a project folder first — pull requests are read from its git remote.')
+    return unavailable('no-project', 'Pick a project folder first — pull requests are read from its git remote.')
   }
 
   try {
     await exec('gh', ['--version'], { timeout: 10_000 })
   } catch {
-    return unavailable('The GitHub CLI (`gh`) is not installed, so there is nothing to read pull requests with.')
+    return unavailable('no-gh', 'The GitHub CLI (`gh`) is not installed, so there is nothing to read pull requests with.')
   }
 
   let viewer: string
   try {
     viewer = (await gh(repoDir, ['api', 'user', '--jq', '.login'], 20_000)).trim()
   } catch {
-    return unavailable('The GitHub CLI is installed but not signed in. Run `gh auth login` and try again.')
+    return unavailable('no-auth', 'The GitHub CLI is installed but not signed in. Run `gh auth login` and try again.')
   }
 
   let nameWithOwner: string
   try {
     nameWithOwner = JSON.parse(await gh(repoDir, ['repo', 'view', '--json', 'nameWithOwner']))?.nameWithOwner ?? ''
   } catch {
-    return unavailable('This project has no GitHub repository behind it, so there are no pull requests to read.')
+    return unavailable('not-github', 'This project has no GitHub repository behind it, so there are no pull requests to read.')
   }
 
   const [owner = '', name = ''] = nameWithOwner.split('/')
@@ -704,7 +729,7 @@ export async function readPulls(repoDir: string | null): Promise<PullsReading> {
   ])
 
   if (!reviewing && !mine) {
-    return unavailable(`GitHub could not be reached for ${nameWithOwner}. The list below is not empty — it is unknown.`)
+    return unavailable('unreachable', `GitHub could not be reached for ${nameWithOwner}. The list below is not empty — it is unknown.`)
   }
 
   const found = [...(reviewing ?? []), ...(mine ?? [])]

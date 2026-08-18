@@ -1,5 +1,3 @@
-import type { ActId } from '~/utils/cinema'
-
 /**
  * What the wall will and will not do when spoken to.
  *
@@ -40,9 +38,6 @@ import type { ActId } from '~/utils/cinema'
  */
 
 export type VoiceCommand =
-  /** Move the wall's rotation. Costs nothing, so it needs no confirmation. */
-  | { kind: 'act'; act: ActId }
-  | { kind: 'rotation'; move: 'next' | 'previous' | 'pause' | 'resume' }
   /** Start a session. Cuts a worktree, spends money, runs an agent. */
   | { kind: 'session'; instruction: string; project?: string }
   /** Stop what is running — the brake, which is why it is in the grammar. */
@@ -93,14 +88,6 @@ const REFUSALS: { pattern: RegExp; verb: string; why: string }[] = [
   },
 ]
 
-/** Which act a phrase is asking for. Deliberately generous about wording. */
-const ACT_WORDS: { pattern: RegExp; act: ActId }[] = [
-  { pattern: /\b(fleet|sessions|what'?s running|whats running)\b/, act: 'fleet' },
-  { pattern: /\b(night|last night|timeline|overnight)\b/, act: 'night' },
-  { pattern: /\b(landed|shipped|what landed|merged today)\b/, act: 'landed' },
-  { pattern: /\b(needs me|needs you|waiting|blocked|attention)\b/, act: 'needs-you' },
-]
-
 /**
  * Lead-ins people say to a screen and mean nothing by.
  *
@@ -129,41 +116,28 @@ function projectIn(text: string): { project?: string; rest: string } {
   return { project: match[1]!.trim(), rest: text.slice(0, match.index).trim() }
 }
 
-/** "show me…", "go to…", "what landed" — a request to look at something. */
-const LOOKING = /^(show|go to|switch to|display|let'?s see|see|what|whats|what'?s)\b/
-
 /**
  * A sentence, understood — or honestly reported as not.
  *
  * The order is the safety property, and it is not the obvious one.
  *
- * **Looking comes first**, because changing which act is on screen cannot do
- * anything: a phrase that merely asks to see something is answered before any
- * refusal has a chance to fire. That is what lets "what landed today" be a
- * question rather than an order to land something — the past tense of the thing
- * this refuses is the ordinary way to ask about it.
- *
- * **Refusals come next**, ahead of the two commands that act. "Start a session
+ * **Refusals come first**, ahead of the two commands that act. "Start a session
  * that merges the billing branch" is a session request wrapped round a verb this
  * will not do, and reading it as a session would launch an agent whose entire
  * instruction is the refused thing. That sentence is the reason this ordering is
  * written down rather than left to chance.
+ *
+ * **Nothing here navigates.** The grammar used to move the wall's rotation, and
+ * those phrases were answered ahead of the refusals because looking at something
+ * cannot do anything. The rotation is gone and so are they: a screen with one
+ * layout has nowhere to be sent. What survives of that reasoning is the reason
+ * "landed" is absent from the merge refusal — the past tense is how people ask a
+ * question, and refusing a question is nonsense.
  */
 export function parseCommand(transcript: string): VoiceCommand {
   const heard = transcript.trim()
   const text = normalise(heard)
   if (!text) return { kind: 'unknown', heard }
-
-  if (/^(next|forward|skip)\b/.test(text)) return { kind: 'rotation', move: 'next' }
-  if (/^(back|previous|go back)\b/.test(text)) return { kind: 'rotation', move: 'previous' }
-  if (/^(pause|hold|stop rotating|wait)\b/.test(text)) return { kind: 'rotation', move: 'pause' }
-  if (/^(resume|continue|carry on|play)\b/.test(text)) return { kind: 'rotation', move: 'resume' }
-
-  if (LOOKING.test(text)) {
-    for (const { pattern, act } of ACT_WORDS) {
-      if (pattern.test(text)) return { kind: 'act', act }
-    }
-  }
 
   for (const { pattern, verb, why } of REFUSALS) {
     if (pattern.test(text)) return { kind: 'refused', verb, why }
@@ -198,10 +172,11 @@ export function parseCommand(transcript: string): VoiceCommand {
 /**
  * Whether a hand has to agree.
  *
- * Only the two commands that change something on the machine. Moving the
- * rotation is reversible by waiting twenty seconds, so asking about it would
- * teach people to confirm without reading — which is the habit that makes the
- * confirmation on the other two worthless.
+ * Both of the commands that survive change something on this machine, so both
+ * are confirmed. It stays a function rather than becoming `true` because the
+ * distinction is the rule — anything added to this grammar that does not change
+ * anything belongs on the other side of it, and a hard-coded `true` is how the
+ * next person adds something that does and never notices.
  */
 export function needsConfirmation(command: VoiceCommand): boolean {
   return command.kind === 'session' || command.kind === 'stop'
@@ -210,10 +185,6 @@ export function needsConfirmation(command: VoiceCommand): boolean {
 /** What the screen shows, and what is said back if speech is on. */
 export function describe(command: VoiceCommand): string {
   switch (command.kind) {
-    case 'act':
-      return `Show ${command.act === 'needs-you' ? 'what needs you' : `the ${command.act}`}`
-    case 'rotation':
-      return { next: 'Next', previous: 'Back', pause: 'Paused', resume: 'Playing' }[command.move]
     case 'session':
       return command.project
         ? `Start a session in ${command.project}: ${command.instruction}`

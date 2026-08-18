@@ -1,21 +1,25 @@
 <script setup lang="ts">
 import {
   URGENCY_LABELS,
+  asOfLabel,
   countUrgency,
   groupByRepo,
   isCurrent,
   landedLabel,
   moodOf,
+  orderPulls,
   orderTiles,
   quotaMeter,
+  sinceLabel,
   spendMeter,
-  takeTiles,
+  takeSome,
   untilLabel,
   urgencyOf,
   withDetail,
   type WallDetail,
   type WallPrompt,
   type WallTile,
+  type WallTone,
   type WallUrgency,
 } from '~/utils/wall'
 import { errorMessage } from '~/utils/errors'
@@ -29,48 +33,48 @@ import {
 } from '~/utils/voice'
 
 /**
- * Fleet — the wall.
+ * Fleet — mission control.
  *
- * A screen to leave on. Not a page somebody navigates to with a question in
- * mind, which is what every other surface here is: this one is read at a glance,
- * from across a room, by somebody who was walking past on their way to
- * something else. That single difference decides everything about it.
+ * It began as a wall: cards, big type, a rotation of acts, a screen to leave on
+ * at the end of a room. That is not what it became. It is the page this app gets
+ * opened *to* with work already running, read at a desk from two feet away, to
+ * answer one question — what should I look at next — and everything below follows
+ * from taking that seriously instead of the poster it started as.
  *
- * **No chrome.** The sidebar is suppressed for this route in `app.vue`, because
- * a wall showing its own navigation is a wall admitting it expects to be left.
- * Escape gets you back and `F` goes fullscreen; the cursor fades after a few
- * still seconds, since a mouse pointer frozen over a display all afternoon is
- * the one thing on it that is not information.
+ * **Density is the feature.** Twenty sessions across four repositories, nine pull
+ * requests, whatever Slack found, the clock's next five jobs and the day's
+ * throughput, all at once and without a click. The alternative is not a calmer
+ * screen, it is four tabs and a habit of remembering to check them, which is the
+ * thing this app exists to not require.
  *
- * **Three questions, in order.** Is anything wrong; is anything happening; what
- * has it cost. The left is the fleet, ordered so the first answer is always the
- * top row. The right rail is what is waiting on a person, and what landed. The
- * strip along the bottom is the night, which is the only part of this that looks
- * backwards.
+ * **Three clocks, and each panel says which one it is on.** The fleet is two
+ * seconds old and free to know — see `/api/wall`. Pull requests are up to a
+ * minute old and cost `gh` per repository — see `wallPulls.ts`. The inbox is
+ * however long ago somebody last spent two minutes asking Slack. Drawn
+ * identically those three would all read as *now*, so the ones that are not say
+ * so in their heading. A screen that hides its own staleness is the failure mode
+ * of every dashboard, and it is worse than being slow.
  *
- * **It is a table, not a poster.** It began as a wall of cards and is used as an
- * orchestration screen — twenty sessions across four repositories, read at a desk,
- * to decide what to look at next. So the default view is dense rows in aligned
- * columns, grouped by repository, and it scrolls: a screen somebody sits at can,
- * where a wall cannot. The cards survive in cinema mode, which is the one place
- * big type is the right answer.
+ * **It can be acted on.** A row waiting on a permission answer carries the answer;
+ * a running one carries its brake; an inbox source carries the button that goes
+ * and looks again. Everything else reports, and reporting is fine — but a screen
+ * where nothing can be done is a screen you leave to go and do it somewhere else.
  *
- * **And it can be acted on.** A row that is waiting on a person carries the answer
- * to what it is waiting for, and a running one carries its brake. Everything else
- * here reports; these two do something, which is the whole difference between a
- * dashboard and a tool.
+ * **What it will not do is start work off a stale reading.** Pull request rows
+ * link to GitHub rather than turning into sessions, deliberately: the reviews page
+ * re-reads the pull request before it acts, knows which project it belongs to and
+ * reports a budget refusal properly, and none of that is true of a row that may be
+ * a minute old and may belong to a repository this screen does not have selected.
  *
- * **It says when it has stopped knowing.** The characteristic failure of an
- * unattended screen is not being wrong, it is being nine minutes old while
- * looking exactly as it did when it was right. So the header carries the
- * connection, and a wall whose server has gone away says so in words.
+ * **It says when it has stopped knowing.** The characteristic failure of a screen
+ * left open is not being wrong, it is being nine minutes old while looking exactly
+ * as it did when it was right. So a poll that throws is remembered and the page
+ * says so in words.
  *
- * **Cinema mode** is the same screen with an audience: one act at a time, on a
- * clock, for a display at the end of a room where a single still image stops
- * being looked at inside a minute. `C` turns it on, `?cinema=1` launches into
- * it, space pauses, the arrows step. What decides the rotation lives in
- * `utils/cinema.ts` — including the rule that an act with nothing to say is not
- * shown at all.
+ * Escape goes back, `F` fills the screen, `S` is sound, held `V` is voice. The
+ * cinema rotation that used to live here is gone: an act at a time was the right
+ * answer for an audience across a room and the wrong one for the person actually
+ * using this, who needs all of it visible at once.
  */
 
 const { snapshot, now, connected, refresh, watchWall } = useWall()
@@ -81,13 +85,44 @@ watchWall()
 const { attention, watchContinuously } = useAttention()
 onMounted(() => watchContinuously())
 
+/**
+ * The half of the screen that leaves the machine, on its own far slower clock.
+ *
+ * A minute, matched to the server's cache. See `useWallPulls` for why this is not
+ * simply another field on the snapshot.
+ */
+const {
+  reading: pulls,
+  refreshing: pullsRefreshing,
+  error: pullsError,
+  refresh: refreshPulls,
+  watchPulls,
+} = useWallPulls()
+watchPulls()
+
+/**
+ * What was found elsewhere, as last found.
+ *
+ * Read on mount and never polled, because looking is a two-minute job that costs
+ * money — `useInbox` and `server/utils/inbox.ts` both explain why. The panel
+ * carries the button and says how old each source is; nothing here goes and looks
+ * without being asked.
+ */
+const {
+  sources: inboxSources,
+  refreshing: inboxRefreshing,
+  load: loadInbox,
+  refresh: refreshInbox,
+} = useInbox()
+
+onMounted(() => void loadInbox())
+
 const router = useRouter()
 
 const current = computed(() =>
   (snapshot.value?.tiles ?? []).filter(tile => isCurrent(tile, now.value)),
 )
 
-const fleet = computed(() => takeTiles(current.value))
 const mood = computed(() => moodOf(current.value))
 
 /**
@@ -127,6 +162,8 @@ const MOOD_TONES: Record<ReturnType<typeof moodOf>, string> = {
 }
 
 const landedToday = computed(() => snapshot.value?.landedToday ?? [])
+const upcoming = computed(() => snapshot.value?.upcoming ?? [])
+const day = computed(() => snapshot.value?.day ?? { runs: 0, failed: 0, lastHour: 0 })
 
 /**
  * The half that costs git, asked far less often.
@@ -171,6 +208,192 @@ const groups = computed(() => groupByRepo(rows.value))
 const manyRepos = computed(() => groups.value.length > 1)
 
 /**
+ * How many rows a panel in the rail may draw.
+ *
+ * Four, measured rather than chosen: six panels of five rows overflowed the rail
+ * on a 1100px window, and a rail that scrolls by one row is a rail that hides
+ * something for no gain. Every panel reports what it cut, so the cap costs a
+ * figure rather than a fact — and the page that lists all of it is one click away.
+ */
+const PANEL_ROWS = 4
+
+const reviewQueue = computed(() => takeSome(orderPulls(pulls.value.reviewing), PANEL_ROWS))
+const myPulls = computed(() => takeSome(orderPulls(pulls.value.mine), PANEL_ROWS))
+
+/**
+ * How old the GitHub half is. Every panel drawn from it says this.
+ *
+ * The age, never the error — a failed poll used to replace this with whatever the
+ * fetch threw, which is a sentence of unknown length in a heading that does not
+ * wrap. The failure is said in the panel instead, where there is room for it and
+ * where it can say the thing that actually matters: the list below is the last
+ * good read rather than the current state.
+ */
+const pullsStamp = computed(() => asOfLabel(pulls.value.at, now.value))
+
+/**
+ * Repositories whose pull requests could not be read.
+ *
+ * Named rather than counted, and never silently absent: an empty list because
+ * `gh` is not signed in looks exactly like an empty list because nothing is
+ * waiting, and only one of those is good news.
+ */
+const pullProblems = computed(() => takeSome(pulls.value.problems, 2))
+
+const pullsNote = computed(() => {
+  const { toMerge, failing } = pulls.value.summary
+  const parts: string[] = []
+  if (failing) parts.push(`${failing} red`)
+  if (toMerge) parts.push(`${toMerge} ready`)
+  return parts.join(' · ')
+})
+
+/**
+ * Everything the inbox found, from every source, as one list.
+ *
+ * Flattened because the reader does not care which service a waiting thing came
+ * from until they decide to go and answer it — at which point the row says so.
+ * Two panels of two rows would spend twice the space to make the same point.
+ */
+const inboxRows = computed(() =>
+  inboxSources.value.flatMap(source =>
+    source.items.map(item => ({
+      key: `${source.key}-${item.id}`,
+      source: source.label,
+      icon: source.icon,
+      title: item.title,
+      why: item.why,
+      url: item.url,
+    })),
+  ),
+)
+
+const inbox = computed(() => takeSome(inboxRows.value, PANEL_ROWS))
+
+/**
+ * Whether any source has ever answered.
+ *
+ * The empty state turns on this rather than on the item count, because "nothing
+ * is waiting" and "nobody has ever asked" are opposite facts that look identical
+ * in an empty panel.
+ */
+const inboxEverChecked = computed(() => inboxSources.value.some(source => source.checkedAt))
+
+const MOOD_LABEL: Record<ReturnType<typeof moodOf>, string> = {
+  attention: 'Something needs you',
+  busy: 'Work in flight',
+  quiet: 'Nothing running',
+}
+
+/**
+ * The strip of figures under the header.
+ *
+ * The panels below answer "which one"; this answers "how many", for everything at
+ * once and in one place that never scrolls. It is the part of this screen that is
+ * a terminal rather than a dashboard: a fixed row of labelled numbers, in the same
+ * order every time, so a glance at the same six inches of screen answers the same
+ * six questions all day.
+ *
+ * Only bad news gets a colour. A strip where four of eleven figures are lit is a
+ * strip where none of them are.
+ */
+interface WallStat {
+  key: string
+  label: string
+  value: string
+  /** A second, quieter figure about the same thing — `3 failed` beside `41`. */
+  note?: string
+  tone: WallTone
+}
+
+const stats = computed<WallStat[]>(() => {
+  const { summary, mine } = pulls.value
+
+  return [
+    {
+      key: 'needs',
+      label: 'needs you',
+      value: String(attention.value.needsYou),
+      tone: attention.value.needsYou ? 'error' : 'quiet',
+    },
+    {
+      key: 'working',
+      label: 'working',
+      value: String(attention.value.working),
+      tone: attention.value.working ? 'accent' : 'quiet',
+    },
+    {
+      key: 'sessions',
+      label: 'sessions',
+      // Current over live: the table draws the first number, and the second is
+      // what it is a slice of. A quiet screen otherwise reads the same at three
+      // sessions and at thirty.
+      value: `${current.value.length}/${snapshot.value?.liveSessions ?? current.value.length}`,
+      note: repos.value > 1 ? `${repos.value} repos` : undefined,
+      tone: 'quiet',
+    },
+    {
+      key: 'review',
+      label: 'to review',
+      value: String(summary.toReview),
+      tone: summary.toReview ? 'accent' : 'quiet',
+    },
+    {
+      key: 'mine',
+      label: 'my prs',
+      value: String(mine.length),
+      note: summary.waiting ? `${summary.waiting} waiting` : undefined,
+      tone: 'quiet',
+    },
+    {
+      key: 'red',
+      label: 'ci red',
+      value: String(summary.failing),
+      tone: summary.failing ? 'error' : 'quiet',
+    },
+    {
+      key: 'inbox',
+      label: 'inbox',
+      value: inboxEverChecked.value ? String(inboxRows.value.length) : '—',
+      tone: inboxRows.value.length ? 'warning' : 'quiet',
+    },
+    {
+      key: 'runs',
+      label: '24h runs',
+      value: String(day.value.runs),
+      tone: 'quiet',
+    },
+    {
+      // Its own figure rather than a note beside the run count, because a note
+      // does not carry the colour and "28" is not the bad news — "15 failed" is.
+      key: 'failed',
+      label: 'failed',
+      value: String(day.value.failed),
+      tone: day.value.failed ? 'error' : 'quiet',
+    },
+    {
+      key: 'hour',
+      label: 'last hour',
+      value: String(day.value.lastHour),
+      tone: 'quiet',
+    },
+    {
+      key: 'landed',
+      label: 'landed',
+      value: String(landedToday.value.length),
+      tone: landedToday.value.length ? 'success' : 'quiet',
+    },
+    {
+      key: 'next',
+      label: 'next',
+      value: upcoming.value[0] ? untilLabel(upcoming.value[0]!.at, now.value) : '—',
+      note: snapshot.value?.pausedRituals ? `${snapshot.value.pausedRituals} stopped` : undefined,
+      tone: snapshot.value?.pausedRituals ? 'warning' : 'quiet',
+    },
+  ]
+})
+
+/**
  * Answering, and stopping.
  *
  * Held here rather than in the row so a prompt cannot be answered twice by two
@@ -210,28 +433,19 @@ async function stopRow(row: { sessionId: string; runId?: string }) {
   }
 }
 
-/** What the rotation has to work with. */
-const cinemaInput = computed(() => ({
-  needsYou: attention.value.needsYou,
-  tiles: current.value.length,
-  landedToday: landedToday.value.length,
-  runsInWindow: snapshot.value?.runsLastDay ?? 0,
-}))
-
-const cinema = useCinema(cinemaInput, now)
-
 /**
- * A session that has just broken is worth cutting to the fleet for. Counted
- * here, where the tiles are, and only acted on when it goes *up* — see
- * `interruptFor`.
+ * Go and look elsewhere, because somebody pressed the button.
+ *
+ * The only thing on this screen that spends money without a turn being started,
+ * so the refusal is reported in words rather than swallowed — a source that is not
+ * configured has to say that instead of appearing to do nothing.
  */
-const brokenCount = computed(() =>
-  current.value.filter(tile => urgencyOf(tile) === 'broken').length,
-)
+async function lookAgain(key: string, label: string) {
+  if (inboxRefreshing.value) return
 
-watch(brokenCount, (count, before) => {
-  if (count > (before ?? 0)) cinema.interruptFor('broken')
-})
+  const result = await refreshInbox(key)
+  if (!result.ok) report(`Could not check ${label}: ${result.reason}`)
+}
 
 /**
  * The sound of the fleet.
@@ -246,9 +460,10 @@ const sound = useSound()
 /**
  * What the noises mean, on the control that makes them.
  *
- * A wall in a shared room makes sounds other people hear, and the first question
- * is always "what was that?". The vocabulary is six lines, which is short enough
- * to answer that in a tooltip and too long to put on the screen permanently.
+ * A screen left running in a shared room makes sounds other people hear, and the
+ * first question is always "what was that?". The vocabulary is six lines, which is
+ * short enough to answer that in a tooltip and too long to put on the screen
+ * permanently.
  */
 const soundLegend = computed(() => {
   const vocabulary = Object.values(SOUND_LABELS).join('\n')
@@ -269,7 +484,7 @@ watch(snapshot, (next, previous) => {
 })
 
 /**
- * Speaking to the wall.
+ * Speaking to the screen.
  *
  * Off until switched on, held down to be heard, and confirmed by hand before
  * anything runs. The grammar and — more to the point — what it refuses live in
@@ -355,45 +570,6 @@ async function runCommand(command: VoiceCommand) {
   pending.value = null
 
   switch (command.kind) {
-    case 'act': {
-      // Turning the rotation on first: asking for an act while it is off is
-      // asking for the rotation, whatever the words were.
-      if (!cinema.enabled.value) cinema.setEnabled(true)
-
-      /**
-       * An act can be asked for and refused by the rotation itself — while
-       * something needs a person the retrospective acts are not in it, and an act
-       * with nothing in it is never in it. Showing it anyway lasts until the next
-       * tick and then snaps somewhere else, which reads as the voice not working.
-       *
-       * So the override is *stated*. Found by asking for the night on a machine
-       * with a broken ritual: the screen cut to "Needs you" and said nothing.
-       */
-      if (!cinema.acts.value.some(act => act.id === command.act)) {
-        cinema.show(cinema.acts.value[0]?.id ?? 'fleet')
-        report(attention.value.needsYou
-          ? 'Something needs you first — showing that instead.'
-          : 'Nothing to show there yet.')
-        return
-      }
-
-      cinema.show(command.act)
-      report(describeVoice(command))
-      return
-    }
-
-    case 'rotation':
-      switch (command.move) {
-        case 'next': cinema.next(); break
-        case 'previous': cinema.previous(); break
-        // Idempotent: "pause" said twice leaves it paused, which is what the
-        // word means. A blind toggle would have made the second one resume.
-        case 'pause': if (!cinema.paused.value) cinema.togglePause(); break
-        case 'resume': if (cinema.paused.value) cinema.togglePause(); break
-      }
-      report(describeVoice(command))
-      return
-
     case 'session':
       await startSpokenSession(command.instruction, command.project)
       return
@@ -478,19 +654,19 @@ async function stopWork(spokenProject?: string) {
 }
 
 /**
- * Escape leaves, `F` fills the screen, `C` starts the rotation.
+ * Escape leaves, `F` fills the screen, `S` is sound, held `V` is voice.
  *
- * All on the page rather than as buttons only, because the machine driving a
- * wall is usually not the one you are sitting at — a keyboard reachable once,
- * during setup, is the whole interaction this screen expects to have.
+ * On the page rather than as buttons only, because the machine driving a screen
+ * like this is often not the one you are sitting at — a keyboard reachable once,
+ * during setup, is the whole interaction it expects to have.
  */
 function onKey(event: KeyboardEvent) {
   /**
    * A command waiting for a hand owns the keyboard until it is answered.
    *
-   * Escape means "not that" here rather than "leave the wall", which is the
-   * safer reading of the same key: somebody who has just heard the screen offer
-   * to start an agent and hits Escape is cancelling, not navigating.
+   * Escape means "not that" here rather than "leave the screen", which is the
+   * safer reading of the same key: somebody who has just heard it offer to start
+   * an agent and hits Escape is cancelling, not navigating.
    */
   if (pending.value) {
     if (event.key === 'Enter') {
@@ -523,28 +699,11 @@ function onKey(event: KeyboardEvent) {
     case 'F':
       void toggleFullscreen()
       return
-    case 'c':
-    case 'C':
-      cinema.toggle()
-      return
     case 's':
     case 'S':
       sound.toggle()
       return
   }
-
-  // The rest only mean anything while the rotation is running.
-  if (!cinema.enabled.value) return
-
-  if (event.key === ' ') {
-    // Otherwise the space also scrolls the page under the act.
-    event.preventDefault()
-    cinema.togglePause()
-    return
-  }
-
-  if (event.key === 'ArrowRight') cinema.next()
-  if (event.key === 'ArrowLeft') cinema.previous()
 }
 
 /** The key coming up is what ends the utterance, and the only thing that does. */
@@ -604,20 +763,21 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="wall" :class="{ 'is-idle': cursorHidden, 'is-cinema': cinema.enabled.value }">
-    <!--
-      The hairline that says how long this act has left. At the very top edge,
-      full width, because it is the one element here that must never compete for
-      attention with the content under it — and because that is where every
-      audience already knows to read a progress bar.
-    -->
-    <div v-if="cinema.enabled.value" class="wall-progress" :class="{ 'is-paused': cinema.paused.value }">
-      <div class="wall-progress-fill" :style="{ width: `${cinema.progress.value * 100}%` }" />
-    </div>
-
+  <div class="wall" :class="{ 'is-idle': cursorHidden }">
     <header class="wall-header">
-      <div class="flex items-baseline gap-3 min-w-0">
-        <span class="wall-mood" :style="{ background: MOOD_TONES[mood] }" />
+      <div class="wall-head">
+        <!--
+          Out, and back to the app. Top left because that is where a back arrow
+          lives in every other piece of software somebody has ever used, and this
+          is the one control on the screen that has to be findable without being
+          looked for — the sidebar is suppressed on this route, so it is the only
+          way out that does not involve knowing about Escape.
+        -->
+        <NuxtLink to="/" class="wall-back" title="Back to Now — Esc" aria-label="Back to Now">
+          <UIcon name="i-lucide-arrow-left" class="size-4" />
+        </NuxtLink>
+
+        <span class="wall-mood" :style="{ background: MOOD_TONES[mood] }" :title="MOOD_LABEL[mood]" />
         <h1 class="wall-brand">Fleet</h1>
 
         <p v-if="bands.length" class="wall-bands">
@@ -635,79 +795,32 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <div class="flex items-center gap-6 shrink-0">
-        <!--
-          Everything that is *read* sits in here, on one baseline.
-          
-          The meters are two-line blocks — a caption over a bar — and the clock is
-          a single line of much larger type. Centring them against each other, as
-          the row used to, put the captions six pixels above the clock's baseline:
-          each one is vertically centred and none of them line up. Aligning by
-          baseline instead lets the bars hang below the line the words share,
-          which is where a bar belongs.
-        -->
-        <div class="wall-readouts">
-          <WallMeter v-if="quota" label="Limit" :meter="quota" />
-          <WallMeter label="Today" :meter="spend" />
+      <!--
+        Everything that is *read*, on one baseline.
 
-        <!--
-          Which act, named, with a pip per act in the rotation. Named because a
-          screen that changes every twenty seconds without saying what it is
-          showing makes the viewer work it out each time.
-        -->
-          <div v-if="cinema.enabled.value" class="wall-acts">
-            <span class="wall-act-name">{{ cinema.act.value.label }}</span>
-            <span class="wall-pips">
-              <button
-                v-for="act in cinema.acts.value"
-                :key="act.id"
-                class="wall-pip"
-                :class="{ 'is-on': act.id === cinema.act.value.id }"
-                :title="act.label"
-                @click="cinema.show(act.id)"
-              />
-            </span>
-            <UIcon v-if="cinema.paused.value" name="i-lucide-pause" class="wall-act-paused" title="Paused — space" />
-          </div>
-
-          <span class="wall-clock">{{ clock }}</span>
-        </div>
-
-        <div class="wall-controls">
-          <button
-            v-if="sound.supported.value"
-            class="wall-control"
-            :class="{ 'is-on': sound.enabled.value }"
-            :title="soundLegend"
-            @click="sound.toggle()"
-          >
-            <UIcon :name="sound.enabled.value ? 'i-lucide-volume-2' : 'i-lucide-volume-x'" class="size-4" />
-          </button>
-          <button
-            class="wall-control"
-            :class="{ 'is-on': voice.enabled.value }"
-            :title="voice.enabled.value ? 'Voice on — hold V to speak' : 'Turn on voice'"
-            @click="toggleVoice"
-          >
-            <UIcon :name="voice.enabled.value ? 'i-lucide-mic' : 'i-lucide-mic-off'" class="size-4" />
-          </button>
-          <button
-            class="wall-control"
-            :class="{ 'is-on': cinema.enabled.value }"
-            title="Cinema mode — C"
-            @click="cinema.toggle()"
-          >
-            <UIcon name="i-lucide-clapperboard" class="size-4" />
-          </button>
-          <button class="wall-control" title="Fullscreen — F" @click="toggleFullscreen">
-            <UIcon name="i-lucide-maximize" class="size-4" />
-          </button>
-          <NuxtLink to="/" class="wall-control" title="Back to Now — Esc">
-            <UIcon name="i-lucide-x" class="size-4" />
-          </NuxtLink>
-        </div>
+        The meters are two-line blocks — a caption over a bar — and the clock is a
+        single line of much larger type. Centring them against each other put the
+        captions six pixels above the clock's baseline: each one vertically
+        centred and none of them lined up. Aligning by baseline instead lets the
+        bars hang below the line the words share, which is where a bar belongs.
+      -->
+      <div class="wall-readouts">
+        <WallMeter v-if="quota" label="Limit" :meter="quota" />
+        <WallMeter label="Today" :meter="spend" />
+        <span class="wall-clock">{{ clock }}</span>
       </div>
     </header>
+
+    <!--
+      The tape of figures. Fixed order, one line, never scrolls — see `stats`.
+    -->
+    <div class="wall-stats">
+      <span v-for="stat in stats" :key="stat.key" class="wall-stat" :class="`is-${stat.tone}`">
+        <span class="wall-stat-label">{{ stat.label }}</span>
+        <span class="wall-stat-value">{{ stat.value }}</span>
+        <span v-if="stat.note" class="wall-stat-note">{{ stat.note }}</span>
+      </span>
+    </div>
 
     <p v-if="!connected" class="wall-offline">
       <UIcon name="i-lucide-unplug" class="size-4 shrink-0" />
@@ -715,55 +828,7 @@ onUnmounted(() => {
       below is the last it said.
     </p>
 
-    <!--
-      Cinema mode: one act, full width, on a clock.
-
-      Keyed by act so each one mounts fresh and runs its own entrance. The
-      entrance is a CSS animation rather than a Vue <Transition> on purpose — a
-      transition's class swap happens inside requestAnimationFrame, which does not
-      run while the document is hidden, and a wall spends its life in a window
-      that may well be occluded. That combination leaves the incoming act stuck at
-      `opacity: 0` forever: mounted, correct, invisible. See the note in
-      `nuxt.config.ts`, which is the same bug found the hard way. Here the resting
-      state is visible and the animation only adds the fade, so a frame that never
-      runs costs the fade and nothing else.
-    -->
-    <main v-if="cinema.enabled.value" class="wall-stage">
-      <div :key="cinema.act.value.id" class="wall-act">
-        <WallActAttention
-          v-if="cinema.act.value.id === 'needs-you'"
-          :items="attention.items"
-          :count="attention.needsYou"
-        />
-
-        <WallActFleet
-          v-else-if="cinema.act.value.id === 'fleet'"
-          :tiles="fleet.shown"
-          :hidden="fleet.hidden"
-          :next-ritual="snapshot?.nextRitual"
-          :now="now"
-        />
-
-        <div v-else-if="cinema.act.value.id === 'night'" class="wall-act-night">
-          <NightShift />
-        </div>
-
-        <WallActLanded
-          v-else-if="cinema.act.value.id === 'landed'"
-          :entries="landedToday"
-          :now="now"
-        />
-
-      </div>
-
-      <!--
-        The heartbeat, under every act. Without it a rotation through last
-        night's numbers reads as a slideshow of a machine that has stopped.
-      -->
-      <WallTicker class="wall-heartbeat" line :ticks="snapshot?.ticker ?? []" :now="now" />
-    </main>
-
-    <main v-else class="wall-main">
+    <main class="wall-main">
       <!--
         The table. Grouped by repository only when there is more than one, because
         a single header over every row on the screen is a header that says nothing.
@@ -818,23 +883,30 @@ onUnmounted(() => {
         <div v-else class="wall-empty">
           <UIcon name="i-lucide-moon-star" class="wall-empty-icon" />
           <p class="wall-empty-line">Nothing is running.</p>
-          <p v-if="snapshot?.nextRitual" class="wall-empty-next">
-            {{ snapshot.nextRitual.title }}
-            <span class="wall-empty-when">{{ untilLabel(snapshot.nextRitual.at, now) }}</span>
+          <p v-if="upcoming[0]" class="wall-empty-next">
+            {{ upcoming[0].title }}
+            <span class="wall-empty-when">{{ untilLabel(upcoming[0].at, now) }}</span>
           </p>
           <p v-else class="wall-empty-next">No scheduled work is due.</p>
         </div>
       </section>
 
-      <aside class="wall-rail">
-        <section class="wall-panel">
-          <h2 class="wall-panel-title">
-            Needs you
-            <span v-if="attention.needsYou" class="wall-panel-count is-loud">{{ attention.needsYou }}</span>
-          </h2>
+      <!--
+        The rail: six panels in two columns, each on its own clock and each saying
+        which one.
 
+        The two columns have a fixed membership rather than being auto-placed,
+        because auto-placement makes rows: a short panel beside a tall one is
+        stretched to the row's height or leaves a hole under it, and both read as a
+        panel that has lost something. Two independent columns are two independent
+        stacks, and which panel is in which is a judgement — the urgent half sits
+        nearest the table, where the eye already is.
+      -->
+      <div class="wall-rails">
+       <div class="wall-rail">
+        <WallPanel title="Needs you" :count="attention.needsYou" loud :hidden="Math.max(0, attention.items.length - PANEL_ROWS)">
           <ul v-if="attention.items.length" class="wall-list">
-            <li v-for="item in attention.items.slice(0, 5)" :key="`${item.kind}-${item.id}`" class="wall-list-row">
+            <li v-for="item in attention.items.slice(0, PANEL_ROWS)" :key="`${item.kind}-${item.id}`" class="wall-list-row">
               <span class="wall-list-dot" />
               <span class="min-w-0">
                 <span class="wall-list-title truncate">{{ item.title }}</span>
@@ -843,40 +915,188 @@ onUnmounted(() => {
             </li>
           </ul>
           <p v-else class="wall-panel-empty">Nothing is waiting on you.</p>
-        </section>
+        </WallPanel>
 
-        <section class="wall-panel">
-          <h2 class="wall-panel-title">
-            Landed today
-            <span v-if="landedToday.length" class="wall-panel-count">{{ landedToday.length }}</span>
-          </h2>
+        <WallPanel
+          title="Your review"
+          :count="pulls.summary.toReview"
+          :loud="Boolean(pulls.summary.toReview)"
+          :stamp="pullsStamp"
+          :hidden="reviewQueue.hidden"
+        >
+          <template #actions>
+            <!--
+              The refresh, for somebody standing in front of the screen who has
+              just merged something. The server holds a reading for a minute; this
+              is the one button that says never mind that.
+            -->
+            <button
+              class="wall-panel-button"
+              :disabled="pullsRefreshing"
+              title="Ask GitHub again now — normally read once a minute"
+              @click="refreshPulls(true)"
+            >
+              <UIcon name="i-lucide-refresh-cw" class="size-3" :class="{ 'animate-spin': pullsRefreshing }" />
+            </button>
+          </template>
 
+          <div v-if="reviewQueue.shown.length" class="wall-pulls">
+            <WallPullRow v-for="pull in reviewQueue.shown" :key="pull.url" :pull="pull" :now="now" />
+          </div>
+          <p v-else-if="pulls.repos" class="wall-panel-empty">No review has been asked of you.</p>
+          <p v-else class="wall-panel-empty">No repository here could be read.</p>
+
+          <!--
+            A repository that could not be answered for, named. An empty list
+            because `gh` is not signed in must never look like an empty list
+            because nothing is waiting.
+          -->
+          <p v-for="problem in pullProblems.shown" :key="problem.repo" class="wall-problem">
+            <UIcon name="i-lucide-triangle-alert" class="wall-problem-icon shrink-0" />
+            <span class="truncate"><strong>{{ problem.repo }}</strong> — {{ problem.reason }}</span>
+          </p>
+          <p v-if="pullProblems.hidden" class="wall-problem">
+            and {{ pullProblems.hidden }} more that could not be read
+          </p>
+
+          <!--
+            The last poll failed. Said in the panel rather than in the stamp,
+            because the news is not "this is old" — it is that what is on screen is
+            the last good read and nothing since has been seen.
+          -->
+          <p v-if="pullsError" class="wall-problem" :title="pullsError">
+            <UIcon name="i-lucide-unplug" class="wall-problem-icon shrink-0" />
+            <span class="truncate">GitHub could not be asked just now — this is the last it said.</span>
+          </p>
+        </WallPanel>
+
+        <WallPanel
+          title="Next up"
+          :note="snapshot?.pausedRituals ? `${snapshot.pausedRituals} stopped` : ''"
+        >
+          <ul v-if="upcoming.length" class="wall-list is-tight">
+            <li v-for="ritual in upcoming" :key="ritual.id" class="wall-list-row">
+              <UIcon name="i-lucide-clock" class="wall-list-icon is-quiet shrink-0" />
+              <span class="min-w-0 flex-1">
+                <span class="wall-list-title truncate">{{ ritual.title }}</span>
+                <span v-if="ritual.repo" class="wall-list-because truncate">{{ ritual.repo }}</span>
+              </span>
+              <span class="wall-list-when">{{ untilLabel(ritual.at, now) }}</span>
+            </li>
+          </ul>
+          <p v-else class="wall-panel-empty">No scheduled work is due.</p>
+        </WallPanel>
+
+        <WallPanel title="Landed today" :count="landedToday.length" :hidden="Math.max(0, landedToday.length - PANEL_ROWS)">
           <ul v-if="landedToday.length" class="wall-list">
-            <li v-for="entry in landedToday.slice(0, 4)" :key="entry.sessionId" class="wall-list-row">
+            <li v-for="entry in landedToday.slice(0, PANEL_ROWS)" :key="entry.sessionId" class="wall-list-row">
               <UIcon name="i-lucide-git-merge" class="wall-list-icon shrink-0" />
-              <span class="min-w-0">
+              <NuxtLink :to="`/sessions/${entry.sessionId}`" class="min-w-0">
                 <span class="wall-list-title truncate">{{ entry.title }}</span>
                 <span class="wall-list-because truncate">{{ entry.repo }} · {{ landedLabel(entry.how) }}</span>
-              </span>
+              </NuxtLink>
             </li>
           </ul>
           <p v-else class="wall-panel-empty">Nothing has landed today.</p>
-        </section>
+        </WallPanel>
+       </div>
 
-        <div class="wall-rail-spacer" />
+       <div class="wall-rail">
+        <WallPanel
+          title="Your pull requests"
+          :count="pulls.mine.length"
+          :note="pullsNote"
+          :hidden="myPulls.hidden"
+        >
+          <div v-if="myPulls.shown.length" class="wall-pulls">
+            <WallPullRow v-for="pull in myPulls.shown" :key="pull.url" :pull="pull" :now="now" />
+          </div>
+          <p v-else class="wall-panel-empty">Nothing of yours is open.</p>
+        </WallPanel>
 
-        <footer class="wall-rail-foot">
-          <span v-if="snapshot?.nextRitual" class="truncate">
-            Next: {{ snapshot.nextRitual.title }} {{ untilLabel(snapshot.nextRitual.at, now) }}
-          </span>
-          <span v-else class="truncate">No scheduled work due</span>
+        <WallPanel
+          title="Elsewhere"
+          :count="inboxRows.length"
+          :hidden="inbox.hidden"
+        >
+          <ul v-if="inbox.shown.length" class="wall-list">
+            <li v-for="row in inbox.shown" :key="row.key" class="wall-list-row">
+              <UIcon :name="row.icon" class="wall-list-icon is-quiet shrink-0" />
+              <a :href="row.url" target="_blank" rel="noopener" class="min-w-0" :title="row.why">
+                <span class="wall-list-title truncate">{{ row.title }}</span>
+                <span class="wall-list-because truncate">{{ row.why }}</span>
+              </a>
+            </li>
+          </ul>
+          <p v-else-if="inboxEverChecked" class="wall-panel-empty">Nothing is waiting on you elsewhere.</p>
+          <p v-else class="wall-panel-empty">Nobody has looked yet.</p>
 
-          <span v-if="snapshot?.pausedRituals" class="wall-rail-paused">
-            {{ snapshot.pausedRituals }} stopped
-          </span>
-        </footer>
-      </aside>
+          <!--
+            Per source, because the age of the answer is part of the answer and
+            each source has its own. In seconds rather than dollars, for the reason
+            the Now queue gives: on a subscription the recorded cost is notional,
+            and a figure in dollars beside a button reads as a charge.
+          -->
+          <div class="wall-sources">
+            <span v-for="source in inboxSources" :key="source.key" class="wall-source">
+              <UIcon :name="source.icon" class="wall-source-icon shrink-0" />
+              <span class="wall-source-name">{{ source.label.toLowerCase() }}</span>
+              <span v-if="source.error" class="wall-source-bad truncate" :title="source.error">unavailable</span>
+              <span v-else class="wall-source-age">
+                {{ source.checkedAt ? sinceLabel(source.checkedAt, now) : 'never' }}
+              </span>
+              <button
+                class="wall-source-button"
+                :disabled="inboxRefreshing !== null"
+                :title="`Go and look now — a check takes a minute or two${source.error ? `\n\nLast time: ${source.error}` : ''}`"
+                @click="lookAgain(source.key, source.label)"
+              >
+                {{ inboxRefreshing === source.key ? 'looking…' : 'check' }}
+              </button>
+            </span>
+          </div>
+        </WallPanel>
+
+       </div>
+      </div>
     </main>
+
+    <!--
+      The heartbeat, and the controls that used to be in the corner.
+
+      The ticker is here rather than in the rail because it is the one thing on the
+      screen that is neither a list nor a figure: it is proof of life, and without
+      it a quiet minute reads as a machine that has stopped. The toggles sit at its
+      right because they are for the minute somebody sets this up, not for the days
+      it then runs — a control cluster in the top right corner spent the most
+      valuable space on the screen on three things nobody presses twice.
+    -->
+    <section class="wall-tape">
+      <WallTicker class="wall-tape-feed" line :ticks="snapshot?.ticker ?? []" :now="now" />
+
+      <div class="wall-tools">
+        <button
+          v-if="sound.supported.value"
+          class="wall-control"
+          :class="{ 'is-on': sound.enabled.value }"
+          :title="soundLegend"
+          @click="sound.toggle()"
+        >
+          <UIcon :name="sound.enabled.value ? 'i-lucide-volume-2' : 'i-lucide-volume-x'" class="size-4" />
+        </button>
+        <button
+          class="wall-control"
+          :class="{ 'is-on': voice.enabled.value }"
+          :title="voice.enabled.value ? 'Voice on — hold V to speak' : 'Turn on voice'"
+          @click="toggleVoice"
+        >
+          <UIcon :name="voice.enabled.value ? 'i-lucide-mic' : 'i-lucide-mic-off'" class="size-4" />
+        </button>
+        <button class="wall-control" title="Fullscreen — F" @click="toggleFullscreen">
+          <UIcon name="i-lucide-maximize" class="size-4" />
+        </button>
+      </div>
+    </section>
 
     <!--
       The disclosure, before the microphone is ever opened. Worded as the
@@ -911,28 +1131,25 @@ onUnmounted(() => {
     />
 
     <!--
-      The night, along the bottom. The same component the Now page uses rather
-      than a second chart drawing the same runs: two pictures of one night that
-      could ever disagree is a worse outcome than one that is slightly too small.
+      No chart of last night here any more.
 
-      Not in cinema mode, where the night is an act of its own and gets the whole
-      screen — a strip of it under the act it is about would be the same chart
-      twice.
+      It was the original bottom third of this screen and it went the way cinema
+      mode did, for the same reason: this is read to decide what to look at *now*,
+      and a picture of the last twenty-four hours answers a question nobody
+      standing in front of it is asking. What was worth keeping from it is in the
+      figure strip — how many runs, how many failed, how many in the last hour —
+      and the chart itself is still on Now, where a retrospective belongs.
     -->
-    <section v-if="!cinema.enabled.value" class="wall-night" aria-label="The last day">
-      <NightShift compact />
-    </section>
   </div>
 </template>
 
 <style scoped>
 .wall {
-  position: relative; /* The cinema progress hairline pins to this. */
   height: 100vh;
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 1vh, 16px);
-  padding: clamp(12px, 1.4vw, 26px);
+  gap: clamp(6px, 0.8vh, 12px);
+  padding: clamp(10px, 1.1vw, 20px);
   background: var(--surface-base);
   overflow: hidden;
 }
@@ -958,6 +1175,38 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
+.wall-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+/*
+ * The way out. Quiet, and never faint: this is the only exit on a route with no
+ * sidebar, so the hover-to-reveal treatment the old control cluster had would be
+ * wrong here — a back arrow you have to find by waving a mouse at the corner is
+ * not a back arrow.
+ */
+.wall-back {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  flex-shrink: 0;
+  /* No text of its own, so it centres on the line rather than sitting on the
+     baseline the words share. */
+  align-self: center;
+  color: var(--text-tertiary);
+  border: 1px solid var(--border-subtle);
+}
+
+.wall-back:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
 .wall-mood {
   width: clamp(8px, 0.7vw, 12px);
   height: clamp(8px, 0.7vw, 12px);
@@ -971,7 +1220,7 @@ onUnmounted(() => {
 
 .wall-brand {
   font-family: var(--font-display, var(--font-sans));
-  font-size: clamp(17px, 1.5vw, 28px);
+  font-size: clamp(16px, 1.35vw, 25px);
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--text-primary);
@@ -979,12 +1228,15 @@ onUnmounted(() => {
 
 .wall-bands {
   font-family: var(--font-sans);
-  font-size: clamp(12px, 1vw, 17px);
+  font-size: clamp(11px, 0.9vw, 15px);
   color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .wall-band-sep {
-  margin: 0 8px;
+  margin: 0 7px;
   color: var(--text-disabled);
 }
 
@@ -997,10 +1249,8 @@ onUnmounted(() => {
  * One baseline for everything the header states.
  *
  * A flex item's baseline is its first line's baseline, so a meter aligns by its
- * caption and lets its bar hang below — which is what puts the captions, the act
- * name and the clock on the single line the eye expects. The controls are
- * deliberately outside this: an icon button has no text to sit on a baseline, and
- * including it would align the row to the bottom of a 30px square.
+ * caption and lets its bar hang below — which is what puts the captions and the
+ * clock on the single line the eye expects.
  */
 .wall-readouts {
   display: flex;
@@ -1013,8 +1263,7 @@ onUnmounted(() => {
  * Each meter as wide as the words in it, floored only so a very short value still
  * draws a bar worth seeing. A fixed width was tried twice and was wrong twice:
  * too wide stretched the name and its value to opposite ends of nothing, too
- * narrow truncated "five-hour has room" into an ellipsis on a display meant to be
- * read from the back of a room.
+ * narrow truncated "five-hour has room" into an ellipsis.
  */
 .wall-readouts > .wall-meter {
   flex: 0 0 auto;
@@ -1028,46 +1277,66 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
-.wall-controls {
+/* ── The tape of figures ─────────────────────────────────────────────────── */
+
+/*
+ * One row, fixed order, wrapping only when the window is genuinely too narrow.
+ *
+ * The order never changes and that is the whole value: the same six inches of
+ * screen answers the same six questions all day, so reading it becomes a glance
+ * rather than a search. Sorting these by whichever is currently interesting would
+ * be the single worst thing that could be done to this row.
+ */
+.wall-stats {
   display: flex;
-  gap: 4px;
-  /* Present, and quiet until wanted: the controls are for the minute somebody
-     sets this up, not for the days it then runs. */
-  opacity: 0.25;
-  transition: opacity 0.2s ease;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px clamp(10px, 1.3vw, 22px);
+  flex-shrink: 0;
+  padding: 5px clamp(8px, 0.8vw, 14px);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
 }
 
-.wall-controls:hover {
-  opacity: 1;
+.wall-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  white-space: nowrap;
 }
 
-.wall-control {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 6px;
+.wall-stat-label {
+  font-family: var(--font-sans);
+  font-size: clamp(9px, 0.66vw, 11.5px);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+}
+
+.wall-stat-value {
+  font-family: var(--font-mono);
+  font-size: clamp(12px, 0.95vw, 16px);
+  font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
-  cursor: pointer;
 }
 
-.wall-control:hover {
-  background: var(--surface-hover);
+.wall-stat-note {
+  font-family: var(--font-sans);
+  font-size: clamp(9px, 0.68vw, 11.5px);
+  color: var(--text-disabled);
 }
 
 /*
- * The cinema toggle stays lit while the rotation runs, and the whole control
- * cluster stops being faint — the one control on this screen whose state is
- * worth reading from across the room is whether the rotation is on.
+ * Only bad news is lit. A strip where four figures of eleven have a colour is a
+ * strip where none of them do, so `quiet` — the ordinary case — deliberately has
+ * no rule of its own beyond the default above.
  */
-.wall-control.is-on {
-  background: var(--accent-muted);
-  color: var(--accent);
-}
-
-.wall.is-cinema .wall-controls {
-  opacity: 0.6;
-}
+.wall-stat.is-accent .wall-stat-value { color: var(--accent); }
+.wall-stat.is-error .wall-stat-value { color: var(--error); }
+.wall-stat.is-warning .wall-stat-value { color: var(--warning); }
+.wall-stat.is-success .wall-stat-value { color: var(--success); }
 
 .wall-offline {
   display: flex;
@@ -1083,277 +1352,138 @@ onUnmounted(() => {
   border: 1px solid var(--error-edge);
 }
 
+/* ── The two halves ──────────────────────────────────────────────────────── */
+
 .wall-main {
   flex: 1;
   min-height: 0;
   display: grid;
-  /* Narrower than the wall's rail: the table beside it is the point of the screen,
-     and the rail is now two short lists rather than three panels. */
-  grid-template-columns: minmax(0, 1fr) clamp(210px, 20vw, 330px);
-  gap: clamp(10px, 1.2vw, 22px);
+  /*
+   * The table keeps the room and the rail gets two columns of it, because six
+   * panels stacked in one column is a rail nobody can see the bottom of. Below
+   * about 1400px there is not width for two, and the media query at the end of
+   * this block falls back to one.
+   */
+  grid-template-columns: minmax(0, 1fr) clamp(300px, 33vw, 640px);
+  gap: clamp(8px, 1vw, 18px);
 }
 
 /*
  * The fleet column keeps `min-height: 0` inside its own component; the grid
  * needs it here too, because a grid item's default minimum is its content and
- * without it the fleet grows past the viewport the moment there are more tiles
- * than fit — over the night strip below. Found exactly that way, at nine tiles.
+ * without it the table grows past the viewport the moment there are more rows
+ * than fit — pushing the tape under it off the screen.
  */
 .wall-main > * {
   min-width: 0;
   min-height: 0;
 }
 
-/* ── Cinema mode ─────────────────────────────────────────────────────────── */
-
-.wall-progress {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--border-subtle);
-  z-index: 2;
-}
-
-.wall-progress-fill {
-  height: 100%;
-  background: var(--accent);
-  /* Matched to the tick that feeds it, so a bar advancing once a second reads
-     as continuous rather than as a series of jumps. */
-  transition: width 1s linear;
-}
-
-.wall-progress.is-paused .wall-progress-fill {
-  background: var(--text-disabled);
-  transition: none;
-}
-
-.wall-acts {
-  display: flex;
-  align-items: center;
-  gap: clamp(6px, 0.8vw, 14px);
-}
-
-.wall-act-name {
-  font-family: var(--font-sans);
-  font-size: clamp(10px, 0.8vw, 13px);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
-  white-space: nowrap;
-}
-
-.wall-pips {
-  display: flex;
-  gap: 5px;
-}
-
-.wall-pip {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--border-emphasis);
-  cursor: pointer;
-  transition: background 0.3s ease, transform 0.3s ease;
-}
-
-.wall-pip.is-on {
-  background: var(--accent);
-  transform: scale(1.35);
-}
-
-.wall-act-paused {
-  width: 13px;
-  height: 13px;
-  color: var(--text-disabled);
-}
-
-.wall-stage {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(8px, 1.2vh, 20px);
-}
-
-.wall-act {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  /* Resting state is visible; the animation only adds the entrance. See the
-     comment in the template for why that distinction matters here. */
-  opacity: 1;
-  animation: act-in 420ms ease;
-}
-
 /*
- * Whatever act is inside takes the stage. Without this the fleet act drew its
- * tiles at their natural height and left two thirds of the screen empty, which
- * is the one thing a full-screen act must not do.
- */
-.wall-act > * {
-  flex: 1;
-  min-height: 0;
-}
-
-/*
- * Bigger tiles, fewer across. An act has the whole width where the normal wall
- * gives the fleet three quarters of it, and the same grid there produces five
- * narrow columns in a room where the audience is furthest away.
- */
-.wall-act :deep(.fleet-grid) {
-  grid-template-columns: repeat(auto-fill, minmax(clamp(260px, 25vw, 420px), 1fr));
-}
-
-.wall-act :deep(.wall-tile) {
-  max-height: clamp(180px, 32vh, 360px);
-}
-
-/*
- * Larger type inside a cinema tile, rather than a smaller tile.
+ * Two independent stacks, and the one scrolling surface on this side.
  *
- * A tile with the room of a full screen and the type of a sidebar is mostly air,
- * and the instinct is to shrink the card. That is the wrong way round: the reason
- * this act has the whole screen is so the people furthest from it can read the
- * title and what the session is doing, so the space goes into those two lines and
- * the air goes away by itself.
+ * The crowded case is the expected one, so the rail scrolls rather than squeezing
+ * — a panel compressed to two rows is a panel lying about how much is waiting.
  */
-.wall-act :deep(.wall-tile-title) {
-  font-size: clamp(16px, 1.5vw, 30px);
-}
-
-.wall-act :deep(.wall-tile-doing) {
-  font-size: clamp(12px, 1.05vw, 20px);
-}
-
-.wall-act :deep(.wall-tile-repo),
-.wall-act :deep(.wall-tile-branch),
-.wall-act :deep(.wall-tile-sep),
-.wall-act :deep(.wall-tile-meta) {
-  font-size: clamp(11px, 0.9vw, 16px);
-}
-
-@keyframes act-in {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .wall-act {
-    animation: none;
-  }
-  .wall-progress-fill {
-    transition: none;
-  }
-}
-
-/* The night act is the chart, given the room the strip version never has. */
-.wall-act-night {
-  height: 100%;
+.wall-rails {
   display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 0 clamp(4px, 2vw, 50px);
-}
-
-.wall-heartbeat {
-  flex-shrink: 0;
-  min-height: 1.6em;
+  align-items: flex-start;
+  gap: clamp(6px, 0.7vw, 12px);
+  overflow-y: auto;
 }
 
 .wall-rail {
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: clamp(8px, 1vh, 16px);
-}
-
-.wall-panel {
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: clamp(10px, 1vw, 18px);
-  border-radius: 10px;
-  background: var(--surface-raised);
-  border: 1px solid var(--border-subtle);
-}
-
-.wall-panel.is-grow {
   flex: 1;
-  overflow: hidden;
-}
-
-.wall-panel-title {
+  min-width: 0;
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-sans);
-  font-size: clamp(10px, 0.8vw, 13px);
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--text-tertiary);
+  flex-direction: column;
+  gap: clamp(6px, 0.7vw, 12px);
 }
 
-.wall-panel-count {
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: clamp(9.5px, 0.7vw, 12px);
-  letter-spacing: 0;
-  background: var(--badge-subtle-bg);
-  color: var(--text-secondary);
+/* Below about 1400px there is not width for two columns of panels beside a table,
+   so the rail narrows to one and the six stack in the order they are written. */
+@media (max-width: 1400px) {
+  .wall-main {
+    grid-template-columns: minmax(0, 1fr) clamp(230px, 27vw, 340px);
+  }
+
+  .wall-rails {
+    flex-direction: column;
+  }
 }
 
-.wall-panel-count.is-loud {
-  background: var(--error-tint);
-  color: var(--error);
-}
+/* ── Panels ──────────────────────────────────────────────────────────────── */
 
 .wall-panel-empty {
   font-family: var(--font-sans);
-  font-size: clamp(11px, 0.85vw, 15px);
+  font-size: clamp(10.5px, 0.8vw, 14px);
   color: var(--text-disabled);
+}
+
+.wall-panel-button {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  flex-shrink: 0;
+  color: var(--text-disabled);
+  cursor: pointer;
+}
+
+.wall-panel-button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+
+.wall-panel-button:disabled {
+  cursor: default;
 }
 
 .wall-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
+}
+
+/* A list of one-line rows does not need the room two-line ones do. */
+.wall-list.is-tight {
+  gap: 3px;
 }
 
 .wall-list-row {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
 .wall-list-dot {
-  width: 7px;
-  height: 7px;
-  margin-top: 6px;
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
   border-radius: 999px;
   flex-shrink: 0;
   background: var(--error);
 }
 
 .wall-list-icon {
-  width: clamp(12px, 0.9vw, 15px);
-  height: clamp(12px, 0.9vw, 15px);
+  width: clamp(11px, 0.85vw, 14px);
+  height: clamp(11px, 0.85vw, 14px);
   margin-top: 2px;
   color: var(--success);
+}
+
+/* Everything that is not news: a clock, a source's own mark. */
+.wall-list-icon.is-quiet {
+  color: var(--text-disabled);
 }
 
 .wall-list-title {
   display: block;
   font-family: var(--font-sans);
-  font-size: clamp(12px, 0.9vw, 16px);
+  font-size: clamp(11px, 0.85vw, 15px);
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -1361,30 +1491,96 @@ onUnmounted(() => {
 .wall-list-because {
   display: block;
   font-family: var(--font-sans);
-  font-size: clamp(10.5px, 0.8vw, 14px);
+  font-size: clamp(10px, 0.75vw, 13px);
   color: var(--text-tertiary);
 }
 
-/* Holds the two lists at the top so the footer stays at the bottom. */
-.wall-rail-spacer {
-  flex: 1;
-  min-height: 0;
+.wall-list-when {
+  font-family: var(--font-mono);
+  font-size: clamp(9.5px, 0.72vw, 12.5px);
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.wall-rail-foot {
+.wall-pulls {
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  flex-shrink: 0;
-  font-family: var(--font-mono);
-  font-size: clamp(10px, 0.75vw, 13px);
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+/*
+ * A repository that could not be read, in the panel it is missing from.
+ *
+ * Not a toast and not a tooltip: this is the difference between "nothing is
+ * waiting" and "we could not ask", and it has to be readable without a mouse.
+ */
+.wall-problem {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 5px;
+  font-family: var(--font-sans);
+  font-size: clamp(9.5px, 0.72vw, 12.5px);
+  color: var(--warning);
+}
+
+.wall-problem-icon {
+  width: 11px;
+  height: 11px;
+}
+
+/* Where the rows from elsewhere came from, and how long ago somebody asked. */
+.wall-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.wall-source {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  font-family: var(--font-sans);
+  font-size: clamp(9.5px, 0.7vw, 12px);
   color: var(--text-disabled);
 }
 
-.wall-rail-paused {
-  flex-shrink: 0;
+.wall-source-icon {
+  width: 11px;
+  height: 11px;
+}
+
+.wall-source-name {
+  color: var(--text-tertiary);
+}
+
+.wall-source-age {
+  font-family: var(--font-mono);
+}
+
+.wall-source-bad {
   color: var(--warning);
+}
+
+.wall-source-button {
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.wall-source-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.wall-source-button:disabled {
+  color: var(--text-disabled);
+  cursor: default;
 }
 
 /* ── The table ───────────────────────────────────────────────────────────── */
@@ -1438,11 +1634,11 @@ onUnmounted(() => {
 }
 
 /*
- * The one scrolling surface here, and the difference between this screen and the
- * wall it grew out of: nobody is standing in front of a wall to scroll it, and
- * somebody is always sitting in front of this. Twenty sessions is a normal day for
- * the person who asked for it, and truncating those to what fits would be the
- * screen quietly hiding the thing they opened it to see.
+ * The one scrolling surface in the left half, and the difference between this
+ * screen and the wall it grew out of: nobody stands in front of a wall to scroll
+ * it, and somebody is always sitting in front of this. Twenty sessions is a normal
+ * day for the person who asked for it, and truncating those to what fits would be
+ * the screen quietly hiding the thing they opened it to see.
  */
 .wall-scroll {
   flex: 1;
@@ -1521,6 +1717,64 @@ onUnmounted(() => {
   margin-left: 6px;
 }
 
+/* ── The tape, and the controls at the end of it ─────────────────────────── */
+
+.wall-tape {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 1vw, 16px);
+  flex-shrink: 0;
+  padding: 2px clamp(6px, 0.6vw, 10px);
+}
+
+.wall-tape-feed {
+  flex: 1;
+  min-width: 0;
+}
+
+/*
+ * Present, and quiet until wanted: these are for the minute somebody sets this
+ * screen up, not for the days it then runs. Which is also why they are no longer
+ * in the top right corner — that space is worth more than three buttons nobody
+ * presses twice.
+ */
+.wall-tools {
+  display: flex;
+  gap: 3px;
+  flex-shrink: 0;
+  opacity: 0.3;
+  transition: opacity 0.2s ease;
+}
+
+.wall-tools:hover {
+  opacity: 1;
+}
+
+.wall-control {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.wall-control:hover {
+  background: var(--surface-hover);
+}
+
+/* Lit while on, and the cluster stops being faint with it — whether the room is
+   about to make a noise is worth reading without hovering. */
+.wall-control.is-on {
+  background: var(--accent-muted);
+  color: var(--accent);
+}
+
+.wall-tools:has(.is-on) {
+  opacity: 0.7;
+}
+
 /* ── Voice ───────────────────────────────────────────────────────────────── */
 
 .wall-voice {
@@ -1586,11 +1840,5 @@ onUnmounted(() => {
   background: var(--accent);
   border-color: var(--accent);
   color: white;
-}
-
-.wall-night {
-  flex-shrink: 0;
-  max-height: 26vh;
-  overflow: hidden;
 }
 </style>

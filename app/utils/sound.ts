@@ -18,8 +18,8 @@ import type { WallSnapshot, WallTile } from '~/utils/wall'
  *
  * **Opening the wall is not news.** The first snapshot produces nothing at all,
  * however much is in it. Otherwise arriving at a display would replay the whole
- * morning as a burst of noise — the same mistake the cinema interrupts avoid with
- * their settling window, arriving through a different door.
+ * morning as a burst of noise — every one of those events is real, and none of
+ * them is happening.
  *
  * **A repository has a pitch.** Derived from its name, so it is the same pitch
  * tomorrow and on somebody else's machine. This is what turns a stream of ticks

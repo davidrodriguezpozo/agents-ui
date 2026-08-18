@@ -49,10 +49,11 @@ function snapshot(tiles: WallTile[], ticker: WallTick[] = []): WallSnapshot {
     ticker,
     landedToday: [],
     spend: { todayUsd: 0, capUsd: 0 },
-    runsLastDay: 0,
+    day: { runs: 0, failed: 0, lastHour: 0 },
     quota: null,
-    nextRitual: null,
+    upcoming: [],
     pausedRituals: 0,
+    liveSessions: tiles.length,
   }
 }
 
