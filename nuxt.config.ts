@@ -65,5 +65,9 @@ export default defineNuxtConfig({
 
   routeRules: {
     '/templates': { redirect: '/explore' },
+    // "Reviews" became "Land" when the merge train joined the pull requests:
+    // both answer "this is finished, now what". Bookmarks and the session
+    // pages' own links predate the rename.
+    '/pulls': { redirect: '/land' },
   },
 })

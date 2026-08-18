@@ -137,7 +137,7 @@ describe('simple mode', () => {
   it('still reaches everything simple mode does show', () => {
     const items = flattenPalette(buildPalette(source({ isSimple: true }), ''))
     // /sessions and /runs became one destination when Work merged them.
-    for (const path of ['/', '/work', '/pulls', '/schedules', '/library', '/settings']) {
+    for (const path of ['/', '/work', '/land', '/schedules', '/library', '/settings']) {
       expect(items.some(i => i.to === path), `should reach ${path}`).toBe(true)
     }
   })

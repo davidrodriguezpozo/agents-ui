@@ -828,7 +828,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <div id="settings-pull-actions" class="rounded-lg p-5 space-y-4 bg-card">
         <h3 class="text-section-title">Review actions</h3>
         <p class="fs-sm text-meta">
-          Each button on a pull request in <NuxtLink to="/pulls" class="ink-accent hover:underline">Reviews</NuxtLink>
+          Each button on a pull request in <NuxtLink to="/land" class="ink-accent hover:underline">Land</NuxtLink>
           starts a session already working on it. Leave a box blank to use the built-in prompt for
           that action. Type a command — <code class="font-mono fs-mono">/hd:review {url}</code> — to
           run your own instead; it is sent as the session's first message.

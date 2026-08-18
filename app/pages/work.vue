@@ -530,81 +530,6 @@ onUnmounted(() => { if (searchDebounce) clearTimeout(searchDebounce) })
  * so a session that gained changes since this page loaded survives regardless
  * of what was clicked here.
  */
-/**
- * Landing the finished ones.
- *
- * Two steps, because this merges into the branch you have checked out. The
- * confirmation names the branch rather than saying "are you sure" — the branch
- * is the part worth checking before agreeing.
- */
-const {
-  showRun: landingRun, active: landing, starting: startingLanding, plan: landingPlan,
-  start: beginLanding, refresh: refreshLanding, refreshPlan: refreshLandingPlan,
-  dismiss: dismissLanding, watch: watchLanding,
-} = useLanding()
-const confirmingLand = ref(false)
-
-onMounted(async () => {
-  await Promise.all([refreshLanding(), refreshLandingPlan()])
-  if (landing.value) watchLanding()
-})
-
-// The plan is read from the repository's worktrees, so it goes stale whenever a
-// session does — a turn finishing, a merge landing, a project switch.
-watch(workingDir, () => { refreshLandingPlan() })
-
-/**
- * The train is only worth drawing when there is an order to show.
- *
- * One session has no order — the picture would be a single track beside a spine,
- * explaining a design decision that has not come up yet. It earns its space from
- * two upwards, which is also the point at which merging by hand starts being
- * wrong rather than merely tedious.
- */
-const trainSessions = computed(() =>
-  sessions.value.filter(s => s.inCurrentProject && s.status !== 'archived'))
-
-const showTrain = computed(() => trainSessions.value.length >= 2)
-
-/**
- * Which sessions are in their base branch now, for the landing panel.
- *
- * Read from git on every sessions fetch, so the panel can prefer what is true
- * over what an old run concluded — it kept insisting a session with sixteen
- * commits had never committed anything.
- */
-const landedSessionIds = computed(() =>
-  sessions.value.filter(s => s.landed).map(s => s.id))
-
-/**
- * Whether the merge train is the news, rather than a tool sitting at the bottom.
- *
- * It normally lives below the sessions — you start work, you see what happened,
- * then you land what is finished. But while a landing is running or has just
- * reported, that *is* what is happening on this page, so it hoists above the
- * composer. Done with flex order rather than two copies of the markup, and it
- * stays late in the DOM so the reading order is composer, sessions, train
- * whichever way it is drawn.
- */
-const landingIsHappening = computed(() => Boolean(landingRun.value) || landing.value)
-
-async function onLand() {
-  confirmingLand.value = false
-  try {
-    await beginLanding()
-    toast.add({
-      title: 'Landing started',
-      description: 'It runs the checks again for each one. You can leave this page.',
-      color: 'success',
-    })
-  } catch (e) {
-    toast.add({ title: 'Could not start landing', description: errorMessage(e), color: 'error' })
-    // Usually the base checkout: re-reading the plan puts the reason on the
-    // train, where it stays until it is fixed.
-    await refreshLandingPlan()
-  }
-}
-
 const confirmingClose = ref<string | null>(null)
 const closing = ref(false)
 
@@ -679,16 +604,16 @@ async function switchTo(path: string) {
     </PageHeader>
 
     <!--
-      Ordered by what you came to do: start something, see what happened to what
-      is already going, then land the finished ones.
+      Ordered by what you came to do: start something, then see what happened to
+      what is already going.
 
-      The merge train used to be first and is nine rows tall, so on a 1512×810
-      window both the box you start work in and every session were below the
-      fold. It sits after the list now, folded, and hoists itself back above the
-      composer only while a landing is actually running — at which point it is
-      the thing that is happening.
+      Landing is not on this page. The merge train used to sit here and is nine
+      rows tall, so on a 1512×810 window both the box you start work in and every
+      session were below the fold — and it was answering a different question
+      from everything around it. It lives on /land now, next to the pull requests
+      that ask the same one.
 
-      The paragraph explaining what a session is went with it. Permanent
+      The paragraph explaining what a session is went earlier. Permanent
       onboarding text on a page you open several times a day is a sign the labels
       are not trusted; "Branches from …, its own workspace, its own branch" is
       already said under the composer, where it is doing something.
@@ -743,47 +668,6 @@ async function switchTo(path: string) {
           Nothing inside it is one either. Pick a repository in the sidebar, or run
           <span class="font-mono">git init</span> here.
         </p>
-      </div>
-
-      <!--
-        Shown whether or not it is still going: the result of a landing is a
-        list rather than a sentence, and the half that did not land is the half
-        worth reading.
-      -->
-      <!--
-        The order, before the ending. Kept above the panel rather than instead of
-        it: while a landing runs the train shows which one the minutes are going
-        into, and the panel below carries the list of what each came to.
-      -->
-      <div
-        v-if="(showTrain && workingDir) || landingRun"
-        class="flex flex-col gap-5"
-        :class="landingIsHappening ? 'order-2' : 'order-6'"
-      >
-      <MergeTrain
-        v-if="showTrain && workingDir"
-        collapsible
-        :plan="landingPlan"
-        :sessions="trainSessions"
-        :base-branch="activeProject?.branch || 'your current branch'"
-        :landing="landingRun"
-        :starting="startingLanding"
-        @land="onLand"
-        @recheck="refreshLandingPlan"
-      />
-
-      <!--
-        Above the composer rather than instead of it. It used to take its place,
-        and since the newest run is shown whatever its status and nothing cleared
-        it, one landing removed the way to start a session for good.
-      -->
-      <LandingPanel
-        v-if="landingRun"
-        :run="landingRun"
-        :dismissable="!landing"
-        :landed-ids="landedSessionIds"
-        @dismiss="dismissLanding"
-      />
       </div>
 
       <!-- Start a session -->

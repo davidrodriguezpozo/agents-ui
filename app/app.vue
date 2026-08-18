@@ -156,7 +156,7 @@ const navLinks = computed(() => isSimple.value
   ? [
       { label: 'Home', icon: 'i-lucide-house', to: '/' },
       { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
-      { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
+      { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       // Was "My skills", which stopped being true when the Library merged
       // agents and commands in beside them. Its Personal group is first and
@@ -169,7 +169,7 @@ const navLinks = computed(() => isSimple.value
       // what *started* the work — a distinction the system cares about and
       // nobody else does.
       { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
-      { label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls' },
+      { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       // Agents, commands and skills were three nav items for one question.
       { label: 'Library', icon: 'i-lucide-library', to: '/library' },

@@ -62,7 +62,7 @@ function navigation(isSimple: boolean): PaletteItem[] {
   const items: PaletteItem[] = [
     { key: 'go:now', kind: 'goto', label: 'Now', icon: 'i-lucide-target', to: '/', keywords: 'home dashboard needs you' },
     { key: 'go:work', kind: 'goto', label: 'Work', icon: 'i-lucide-git-branch', to: '/work', keywords: 'sessions activity runs branches worktrees history log' },
-    { key: 'go:reviews', kind: 'goto', label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls', keywords: 'pull requests pr' },
+    { key: 'go:land', kind: 'goto', label: 'Land', icon: 'i-lucide-git-merge', to: '/land', keywords: 'reviews pull requests pr merge train ship' },
     { key: 'go:daily', kind: 'goto', label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules', keywords: 'rituals schedule cron' },
     { key: 'go:library', kind: 'goto', label: 'Library', icon: 'i-lucide-library', to: '/library', keywords: 'agents commands skills' },
     { key: 'go:wall', kind: 'goto', label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall', keywords: 'wall display screen monitor live glance kiosk' },
