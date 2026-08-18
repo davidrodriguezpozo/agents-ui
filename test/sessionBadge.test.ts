@@ -168,3 +168,24 @@ describe('a session whose work is in the base', () => {
     expect(badge.label).toBe('Base moved on')
   })
 })
+
+describe('when nobody counted the files', () => {
+  it('says idle rather than asserting there were no changes', () => {
+    // The wall builds tiles without spawning git, so it genuinely does not know.
+    expect(sessionBadge({ activity: 'idle', changesUnknown: true }).label).toBe('Idle')
+    expect(sessionBadge({ activity: 'idle' }).label).toBe('No changes')
+  })
+
+  it('does not suppress a verdict that was recorded', () => {
+    const passing = sessionBadge({ activity: 'idle', changesUnknown: true, check: { status: 'passing' } })
+    expect(passing.label).toBe('Checks pass')
+
+    const failing = sessionBadge({ activity: 'idle', changesUnknown: true, check: { status: 'failing' } })
+    expect(failing.label).toBe('Checks failed')
+  })
+
+  it('does not suppress landing, which is the end of the story either way', () => {
+    const badge = sessionBadge({ activity: 'idle', changesUnknown: true, landed: true })
+    expect(badge.label).toBe('Landed')
+  })
+})

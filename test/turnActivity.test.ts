@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactInput, toolCallsFromEvents } from '../server/utils/turnActivity'
+import { compactInput, latestStep, recentSteps, toolCallsFromEvents } from '../server/utils/turnActivity'
 import type { RunEvent } from '../server/utils/runStore'
 
 /**
@@ -89,5 +89,56 @@ describe('recovering the steps', () => {
   it('has nothing to say about a turn with no events', () => {
     expect(toolCallsFromEvents([])).toEqual([])
     expect(toolCallsFromEvents()).toEqual([])
+  })
+})
+
+/**
+ * The live counterpart, read from the end of the log rather than the start. It
+ * feeds the wall's "what is it doing" line and its ticker, which are the two
+ * things on that screen that have to be true *this second*.
+ */
+describe('reading a running turn from the end', () => {
+  const log = [
+    event({ type: 'status', status: 'running' }),
+    event({ type: 'tool_use', id: 't0', toolName: 'Read', input: { file_path: '/repo/a.ts' }, at: 100 }),
+    event({ type: 'text', text: 'thinking about it' }),
+    event({ type: 'tool_use', id: 't1', toolName: 'Edit', input: { file_path: '/repo/b.ts' }, at: 200 }),
+    event({ type: 'tool_use', id: 't2', toolName: 'Bash', input: { command: 'bun run test' }, at: 300 }),
+  ]
+
+  it('gives the newest step first', () => {
+    expect(recentSteps(log, 2)).toEqual([
+      { toolName: 'Bash', input: { command: 'bun run test' }, at: 300 },
+      { toolName: 'Edit', input: { file_path: '/repo/b.ts' }, at: 200 },
+    ])
+  })
+
+  it('stops as soon as it has enough, however long the log is', () => {
+    const long = [...Array(400)].map((_, i) =>
+      event({ type: 'tool_use', id: `t${i}`, toolName: 'Read', input: { file_path: `/repo/${i}.ts` }, at: i }))
+
+    expect(recentSteps(long, 3).map(s => s.at)).toEqual([399, 398, 397])
+  })
+
+  it('reports the step in flight rather than waiting for its result', () => {
+    // The call with no result yet is the one worth showing; waiting for it would
+    // mean always naming the step before the current one.
+    expect(latestStep(log)).toEqual({ toolName: 'Bash', input: { command: 'bun run test' }, at: 300 })
+  })
+
+  it('trims arguments the same way a finished turn does', () => {
+    const write = [event({ type: 'tool_use', id: 'w', toolName: 'Write', input: { file_path: '/repo/c.ts', content: 'x'.repeat(5_000) }, at: 1 })]
+    const { content } = latestStep(write)!.input as { content: string }
+
+    expect(content.length).toBeLessThan(250)
+  })
+
+  it('is empty for a turn that has not used a tool yet', () => {
+    expect(latestStep([event({ type: 'status', status: 'running' })])).toBeNull()
+    expect(recentSteps([], 5)).toEqual([])
+  })
+
+  it('names an unnamed tool rather than dropping the step', () => {
+    expect(latestStep([event({ type: 'tool_use', id: 'x', input: {}, at: 5 })])!.toolName).toBe('tool')
   })
 })

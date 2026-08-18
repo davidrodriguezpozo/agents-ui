@@ -40,6 +40,50 @@ export function compactInput(input: unknown): Record<string, unknown> {
   return compact
 }
 
+/** One step, as much of it as a line of text needs. */
+export interface StepSummary {
+  toolName: string
+  input: Record<string, unknown>
+  at: number
+}
+
+/**
+ * The last few steps a run took, newest first.
+ *
+ * The counterpart to `toolCallsFromEvents`, which reads a finished turn in
+ * order so it can pair results with calls. This reads a *running* one from the
+ * end, because what a wall or a live feed wants is the newest handful and
+ * nothing else — a turn fifty calls in should not be walked from the beginning
+ * every two seconds to find out what it is doing now.
+ *
+ * Results are ignored on purpose. A call that has not come back yet is exactly
+ * the one worth showing, and waiting for its result would mean always reporting
+ * the step before the current one.
+ */
+export function recentSteps(events: RunEvent[] = [], limit = 1): StepSummary[] {
+  const steps: StepSummary[] = []
+
+  for (let index = events.length - 1; index >= 0 && steps.length < limit; index--) {
+    const event = events[index]!
+    if (event.type !== 'tool_use') continue
+
+    steps.push({
+      // An event with no tool name is not worth dropping the step over; the
+      // word "tool" reads better than an empty verb.
+      toolName: typeof event.toolName === 'string' && event.toolName ? event.toolName : 'tool',
+      input: compactInput(event.input),
+      at: event.at,
+    })
+  }
+
+  return steps
+}
+
+/** What a run is doing this second, or null if it has not used a tool yet. */
+export function latestStep(events: RunEvent[] = []): StepSummary | null {
+  return recentSteps(events, 1)[0] ?? null
+}
+
 export function toolCallsFromEvents(events: RunEvent[] = []): TurnToolCall[] {
   const calls: TurnToolCall[] = []
   const byId = new Map<string, TurnToolCall>()

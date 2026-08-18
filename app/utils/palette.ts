@@ -65,6 +65,7 @@ function navigation(isSimple: boolean): PaletteItem[] {
     { key: 'go:reviews', kind: 'goto', label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls', keywords: 'pull requests pr' },
     { key: 'go:daily', kind: 'goto', label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules', keywords: 'rituals schedule cron' },
     { key: 'go:library', kind: 'goto', label: 'Library', icon: 'i-lucide-library', to: '/library', keywords: 'agents commands skills' },
+    { key: 'go:wall', kind: 'goto', label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall', keywords: 'wall display screen monitor live glance kiosk' },
     { key: 'go:settings', kind: 'goto', label: 'Settings', icon: 'i-lucide-settings', to: '/settings', keywords: 'preferences limits sandbox backups' },
   ]
 

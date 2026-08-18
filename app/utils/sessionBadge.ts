@@ -29,7 +29,19 @@ export interface Badge {
 export interface BadgeInput {
   activity: SessionActivity
   changedFiles?: number
-  check?: SessionCheck | null
+  /**
+   * Nobody counted the files.
+   *
+   * `changedFiles: undefined` is ambiguous — it is also what a session with
+   * nothing in it looks like — and the wall is a caller that genuinely cannot
+   * know: it is built without spawning git, on purpose, so asking how many files
+   * moved is the one question it cannot afford. Without this it would read
+   * "No changes" over a session that had written twelve, which is the same lie
+   * this file was written to stop, arriving from the other direction.
+   */
+  changesUnknown?: boolean
+  /** Only `status` is read, so a caller holding just that may pass just that. */
+  check?: Pick<SessionCheck, 'status'> | null
   /** The recorded verdict predates the current contents of the workspace. */
   checkStale?: boolean
   /** Commits on the base branch this session does not have. */
@@ -122,6 +134,11 @@ export function sessionBadge(input: BadgeInput): Badge {
   // work is good — only that there is some, and that it still applies.
   if (input.changedFiles) {
     return { label: 'Changes ready', icon: 'i-lucide-check', ...SUCCESS }
+  }
+
+  // Asserts nothing about the work, because nobody looked. See `changesUnknown`.
+  if (input.changesUnknown) {
+    return { label: 'Idle', icon: 'i-lucide-circle-dashed', ...QUIET }
   }
 
   // Describes the result, not the session: one that thought about it and wrote

@@ -28,6 +28,18 @@ function toggleTheme() {
 watch(() => route.path, () => { sidebarOpen.value = false })
 
 /**
+ * The one route that gets no shell.
+ *
+ * Fleet is meant to be left on a screen nobody is sitting at, so a sidebar on it
+ * is 200px of navigation for a reader who is not going to navigate — and the
+ * setup wizard, which every other page waits behind, would be a modal nobody is
+ * there to dismiss. It renders immediately for the same reason: a wall whose
+ * machine has just rebooted should come back to the wall, not to a spinner
+ * waiting on a config read.
+ */
+const bare = computed(() => route.path === '/wall')
+
+/**
  * Sessions are in here for a reason. `inCurrentProject` is worked out on the
  * server against the selected folder, so after a project switch every session
  * in the shared list still carries the *previous* project's answer — and
@@ -170,11 +182,20 @@ const navLinks = computed(() => isSimple.value
 const navSecondary = computed(() => isSimple.value
   ? [
       { label: 'Add tools', icon: 'i-lucide-compass', to: '/explore' },
+      /*
+       * In simple mode too, unlike Graph. What simple mode hides is the
+       * authoring concepts — agents, workflows, MCP — and a wall is not one:
+       * it is work happening, in words, which is the audience this mode is for.
+       */
+      { label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall' },
       { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
     ]
   : [
       { label: 'Explore', icon: 'i-lucide-compass', to: '/explore' },
       { label: 'Graph', icon: 'i-lucide-workflow', to: '/graph' },
+      // A screen to leave on rather than a page to work in, so it sits down
+      // here with the other things you visit once and not every day.
+      { label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall' },
       { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
     ]
 )
@@ -251,7 +272,9 @@ function badgeFor(to: string) {
 
 <template>
   <UApp>
-    <div class="flex h-screen overflow-hidden" style="background: var(--surface-base);">
+    <NuxtPage v-if="bare" />
+
+    <div v-else class="flex h-screen overflow-hidden" style="background: var(--surface-base);">
       <!-- Mobile hamburger (md:hidden) -->
       <button
         class="fixed top-4 left-4 z-30 md:hidden p-2 rounded-md cursor-pointer press-scale"
