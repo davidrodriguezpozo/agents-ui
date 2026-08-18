@@ -109,3 +109,32 @@ export function filesTouched(calls: ToolCallLike[], root?: string): string[] {
 
   return seen
 }
+
+/**
+ * The same verb, in the present tense.
+ *
+ * `describeToolCall` is written for things that have happened — "Edited", "Ran" —
+ * which is right for a log and wrong for a question. A permission prompt asks
+ * about something that has *not* happened yet, and "wants to Ran gh pr create" is
+ * what you get from reusing the wrong tense.
+ */
+const PRESENT: Record<string, string> = {
+  Read: 'read',
+  Edit: 'edit',
+  MultiEdit: 'edit',
+  Write: 'write',
+  NotebookEdit: 'edit',
+  Bash: 'run',
+  BashOutput: 'run',
+  Grep: 'search for',
+  Glob: 'look for',
+  Task: 'delegate',
+  Agent: 'delegate',
+  WebFetch: 'fetch',
+  WebSearch: 'search the web for',
+  TodoWrite: 'update the plan',
+}
+
+export function presentVerb(toolName: string): string {
+  return PRESENT[toolName] ?? `use ${toolName}`
+}

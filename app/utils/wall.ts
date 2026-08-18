@@ -38,6 +38,28 @@ export type LandedHow = 'merged' | 'pull-request' | 'elsewhere'
  * and inventing a cheaper wrong number would be worse than leaving it out.
  */
 
+/**
+ * A tool call a session has stopped to ask about.
+ *
+ * Carried in full — id included — rather than counted, because the count is a
+ * report and the id is an answer. A screen somebody sits at should be able to
+ * unblock the fleet from the row that says it is blocked; walking to the session
+ * page to press the same two buttons is the trip this screen exists to save.
+ *
+ * The arguments come through `compactInput`, so a `Write` of a whole file arrives
+ * as a line of text rather than the file.
+ */
+export interface WallPrompt {
+  id: string
+  toolName: string
+  input: Record<string, unknown>
+  /** The narrow rule the CLI proposed, e.g. `Bash(gh:*)`, when it proposed one. */
+  rule?: string
+  /** Whether "allow for the rest of this run" is a meaningful answer. */
+  canRemember: boolean
+  at: number
+}
+
 /** What a tile is doing right now, from the live run's latest tool call. */
 export interface WallDoing {
   toolName: string
@@ -62,7 +84,16 @@ export interface WallTile {
   updatedAt: number
   /** When the turn now in flight began, which is what the elapsed clock counts. */
   startedAt?: number
-  /** Permission prompts waiting for an answer. */
+  /** Permission prompts waiting for an answer, with enough to answer them. */
+  prompts: WallPrompt[]
+  /**
+   * How many are waiting.
+   *
+   * Not `prompts.length`: the list is capped so one confused run cannot put forty
+   * cards on a screen, and the count is what it is. Every ordering rule reads this
+   * one rather than the list, so a capped list can never make a blocked session
+   * look unblocked.
+   */
   pending: number
   /**
    * The turn in flight, when there is one.
@@ -214,7 +245,7 @@ export function isCurrent(tile: WallTile, now: number): boolean {
  * Recency second rather than first is the whole point: a wall sorted by time is
  * a log, and a log is the thing this exists instead of.
  */
-export function orderTiles(tiles: WallTile[]): WallTile[] {
+export function orderTiles<T extends WallTile>(tiles: T[]): T[] {
   return [...tiles].sort((a, b) => {
     const byUrgency = URGENCY_ORDER.indexOf(urgencyOf(a)) - URGENCY_ORDER.indexOf(urgencyOf(b))
     if (byUrgency !== 0) return byUrgency
@@ -222,9 +253,83 @@ export function orderTiles(tiles: WallTile[]): WallTile[] {
   })
 }
 
-export function takeTiles(tiles: WallTile[], cap = TILE_CAP): { shown: WallTile[]; hidden: number } {
+export function takeTiles<T extends WallTile>(tiles: T[], cap = TILE_CAP): { shown: T[]; hidden: number } {
   const ordered = orderTiles(tiles)
   return { shown: ordered.slice(0, cap), hidden: Math.max(0, ordered.length - cap) }
+}
+
+/**
+ * What git knows about a session, which the wall snapshot deliberately does not.
+ *
+ * The snapshot is built without spawning git so it can be polled every couple of
+ * seconds forever. These are the facts that *do* cost a process — files changed,
+ * how far behind the base is — and they come from `/api/sessions`, polled far more
+ * slowly, on the screen somebody is sitting at rather than the one on a wall.
+ *
+ * Each fact has exactly one owner, and that is the whole point of keeping them
+ * apart: liveness (what it is doing, whether it is blocked, how long the turn has
+ * run) comes only from the snapshot, and the git figures come only from here. Two
+ * sources that both claim to know whether a session is working is how a row ends
+ * up arguing with itself.
+ */
+export interface WallDetail {
+  changedFiles?: number
+  /** Commits on the base branch this session does not have. */
+  behind?: number
+  /** The recorded verdict describes a workspace that has since moved on. */
+  checkStale?: boolean
+  /** One sentence about what the session did, written from its diff. */
+  summary?: string
+  prUrl?: string
+}
+
+/** A row: the live tile, plus whatever git has been asked since. */
+export interface WallRowData extends WallTile {
+  detail?: WallDetail
+}
+
+/**
+ * Rows for the screen, grouped by repository.
+ *
+ * Groups are ordered by their most urgent row rather than alphabetically, because
+ * the reason to group at all is that somebody with four repositories open needs the
+ * one with a problem in it first. Within a group the ordinary ordering applies.
+ */
+export function groupByRepo<T extends WallTile>(tiles: T[]): { repo: string; tiles: T[] }[] {
+  const lanes: { repo: string; tiles: T[] }[] = []
+
+  for (const tile of orderTiles(tiles)) {
+    const lane = lanes.find(l => l.repo === tile.repo)
+    if (lane) lane.tiles.push(tile)
+    else lanes.push({ repo: tile.repo, tiles: [tile] })
+  }
+
+  return lanes
+}
+
+/** How many of a group need somebody, for the count beside its name. */
+export function countUrgency(tiles: WallTile[]): Record<WallUrgency, number> {
+  const counts: Record<WallUrgency, number> = {
+    'needs-you': 0, broken: 0, working: 0, settled: 0,
+  }
+
+  for (const tile of tiles) counts[urgencyOf(tile)]++
+  return counts
+}
+
+/**
+ * The git half, attached to the live half.
+ *
+ * Left absent rather than zeroed when the slower poll has not answered yet, so a
+ * row can say nothing about files changed instead of claiming there are none —
+ * which, on a screen used to decide what to look at next, is the difference between
+ * "no work here" and "we have not asked".
+ */
+export function withDetail<T extends WallTile>(
+  tiles: T[],
+  details: Map<string, WallDetail>,
+): (T & { detail?: WallDetail })[] {
+  return tiles.map(tile => ({ ...tile, detail: details.get(tile.sessionId) }))
 }
 
 /**

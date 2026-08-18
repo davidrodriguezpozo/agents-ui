@@ -1,16 +1,24 @@
 <script setup lang="ts">
 import {
   URGENCY_LABELS,
+  countUrgency,
+  groupByRepo,
   isCurrent,
   landedLabel,
   moodOf,
+  orderTiles,
   quotaMeter,
   spendMeter,
   takeTiles,
   untilLabel,
   urgencyOf,
+  withDetail,
+  type WallDetail,
+  type WallPrompt,
+  type WallTile,
   type WallUrgency,
 } from '~/utils/wall'
+import { errorMessage } from '~/utils/errors'
 import { SOUND_LABELS, diffSounds } from '~/utils/sound'
 import {
   describe as describeVoice,
@@ -36,9 +44,21 @@ import {
  *
  * **Three questions, in order.** Is anything wrong; is anything happening; what
  * has it cost. The left is the fleet, ordered so the first answer is always the
- * top-left tile. The right rail is what is waiting on a person, and what landed.
- * The strip along the bottom is the night, which is the only part of this that
- * looks backwards.
+ * top row. The right rail is what is waiting on a person, and what landed. The
+ * strip along the bottom is the night, which is the only part of this that looks
+ * backwards.
+ *
+ * **It is a table, not a poster.** It began as a wall of cards and is used as an
+ * orchestration screen — twenty sessions across four repositories, read at a desk,
+ * to decide what to look at next. So the default view is dense rows in aligned
+ * columns, grouped by repository, and it scrolls: a screen somebody sits at can,
+ * where a wall cannot. The cards survive in cinema mode, which is the one place
+ * big type is the right answer.
+ *
+ * **And it can be acted on.** A row that is waiting on a person carries the answer
+ * to what it is waiting for, and a running one carries its brake. Everything else
+ * here reports; these two do something, which is the whole difference between a
+ * dashboard and a tool.
  *
  * **It says when it has stopped knowing.** The characteristic failure of an
  * unattended screen is not being wrong, it is being nine minutes old while
@@ -53,7 +73,7 @@ import {
  * shown at all.
  */
 
-const { snapshot, now, connected, watchWall } = useWall()
+const { snapshot, now, connected, refresh, watchWall } = useWall()
 watchWall()
 
 // Already polled app-wide; this is guarded against starting a second one, so
@@ -70,18 +90,22 @@ const current = computed(() =>
 const fleet = computed(() => takeTiles(current.value))
 const mood = computed(() => moodOf(current.value))
 
-/** The counts in the header, in the order the tiles are in. */
-const bands = computed(() => {
-  const counts = new Map<WallUrgency, number>()
-  for (const tile of current.value) {
-    const urgency = urgencyOf(tile)
-    counts.set(urgency, (counts.get(urgency) ?? 0) + 1)
-  }
+/**
+ * The counts, for the header and for each repository's group.
+ *
+ * `settled` is deliberately absent: a row that needs nothing is on the screen
+ * already, and a count of things that are fine is the kind of number that makes a
+ * summary line longer without making it say more.
+ */
+function bandsOf(tiles: WallTile[]) {
+  const counts = countUrgency(tiles)
 
   return (['needs-you', 'broken', 'working'] as WallUrgency[])
-    .filter(urgency => counts.get(urgency))
-    .map(urgency => ({ urgency, count: counts.get(urgency)!, label: URGENCY_LABELS[urgency] }))
-})
+    .filter(urgency => counts[urgency])
+    .map(urgency => ({ urgency, count: counts[urgency], label: URGENCY_LABELS[urgency] }))
+}
+
+const bands = computed(() => bandsOf(current.value))
 
 const repos = computed(() => new Set(current.value.map(tile => tile.repo)).size)
 
@@ -103,6 +127,88 @@ const MOOD_TONES: Record<ReturnType<typeof moodOf>, string> = {
 }
 
 const landedToday = computed(() => snapshot.value?.landedToday ?? [])
+
+/**
+ * The half that costs git, asked far less often.
+ *
+ * `/api/wall` is built without spawning a process so it can be polled every couple
+ * of seconds forever; files changed and how far behind a base is cannot be had that
+ * way. `/api/sessions` answers those, at the price of a process per session, and it
+ * is the same request the Work page already makes — so this screen costs what that
+ * screen costs, not more, and only while it is open.
+ *
+ * Ten seconds because these figures move when a turn finishes, not between polls.
+ * Each fact still has exactly one owner: liveness comes from the snapshot, git
+ * comes from here, and `withDetail` is where they meet.
+ */
+const { sessions, fetchAll: fetchSessions } = useSessions()
+
+const details = computed(() => {
+  const map = new Map<string, WallDetail>()
+
+  for (const session of sessions.value) {
+    map.set(session.id, {
+      changedFiles: session.worktree?.changedFiles,
+      behind: session.worktree?.behind,
+      checkStale: session.checkStale,
+      summary: session.summary?.text,
+      prUrl: session.prUrl,
+    })
+  }
+
+  return map
+})
+
+onMounted(() => {
+  void fetchSessions()
+  const poll = setInterval(() => void fetchSessions(), 10_000)
+  onUnmounted(() => clearInterval(poll))
+})
+
+/** Rows for the table: the live half, with whatever git has said, grouped by repo. */
+const rows = computed(() => withDetail(orderTiles(current.value), details.value))
+const groups = computed(() => groupByRepo(rows.value))
+const manyRepos = computed(() => groups.value.length > 1)
+
+/**
+ * Answering, and stopping.
+ *
+ * Held here rather than in the row so a prompt cannot be answered twice by two
+ * clicks, and so a row stays honest about what is in flight while the wall's next
+ * poll catches up with the answer.
+ */
+const answeringIds = ref<string[]>([])
+const stoppingIds = ref<string[]>([])
+
+async function answerPrompt(prompt: WallPrompt, decision: { behavior: 'allow' | 'deny'; scope?: 'once' | 'session' }) {
+  if (answeringIds.value.includes(prompt.id)) return
+  answeringIds.value = [...answeringIds.value, prompt.id]
+
+  try {
+    await $fetch(`/api/permissions/${encodeURIComponent(prompt.id)}`, { method: 'POST', body: decision })
+    // Straight back to the server rather than waiting out the poll: the whole
+    // point of answering here is that the row stops saying "blocked" at once.
+    await refresh()
+  } catch (e: unknown) {
+    report(errorMessage(e))
+  } finally {
+    answeringIds.value = answeringIds.value.filter(id => id !== prompt.id)
+  }
+}
+
+async function stopRow(row: { sessionId: string; runId?: string }) {
+  if (!row.runId || stoppingIds.value.includes(row.sessionId)) return
+  stoppingIds.value = [...stoppingIds.value, row.sessionId]
+
+  try {
+    await $fetch(`/api/runs/${encodeURIComponent(row.runId)}/cancel`, { method: 'POST' })
+    await refresh()
+  } catch (e: unknown) {
+    report(errorMessage(e))
+  } finally {
+    stoppingIds.value = stoppingIds.value.filter(id => id !== row.sessionId)
+  }
+}
 
 /** What the rotation has to work with. */
 const cinemaInput = computed(() => ({
@@ -658,12 +764,67 @@ onUnmounted(() => {
     </main>
 
     <main v-else class="wall-main">
-      <WallActFleet
-        :tiles="fleet.shown"
-        :hidden="fleet.hidden"
-        :next-ritual="snapshot?.nextRitual"
-        :now="now"
-      />
+      <!--
+        The table. Grouped by repository only when there is more than one, because
+        a single header over every row on the screen is a header that says nothing.
+      -->
+      <section class="wall-table" aria-label="Sessions">
+        <!--
+          Named columns, because three right-aligned numbers with no headings is a
+          riddle. They are the reason this is a table rather than a list: the same
+          fact in the same place on every row is what makes twenty of them
+          readable down the screen as well as across.
+        -->
+        <header v-if="rows.length" class="wall-columns">
+          <span class="wall-col-where">repo · branch</span>
+          <span class="wall-col-title">session</span>
+          <span class="wall-col-doing">doing</span>
+          <span class="wall-col-num" title="Files changed against the base">files</span>
+          <span class="wall-col-num" title="Commits on the base this session does not have">behind</span>
+          <span class="wall-col-num" title="Turns taken">turns</span>
+          <span class="wall-col-num">for</span>
+          <span class="wall-col-actions" />
+        </header>
+
+        <div v-if="rows.length" class="wall-scroll">
+          <div v-for="group in groups" :key="group.repo" class="wall-group">
+            <header v-if="manyRepos" class="wall-group-head">
+              <span class="wall-group-name">{{ group.repo }}</span>
+              <span class="wall-group-counts">
+                <span v-for="band in bandsOf(group.tiles)" :key="band.urgency" :class="`is-${band.urgency}`">
+                  {{ band.count }} {{ band.label.toLowerCase() }}
+                </span>
+              </span>
+            </header>
+
+            <WallRow
+              v-for="row in group.tiles"
+              :key="row.sessionId"
+              :row="row"
+              :now="now"
+              :busy="answeringIds"
+              :stopping="stoppingIds.includes(row.sessionId)"
+              @answer="(prompt, decision) => answerPrompt(prompt, decision)"
+              @stop="stopRow(row)"
+            />
+          </div>
+        </div>
+
+        <!--
+          The quiet state, which is most of a working day and so is not treated as
+          an absence: what somebody glancing at an idle screen wants is the
+          reassurance that it is idle on purpose.
+        -->
+        <div v-else class="wall-empty">
+          <UIcon name="i-lucide-moon-star" class="wall-empty-icon" />
+          <p class="wall-empty-line">Nothing is running.</p>
+          <p v-if="snapshot?.nextRitual" class="wall-empty-next">
+            {{ snapshot.nextRitual.title }}
+            <span class="wall-empty-when">{{ untilLabel(snapshot.nextRitual.at, now) }}</span>
+          </p>
+          <p v-else class="wall-empty-next">No scheduled work is due.</p>
+        </div>
+      </section>
 
       <aside class="wall-rail">
         <section class="wall-panel">
@@ -702,10 +863,7 @@ onUnmounted(() => {
           <p v-else class="wall-panel-empty">Nothing has landed today.</p>
         </section>
 
-        <section class="wall-panel is-grow">
-          <h2 class="wall-panel-title">Live</h2>
-          <WallTicker :ticks="snapshot?.ticker ?? []" :now="now" />
-        </section>
+        <div class="wall-rail-spacer" />
 
         <footer class="wall-rail-foot">
           <span v-if="snapshot?.nextRitual" class="truncate">
@@ -743,7 +901,7 @@ onUnmounted(() => {
     </div>
 
     <WallVoice
-      v-if="voice.enabled.value"
+      v-if="voice.enabled.value || outcome"
       class="wall-voice"
       :state="voice.state.value"
       :transcript="voice.transcript.value"
@@ -929,7 +1087,9 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) clamp(230px, 24vw, 400px);
+  /* Narrower than the wall's rail: the table beside it is the point of the screen,
+     and the rail is now two short lists rather than three panels. */
+  grid-template-columns: minmax(0, 1fr) clamp(210px, 20vw, 330px);
   gap: clamp(10px, 1.2vw, 22px);
 }
 
@@ -1205,6 +1365,12 @@ onUnmounted(() => {
   color: var(--text-tertiary);
 }
 
+/* Holds the two lists at the top so the footer stays at the bottom. */
+.wall-rail-spacer {
+  flex: 1;
+  min-height: 0;
+}
+
 .wall-rail-foot {
   display: flex;
   align-items: baseline;
@@ -1219,6 +1385,140 @@ onUnmounted(() => {
 .wall-rail-paused {
   flex-shrink: 0;
   color: var(--warning);
+}
+
+/* ── The table ───────────────────────────────────────────────────────────── */
+
+/*
+ * The column header, aligned with `WallRow`'s grid by repeating it. Two grids that
+ * have to agree is a real cost; the alternative is one grid over both, which makes
+ * every row a member of a single enormous layout and takes the expandable prompt
+ * line with it. Kept in step by a comment in each place and by there being exactly
+ * two of them.
+ */
+.wall-columns {
+  display: grid;
+  grid-template-columns:
+    16px
+    minmax(120px, 15%)
+    minmax(140px, 1fr)
+    minmax(140px, 30%)
+    40px 46px 40px
+    46px
+    46px;
+  gap: 10px;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-default);
+  background: var(--surface-base);
+  font-family: var(--font-sans);
+  font-size: 10px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+}
+
+/* The status glyph column has no heading; the first label starts after it. */
+.wall-columns > :first-child {
+  grid-column: 2;
+}
+
+.wall-col-num {
+  text-align: right;
+}
+
+.wall-table {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  border-radius: 10px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  overflow: hidden;
+}
+
+/*
+ * The one scrolling surface here, and the difference between this screen and the
+ * wall it grew out of: nobody is standing in front of a wall to scroll it, and
+ * somebody is always sitting in front of this. Twenty sessions is a normal day for
+ * the person who asked for it, and truncating those to what fits would be the
+ * screen quietly hiding the thing they opened it to see.
+ */
+.wall-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.wall-group + .wall-group {
+  margin-top: 2px;
+}
+
+.wall-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 10px 5px;
+  background: var(--surface-base);
+  border-bottom: 1px solid var(--border-subtle);
+  /* Sticky so the repository a row belongs to is still readable when the list is
+     scrolled past its own heading. */
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.wall-group-name {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
+.wall-group-counts {
+  display: flex;
+  gap: 10px;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.wall-group-counts .is-needs-you { color: var(--accent); }
+.wall-group-counts .is-broken { color: var(--error); }
+
+.wall-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.wall-empty-icon {
+  width: 26px;
+  height: 26px;
+  color: var(--text-disabled);
+}
+
+.wall-empty-line {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.wall-empty-next {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.wall-empty-when {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  margin-left: 6px;
 }
 
 /* ── Voice ───────────────────────────────────────────────────────────────── */

@@ -32,6 +32,7 @@ function tile(over: Partial<WallTile> = {}): WallTile {
     turns: 1,
     updatedAt: NOW,
     pending: 0,
+    prompts: [],
     doing: null,
     ...over,
   }

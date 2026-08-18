@@ -2,13 +2,13 @@ import { basename } from 'node:path'
 import { readSessions, type Session } from '../utils/sessions'
 import { getActive, readRun, runsSince, type Run } from '../utils/runStore'
 import { listPending } from '../utils/permissionBroker'
-import { latestStep, recentSteps } from '../utils/turnActivity'
+import { compactInput, latestStep, recentSteps } from '../utils/turnActivity'
 import { spentSince, startOfToday } from '../utils/budget'
 import { readPreferences } from '../utils/preferences'
 import { describeWindow, isStale, readQuota, resetsAtMs } from '../utils/quota'
 import { readSchedules } from '../utils/schedules'
 import { mapLimit } from '../utils/pool'
-import { SETTLED_WINDOW_MS, type WallSnapshot, type WallTick, type WallTile } from '~/utils/wall'
+import { SETTLED_WINDOW_MS, type WallPrompt, type WallSnapshot, type WallTick, type WallTile } from '~/utils/wall'
 
 /**
  * One poll for a screen that is never looked away from.
@@ -90,6 +90,16 @@ async function readMoney(now: number, dayStart: number): Promise<Money> {
 const TICKER_MAX = 14
 
 /**
+ * Prompts carried per session.
+ *
+ * One run asking about forty files would otherwise put forty answerable cards on
+ * a screen, which is not a screen anybody can use. The oldest are the ones the run
+ * is actually blocked on, so those are the ones kept — and `pending` reports the
+ * true count beside them.
+ */
+const PROMPTS_PER_SESSION = 3
+
+/**
  * Whether this session could possibly be part of *now*, decided without
  * touching the disk.
  *
@@ -132,19 +142,20 @@ export default defineEventHandler(async (): Promise<WallSnapshot> => {
    * that read is what the filter above exists to keep small.
    */
   const runs = await mapLimit(candidates, AT_ONCE, async ({ lastRunId }) => {
-    if (!lastRunId) return { run: null as Run | null, pending: 0, fromMemory: false }
+    if (!lastRunId) return { run: null as Run | null, waiting: [], pending: 0 }
 
     const activeRun = getActive(lastRunId)?.run ?? null
     const run = activeRun ?? await readRun(lastRunId)
+    const waiting = listPending(lastRunId)
 
-    return { run, pending: listPending(lastRunId).length, fromMemory: Boolean(activeRun) }
+    return { run, waiting, pending: waiting.length }
   })
 
   const tiles: WallTile[] = []
   const ticker: WallTick[] = []
 
   candidates.forEach(({ session }, index) => {
-    const { run, pending } = runs[index]!
+    const { run, waiting, pending } = runs[index]!
     const repo = basename(session.repoDir) || session.repoDir
     const working = run?.status === 'running' || run?.status === 'queued'
 
@@ -171,6 +182,14 @@ export default defineEventHandler(async (): Promise<WallSnapshot> => {
       // counts up forever and reads as work that is stuck.
       startedAt: working ? run?.startedAt ?? run?.createdAt : undefined,
       pending,
+      prompts: waiting.slice(0, PROMPTS_PER_SESSION).map((request): WallPrompt => ({
+        id: request.id,
+        toolName: request.toolName,
+        input: compactInput(request.input),
+        rule: request.suggestedRules?.[0],
+        canRemember: request.canRemember,
+        at: request.createdAt,
+      })),
       // Only while it is live: a run id on a finished turn is a cancel button
       // for something that has already stopped.
       runId: working ? run?.id : undefined,

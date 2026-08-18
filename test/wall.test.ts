@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   SETTLED_WINDOW_MS,
+  countUrgency,
+  groupByRepo,
+  withDetail,
   TILE_CAP,
   elapsedLabel,
   isCurrent,
@@ -37,6 +40,7 @@ function tile(over: Partial<WallTile> = {}): WallTile {
     turns: 1,
     updatedAt: NOW - MINUTE,
     pending: 0,
+    prompts: [],
     doing: null,
     ...over,
   }
@@ -259,5 +263,73 @@ describe('untilLabel', () => {
     expect(untilLabel(NOW + 12 * MINUTE, NOW)).toBe('in 12m')
     expect(untilLabel(NOW + 3 * 3_600_000, NOW)).toBe('in 3h')
     expect(untilLabel(NOW + 2 * 86_400_000, NOW)).toBe('in 2d')
+  })
+})
+
+/**
+ * The dense view's arithmetic. Grouping exists because somebody with four
+ * repositories open needs the one with a problem in it first, so the order of the
+ * groups is the part worth testing.
+ */
+describe('grouping rows by repository', () => {
+  it('orders groups by their most urgent row, not alphabetically', () => {
+    const lanes = groupByRepo([
+      tile({ repo: 'aaa', activity: 'working', updatedAt: NOW }),
+      tile({ repo: 'zzz', activity: 'awaiting-permission', pending: 1, updatedAt: NOW - 60 * MINUTE }),
+    ])
+
+    expect(lanes.map(l => l.repo)).toEqual(['zzz', 'aaa'])
+  })
+
+  it('keeps a repository together and in urgency order inside the group', () => {
+    const lanes = groupByRepo([
+      tile({ sessionId: '1', repo: 'one', activity: 'working', updatedAt: NOW }),
+      tile({ sessionId: '2', repo: 'two', activity: 'working' }),
+      tile({ sessionId: '3', repo: 'one', activity: 'failed', updatedAt: NOW - MINUTE }),
+    ])
+
+    expect(lanes.map(l => [l.repo, l.tiles.length])).toEqual([['one', 2], ['two', 1]])
+    expect(lanes[0]!.tiles[0]!.sessionId).toBe('3')
+  })
+
+  it('has nothing to group when there is nothing', () => {
+    expect(groupByRepo([])).toEqual([])
+  })
+})
+
+describe('counting a group', () => {
+  it('counts each band once', () => {
+    const counts = countUrgency([
+      tile({ activity: 'awaiting-permission', pending: 1 }),
+      tile({ activity: 'failed' }),
+      tile({ activity: 'working' }),
+      tile({ activity: 'working' }),
+      tile(),
+    ])
+
+    expect(counts).toEqual({ 'needs-you': 1, broken: 1, working: 2, settled: 1 })
+  })
+})
+
+describe('attaching what git knows', () => {
+  it('leaves a row saying nothing rather than nothing-changed when unasked', () => {
+    const [row] = withDetail([tile()], new Map())
+    expect(row!.detail).toBeUndefined()
+  })
+
+  it('attaches by session, not by position', () => {
+    const rows = withDetail(
+      [tile({ sessionId: 'a' }), tile({ sessionId: 'b' })],
+      new Map([['b', { changedFiles: 4, behind: 2 }]]),
+    )
+
+    expect(rows[0]!.detail).toBeUndefined()
+    expect(rows[1]!.detail).toEqual({ changedFiles: 4, behind: 2 })
+  })
+
+  it('does not change the live half it was given', () => {
+    const rows = withDetail([tile({ sessionId: 'a', activity: 'working' })], new Map([['a', { changedFiles: 1 }]]))
+    expect(rows[0]!.activity).toBe('working')
+    expect(rows[0]!.detail?.changedFiles).toBe(1)
   })
 })
