@@ -7,7 +7,7 @@ import { agedFor, relativeTime } from '~/utils/time'
  * What needs you, in one place, ranked.
  *
  * The four red counters in the sidebar were an admission that this view was
- * missing: blocked sessions lived on /sessions, reviews on /pulls, failing
+ * missing: blocked sessions lived on /sessions, reviews on /land, failing
  * rituals on /schedules, and the morning report on /. You had to visit four
  * pages to find out whether your morning was going to go well.
  *

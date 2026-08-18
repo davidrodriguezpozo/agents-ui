@@ -9,14 +9,14 @@ import { DEFAULT_WINDOW_MS } from './digest'
  * Sending the morning report somewhere you actually look.
  *
  * The first thing in this app that writes to somebody else's product. Everything
- * up to now has read — the inbox reads Notion and Slack, Reviews reads GitHub —
+ * up to now has read — the inbox reads Notion and Slack, Land reads GitHub —
  * and every loop still ended with you opening another tab to do the last step by
  * hand. This is the narrowest possible version of the other direction: one
  * message, to one destination you chose, containing text this app composed, with
  * nothing in it that came from a decision a model made.
  *
  * **Why a run rather than a webhook.** A webhook is a token to paste and store,
- * and this app has spent real effort on not having one — Reviews works through
+ * and this app has spent real effort on not having one — Land works through
  * the `gh` you already signed in to, the inbox through the MCP servers you
  * already configured. Sending goes the same way: the Slack MCP server that
  * already answers "is anyone waiting on me" is the same server that can post.

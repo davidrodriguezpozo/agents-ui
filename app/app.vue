@@ -209,7 +209,7 @@ function isActive(to: string) {
  * The badge that means "look at this", as distinct from the one that counts what
  * you have.
  *
- * There used to be four of these — on Sessions, Reviews and Daily — one per
+ * There used to be four of these — on Sessions, Land and Daily — one per
  * place a slice of the answer happened to live. Four counters for one question
  * is the app admitting the question has no home, so they are now one number on
  * Now, which is where the answer is.

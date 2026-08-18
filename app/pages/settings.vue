@@ -249,7 +249,7 @@ const pauseOnQuotaWarning = ref(false)
  * action lands in your own command instead.
  *
  * Keyed by `WorkIntent` on the server; the labels here are the same words the
- * Reviews page prints on the button, so the setting reads as "what this button
+ * Land page prints on the button, so the setting reads as "what this button
  * does".
  */
 type PullActionKey = 'review' | 'address' | 'fix' | 'update'
@@ -820,7 +820,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <!--
         Review actions — what the quick-action button on a pull request runs.
 
-        The Reviews page turns a pull request into a session already working on
+        The Land page turns a pull request into a session already working on
         it. By default that session opens with a careful built-in prompt; here
         you can point each button at your own command instead, so "Review it"
         can run /hd:review on the pull request rather than the built-in review.

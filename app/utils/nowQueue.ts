@@ -7,7 +7,7 @@ import type { InboxItem, InboxSourceReading } from '~/composables/useInbox'
  * One queue of everything that will not move until you do something.
  *
  * This existed in five places and nowhere: blocked sessions on /sessions,
- * pull requests on /pulls, failing rituals on /schedules, the morning digest on
+ * pull requests on /land, failing rituals on /schedules, the morning digest on
  * /, failed runs on /runs. The four red counters in the sidebar were the tell —
  * the app had to badge four nav items precisely because the answer did not live
  * anywhere, and a badge that compensates for a missing view is a missing view.

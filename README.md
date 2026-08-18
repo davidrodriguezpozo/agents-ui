@@ -14,7 +14,7 @@ leaving: edit the files, run a shell, see the app, and land it.
 <a href="#sessions">Sessions</a> ·
 <a href="#finishing-it-without-leaving">Workspace</a> ·
 <a href="#whether-it-works">Verification</a> ·
-<a href="#reviews">Reviews</a> ·
+<a href="#land">Land</a> ·
 <a href="#what-a-run-may-touch">Sandboxing</a> ·
 <a href="#activity">Activity</a> ·
 <a href="#alongside-claude-code-desktop">vs. Desktop</a> ·
@@ -510,14 +510,23 @@ collide, which the page says rather than pretends to have solved.
 
 ---
 
-## Reviews
+## Land
 
 A session ends at a pull request, and that used to be where this app stopped looking. It
 is not where the work stops. Somebody asks for a change on Tuesday, CI goes red on the
 third push, a review is requested from you while you are inside something else — all of
 it on github.com, which is a tab you have to remember to open.
 
-**Reviews** asks the two questions you open that tab for, in the project you are already
+**Land** is the page for everything with a diff behind it and a decision still to make. It
+has two bands, because "this is finished, now what" gets asked of two different things and
+used to be answered in two different places.
+
+**Ready here** is the merge train: sessions on this machine whose branches can go into the
+base without asking GitHub anything. It lived at the top of the Work page, nine rows tall,
+pushing the box you start work in below the fold — and it was answering a different
+question from everything around it.
+
+**On GitHub** asks the two questions you open that tab for, in the project you are already
 in: *what is waiting on me*, and *where has my own work got to*. Read through `gh`, with
 the sign-in you already have — no token to paste, nothing stored, nothing listening on a
 port.
@@ -548,6 +557,11 @@ read is the worst thing this could possibly do for you.
 Merging is the exception and is treated like one: it only appears on your own pull
 request, only when it is genuinely ready, and the page re-reads GitHub at the moment you
 press it rather than trusting what it drew ten minutes ago.
+
+The same rows can be reached by right-click from **Fleet**, which is how you act on one
+without leaving a screen you left running. Every entry there that writes selects the right
+project first and then calls this page's own route, so it re-reads the pull request before
+it builds a prompt — the screen's minute-old copy decides what to offer, never what to do.
 
 ### When it lands
 
@@ -620,9 +634,15 @@ against.
 
 ## Activity
 
-Every run there has ever been — scheduled work, agent invocations and session turns —
-with what it cost, how long it took and how it ended. Runs keep going if you close the
-tab; the log replays for whoever attaches next.
+The **History** tab of Work: every run there has ever been — scheduled work, agent
+invocations and session turns — with what it cost, how long it took and how it ended,
+under a chart of the night that shows *when* rather than merely what. Runs keep going if
+you close the tab; the log replays for whoever attaches next.
+
+It is a tab rather than a page because the other half — **In flight** — is the same list
+asking the opposite question. A session you might still interrupt and a ritual that failed
+on Tuesday are both work, but nobody looks for both at once, and in one list the finished
+rows win on volume: forty of them, and the two you could act on at the bottom.
 
 Filter by what started it and how it ended, and search what a run *said* rather than only
 what it was called. Searching covers the whole log, not the page of it on screen.
