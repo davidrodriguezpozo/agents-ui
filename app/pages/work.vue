@@ -25,6 +25,22 @@ const router = useRouter()
 const toast = useToast()
 
 /**
+ * The shell docked to the bottom of this page.
+ *
+ * The shortcut is bound here rather than in the dock because the dock only
+ * renders once it is open — a component that has to exist to be opened cannot
+ * be the thing listening for the key that opens it.
+ */
+const {
+  open: terminalOpen,
+  height: terminalHeight,
+  toggle: toggleTerminal,
+  bindShortcut: bindTerminalShortcut,
+} = useWorkTerminal()
+
+bindTerminalShortcut()
+
+/**
  * Which pull request each session's work is behind.
  *
  * From the wall's reading rather than a request of its own: it covers every
@@ -704,6 +720,21 @@ async function switchTo(path: string) {
           activity="awaiting-permission"
           compact
         />
+
+        <!--
+          A shell in the project you already have selected, without going through
+          a session to get one. Hidden when there is no project, because there
+          would be nowhere to open it.
+        -->
+        <UButton
+          v-if="workingDir"
+          icon="i-lucide-square-terminal"
+          size="xs"
+          variant="ghost"
+          :color="terminalOpen ? 'primary' : 'neutral'"
+          :title="`${terminalOpen ? 'Hide' : 'Open'} terminal (Ctrl+\`)`"
+          @click="toggleTerminal"
+        />
       </template>
     </PageHeader>
 
@@ -1315,5 +1346,13 @@ async function switchTo(path: string) {
       -->
       <WorktreePanel v-if="tab === 'flight'" class="order-8" />
     </div>
+
+    <!--
+      Fixed to the bottom of the viewport, so the page reserves room for it
+      rather than running underneath — otherwise the last session card is
+      permanently behind the shell.
+    -->
+    <div v-if="terminalOpen && workingDir" :style="{ height: `${terminalHeight}px` }" />
+    <WorkTerminalDock />
   </div>
 </template>

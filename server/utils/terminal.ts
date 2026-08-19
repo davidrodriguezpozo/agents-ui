@@ -153,7 +153,28 @@ export function startTerminal(id: string, cwd: string): TerminalSession {
   const child = spawn('python3', ['-c', PTY_SCRIPT], {
     cwd: existsSync(cwd) ? cwd : process.cwd(),
     stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, TERM: 'xterm-256color' },
+    /**
+     * `TERM` so programs know what they are drawing to, and two more that
+     * decide whether the result is legible.
+     *
+     * A prompt like powerlevel10k or starship draws its separators and icons
+     * from the Private Use Area — multi-byte characters that a shell inheriting
+     * a non-UTF-8 `LANG` mangles before xterm ever sees them, which reads as
+     * "the font is wrong" when the font is fine. The launcher is a background
+     * service and may well have been started without a locale at all, so this
+     * fills one in rather than trusting what it was handed. Only when absent:
+     * somebody who has set `LANG` has set it for a reason.
+     *
+     * `COLORTERM` is what 24-bit colour is gated on in most tools; without it
+     * they fall back to 256 and a theme picked in truecolor comes out
+     * approximated.
+     */
+    env: {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor',
+      LANG: process.env.LANG || 'en_US.UTF-8',
+    },
   })
 
   const session: TerminalSession = {

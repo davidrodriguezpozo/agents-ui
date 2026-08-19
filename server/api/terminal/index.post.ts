@@ -1,20 +1,15 @@
-import { findSession } from '../../../../utils/sessions'
-import { resizeTerminal, sendInput, stopTerminal } from '../../../../utils/terminal'
+import { resizeTerminal, sendInput, stopTerminal } from '../../utils/terminal'
+import { resolveWorkTerminal } from '../../utils/workTerminal'
 
 /**
- * Everything that goes *into* a session's shell: keystrokes, a new size, or a
+ * Everything that goes *into* the project's shell: keystrokes, a new size, or a
  * request to close it. Output comes back over the stream.
  *
  * State-changing, so the same-origin check in front of every request applies —
  * a page you happen to have open cannot type into your shell.
  */
 export default defineEventHandler(async (event) => {
-  const id = getRouterParam(event, 'id')!
-  const session = await findSession(id)
-
-  if (!session) {
-    throw createError({ statusCode: 404, message: `Session not found: ${id}` })
-  }
+  const { id } = await resolveWorkTerminal(event)
 
   const body = await readBody<{
     input?: string | string[]
