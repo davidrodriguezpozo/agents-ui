@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
+import { driftNote } from '~/utils/checkout'
 import { isSendKey } from '~/utils/keys'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
@@ -442,6 +443,18 @@ const baseBranch = computed(() => {
 const retargeted = computed(() =>
   Boolean(session.value && baseBranch.value && baseBranch.value !== session.value.baseBranch)
 )
+
+/**
+ * Which of three things this workspace is, in one glyph.
+ *
+ * A branch it holds, a commit it is only reading, or a branch it wandered onto —
+ * and the last is the one worth an icon that does not look like the first.
+ */
+const branchIcon = computed(() => {
+  if (session.value?.detached) return 'i-lucide-git-commit-horizontal'
+  if (session.value?.driftedTo) return 'i-lucide-git-compare-arrows'
+  return 'i-lucide-git-branch'
+})
 
 /**
  * The header's overflow. Everything here is real but occasional — opening the
@@ -1123,16 +1136,30 @@ const totalChanges = computed(() => {
 
             <!-- Where this session is working, stated plainly -->
             <div class="rounded-md px-4 py-3 space-y-1" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
-              <div class="flex items-center gap-2">
+              <div class="flex items-start gap-2">
                 <UIcon
-                  :name="session.detached ? 'i-lucide-git-commit-horizontal' : 'i-lucide-git-branch'"
-                  class="size-3.5 shrink-0 ink-4"
+                  :name="branchIcon"
+                  class="size-3.5 shrink-0 mt-0.5"
+                  :class="session.driftedTo ? '' : 'ink-4'"
+                  :style="session.driftedTo ? 'color: var(--warning);' : undefined"
                 />
                 <span v-if="session.detached" class="type-detail ink-2">
                   Reading <span class="font-mono ink-accent">{{ session.branch }}</span>
                   at <span class="font-mono">{{ session.baseSha.slice(0, 7) }}</span> —
                   detached, so no branch is checked out here
                 </span>
+                <!--
+                  Replacing the line rather than correcting it underneath. "Working
+                  on X" is simply false once the worktree is on something else, and
+                  a page that states it and then contradicts it two lines down has
+                  made the reader decide which half to believe. The sentence comes
+                  from `driftNote` so this and the card cannot word it differently.
+                -->
+                <span
+                  v-else-if="session.driftedTo"
+                  class="type-detail leading-snug"
+                  style="color: var(--warning);"
+                >{{ driftNote(session.branch, session.driftedTo) }}</span>
                 <span v-else class="type-detail ink-2">
                   Working on <span class="font-mono ink-accent">{{ session.branch }}</span>,
                   branched from <span class="font-mono">{{ session.baseBranch }}</span>
