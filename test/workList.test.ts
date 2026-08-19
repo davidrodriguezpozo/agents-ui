@@ -238,8 +238,10 @@ describe('filters', () => {
 
   it('filters by the coarse status', () => {
     expect(buildWorkList(input, { status: 'needs-you' }).map(i => i.title)).toEqual(['blocked thing'])
-    expect(buildWorkList(input, { status: 'done' }).map(i => i.title).sort())
-      .toEqual(['faceted search', 'morning brief'])
+    // Unmerged work in a live workspace is `yours`, not `done` — it is waiting
+    // on you, which is the distinction the fifth status exists to make.
+    expect(buildWorkList(input, { status: 'yours' }).map(i => i.title)).toEqual(['faceted search'])
+    expect(buildWorkList(input, { status: 'done' }).map(i => i.title)).toEqual(['morning brief'])
   })
 
   it('filters by what started it', () => {
@@ -263,8 +265,9 @@ describe('filters', () => {
   })
 
   it('combines status and origin', () => {
-    expect(buildWorkList(input, { status: 'done', origin: 'session' }).map(i => i.title))
+    expect(buildWorkList(input, { status: 'yours', origin: 'session' }).map(i => i.title))
       .toEqual(['faceted search'])
+    expect(buildWorkList(input, { status: 'done', origin: 'session' })).toHaveLength(0)
   })
 })
 
@@ -274,7 +277,7 @@ describe('statusCounts', () => {
       sessions: [session({ activity: 'awaiting-permission' })],
       runs: [run({ status: 'running' })],
     })
-    expect(statusCounts(items)).toEqual({ running: 1, 'needs-you': 1, done: 0, failed: 0 })
+    expect(statusCounts(items)).toEqual({ running: 1, 'needs-you': 1, yours: 0, done: 0, failed: 0 })
   })
 })
 
