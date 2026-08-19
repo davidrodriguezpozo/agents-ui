@@ -90,6 +90,20 @@ export interface Session {
    */
   repair?: SessionRepair
   /**
+   * When the person said they were done with this session.
+   *
+   * Not a state a session can reach on its own, and deliberately so: every
+   * automatic reading of "finished" available here — the process has stopped,
+   * nothing is committed, no pull request exists — is also what a session looks
+   * like halfway through a conversation, waiting on the next instruction. So
+   * this is the one that is asked for rather than inferred. Cleared when a turn
+   * starts, since sending one says it plainly enough.
+   *
+   * Nothing else reads it: the worktree stays, the branch stays, the record
+   * stays. It moves the row from In flight to History and does nothing more.
+   */
+  filedAt?: number
+  /**
    * Set when the session continues a conversation started in the terminal.
    * The work has moved to a fresh checkout, which the conversation does not
    * know yet — see the note the session offers to send first.

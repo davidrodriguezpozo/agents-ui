@@ -18,7 +18,7 @@ const id = route.params.id as string
 const {
   fetchOne, send, fetchTranscript, setTrust, fetchDiff,
   previewPullRequest, openPullRequest, watchPullRequest, previewMerge, merge, runCheck, repair,
-  updateFromBase, close,
+  updateFromBase, close, setAside,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 const {
@@ -132,6 +132,7 @@ const inherited = ref<TranscriptMessage[]>([])
 const showPatch = ref(false)
 const showClose = ref(false)
 const closing = ref(false)
+const filing = ref(false)
 const showMerge = ref(false)
 const mergePreview = ref<MergePreview | null>(null)
 const merging = ref(false)
@@ -484,6 +485,19 @@ const overflowActions = computed(() => {
   }
 
   groups.push([
+    session.value?.filedAt
+      ? {
+          label: 'Put back in flight',
+          icon: 'i-lucide-undo-2',
+          onSelect: () => { void onSetAside(false) },
+        }
+      : {
+          // Named for what it does to the row, not for the tab it lands on:
+          // "Move to History" reads like an archive, and this deletes nothing.
+          label: 'Set aside',
+          icon: 'i-lucide-archive',
+          onSelect: () => { void onSetAside(true) },
+        },
     { label: 'Close session', icon: 'i-lucide-x-circle', onSelect: () => { showClose.value = true } },
   ])
 
@@ -766,6 +780,36 @@ async function onClose(opts: { force?: boolean; keepBranch?: boolean }) {
   } finally {
     closing.value = false
     showClose.value = false
+  }
+}
+
+/**
+ * Move this session between In flight and History.
+ *
+ * The one thing on this page that says "I am done with this" without destroying
+ * anything, and the reason the In flight tab can be trusted. Everything the tab
+ * could work out for itself — the turn has ended, nothing is committed, there is
+ * no pull request — is equally true of a session that has just answered you and
+ * is waiting for the next thing, so it stopped guessing and started asking.
+ *
+ * No confirmation, because there is nothing to lose: the worktree, the branch
+ * and the whole conversation stay exactly where they are, and the next turn
+ * brings it back on its own.
+ */
+async function onSetAside(aside: boolean) {
+  if (filing.value) return
+  filing.value = true
+  try {
+    const updated = await setAside(id, aside)
+    if (session.value) session.value = { ...session.value, filedAt: updated.filedAt }
+    toast.add({
+      title: aside ? 'Set aside — moved to History' : 'Back in flight',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not move it', description: errorMessage(e), color: 'error' })
+  } finally {
+    filing.value = false
   }
 }
 

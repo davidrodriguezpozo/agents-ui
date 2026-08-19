@@ -1,6 +1,6 @@
 import type { RunSummary } from '~/composables/useRuns'
 import type { Session } from '~/composables/useSessions'
-import { outcomeOf } from '~/utils/sessionOutcome'
+import { isSettled, outcomeOf } from '~/utils/sessionOutcome'
 
 /**
  * Sessions and runs as one list of work.
@@ -25,8 +25,16 @@ import { outcomeOf } from '~/utils/sessionOutcome'
 
 export type WorkOrigin = 'session' | 'ritual' | 'agent' | 'command'
 
-/** The coarse question, and the only thing worth filtering on. */
-export type WorkStatus = 'running' | 'needs-you' | 'done' | 'failed'
+/**
+ * The coarse question, and the only thing worth filtering on.
+ *
+ * `yours` is the one that is not about the machine. Every other value here
+ * describes what a process did; that one describes whose turn it is — a session
+ * that has stopped, produced no reason to be worried about, and is waiting for
+ * you to say the next thing. It used to come out as `done`, which is how a
+ * conversation you were halfway through ended up filed under History.
+ */
+export type WorkStatus = 'running' | 'needs-you' | 'yours' | 'done' | 'failed'
 
 export interface WorkItem {
   key: string
@@ -56,6 +64,7 @@ export interface WorkItem {
 export const WORK_STATUS: { value: WorkStatus; label: string }[] = [
   { value: 'running', label: 'running' },
   { value: 'needs-you', label: 'needs you' },
+  { value: 'yours', label: 'your turn' },
   { value: 'done', label: 'done' },
   { value: 'failed', label: 'failed' },
 ]
@@ -75,13 +84,31 @@ export const WORK_STATUS: { value: WorkStatus; label: string }[] = [
  */
 export type WorkTab = 'flight' | 'history'
 
+/**
+ * Which tab owns which status.
+ *
+ * The cut is *open versus settled*, not *stopped versus running*, and that
+ * distinction is the whole reason this list needed a fifth status. Whether a
+ * turn is currently executing is a fact about the last few seconds; whether the
+ * work is finished with is a fact about the work. Reading the tab off the first
+ * one put a session with twelve uncommitted files, and every session waiting on
+ * a reply from you, under History — where you go to read about things, not to do
+ * them.
+ */
 export const TAB_STATUSES: Record<WorkTab, WorkStatus[]> = {
-  flight: ['running', 'needs-you'],
+  flight: ['running', 'needs-you', 'yours'],
   history: ['done', 'failed'],
 }
 
 export function tabOf(status: WorkStatus): WorkTab {
   return TAB_STATUSES.flight.includes(status) ? 'flight' : 'history'
+}
+
+/** How many rows each tab holds, read off `TAB_STATUSES` so it cannot drift. */
+export function tabCounts(items: WorkItem[]): Record<WorkTab, number> {
+  const counts: Record<WorkTab, number> = { flight: 0, history: 0 }
+  for (const item of items) counts[tabOf(item.status)]++
+  return counts
 }
 
 /** The rows one tab is responsible for. Origin and search still apply on top. */
@@ -99,6 +126,9 @@ export const WORK_ORIGIN: { value: WorkOrigin; label: string; icon: string }[] =
 export const STATUS_LOOK: Record<WorkStatus, { icon: string; colour: string }> = {
   running: { icon: 'i-lucide-loader-2', colour: 'var(--accent)' },
   'needs-you': { icon: 'i-lucide-hand', colour: 'var(--warning)' },
+  // Not amber. A session waiting on your reply is not a problem, and dressing
+  // it as one is how "needs you" stops meaning anything.
+  yours: { icon: 'i-lucide-corner-down-left', colour: 'var(--info)' },
   done: { icon: 'i-lucide-check', colour: 'var(--success)' },
   failed: { icon: 'i-lucide-x', colour: 'var(--error)' },
 }
@@ -117,11 +147,19 @@ export function fromSession(session: Session): WorkItem {
         // Finished, and does not work — which is not the same as failing to run.
         return ['needs-you', 'Checks fail']
       case 'ready':
-        return ['done', session.landed ? 'Merged' : 'Ready to land']
+        if (session.landed) return ['done', 'Merged']
+        // Work sitting in a workspace nobody has merged is the definition of
+        // unfinished, whatever the process table says. It leaves this tab when
+        // it lands or when you set it aside, and not before.
+        return isSettled(session) ? ['done', 'Set aside'] : ['yours', 'Ready to land']
       case 'gone':
         return ['done', 'Workspace gone']
       default:
-        return ['done', 'Nothing came of it']
+        // Nothing produced — which is what a session that answered a question
+        // looks like, and also what one you abandoned looks like. The two are
+        // told apart by whether you have come back to it: see `isSettled`.
+        if (!isSettled(session)) return ['yours', 'Your turn']
+        return ['done', session.filedAt ? 'Set aside' : 'Nothing came of it']
     }
   })()
 
@@ -231,7 +269,8 @@ const STATUS_RANK: Record<WorkStatus, number> = {
   'needs-you': 0,
   failed: 1,
   running: 2,
-  done: 3,
+  yours: 3,
+  done: 4,
 }
 
 export function byUrgencyThenRecency(a: WorkItem, b: WorkItem): number {
@@ -240,7 +279,9 @@ export function byUrgencyThenRecency(a: WorkItem, b: WorkItem): number {
 
 /** How many of each status the unfiltered list holds, for the filter chips. */
 export function statusCounts(items: WorkItem[]): Record<WorkStatus, number> {
-  const counts: Record<WorkStatus, number> = { running: 0, 'needs-you': 0, done: 0, failed: 0 }
+  const counts: Record<WorkStatus, number> = {
+    running: 0, 'needs-you': 0, yours: 0, done: 0, failed: 0,
+  }
   for (const item of items) counts[item.status]++
   return counts
 }

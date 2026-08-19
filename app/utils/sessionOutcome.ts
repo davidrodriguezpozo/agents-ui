@@ -84,3 +84,49 @@ export function bySection<T extends SessionShape>(
     }))
     .filter(group => group.sessions.length > 0)
 }
+
+/**
+ * How long an idle session that left nothing behind stays in flight.
+ *
+ * The point of the tab is that everything on it is live, and "the workspace
+ * still exists" is true of a session you opened three weeks ago and forgot. So
+ * an empty one ages out on its own. A session with work sitting in it never
+ * does — see `isSettled`.
+ */
+export const AUTO_FILE_AFTER_MS = 7 * 24 * 60 * 60 * 1000
+
+export interface SettledShape {
+  worktree?: Pick<WorktreeState, 'changedFiles' | 'dirty'> | null
+  /** Its commits are in the base branch. Nothing is left to decide. */
+  landed?: boolean
+  /** You said you were done with it. The one signal nothing can second-guess. */
+  filedAt?: number
+  updatedAt: number
+}
+
+/**
+ * Whether a session that has stopped is *finished with*, rather than waiting on
+ * your next instruction.
+ *
+ * This is the axis `SessionOutcome` does not have, and the reason sessions kept
+ * turning up in History with the ball still in your court. "Claude is working"
+ * answers whether a process is alive; it says nothing about whose turn it is.
+ * A turn that answered a question, committed nothing and opened no pull request
+ * has ended — and is the most in-flight a session ever gets, because the next
+ * thing to happen is you typing.
+ *
+ * So finished means finished with, and there are only three ways to get there:
+ * the work landed, you said so, or it produced nothing at all and a week went
+ * by. Nothing here infers it from a stopped process, and nothing infers it from
+ * an absent pull request — a session's work not being *shipped* is the normal
+ * mid-conversation state, not evidence that the conversation is over.
+ *
+ * Work sitting in the workspace is deliberately exempt from ageing out: filing
+ * that away quietly, a week later, is the same bug as filing it away instantly.
+ */
+export function isSettled(session: SettledShape, now = Date.now()): boolean {
+  if (session.filedAt) return true
+  if (session.landed) return true
+  if (producedSomething(session)) return false
+  return now - session.updatedAt >= AUTO_FILE_AFTER_MS
+}
