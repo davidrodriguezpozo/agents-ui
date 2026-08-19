@@ -1,5 +1,5 @@
 import { findSession, patchSession } from '../../../utils/sessions'
-import { commitSessionWork, mergeSession } from '../../../utils/merge'
+import { commitSessionWork, mergeRefusal, mergeSession } from '../../../utils/merge'
 
 /**
  * Merge a session's branch into the branch it came from.
@@ -18,6 +18,20 @@ export default defineEventHandler(async (event) => {
   const session = await findSession(id)
   if (!session) {
     throw createError({ statusCode: 404, message: `Session not found: ${id}` })
+  }
+
+  /*
+   * Asked before anything is written, because `commitFirst` writes to whatever
+   * the worktree is on. `mergeSession` refuses both of these on its own, but by
+   * then the leftovers would already be a commit — in a review workspace, a
+   * commit on a colleague's pull request branch.
+   */
+  const refusal = await mergeRefusal(session)
+  if (refusal) {
+    throw createError({
+      statusCode: 409,
+      data: { error: 'merge_blocked', message: refusal.reason },
+    })
   }
 
   let committed = 0

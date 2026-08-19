@@ -545,6 +545,16 @@ export interface WallPull {
   repo: string
   /** Its path, so a row can be told which checkout it belongs to. */
   repoDir: string
+  /**
+   * The branch it merges from, which is how a session finds its own pull request.
+   *
+   * Carried so nothing has to ask GitHub a second time: this reading covers every
+   * project once a minute, and a session's pull request is either one you opened
+   * or one you were asked to review — both of which are already in it. A branch
+   * that is in neither list simply has no pull request to show, which is the same
+   * answer the card gave before.
+   */
+  headBranch: string
   number: number
   title: string
   url: string

@@ -1,7 +1,8 @@
 import { findSession, patchSession, readSessions, type Session } from './sessions'
 import { diffBase, updateFromBase, worktreeStatus } from './worktrees'
 import {
-  baseCheckoutState, commitSessionWork, mergedBranches, mergeSession, previewMerge,
+  baseCheckoutState, commitSessionWork, driftedCheckout, mergeRefusal, mergedBranches, mergeSession,
+  previewMerge,
 } from './merge'
 import { verifySession } from './sessionChecks'
 import { notify } from './notify'
@@ -61,7 +62,13 @@ function toInput(
  * how the picture ends up disagreeing with the button underneath it.
  */
 export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
-  const sessions = (await readSessions()).filter(s => s.repoDir === repoDir)
+  const sessions = (await readSessions())
+    .filter(s => s.repoDir === repoDir)
+    // A review workspace is read-only: it holds a commit rather than a branch,
+    // and the commits on the branch it names are the pull request author's. It is
+    // refused at the merge either way — see `mergeRefusal` — so listing it in the
+    // order things will land in only draws a row that cannot.
+    .filter(s => !s.detached)
 
   // One question for the whole repository rather than one per session, asked
   // against the base as it stands now — which is what makes a session that has
@@ -69,13 +76,28 @@ export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
   const merged = await mergedBranches(repoDir, sessions[0]?.baseBranch ?? 'HEAD')
 
   return Promise.all(sessions.map(async (session) => {
+    /*
+     * Read before the measurement, because it decides what the measurement is
+     * against: a checkout that has moved off its branch cannot be measured from
+     * the base its record names. Same read the plan's own refusal uses, so the
+     * picture and the button cannot come to different conclusions.
+     */
+    const drifted = await driftedCheckout(session)
+
     const worktree = await worktreeStatus(
       session.worktreePath,
-      await diffBase(session),
+      await diffBase({ ...session, checkedOut: drifted }),
       session.baseBranch,
     )
 
-    return toInput({ ...session, worktree, inBase: hasLanded(session.branch, worktree.ahead, merged) })
+    return toInput({
+      ...session,
+      worktree,
+      // Never claimed while drifted: `ahead` would come from the checkout and
+      // `merged` from the branch on record, and a branch nothing ever committed
+      // to is trivially contained in its base. See `hasLanded`.
+      inBase: !drifted && hasLanded(session.branch, worktree.ahead, merged),
+    })
   }))
 }
 
@@ -103,6 +125,21 @@ async function land(sessionId: string): Promise<LandingStepResult> {
   if (!session) return { id: sessionId, title: sessionId, outcome: 'refused', detail: 'The session is gone.' }
 
   const head = { id: session.id, title: session.title }
+
+  /*
+   * Before anything is written, and before the checks are paid for. A drifted
+   * session's commit below would land on a branch its record does not name, and a
+   * review session's on somebody else's — and in both cases the merge at the end
+   * is refused anyway, after a full test-suite run. The same argument
+   * `baseCheckoutState` makes about a dirty base: a refusal you are told about
+   * beats one you pay for.
+   *
+   * `refused` rather than a softer outcome, because nothing further along the
+   * queue can fix either one: a drifted session needs a person to say which
+   * branch is real, and a review workspace was never going to land.
+   */
+  const refusal = await mergeRefusal(session)
+  if (refusal) return { ...head, outcome: 'refused', detail: refusal.reason }
 
   // Uncommitted work is still work. Merging without it silently drops whatever
   // the agent had not committed, which is rarely what anybody means.

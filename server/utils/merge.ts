@@ -3,6 +3,7 @@ import { promisify } from 'node:util'
 import { isStale, worktreeFingerprint, type SessionCheck } from './checks'
 import { recordLanded } from './landed'
 import type { Session } from './sessions'
+import { checkoutDrifted, driftNote, reviewOnlyNote } from '~/utils/checkout'
 
 const exec = promisify(execFile)
 
@@ -26,6 +27,10 @@ export type MergeBlocker =
   | 'already-landed'
   | 'dirty-base'
   | 'wrong-branch'
+  /** The session's own worktree is not on the branch this merge would take. */
+  | 'drifted'
+  /** A review workspace: the commits on its branch belong to somebody else. */
+  | 'read-only'
   | 'conflicts'
   | 'checks'
 
@@ -174,6 +179,57 @@ export async function baseCheckoutState(repoDir: string, baseBranch: string): Pr
   return { currentBranch, clean }
 }
 
+/**
+ * The branch a session's worktree is really on, when that is not its own.
+ *
+ * Asked of the worktree, not the repository — `baseCheckoutState` answers the
+ * same-sounding question about the *main* checkout, and the two were both being
+ * called "the current branch".
+ *
+ * One `git` invocation, exported because two write paths need it before they act
+ * rather than after: committing a session's leftovers commits them onto whatever
+ * is checked out, and finding out afterwards that the merge is refused is a
+ * commit on somebody else's branch that nobody asked for.
+ */
+export async function driftedCheckout(session: Session): Promise<string | null> {
+  const checkedOut = await tryGit(session.worktreePath, ['rev-parse', '--abbrev-ref', 'HEAD'])
+
+  return checkoutDrifted({
+    recorded: session.branch,
+    actual: checkedOut,
+    detached: session.detached,
+  })
+    ? checkedOut
+    : null
+}
+
+/**
+ * Everything that must be refused before a single byte is written.
+ *
+ * Both of these are about the same disagreement between a record and a workspace,
+ * and they are opposite mistakes about it: a drifted session's work is somewhere
+ * other than the branch on record, and a review session's branch is somebody
+ * else's work entirely. Neither can be discovered from the commit count — a
+ * drifted session's is zero, and a review session's is healthy and not ours.
+ *
+ * Asked as one question so the two write paths cannot end up checking one and
+ * not the other, and asked *early* because both of them commit the session's
+ * leftovers first: in a review workspace that is a commit on a colleague's
+ * branch, made on the way to a refusal.
+ */
+export async function mergeRefusal(
+  session: Session,
+): Promise<{ blockedBy: MergeBlocker; reason: string } | null> {
+  const drifted = await driftedCheckout(session)
+  if (drifted) return { blockedBy: 'drifted', reason: driftNote(session.branch, drifted) }
+
+  // Never drift — its record is right, which is why this has to be asked on its
+  // own. See `reviewOnlyNote`.
+  if (session.detached) return { blockedBy: 'read-only', reason: reviewOnlyNote(session.branch) }
+
+  return null
+}
+
 export async function previewMerge(session: Session): Promise<MergePreview> {
   const { repoDir, branch, baseBranch, worktreePath } = session
 
@@ -190,6 +246,8 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
     .split('\n')
     .filter(Boolean)
     .map(line => line.slice(3).trim())
+
+  const refusal = await mergeRefusal(session)
 
   let conflicts: string[] = []
   try {
@@ -214,7 +272,25 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
     checkStale,
   }
 
-  if (!commits) {
+  if (refusal) {
+    /*
+     * Both of `mergeRefusal`'s cases are checked before the commit count, and
+     * that ordering is the whole point.
+     *
+     * A drifted session has never committed to the branch on record, so
+     * `baseBranch..branch` is zero and the refusal below would say "this session
+     * has not committed anything yet" over a worktree holding real work — the
+     * mistake that comment warns about, one case further along. A review session
+     * is the opposite: its count is healthy, and every commit in it belongs to
+     * the person whose pull request it is, so the preview would offer to merge
+     * their branch into your base.
+     *
+     * Refused rather than redirected in both cases. Merging whatever is checked
+     * out instead would be a guess with somebody else's work in it.
+     */
+    preview.blockedBy = refusal.blockedBy
+    preview.blockedReason = refusal.reason
+  } else if (!commits) {
     /**
      * No commits the base does not already have. Two very different reasons, and
      * saying the wrong one is actively misleading: a session showing "16 ahead"

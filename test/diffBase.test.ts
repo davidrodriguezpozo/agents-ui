@@ -138,3 +138,100 @@ describe('a session that has caught up with its base', () => {
     expect(diff.files.map(f => f.path).sort()).toContain('theirs-three.txt')
   })
 })
+
+/**
+ * A checkout that has moved off the branch the record names.
+ *
+ * The other half of the same failure, arriving from the head rather than the
+ * base. Observed on a real machine: five review sessions recorded their own
+ * branch, the agent inside each ran `gh pr checkout`, and every one of them
+ * then reported 2,231 changed files and 214 commits ahead — because the base on
+ * record and the branch actually checked out last shared a commit four months
+ * earlier. Against the repository's default branch the same session was 7 files
+ * and 2 commits.
+ *
+ * Modelled here with the same shape: an old base branch that went its own way, a
+ * trunk that moved on, and a session whose checkout is a fresh branch off the
+ * trunk.
+ */
+describe('a checkout that has drifted off its branch', () => {
+  let drifted: { worktreePath: string; branch: string; baseBranch: string; baseSha: string }
+
+  beforeAll(async () => {
+    const root = git(repoDir, 'rev-list', '--max-parents=0', 'main').split('\n').pop()!
+
+    // The base the session records: an old branch, cut from the root, diverged.
+    git(repoDir, 'checkout', '-q', '-b', 'old/base', root)
+    await commitOn('old/base', 'old-a.txt', 'the old base went this way\n')
+
+    // The trunk, which is where the work actually being done comes from.
+    await commitOn('main', 'trunk-a.txt', 'nobody in this session wrote this\n')
+    const trunkTip = git(repoDir, 'rev-parse', 'main')
+
+    // No network in a test, and none needed: the default branch is a ref.
+    git(repoDir, 'update-ref', 'refs/remotes/origin/main', 'main')
+    git(repoDir, 'symbolic-ref', 'refs/remotes/origin/HEAD', 'refs/remotes/origin/main')
+    git(repoDir, 'checkout', '-q', 'main')
+
+    drifted = session('wandered', 'old/base')
+    // What `gh pr checkout` does inside the worktree: a different branch, cut
+    // from somewhere else entirely.
+    git(drifted.worktreePath, 'checkout', '-q', '-b', 'feat/somebody-elses', trunkTip)
+    await work(drifted, 'mine.txt', 'the session wrote exactly this\n')
+  })
+
+  it('finds the default branch', async () => {
+    expect(await worktrees.defaultBranchRef(drifted.worktreePath)).toBe('origin/main')
+  })
+
+  it('measures against the default branch instead of a base HEAD is not on', async () => {
+    const base = await worktrees.diffBase({ ...drifted, checkedOut: 'feat/somebody-elses' })
+    expect(base).toBe('origin/main')
+
+    const diff = await worktrees.worktreeDiff(drifted.worktreePath, base)
+    const status = await worktrees.worktreeStatus(drifted.worktreePath, base, drifted.baseBranch)
+
+    // Only its own commit, which is the whole point.
+    expect(diff.files.map(f => f.path)).toEqual(['mine.txt'])
+    expect(status.ahead).toBe(1)
+  })
+
+  it('is what the recorded base gets wrong', async () => {
+    // Unchanged behaviour when nobody has read the checkout, which is also the
+    // bug: the base on record shares only the root commit with HEAD, so the
+    // session is handed the trunk's work as its own.
+    const base = await worktrees.diffBase(drifted)
+    expect(base).toBe('old/base')
+
+    const diff = await worktrees.worktreeDiff(drifted.worktreePath, base)
+    expect(diff.files.map(f => f.path)).toContain('trunk-a.txt')
+    expect(diff.files.length).toBeGreaterThan(1)
+  })
+
+  it('leaves a worktree nobody has read alone', async () => {
+    // "Not asked" must not read as "moved", or every cold poll re-measures every
+    // session against the trunk and the base on record stops meaning anything.
+    expect(await worktrees.diffBase({ ...drifted, checkedOut: null })).toBe('old/base')
+  })
+
+  it('leaves a deliberately detached review session on its recorded base', async () => {
+    /*
+     * A review session is `git worktree add --detach` on a pull request's head,
+     * and its record names that head branch on purpose. The recorded base is the
+     * pull request's base, which is exactly what its diff should be measured
+     * against — so this case must not be repaired.
+     */
+    const review = session('reviewing', 'release/2.0')
+    git(review.worktreePath, 'checkout', '-q', '--detach', 'HEAD')
+
+    const status = await worktrees.worktreeStatus(review.worktreePath, review.baseSha, review.baseBranch)
+    expect(status.branch).toBeNull()
+
+    expect(await worktrees.diffBase({
+      ...review,
+      branch: 'feat/the-pull-requests-head',
+      checkedOut: status.branch,
+      detached: true,
+    })).toBe('release/2.0')
+  })
+})

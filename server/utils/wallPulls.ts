@@ -158,6 +158,7 @@ function flatten(pull: DecoratedPull, project: Project): WallPull {
   return {
     repo: nameOf(project),
     repoDir: project.path,
+    headBranch: pull.headBranch,
     number: pull.number,
     title: pull.title,
     url: pull.url,

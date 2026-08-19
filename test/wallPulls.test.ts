@@ -19,6 +19,7 @@ function pull(over: Partial<WallPull> = {}): WallPull {
   return {
     repo: 'agents-ui',
     repoDir: '/repos/agents-ui',
+    headBranch: 'make-it-faster',
     number: 7,
     title: 'Make it faster',
     url: `https://github.com/o/r/pull/${over.number ?? 7}`,

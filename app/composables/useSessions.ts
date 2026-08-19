@@ -101,6 +101,15 @@ export interface Session {
   /** Absent means it has not tried to fix itself on this instruction. */
   repair?: SessionRepair
   worktree: WorktreeState
+  /**
+   * The branch the worktree is really on, when the record does not name it.
+   *
+   * Null in the ordinary case, and null for a `detached` review session, whose
+   * record names a branch nobody has checked out on purpose. Set means every
+   * measurement on this row is about somewhere other than `branch` — see the
+   * sessions index endpoint and `~/utils/checkout`.
+   */
+  driftedTo?: string | null
   /** Its work is in the base branch already — see the sessions index endpoint. */
   landed?: boolean
   /** What the session is doing right now — see the sessions index endpoint. */

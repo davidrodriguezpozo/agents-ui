@@ -7,6 +7,7 @@ import { hasLanded } from '../../utils/lander'
 import { isStale } from '../../utils/checks'
 import { getActive, readRun } from '../../utils/runStore'
 import { listPending } from '../../utils/permissionBroker'
+import { checkoutDrifted } from '~/utils/checkout'
 
 /**
  * Sessions with the live state of their worktree and their current run.
@@ -72,6 +73,7 @@ export default defineEventHandler(async (event) => {
     baseRef: session.baseSha || session.baseBranch,
     baseBranch: session.baseBranch,
     branch: session.branch,
+    detached: session.detached,
     version: session.updatedAt,
     live: runs[index]!.live,
     // Everything `activity === 'idle'` needs except whether the worktree is
@@ -99,13 +101,40 @@ export default defineEventHandler(async (event) => {
     // Only for a session with a settled verdict to be stale, and never mid-turn.
     const settled = session.check && session.check.status !== 'running' && activity === 'idle'
 
+    /**
+     * The worktree is on a branch this record does not name.
+     *
+     * Carried as the branch rather than a flag, because every reader of it needs
+     * to say which one — a row with no room for the reason still has room for
+     * `on feat/something`. Null is the ordinary case.
+     */
+    const driftedTo = checkoutDrifted({
+      recorded: session.branch,
+      actual: worktree.branch,
+      detached: session.detached,
+    })
+      ? worktree.branch
+      : null
+
     return {
       ...session,
       worktree,
       checkStale: settled ? isStale(session.check, fingerprint ?? '') : false,
       activity,
-      /** Its work is in the base branch: finished, whatever else the row says. */
-      landed: hasLanded(session.branch, worktree.ahead, mergedByRepo.get(session.repoDir) ?? new Set()),
+      driftedTo,
+      /**
+       * Its work is in the base branch: finished, whatever else the row says.
+       *
+       * Refused outright while the checkout has drifted, because the two halves
+       * of the question would come from two different branches: `ahead` is
+       * counted from HEAD, and `merged` is asked about the branch on record —
+       * whose untouched tip *is* the base commit, and so is trivially contained
+       * in it. That combination reported the session running at the time as
+       * landed while its two commits sat on another branch, which is the exact
+       * lie the `ahead > 0` half of `hasLanded` was written to prevent.
+       */
+      landed: !driftedTo
+        && hasLanded(session.branch, worktree.ahead, mergedByRepo.get(session.repoDir) ?? new Set()),
       pendingPermissions: pending,
       lastRunId,
       turnCount: session.runIds.length,

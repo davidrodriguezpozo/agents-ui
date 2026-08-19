@@ -1,6 +1,7 @@
+import { existsSync } from 'node:fs'
 import { inFlight, mapLimit } from './pool'
 import { worktreeFingerprint } from './checks'
-import { diffBase, worktreeStatus, type WorktreeStatus } from './worktrees'
+import { currentBranch, diffBase, worktreeStatus, type WorktreeStatus } from './worktrees'
 
 /**
  * The worktree state behind a polled list, without paying for all of it every
@@ -63,6 +64,13 @@ export interface WorktreeStateRequest {
    */
   branch?: string
   /**
+   * The worktree holds a commit rather than a branch, and was made that way —
+   * a review session detached on a pull request's head. Passed through so the
+   * base is not "repaired" for a session whose record is correct, and so the
+   * extra read below is skipped for the one case that can never drift.
+   */
+  detached?: boolean
+  /**
    * Bumped whenever the session record is written, which every mutation does.
    * A merge, a finished turn or a check therefore invalidates immediately
    * rather than waiting the window out.
@@ -101,6 +109,30 @@ const reading = inFlight<string, WorktreeState>()
 
 function versionOf(request: WorktreeStateRequest): string {
   return `${request.baseRef} ${request.baseBranch ?? ''} ${request.branch ?? ''} ${request.version}`
+}
+
+/**
+ * What the worktree is actually on, when knowing could change the answer.
+ *
+ * One more `git` invocation, so it is asked only where it can matter — which is
+ * the same rule the fingerprint above follows. Three cases can skip it and
+ * together they are most sessions:
+ *
+ *   - **Detached on purpose.** A review session cannot drift; its record naming
+ *     another branch is the design.
+ *   - **No branch on record.** Nothing to disagree with.
+ *   - **No directory.** `worktreeStatus` is about to report it missing, and a
+ *     spawn against a path that is not there buys a failure.
+ *
+ * `null` means "not asked", which `diffBase` treats as no drift — so a skip here
+ * is always the old behaviour rather than a new guess.
+ */
+async function checkoutOf(request: WorktreeStateRequest): Promise<string | null> {
+  if (request.detached) return null
+  if (!request.branch) return null
+  if (!existsSync(request.worktreePath)) return null
+
+  return currentBranch(request.worktreePath)
 }
 
 /**
@@ -161,6 +193,8 @@ export async function worktreeStates(
             branch: request.branch ?? '',
             baseBranch: request.baseBranch ?? '',
             baseSha: request.baseRef,
+            checkedOut: await checkoutOf(request),
+            detached: request.detached,
           }),
           request.baseBranch,
         ),

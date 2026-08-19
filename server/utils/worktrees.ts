@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { appendFile, mkdir, readFile, realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, join, sep } from 'node:path'
 import { promisify } from 'node:util'
+import { checkoutDrifted } from '~/utils/checkout'
 
 const exec = promisify(execFile)
 
@@ -260,8 +261,41 @@ export async function diffBase(session: {
   branch: string
   baseBranch: string
   baseSha: string
+  /**
+   * What the worktree is really on, when the caller has already read it.
+   *
+   * Absent means "not asked", which keeps every existing caller's behaviour
+   * exactly as it was. See the drift case below.
+   */
+  checkedOut?: string | null
+  /** Made detached on purpose, so a record naming another branch is correct. */
+  detached?: boolean
 }): Promise<string> {
-  const { worktreePath, branch, baseBranch, baseSha } = session
+  const { worktreePath, branch, baseBranch, baseSha, checkedOut, detached } = session
+
+  /*
+   * A checkout that has wandered off the branch on record is not measurable
+   * against the base that record names. The base described a lineage HEAD is no
+   * longer on, so `baseBranch...HEAD` resolves to whatever the two happen to
+   * share — four months back, on the sessions this was found on, which is how a
+   * review session came to report 2,231 changed files and 214 commits ahead.
+   *
+   * The default branch is the one base that still means something about a branch
+   * we know nothing else about. It reported 7 files and 2 commits for the same
+   * session.
+   *
+   * A better answer exists and is deliberately not taken here: the pull request's
+   * own base, which `branchPullRequest` already knows. It is a fact from GitHub,
+   * this function is called from a polled path, and a stacked branch measured
+   * against the trunk over-reports by its own stack rather than by a season. That
+   * refinement belongs where the network already lives, not here.
+   */
+  if (checkoutDrifted({ recorded: branch, actual: checkedOut, detached })) {
+    const trunk = await defaultBranchRef(worktreePath)
+    // Unknown leaves everything as it was: a guessed trunk that is wrong
+    // produces exactly the enormous diff this is here to avoid.
+    if (trunk) return trunk
+  }
 
   if (!baseBranch || baseBranch === branch) return baseSha || baseBranch || 'HEAD'
   if (!baseSha) return baseBranch
@@ -345,6 +379,25 @@ export async function currentBranch(repoDir: string): Promise<string> {
   } catch {
     return 'HEAD'
   }
+}
+
+/**
+ * What this repository considers its trunk, as git knows it.
+ *
+ * Only ever needed for a checkout that has drifted off the branch on record: the
+ * recorded base then describes a lineage HEAD is not on, and the merge base
+ * between them can be months back. This is the one base that is always
+ * meaningful for a branch we know nothing else about.
+ *
+ * `refs/remotes/origin/HEAD` is the authoritative answer and nothing here
+ * guesses past it — no falling back to a local `main` or `master`, because a
+ * guess that is wrong produces exactly the enormous diff this exists to avoid.
+ * An empty string means "unknown", and the caller keeps what it had.
+ */
+export async function defaultBranchRef(cwd: string): Promise<string> {
+  const ref = await git(cwd, ['symbolic-ref', 'refs/remotes/origin/HEAD']).catch(() => '')
+  if (!ref.startsWith('refs/remotes/')) return ''
+  return ref.slice('refs/remotes/'.length)
 }
 
 /** Every worktree git knows about for this repo — the authoritative list. */

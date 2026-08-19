@@ -5,6 +5,7 @@ import { isSendKey } from '~/utils/keys'
 import type { RunQuery } from '~/composables/useRuns'
 import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type { Session } from '~/composables/useSessions'
+import type { WallPull } from '~/utils/wall'
 import {
   buildWorkList, onTab, removableRuns, statusCounts, tabOf, WORK_ORIGIN, WORK_STATUS,
   type WorkItem, type WorkOrigin, type WorkStatus, type WorkTab,
@@ -21,6 +22,49 @@ const { workingDir, displayPath } = useWorkingDir()
 const { projects, nameFor, activate, addProject, ensureLoaded: ensureProjectsLoaded } = useProjects()
 const router = useRouter()
 const toast = useToast()
+
+/**
+ * Which pull request each session's work is behind.
+ *
+ * From the wall's reading rather than a request of its own: it covers every
+ * project, is held for a minute on the server, and joins concurrent callers — so
+ * a page with forty-five sessions on it costs the same as the Fleet screen
+ * already does, and nothing here asks GitHub about a branch one at a time.
+ *
+ * What it will not know: a pull request that is neither yours nor one you were
+ * asked to review, because that reading is about work with your name on it. A
+ * card with no pull request to show says nothing, which is what it did before.
+ */
+const { reading: pullsReading, watchPulls } = useWallPulls()
+watchPulls()
+
+const pullByBranch = computed(() => {
+  const map = new Map<string, WallPull>()
+
+  // Both lists, because a session can be behind a pull request you opened *or*
+  // one you were asked to look at — a review session is the second kind.
+  for (const pull of [...pullsReading.value.mine, ...pullsReading.value.reviewing]) {
+    if (pull.headBranch) map.set(`${pull.repoDir}\u0000${pull.headBranch}`, pull)
+  }
+
+  return map
+})
+
+/**
+ * The pull request for one session.
+ *
+ * Keyed on the repository as well as the branch: five projects on one machine
+ * routinely share branch names — `main`, and every `fix/typo` anybody has ever
+ * pushed — and a card showing another repository's pull request would be a worse
+ * lie than showing none.
+ *
+ * A drifted session is looked up by the branch it is *really* on, since that is
+ * where its commits are and therefore which pull request they belong to.
+ */
+function pullFor(session: Session): WallPull | null {
+  const branch = session.driftedTo || session.branch
+  return pullByBranch.value.get(`${session.repoDir}\u0000${branch}`) ?? null
+}
 
 const prompt = ref('')
 const creating = ref(false)
@@ -1207,6 +1251,7 @@ async function switchTo(path: string) {
               v-if="sessionFor(item)"
               :session="sessionFor(item)!"
               :repo-name="scope === 'here' ? null : nameFor(sessionFor(item)!.repoDir)"
+              :pull="pullFor(sessionFor(item)!)"
             />
             <RunCard
               v-else
