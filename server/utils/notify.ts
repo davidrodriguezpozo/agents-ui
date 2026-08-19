@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { platform } from 'node:os'
 import { postViaNotifier } from './notifier'
+import { publishBrowserNotification } from './notifyBus'
 import { readPreferences } from './preferences'
 
 /**
@@ -11,12 +12,17 @@ import { readPreferences } from './preferences'
  * ritual blocked on a permission at 08:00 is worth exactly nothing if the
  * first you hear of it is at 11:00.
  *
- * The notification goes to the operating system rather than the browser on
- * purpose: the browser is usually shut, which is the case this exists for.
- *
  * A banner is also a thing you click, and clicking it should land you on the
- * session or run it is about — see `notifier.ts` for the small app bundle that
- * makes that possible.
+ * session or run it is about. That is what decides where it is posted from.
+ *
+ * The browser posts it by default. It is the only sender that can actually
+ * honour the click: the page that asked for permission is the page the click
+ * returns to, in the tab you already had. The desktop banner is still offered
+ * — it reaches you with the browser shut, which the browser cannot — but on
+ * macOS getting a click out of it takes an app bundle of our own (`notifier.ts`)
+ * and even then it can only shell out to `open` and hope. See
+ * `NotificationChannel` in `preferences.ts` for the choice, and `notifyBus.ts`
+ * for the pipe to the open tabs.
  */
 
 export type NotifyKind = 'needsYou' | 'failed' | 'finished'
@@ -77,7 +83,12 @@ export function runPath(run: { id: string; sessionId?: string }): string {
   return run.sessionId ? `/sessions/${run.sessionId}` : `/runs/${run.id}`
 }
 
-async function send(title: string, body: string, link: string): Promise<void> {
+/**
+ * The desktop banner, whatever the machine has for one. Exported so that the
+ * "send a test" button can prove this path without going through the switches
+ * that decide whether a real notification is wanted.
+ */
+export async function postSystemNotification(title: string, body: string, link: string): Promise<void> {
   const os = platform()
 
   if (os === 'darwin') {
@@ -107,14 +118,26 @@ async function send(title: string, body: string, link: string): Promise<void> {
  *
  * `link` is a path within this app — `/sessions/abc` — and is where clicking the
  * banner goes. Left out, a click opens the app on its landing page, which is
- * still an answer to "what was that about".
+ * still an answer to "what was that about". The browser is handed the path and
+ * resolves it against the origin the tab is already on; the desktop banner has
+ * no origin of its own, so it gets the absolute address from `studioUrl`.
  */
 export async function notify(kind: NotifyKind, title: string, body: string, link = '/'): Promise<void> {
   try {
     const { notifications } = await readPreferences()
     if (!notifications.enabled || !notifications[kind]) return
 
-    await send(title, bannerText(body), studioUrl(link))
+    const banner = bannerText(body)
+
+    if (notifications.channel !== 'system') {
+      // Published whether or not a tab is listening. Work running unattended is
+      // the normal case, and it must not behave differently for being watched.
+      publishBrowserNotification({ kind, title, body: banner, link })
+    }
+
+    if (notifications.channel !== 'browser') {
+      await postSystemNotification(title, banner, studioUrl(link))
+    }
   } catch {
     // Deliberately swallowed.
   }

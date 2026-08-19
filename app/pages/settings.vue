@@ -227,6 +227,33 @@ const NOTIFICATION_OPTIONS: { key: NotificationKey; label: string; hint: string 
 const notifications = ref<Record<NotificationKey, boolean>>({
   enabled: true, needsYou: true, failed: true, finished: true,
 })
+
+/**
+ * Where the banner is posted from.
+ *
+ * The browser by default, because it is the only sender that can honour a
+ * click: it has the tab you were already in. The desktop banner is still here
+ * for anyone who leaves the browser shut — it is the only one that reaches
+ * them at all — and `both` for anyone who would rather see two than miss one.
+ */
+type NotificationChannel = 'browser' | 'system' | 'both'
+const notificationChannel = ref<NotificationChannel>('browser')
+const {
+  permission: notificationPermission,
+  support: notificationSupport,
+  request: askForNotifications,
+  refresh: refreshNotificationPermission,
+} = useBrowserNotifications()
+const sendingTestNotification = ref(false)
+
+/**
+ * Whether a test would have nowhere at all to go. Only true on `browser`: with
+ * `both` the desktop half still arrives, and testing that is worth doing even
+ * while the browser half is waiting on a permission.
+ */
+const notificationsNeedPermission = computed(() =>
+  notificationChannel.value === 'browser' && notificationPermission.value !== 'granted',
+)
 const summariseSessions = ref(true)
 const repairAttempts = ref(0)
 const maxTurns = ref('')
@@ -344,7 +371,7 @@ onMounted(async () => {
 
   try {
     const prefs = await $fetch<{
-      notifications: Record<NotificationKey, boolean>
+      notifications: Record<NotificationKey, boolean> & { channel?: NotificationChannel }
       summariseSessions: boolean
       repairAttempts: number
       maxTurns: number
@@ -356,6 +383,7 @@ onMounted(async () => {
       effort?: typeof effort.value
     }>('/api/preferences')
     notifications.value = prefs.notifications
+    notificationChannel.value = prefs.notifications.channel ?? 'browser'
     summariseSessions.value = prefs.summariseSessions
     repairAttempts.value = prefs.repairAttempts ?? 0
     maxTurns.value = prefs.maxTurns ? String(prefs.maxTurns) : ''
@@ -429,6 +457,60 @@ async function savePullAction(key: PullActionKey) {
   }
 }
 
+/**
+ * Saving the channel and asking for permission are one action, because to
+ * anybody choosing "in my browser" they are one decision. Chrome only honours
+ * a permission request that came from a click, and this is the click.
+ */
+async function setNotificationChannel(value: NotificationChannel) {
+  const previous = notificationChannel.value
+  notificationChannel.value = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { notifications: { channel: value } } })
+  } catch {
+    notificationChannel.value = previous
+    toast.add({ title: 'Could not save that', color: 'error' })
+    return
+  }
+
+  if (value !== 'system' && notificationPermission.value === 'default') await requestNotificationPermission()
+}
+
+async function requestNotificationPermission() {
+  const result = await askForNotifications()
+  if (result === 'granted') return
+
+  toast.add({
+    title: result === 'denied' ? 'Your browser is blocking these' : 'Not granted',
+    description: result === 'denied'
+      ? 'Allow notifications for this site in your browser settings — the padlock beside the address bar — then reload.'
+      : 'Nothing was chosen, so nothing changed.',
+    color: 'warning',
+  })
+}
+
+/**
+ * Down whichever channel is configured, and past the switches: this answers
+ * "does delivery work", which a test silenced by a preference cannot.
+ */
+async function sendTestNotification() {
+  sendingTestNotification.value = true
+  try {
+    await $fetch('/api/notifications/test', { method: 'POST' })
+    toast.add({
+      title: 'Sent',
+      description: notificationChannel.value === 'system'
+        ? 'Look for a desktop banner.'
+        : 'If no banner appeared, check Do Not Disturb and your browser\u2019s site permissions.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not send that', description: errorMessage(e), color: 'error' })
+  } finally {
+    sendingTestNotification.value = false
+  }
+}
+
 async function setNotification(key: NotificationKey, value: boolean) {
   const previous = notifications.value[key]
   notifications.value[key] = value
@@ -443,6 +525,9 @@ async function setNotification(key: NotificationKey, value: boolean) {
 onMounted(async () => {
   await load()
   syncRawJson()
+  // Read rather than asked for: the browser may have been answered in a
+  // previous visit, or the answer revoked from the padlock menu since.
+  refreshNotificationPermission()
 })
 
 onMounted(async () => {
@@ -1344,13 +1429,107 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           Notifications
           <HelpTip
             title="Being told things"
-            body="Notifications come from your desktop rather than the browser, so they still arrive when this is closed — which is the point if you run it in the background."
+            body="Your browser posts them, so clicking one comes back to the tab you already had, on the session it is about. A desktop banner is the alternative: it arrives with the browser shut, and its click lands wherever the machine decides."
           />
         </h3>
         <p class="type-body">
           Work carries on whether or not you are watching. These are how it reaches you when
           it stops being able to carry on.
         </p>
+
+        <div class="field-group">
+          <label class="field-label">Where they come from</label>
+          <div class="w-72">
+            <select
+              :value="notificationChannel"
+              class="field-select"
+              @change="setNotificationChannel(($event.target as HTMLSelectElement).value as 'browser' | 'system' | 'both')"
+            >
+              <option value="browser">In this browser (default)</option>
+              <option value="system">On the desktop</option>
+              <option value="both">Both</option>
+            </select>
+          </div>
+          <p class="field-hint">
+            A banner from the browser can bring you back here: clicking it focuses the window you
+            already had and opens the session it is about. A desktop banner cannot reliably do
+            that — it belongs to a small helper app of ours, and the best it can do is hand a
+            link to whichever browser the machine prefers. What it can do is arrive when the
+            browser is shut, which is why it is still here.
+          </p>
+        </div>
+
+        <!--
+          The permission is the browser's to give, and it will only be asked for
+          from a click — so the state of it is said out loud rather than left to
+          be discovered by a banner that never came.
+        -->
+        <div
+          v-if="notificationChannel !== 'system'"
+          class="flex items-start justify-between gap-4 py-2 px-3 rounded-md"
+          style="background: var(--input-bg);"
+        >
+          <span>
+            <span class="type-strong text-body block">
+              <template v-if="notificationSupport === 'insecure'">This address cannot post them</template>
+              <template v-else-if="notificationSupport === 'unsupported'">This browser cannot post them</template>
+              <template v-else-if="notificationPermission === 'granted'">Your browser is allowed to notify you</template>
+              <template v-else-if="notificationPermission === 'denied'">Your browser is blocking them</template>
+              <template v-else>Your browser has not been asked yet</template>
+            </span>
+            <span class="type-meta">
+              <template v-if="notificationSupport === 'insecure'">
+                Browsers only allow notifications on localhost or over HTTPS. Open this at
+                <code>http://127.0.0.1</code> instead, or choose the desktop banner above.
+              </template>
+              <template v-else-if="notificationSupport === 'unsupported'">
+                Choose the desktop banner above — nothing else will reach you here.
+              </template>
+              <template v-else-if="notificationPermission === 'denied'">
+                Allow notifications for this site from the padlock beside the address bar, then
+                reload. A refusal is remembered, so this cannot ask again.
+              </template>
+              <template v-else-if="notificationPermission === 'granted'">
+                Banners are posted while this app is open in any tab. Send one to be sure.
+              </template>
+              <template v-else>
+                One click, once. Nothing is sent anywhere — the notification is posted by your own
+                browser, by this page.
+              </template>
+            </span>
+          </span>
+          <div class="flex items-center gap-2 shrink-0">
+            <UButton
+              v-if="notificationSupport === 'ready' && notificationPermission === 'default'"
+              label="Allow"
+              size="xs"
+              @click="requestNotificationPermission"
+            />
+            <UButton
+              label="Send a test"
+              size="xs"
+              variant="soft"
+              :loading="sendingTestNotification"
+              :disabled="notificationsNeedPermission"
+              @click="sendTestNotification"
+            />
+          </div>
+        </div>
+
+        <div
+          v-else
+          class="flex items-center justify-between gap-4 py-2 px-3 rounded-md"
+          style="background: var(--input-bg);"
+        >
+          <span class="type-meta">Banners come from the desktop, so this page has nothing to ask for.</span>
+          <UButton
+            label="Send a test"
+            size="xs"
+            variant="soft"
+            :loading="sendingTestNotification"
+            @click="sendTestNotification"
+          />
+        </div>
 
         <div class="space-y-2">
           <label
@@ -1382,8 +1561,8 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <!--
         Beside notifications rather than in its own place, because it answers the
         same question they do: how work that carries on without you reaches you.
-        A desktop notification catches you at the machine; this one catches you
-        anywhere else.
+        A banner catches you at the machine you were working on; this one
+        catches you anywhere else.
       -->
       <DigestDelivery />
 

@@ -186,6 +186,28 @@ describe('preferences', () => {
     expect(notifications).toMatchObject({ enabled: true, needsYou: true, failed: true })
   })
 
+  it('posts from the browser unless asked otherwise', async () => {
+    // The browser is the only sender whose click can come back to the tab you
+    // already had, which is the whole reason it is the default.
+    const { notifications } = await preferences.readPreferences()
+
+    expect(notifications.channel).toBe('browser')
+  })
+
+  it('keeps a channel that was chosen', async () => {
+    await preferences.savePreferences({ channel: 'both' })
+    const { notifications } = await preferences.readPreferences()
+
+    expect(notifications.channel).toBe('both')
+  })
+
+  it('ignores a channel that does not exist rather than storing it', async () => {
+    // A hand-edited file must not leave `notify` switching on a value none of
+    // its branches match, which would be silence with nothing to explain it.
+    expect(preferences.sanitiseChannel('carrier-pigeon')).toBe('browser')
+    expect(preferences.sanitiseChannel(undefined)).toBe('browser')
+  })
+
   it('keeps what was set and defaults the rest', async () => {
     await preferences.savePreferences({ finished: false })
     const { notifications } = await preferences.readPreferences()

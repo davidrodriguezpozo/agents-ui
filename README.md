@@ -276,21 +276,38 @@ note — asking for it again is not the moment to bring up what it broke on last
 
 Work that carries on without you is only useful if it can reach you when it stops being
 able to carry on. A blocked permission, a failure, or a turn that ran long enough that you
-looked away each raise a **desktop** notification — not a browser one, because the browser
-is usually shut, which is the case this exists for. Each kind can be turned off in Settings.
+looked away each raise a notification. Each kind can be turned off in Settings.
 
-Clicking one opens the session, ritual or workflow it is about. On macOS that takes a small
-app bundle of our own, built into `~/.claude/agents-ui/notifier` the first time anything is
-sent: notifications belong to an application, and posting them through `osascript` made them
-Script Editor's — its icon, and a click that opened an empty script window.
+**Your browser posts them**, once you allow it to — one click, on a button in Settings, and
+nothing is sent anywhere: the banner is posted by the browser you are already sitting in
+front of, over a connection this app holds open to itself. The reason is the click. A
+notification is a thing you press to get back to the session that needs you, and a browser
+notification has the tab: pressing it focuses the window you already had and opens the
+session in it, without a reload and without a second copy of a page you were on.
+
+The desktop banner is still there, one setting away, and it is the right choice if you
+leave the browser shut — it is the only one that reaches you then. What it cannot do is
+land the click. It belongs to an application, so on macOS it takes a small app bundle of
+our own, built into `~/.claude/agents-ui/notifier` the first time anything is sent —
+without it the banner is Script Editor's, its icon and a click that opens an empty script
+window — and even with it, the best it can do is hand a link to whichever browser the
+machine prefers. Choose **Both** if you would rather see two banners than miss one.
+
+A banner about the page you are already looking at is suppressed, because the page is
+already telling you. Two minutes of history are replayed to a tab that reconnects, so a
+sleeping laptop loses nothing and a browser opened the next morning is not handed the
+night's backlog. And **Send a test** in Settings goes down whichever channel is configured:
+permission, Do Not Disturb and a blocked connection all fail silently, and none of them is
+worth discovering by missing something at three in the morning.
 
 Meanwhile the sidebar counts what is stuck rather than what you own, and the tab title
 carries that count too, so it's readable from another window.
 
 ### The morning message
 
-A notification catches you at the machine. The report it points at is a page in a browser
-that is usually shut — which is the same sentence, aimed at the thing it was meant to fix.
+A notification catches you at the machine you were working on. The report it points at is
+a page you have to be at that machine to open — which is the same sentence, aimed at the
+thing it was meant to fix.
 
 So the report can be **sent to Slack**: what needs you, what came out of it, what it cost,
 in one message, through the Slack MCP server you already have set up. No token to paste,

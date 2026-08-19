@@ -1,13 +1,20 @@
 import {
   savePreferences,
   sanitisePullActions,
+  NOTIFICATION_CHANNELS,
   RUN_EFFORTS,
+  type NotificationChannel,
   type NotificationPreferences,
   type PullActionCommands,
   type RunEffort,
 } from '../utils/preferences'
 
-const KEYS: (keyof NotificationPreferences)[] = ['enabled', 'needsYou', 'failed', 'finished']
+/**
+ * The switches, listed rather than derived from the interface: `channel` is a
+ * key of it too and is not a boolean, so a loop over every key would be a loop
+ * that assigns `true` to it.
+ */
+const KEYS = ['enabled', 'needsYou', 'failed', 'finished'] as const
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -39,6 +46,11 @@ export default defineEventHandler(async (event) => {
     const value = body?.notifications?.[key]
     if (typeof value === 'boolean') patch[key] = value
   }
+
+  // Only a channel that exists. Anything else is left alone rather than stored
+  // and then quietly ignored by every notification after it.
+  const channel = body?.notifications?.channel
+  if (NOTIFICATION_CHANNELS.includes(channel as NotificationChannel)) patch.channel = channel
 
   if (typeof body?.summariseSessions === 'boolean') {
     patch.summariseSessions = body.summariseSessions
