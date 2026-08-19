@@ -10,6 +10,24 @@ import { defineJsonStore } from './jsonStore'
  * this app, and losing them costs nothing but a re-tick.
  */
 
+/**
+ * Where a notification is posted from.
+ *
+ * `browser` is the page asking your browser for permission and posting the
+ * banner itself. Clicking it returns to the tab you already had, on the
+ * session it is about — which the desktop banner never reliably managed,
+ * because it belongs to a half-second applet whose only way back here is
+ * shelling out to `open` and hoping.
+ *
+ * `system` is that applet: it arrives with the browser shut, and pays for it
+ * with a click that lands wherever the machine decides.
+ *
+ * `both` is for anyone who would rather have two banners than miss one.
+ */
+export type NotificationChannel = 'browser' | 'system' | 'both'
+
+export const NOTIFICATION_CHANNELS: NotificationChannel[] = ['browser', 'system', 'both']
+
 export interface NotificationPreferences {
   /** Master switch. Off means nothing is ever sent, whatever else is set. */
   enabled: boolean
@@ -19,7 +37,23 @@ export interface NotificationPreferences {
   failed: boolean
   /** A run finished and there is something to read. */
   finished: boolean
+  /** Which of the two ways of reaching you is used. */
+  channel: NotificationChannel
 }
+
+/** A stored or hand-edited value, made safe to switch on. */
+export function sanitiseChannel(value: unknown): NotificationChannel {
+  return NOTIFICATION_CHANNELS.includes(value as NotificationChannel)
+    ? value as NotificationChannel
+    : DEFAULT_NOTIFICATION_CHANNEL
+}
+
+/**
+ * The browser, because a notification you cannot act on is half a
+ * notification. Anyone who leaves the browser shut and wants the desktop
+ * banner back has one control in Settings that says so.
+ */
+export const DEFAULT_NOTIFICATION_CHANNEL: NotificationChannel = 'browser'
 
 /**
  * The command a pull request's quick action runs, keyed by what the row offers.
@@ -177,6 +211,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
     needsYou: true,
     failed: true,
     finished: true,
+    channel: DEFAULT_NOTIFICATION_CHANNEL,
   },
   summariseSessions: true,
   dailyCapUsd: 0,
@@ -236,6 +271,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     notifications: {
       ...DEFAULT_PREFERENCES.notifications,
       ...(parsed?.preferences?.notifications ?? {}),
+      // Last, so a hand-edited file naming a channel that does not exist gets
+      // the default rather than a value `send` will not recognise.
+      channel: sanitiseChannel(parsed?.preferences?.notifications?.channel),
     },
     // A file written before this preference existed says nothing about it,
     // which is not the same as saying no.

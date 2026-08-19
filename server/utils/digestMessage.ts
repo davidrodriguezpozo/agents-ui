@@ -4,9 +4,9 @@ import type { Digest, DigestRitual, DigestSession } from './digest'
  * The morning report, written for somewhere that is not this app.
  *
  * The digest is the first thing you open, and the whole problem is that you do
- * not open it. Desktop notifications exist because the browser is usually shut —
- * and the same sentence condemns the report they point at. A digest nobody reads
- * is a digest that was not written.
+ * not open it. A notification reaches you at the machine you were working on —
+ * and the same sentence condemns the report it points at, which is a page on
+ * that machine. A digest nobody reads is a digest that was not written.
  *
  * So it goes where you already are. Which makes this the first thing in the app
  * that composes text for another product, and everything below follows from two
