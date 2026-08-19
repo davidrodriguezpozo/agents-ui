@@ -13,10 +13,20 @@ import {
  * rather than yours: nobody arrives wondering whether the thing they need is an
  * agent or a skill. The facet is here for when you do care, and it is a filter
  * rather than three destinations to guess between.
+ *
+ * MCP servers are here too, as a facet after a divider — they were an eighth
+ * nav item for the same question this page answers ("what can Claude reach"),
+ * and one item in a sidebar is a worse home for them than one click in here.
+ * They stay a facet rather than rows in `all` because they are not the same kind
+ * of thing: a server is a live connection with a health state and a sign-in
+ * button, not a file you wrote and can open.
  */
 const { agents, loading: agentsLoading, error: agentsError } = useAgents()
 const { commands, loading: commandsLoading, error: commandsError } = useCommands()
 const { skills, loading: skillsLoading, error: skillsError } = useSkills()
+const {
+  servers: mcpServers, loaded: mcpLoaded, loading: mcpLoading, broken: mcpBroken, load: loadMcp,
+} = useMcp()
 const { isSimple } = useUiMode()
 const router = useRouter()
 const route = useRoute()
@@ -24,20 +34,37 @@ const route = useRoute()
 const loading = computed(() => agentsLoading.value || commandsLoading.value || skillsLoading.value)
 const error = computed(() => agentsError.value || commandsError.value || skillsError.value)
 
-/** `?type=` so the old /agents, /commands and /skills links still land somewhere. */
+/** `?type=` so the old /agents, /commands, /skills and /mcp links still land somewhere. */
 const TYPES: CapabilityType[] = ['agent', 'command', 'skill']
 
-function typeFromQuery(value: unknown): CapabilityType | 'all' {
-  const singular = String(value ?? '').replace(/s$/, '')
+/** The facet bar's keys: the capability types, everything, and the servers. */
+type Facet = CapabilityType | 'all' | 'mcp'
+
+function typeFromQuery(value: unknown): Facet {
+  const raw = String(value ?? '')
+  if (raw === 'mcp') return 'mcp'
+  const singular = raw.replace(/s$/, '')
   return TYPES.includes(singular as CapabilityType) ? (singular as CapabilityType) : 'all'
 }
 
-const activeType = ref<CapabilityType | 'all'>(typeFromQuery(route.query.type))
+const activeType = ref<Facet>(typeFromQuery(route.query.type))
 const search = ref('')
+
+/** True while the facet in view is one of the file-backed kinds. */
+const showingCapabilities = computed(() => activeType.value !== 'mcp')
+
+/**
+ * MCP was an advanced-only nav item, and turning it into a facet should not
+ * quietly promote it into simple mode — that mode leads with what you can do,
+ * not with the plumbing. A `?type=mcp` link still works, so a bookmark from an
+ * older build lands where it used to.
+ */
+const showMcpFacet = computed(() => !isSimple.value || activeType.value === 'mcp')
 
 // Reflected in the URL, so a filtered view can be linked to and survives reload.
 watch(activeType, (type) => {
-  router.replace({ query: type === 'all' ? {} : { type: `${type}s` } })
+  if (type === 'all') return router.replace({ query: {} })
+  router.replace({ query: { type: type === 'mcp' ? 'mcp' : `${type}s` } })
 })
 
 const all = computed(() => toCapabilities(agents.value, commands.value, skills.value))
@@ -50,6 +77,17 @@ const facets = computed(() => [
     // A facet with nothing behind it is a dead end.
     .filter(facet => facet.count > 0),
 ])
+
+/**
+ * The MCP facet's count is only shown once the servers have been asked, because
+ * asking means running `claude mcp list` — so it happens when you open the facet
+ * rather than on every visit to the Library. Until then the facet is a label
+ * with no number, which is honest; a `0` would not be.
+ */
+const mcpFacet = computed(() => ({
+  count: mcpLoaded.value ? mcpServers.value.length : null,
+  broken: mcpLoaded.value ? mcpBroken.value : 0,
+}))
 
 const groups = computed(() => filterGroups(
   groupByOrigin(all.value.filter(item => activeType.value === 'all' || item.type === activeType.value)),
@@ -81,8 +119,11 @@ function openCreate(type: CapabilityType) {
 }
 
 function createActive() {
-  if (activeType.value !== 'all') openCreate(activeType.value)
+  if (activeType.value !== 'all' && activeType.value !== 'mcp') openCreate(activeType.value)
 }
+
+/** The MCP facet's own "New": a server is added through a different modal. */
+const showMcpAdd = ref(false)
 
 /** `?new=agent` so the command palette can open the right form from a keystroke. */
 onMounted(() => {
@@ -101,33 +142,59 @@ const canImport = computed(() => activeType.value === 'agent' || activeType.valu
   <div>
     <PageHeader title="Library">
       <template #trailing>
-        <span class="font-mono fs-sm text-meta">{{ counts.all }}</span>
+        <span class="font-mono fs-sm text-meta">
+          {{ activeType === 'mcp' ? (mcpFacet.count ?? '') : counts.all }}
+        </span>
       </template>
       <template #right>
-        <UButton
-          v-if="canImport"
-          label="Import"
-          icon="i-lucide-upload"
-          size="sm"
-          variant="soft"
-          @click="() => { showImport = true }"
-        />
-        <UButton
-          v-if="activeType !== 'all'"
-          :label="`New ${CAPABILITY_LOOK[activeType].label.toLowerCase()}`"
-          icon="i-lucide-plus"
-          size="sm"
-          @click="createActive"
-        />
-        <UDropdownMenu v-else :items="createMenu">
-          <UButton label="New" icon="i-lucide-plus" trailing-icon="i-lucide-chevron-down" size="sm" />
-        </UDropdownMenu>
+        <!-- The servers answer to a different pair of buttons than the files do. -->
+        <template v-if="activeType === 'mcp'">
+          <UButton
+            label="Check again"
+            icon="i-lucide-refresh-cw"
+            size="sm"
+            variant="soft"
+            color="neutral"
+            :loading="mcpLoading"
+            @click="loadMcp(true)"
+          />
+          <UButton
+            label="Add a server"
+            icon="i-lucide-plus"
+            size="sm"
+            @click="() => { showMcpAdd = true }"
+          />
+        </template>
+        <template v-else>
+          <UButton
+            v-if="canImport"
+            label="Import"
+            icon="i-lucide-upload"
+            size="sm"
+            variant="soft"
+            @click="() => { showImport = true }"
+          />
+          <UButton
+            v-if="activeType !== 'all'"
+            :label="`New ${CAPABILITY_LOOK[activeType].label.toLowerCase()}`"
+            icon="i-lucide-plus"
+            size="sm"
+            @click="createActive"
+          />
+          <UDropdownMenu v-else :items="createMenu">
+            <UButton label="New" icon="i-lucide-plus" trailing-icon="i-lucide-chevron-down" size="sm" />
+          </UDropdownMenu>
+        </template>
       </template>
     </PageHeader>
 
     <div class="page-container py-6">
       <div class="mb-5 flex items-center gap-3 flex-wrap">
-        <input v-model="search" placeholder="Search the library…" class="field-search max-w-xs" />
+        <input
+          v-model="search"
+          :placeholder="showingCapabilities ? 'Search the library…' : 'Search the servers…'"
+          class="field-search max-w-xs"
+        />
 
         <div class="flex items-center gap-1">
           <button
@@ -143,13 +210,45 @@ const canImport = computed(() => activeType.value === 'agent' || activeType.valu
             {{ facet.label }}
             <span class="font-mono fs-micro ml-1 opacity-70">{{ facet.count }}</span>
           </button>
+
+          <!--
+            The divider is the point. A server is not a fourth kind of file, so
+            it sits outside the group the other facets slice up, and "All" keeps
+            meaning all of *those*.
+          -->
+          <span v-if="showMcpFacet" class="w-px h-4 mx-1.5 shrink-0" style="background: var(--border-subtle);" />
+
+          <button
+            v-if="showMcpFacet"
+            class="px-2.5 py-1 rounded-md fs-mono font-medium transition-all focus-ring flex items-center gap-1"
+            :style="{
+              background: activeType === 'mcp' ? 'var(--accent-muted)' : 'transparent',
+              color: activeType === 'mcp' ? 'var(--accent)' : 'var(--text-tertiary)',
+            }"
+            title="MCP servers — tools your agents reach that don't live on this machine"
+            @click="activeType = 'mcp'"
+          >
+            MCP
+            <span v-if="mcpFacet.count !== null" class="font-mono fs-micro opacity-70">
+              {{ mcpFacet.count }}
+            </span>
+            <!-- Somewhere to look when a server has stopped answering. -->
+            <span
+              v-if="mcpFacet.broken"
+              class="size-1.5 rounded-full shrink-0"
+              style="background: var(--warning);"
+              :title="`${mcpFacet.broken} need attention`"
+            />
+          </button>
         </div>
 
-        <span v-if="search" class="type-detail">{{ matchCount }} of {{ counts.all }}</span>
+        <span v-if="search && showingCapabilities" class="type-detail">
+          {{ matchCount }} of {{ counts.all }}
+        </span>
       </div>
 
       <div
-        v-if="error"
+        v-if="error && showingCapabilities"
         class="rounded-lg px-4 py-3 mb-4 flex items-start gap-3"
         style="background: var(--error-wash); border: 1px solid var(--error-tint);"
       >
@@ -157,7 +256,13 @@ const canImport = computed(() => activeType.value === 'agent' || activeType.valu
         <span class="fs-sm ink-error">{{ error }}</span>
       </div>
 
-      <div v-if="loading && !counts.all" class="space-y-1">
+      <!--
+        Head of the chain below, so the capability list and its empty states are
+        skipped wholesale rather than each having to know about the MCP facet.
+      -->
+      <McpServerList v-if="activeType === 'mcp'" v-model:adding="showMcpAdd" :search="search" />
+
+      <div v-else-if="loading && !counts.all" class="space-y-1">
         <SkeletonRow v-for="i in 6" :key="i" />
       </div>
 

@@ -74,8 +74,8 @@ change one line was the thing breaking that loop.
 | **Activity** | Every run there has ever been, with cost, duration and outcome |
 | **Workflows** | Agents chained into a pipeline, run to the end and kept |
 | **Projects** | The repositories you work in — switch between them in a click |
-| **Agents · Commands** | Subagents and slash commands, with where each came from |
-| **Skills · Plugins · MCP** | What is installed, what it adds, and which of it actually works |
+| **Library** | Agents, commands, skills and MCP servers — everything Claude can reach, with where each came from and which of it actually works |
+| **Plugins** | What is installed and what each one adds |
 | **Explore · Graph** | Find new things to install; see how what you have connects |
 
 ---

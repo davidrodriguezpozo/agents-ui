@@ -64,7 +64,7 @@ function navigation(isSimple: boolean): PaletteItem[] {
     { key: 'go:work', kind: 'goto', label: 'Work', icon: 'i-lucide-git-branch', to: '/work', keywords: 'sessions activity runs branches worktrees history log' },
     { key: 'go:reviews', kind: 'goto', label: 'Reviews', icon: 'i-lucide-git-pull-request', to: '/pulls', keywords: 'pull requests pr' },
     { key: 'go:daily', kind: 'goto', label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules', keywords: 'rituals schedule cron' },
-    { key: 'go:library', kind: 'goto', label: 'Library', icon: 'i-lucide-library', to: '/library', keywords: 'agents commands skills' },
+    { key: 'go:library', kind: 'goto', label: 'Library', icon: 'i-lucide-library', to: '/library', keywords: 'agents commands skills mcp servers' },
     { key: 'go:settings', kind: 'goto', label: 'Settings', icon: 'i-lucide-settings', to: '/settings', keywords: 'preferences limits sandbox backups' },
   ]
 
@@ -74,7 +74,10 @@ function navigation(isSimple: boolean): PaletteItem[] {
     items.push(
       { key: 'go:workflows', kind: 'goto', label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows', keywords: 'pipeline chain' },
       { key: 'go:plugins', kind: 'goto', label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins', keywords: 'marketplace extensions' },
-      { key: 'go:mcp', kind: 'goto', label: 'MCP', icon: 'i-lucide-plug', to: '/mcp', keywords: 'servers tools external' },
+      // No longer a page of its own — a facet of the Library. Kept as its own
+      // row because "MCP" is what you type when you want it, and the Library
+      // row is not an obvious hit for that word.
+      { key: 'go:mcp', kind: 'goto', label: 'MCP servers', icon: 'i-lucide-plug', to: '/library?type=mcp', keywords: 'servers tools external library' },
       { key: 'go:graph', kind: 'goto', label: 'Graph', icon: 'i-lucide-workflow', to: '/graph', keywords: 'relationships connections' },
     )
   }
