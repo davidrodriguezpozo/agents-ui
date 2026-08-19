@@ -51,6 +51,20 @@ export function errorCode(error: unknown): string | null {
   return typeof code === 'string' ? code : null
 }
 
+/**
+ * The session a refusal pointed at, when it pointed at one.
+ *
+ * Some 409s are not really errors: asking to work on a branch that a running
+ * session already has is a redirection, and the server says which session. A
+ * page that only reads the message throws that away and leaves the person to
+ * find it in a list.
+ */
+export function errorSessionId(error: unknown): string | null {
+  const candidate = error as { data?: { data?: { sessionId?: unknown }; sessionId?: unknown } }
+  const id = candidate?.data?.data?.sessionId ?? candidate?.data?.sessionId
+  return typeof id === 'string' && id ? id : null
+}
+
 /** True when the request never reached the server — it is probably not running. */
 export function isOffline(error: unknown): boolean {
   const message = (error as { message?: unknown })?.message

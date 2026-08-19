@@ -8,6 +8,12 @@ import { deleteBranch, pruneWorktrees, removeWorktree } from '../../../utils/wor
  * agent's output to a stray click is the worst thing this could do. `?force=1`
  * is the deliberate override, and `?keepBranch=1` keeps the branch so the work
  * survives even though the worktree is gone.
+ *
+ * A borrowed branch is never deleted, whatever was asked. `-D` on somebody's
+ * pull request branch, or on a branch you had here before any of this, destroys
+ * work that was never this session's to destroy — and the session that reads
+ * as emptiest is exactly the one most likely to have borrowed rather than made
+ * its branch.
  */
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -23,7 +29,8 @@ export default defineEventHandler(async (event) => {
   await removeWorktree(session.repoDir, session.worktreePath, { force })
   await pruneWorktrees(session.repoDir)
 
-  if (!keepBranch) {
+  const ours = !session.borrowedBranch
+  if (!keepBranch && ours) {
     await deleteBranch(session.repoDir, session.branch)
   }
 
@@ -34,5 +41,5 @@ export default defineEventHandler(async (event) => {
     await deleteSession(id)
   }
 
-  return { closed: true, id, branchKept: keepBranch ? session.branch : null }
+  return { closed: true, id, branchKept: keepBranch || !ours ? session.branch : null }
 })

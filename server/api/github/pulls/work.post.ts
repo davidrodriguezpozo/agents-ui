@@ -13,6 +13,11 @@ import { readPreferences } from '../../../utils/preferences'
  * this worth having is that the row is one press away from a workspace with the
  * branch checked out and a turn in flight that knows why it is there.
  *
+ * Pressing the same row again does not fail and does not duplicate anything. A
+ * review is a detached checkout of the head commit, so any number of them can
+ * coexist; the three intents that change the branch land in the workspace that
+ * already has it, which `startSessionFromRef` reports back as `how`.
+ *
  * The pull request is re-read here rather than taken from the request body. The
  * page's copy is however many seconds old, and every prompt this builds names
  * specific facts — which checks failed, which commit they failed on. Sending an
@@ -70,11 +75,17 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, data: { error: 'over_budget', message: budget.reason! } })
   }
 
-  const session = await startSessionFromRef({
+  // A review reads; the other three change the branch. That difference decides
+  // whether this workspace holds the branch or just the commit, and holding it
+  // for a review was what made reviewing the same pull request twice — or
+  // reviewing one while a session fixes it — fail with git's "already checked
+  // out" and nothing to do about it.
+  const { session, how, note } = await startSessionFromRef({
     repoDir,
     ref: String(pull.number),
     agentSlug: body.agentSlug,
     title: `#${pull.number} ${pull.title}`,
+    detach: intent === 'review',
   })
 
   // The opening turn is your own command for this action when you have set one,
@@ -85,12 +96,19 @@ export default defineEventHandler(async (event) => {
 
   // The workspace exists and is recorded by this point, so a turn that will not
   // start is still a session you have. Reported rather than rolled back.
+  // The commit that is actually in the workspace, which is the one the review
+  // prompt should name. The fetch happens after the list was read, so a push in
+  // between makes GitHub's answer a commit older than what got checked out.
+  const reviewing = session.detached && session.baseSha ? { ...pull, headSha: session.baseSha } : pull
+
   try {
-    return { ...session, intent, runId: await startTurn(session, turnForIntent(pull, intent, pullActions)) }
+    return { ...session, intent, how, note, runId: await startTurn(session, turnForIntent(reviewing, intent, pullActions)) }
   } catch (e: any) {
     return {
       ...session,
       intent,
+      how,
+      note,
       startError: e?.data?.message ?? e?.message ?? 'The session was created but could not start working.',
     }
   }

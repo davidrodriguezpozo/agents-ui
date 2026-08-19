@@ -78,6 +78,14 @@ export interface Session {
   worktreeRemovedAt?: number
   /** Set when this continues a conversation started in the terminal. */
   adoptedAt?: number
+  /**
+   * Set when the workspace is a detached checkout of a commit — how a review is
+   * taken. `branch` still names the pull request's head branch, because that is
+   * what identifies the work, but nothing here has it checked out.
+   */
+  detached?: true
+  /** Set when the branch predates the session, so closing will not delete it. */
+  borrowedBranch?: true
   /** How much it may do without asking. Absent means `edits`. */
   trust?: TrustLevel
   /** Set once this session's branch has a pull request open. */
@@ -284,12 +292,17 @@ export function useSessions() {
   /**
    * Start on work that already exists — a pull request or a branch. The server
    * decides which from what was pasted.
+   *
+   * `how` says whether a workspace was made or whether one that already had
+   * that branch was continued or taken over. A branch can only be checked out
+   * once, so asking for one twice used to fail; now it lands you in the
+   * workspace that has it, and the difference is worth saying out loud.
    */
   async function startFrom(ref: string) {
-    const session = await $fetch<Session>('/api/sessions/from-existing', {
-      method: 'POST',
-      body: { ref },
-    })
+    const session = await $fetch<Session & { how?: 'created' | 'continued' | 'adopted'; note?: string }>(
+      '/api/sessions/from-existing',
+      { method: 'POST', body: { ref } },
+    )
     await fetchAll()
     return session
   }

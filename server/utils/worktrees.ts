@@ -276,6 +276,61 @@ export async function diffBase(session: {
   }
 }
 
+/**
+ * Fetch one branch from a remote and say which commit came back.
+ *
+ * `FETCH_HEAD` rather than the remote-tracking ref, because a bare
+ * `git fetch <remote> <branch>` is not obliged to update `refs/remotes/` and
+ * quietly returning the commit from last week would be worse than failing.
+ * Empty when the fetch did not work — no network, no such branch — which every
+ * caller here can carry on from.
+ */
+export async function fetchRemoteBranchHead(
+  cwd: string,
+  remote: string,
+  branch: string,
+): Promise<string> {
+  try {
+    await git(cwd, ['fetch', remote, branch], 120_000)
+  } catch {
+    return ''
+  }
+  return resolveRef(cwd, 'FETCH_HEAD')
+}
+
+/** A ref's commit, or empty when this repository has never heard of it. */
+export async function resolveRef(dir: string, ref: string): Promise<string> {
+  return git(dir, ['rev-parse', '--verify', `${ref}^{commit}`]).catch(() => '')
+}
+
+/** Uncommitted work sitting in a workspace — untracked files included. */
+export async function isWorktreeDirty(path: string): Promise<boolean> {
+  if (!existsSync(path)) return false
+  const porcelain = await git(path, ['status', '--porcelain']).catch(() => '')
+  return porcelain.trim().length > 0
+}
+
+/**
+ * Move a workspace forward to a ref, or leave it exactly as it was.
+ *
+ * `--ff-only` is the whole point. Taking over an abandoned workspace, or coming
+ * back to one after somebody pushed to the branch, wants the new commits — but
+ * only if arriving at them costs nothing. Anything that would need a merge, a
+ * conflict resolution, or a decision about uncommitted work is not something to
+ * do on the way to starting a session; git refuses and the workspace is
+ * untouched, which is the right outcome to report rather than to fix.
+ */
+export async function fastForward(path: string, ref: string): Promise<boolean> {
+  if (!ref) return false
+  const before = await resolveRef(path, 'HEAD')
+  try {
+    await git(path, ['merge', '--ff-only', ref], 60_000)
+  } catch {
+    return false
+  }
+  return (await resolveRef(path, 'HEAD')) !== before
+}
+
 /** Commits on `branch` that exist nowhere else — what deleting it would destroy. */
 export async function unmergedCommits(repoDir: string, branch: string): Promise<number> {
   const base = await mergeBase(repoDir, 'HEAD', branch)
@@ -401,14 +456,18 @@ export async function createWorktreeOn(options: {
   } catch (e: any) {
     const stderr = String(e.stderr ?? '').trim()
 
-    // The most common failure by far, and git's own wording is unhelpful about
-    // what to do next.
+    // The backstop, not the usual path: callers are expected to ask
+    // `findBranchHolder` first and offer the workspace that already has it.
+    // Reaching here means the holder appeared in between, so the one thing
+    // worth adding to git's wording is where it went.
     if (/already (checked out|used by worktree)/i.test(stderr)) {
+      const held = (await listWorktrees(repoDir)).find(w => w.branch === branch)
       throw createError({
         statusCode: 409,
         data: {
           error: 'branch_in_use',
-          message: `\`${branch}\` is already checked out somewhere else. A branch can only be in one working copy at a time — switch that one away, or close the session using it.`,
+          message: `\`${branch}\` is already checked out${held ? ` in ${held.path}` : ' somewhere else'}. `
+            + 'A branch can only be in one working copy at a time — switch that one away, or close the session using it.',
         },
       })
     }
@@ -424,6 +483,59 @@ export async function createWorktreeOn(options: {
 
   const baseSha = await git(repoDir, ['rev-parse', branch]).catch(() => '')
   return { path, branch, baseSha }
+}
+
+/**
+ * Check out a commit without taking the branch that points at it.
+ *
+ * The rule that makes this necessary: a branch can be checked out in exactly
+ * one working copy, and git is right about that — two worktrees moving one ref
+ * is a corruption waiting to happen. A *commit* has no such constraint. It can
+ * be checked out in as many worktrees as you like, because nothing about a
+ * detached HEAD is shared.
+ *
+ * Which is the whole answer for reading somebody's work. A review does not
+ * commit, does not push, and does not need a branch — it needed one only
+ * because checking out by name was the only way this app knew. Paying a branch
+ * for it cost twice: reviewing the same pull request a second time failed with
+ * "already checked out somewhere else", and a review taken while a session was
+ * fixing that same branch could not happen at all.
+ *
+ * The commit is named explicitly rather than resolved from the branch here, so
+ * a review is of a sha somebody can quote back — not of "whatever the branch
+ * said when the worktree was cut".
+ */
+export async function createDetachedWorktree(options: {
+  repoDir: string
+  path: string
+  commit: string
+}): Promise<{ path: string; head: string }> {
+  const { repoDir, path, commit } = options
+
+  await excludeWorktreeDir(repoDir)
+
+  if (existsSync(path)) {
+    throw createError({
+      statusCode: 409,
+      data: { error: 'worktree_exists', message: `A worktree already exists at ${path}` },
+    })
+  }
+
+  try {
+    await git(repoDir, ['worktree', 'add', '--detach', path, commit], 180_000)
+  } catch (e: any) {
+    const stderr = String(e.stderr ?? '').trim()
+    throw createError({
+      statusCode: 500,
+      data: {
+        error: 'worktree_failed',
+        message: `Could not check out ${commit.slice(0, 12)}: ${stderr || e.message}`,
+      },
+    })
+  }
+
+  const head = await git(path, ['rev-parse', 'HEAD']).catch(() => commit)
+  return { path, head }
 }
 
 /**

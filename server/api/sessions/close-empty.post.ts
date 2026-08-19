@@ -37,7 +37,10 @@ export default defineEventHandler(async (event) => {
     try {
       await removeWorktree(session.repoDir, session.worktreePath, { force: false })
       await pruneWorktrees(session.repoDir)
-      await deleteBranch(session.repoDir, session.branch)
+      // Only a branch this session made. A session started on a pull request or
+      // somebody's branch reads as empty precisely when it did nothing to it,
+      // and deleting the branch then takes commits that were there before it.
+      if (!session.borrowedBranch) await deleteBranch(session.repoDir, session.branch)
       await deleteSession(id)
       closed.push(id)
     } catch {

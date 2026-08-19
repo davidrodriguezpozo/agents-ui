@@ -109,6 +109,8 @@ export interface ResolvedPullRequest {
   title: string
   url: string
   headBranch: string
+  /** The commit at the head of it, which is the thing a review is of. */
+  headSha: string
   baseBranch: string
   state: string
   isFork: boolean
@@ -257,7 +259,7 @@ export async function resolvePullRequest(cwd: string, ref: string): Promise<Reso
   try {
     raw = await gh(cwd, [
       'pr', 'view', ref,
-      '--json', 'number,title,url,headRefName,baseRefName,state,isCrossRepository',
+      '--json', 'number,title,url,headRefName,headRefOid,baseRefName,state,isCrossRepository',
     ])
   } catch (e) {
     throw createError({
@@ -274,6 +276,7 @@ export async function resolvePullRequest(cwd: string, ref: string): Promise<Reso
     title: string
     url: string
     headRefName: string
+    headRefOid?: string
     baseRefName: string
     state: string
     isCrossRepository: boolean
@@ -284,6 +287,7 @@ export async function resolvePullRequest(cwd: string, ref: string): Promise<Reso
     title: parsed.title,
     url: parsed.url,
     headBranch: parsed.headRefName,
+    headSha: parsed.headRefOid ?? '',
     baseBranch: parsed.baseRefName,
     state: parsed.state,
     isFork: parsed.isCrossRepository,
@@ -322,6 +326,63 @@ export async function fetchPullRequestBranch(
       },
     })
   }
+}
+
+/**
+ * Bring a pull request's commits down without creating a branch for them.
+ *
+ * The counterpart to `fetchPullRequestBranch`, for a workspace that is going to
+ * be a detached checkout. Fetching into `refs/heads/<branch>` would be actively
+ * wrong there: it creates a local branch nobody asked for, and if one already
+ * exists — because a session is working that pull request right now — the
+ * fetch either refuses or moves a ref out from under it.
+ *
+ * `pull/N/head` is fetched for the same reason the branch version uses it: the
+ * ref exists whether the pull request comes from this repository or from a fork
+ * whose remote you do not have.
+ *
+ * `expected` is GitHub's answer for the head commit, and it is preferred over
+ * `FETCH_HEAD` wherever the fetch brought it down. `FETCH_HEAD` is a single file
+ * in the shared git directory: two sessions starting on two pull requests at the
+ * same moment can each read the other's, and the failure that produces is a
+ * review workspace sitting on an unrelated change. Naming the commit removes the
+ * race rather than narrowing it.
+ */
+export async function fetchPullRequestHead(
+  cwd: string,
+  remote: string,
+  number: number,
+  expected?: string,
+): Promise<string> {
+  try {
+    await git(cwd, ['fetch', remote, `pull/${number}/head`], 180_000)
+  } catch (e) {
+    throw createError({
+      statusCode: 502,
+      data: {
+        error: 'fetch_failed',
+        message: `Could not fetch pull request #${number}: ${String((e as { stderr?: string }).stderr ?? '').trim()}`,
+      },
+    })
+  }
+
+  if (expected) {
+    const local = await git(cwd, ['rev-parse', '--verify', `${expected}^{commit}`]).catch(() => '')
+    if (local) return local
+  }
+
+  const sha = await git(cwd, ['rev-parse', 'FETCH_HEAD']).catch(() => '')
+  if (!sha) {
+    throw createError({
+      statusCode: 502,
+      data: {
+        error: 'fetch_failed',
+        message: `Fetched pull request #${number} but could not work out which commit came back.`,
+      },
+    })
+  }
+
+  return sha
 }
 
 export async function defaultRemote(cwd: string): Promise<string | null> {

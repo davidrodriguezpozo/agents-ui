@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { errorMessage } from '~/utils/errors'
+import { errorMessage, errorSessionId } from '~/utils/errors'
 import { relativeTime } from '~/utils/time'
 import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
 
@@ -56,14 +56,50 @@ const nothingOnGithub = computed(() =>
 const mineOnYou = computed(() => reading.value.mine.filter(p => p.verdict.onYou))
 const mineWaiting = computed(() => reading.value.mine.filter(p => !p.verdict.onYou))
 
+/**
+ * Press a row, land in the session for it.
+ *
+ * Pressing one twice used to be a dead end: the first press left a workspace
+ * holding the pull request's branch, and every press after it came back with
+ * git's "already checked out somewhere else" — for the same pull request you
+ * were already looking at. So there are three arrivals rather than one, and the
+ * page says which: a new workspace, the one that already had this branch, or a
+ * workspace nobody claimed that has been taken over.
+ *
+ * A refusal that names a session is not really a refusal. The only case left is
+ * a branch held by a session that is mid-turn, and the answer to that is to go
+ * and look at it, which is what happens.
+ */
 async function startWork(pull: Pull, intent?: WorkIntent) {
   try {
     const session = await work(pull.number, intent)
+
     if (session.startError) {
       toast.add({ title: 'Session started, but not working', description: session.startError, color: 'warning' })
+    } else if (session.how === 'continued') {
+      toast.add({
+        title: `Continued the session on #${pull.number}`,
+        description: session.note
+          ?? 'A session already had this branch checked out, so the instruction went there rather than to a second one.',
+        color: 'info',
+      })
+    } else if (session.how === 'adopted') {
+      toast.add({
+        title: `Reused the workspace on #${pull.number}`,
+        description: session.note ?? 'A workspace already had this branch and no session behind it.',
+        color: 'info',
+      })
     }
+
     await navigateTo(`/sessions/${session.id}`)
   } catch (e: any) {
+    const held = errorSessionId(e)
+    if (held) {
+      toast.add({ title: `Already working on #${pull.number}`, description: errorMessage(e), color: 'warning' })
+      await navigateTo(`/sessions/${held}`)
+      return
+    }
+
     toast.add({ title: `Could not start on #${pull.number}`, description: errorMessage(e), color: 'error' })
   }
 }

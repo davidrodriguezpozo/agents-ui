@@ -28,6 +28,22 @@ export interface Session {
   branch: string
   baseBranch: string
   baseSha: string
+  /**
+   * Set when this workspace is a detached checkout of a commit rather than a
+   * branch — how a review is taken, so that reading a pull request does not
+   * take its branch away from whatever is working on it. `branch` still names
+   * the pull request's head branch, because that is what a person needs to see;
+   * nothing here has that branch checked out. See `createDetachedWorktree`.
+   */
+  detached?: true
+  /**
+   * Set when the branch existed before this session: somebody's pull request,
+   * a colleague's branch, a workspace this session took over. Closing such a
+   * session must not delete the branch — it is not this session's to destroy,
+   * and `close-empty` will happily do it otherwise, taking unpushed commits
+   * that were never this session's work with it.
+   */
+  borrowedBranch?: true
   status: SessionStatus
   /** Continuity across turns. Set from the first run's init message. */
   sdkSessionId?: string

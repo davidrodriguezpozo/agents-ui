@@ -37,13 +37,18 @@ export default defineEventHandler(async (event): Promise<PullRequestPreview> => 
   const uncommittedFiles = diff.files.filter(f => !f.staged).map(f => f.path)
   const files = [...new Set(diff.files.map(f => f.path))]
 
-  const blockedReason = !remote
-    ? 'This repository has no remote, so there is nowhere to push the branch.'
-    : !gh.ready
-      ? gh.reason
-      : !commits.length
-        ? 'There are no commits on this branch yet. Commit the work first — a pull request needs something to review.'
-        : undefined
+  const blockedReason = session.detached
+    // A review workspace: the commit is checked out and no branch is, so there
+    // is nothing here to push. Said plainly rather than left to `git push` to
+    // explain in terms of detached HEAD.
+    ? 'This workspace is a detached checkout for reading a pull request — there is no branch here to open one from.'
+    : !remote
+      ? 'This repository has no remote, so there is nowhere to push the branch.'
+      : !gh.ready
+        ? gh.reason
+        : !commits.length
+          ? 'There are no commits on this branch yet. Commit the work first — a pull request needs something to review.'
+          : undefined
 
   return {
     canOpen: !blockedReason,

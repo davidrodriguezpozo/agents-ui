@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { errorMessage } from '~/utils/errors'
+import { errorMessage, errorSessionId } from '~/utils/errors'
 import { findSimilar } from '~/utils/similarSession'
 import { isSendKey } from '~/utils/keys'
 import type { RunQuery } from '~/composables/useRuns'
@@ -136,8 +136,30 @@ async function onStartFrom() {
     const session = await startFrom(value)
     existingRef.value = ''
     await fetchWorktrees()
+
+    // A branch can only be checked out once, so asking for one that already has
+    // a workspace lands in that workspace rather than failing beside it. Said,
+    // because arriving in a conversation that already has history is not the
+    // same as starting one.
+    if (session.how === 'continued' || session.how === 'adopted') {
+      toast.add({
+        title: session.how === 'continued' ? 'Continued the session on that branch' : 'Reused the workspace on that branch',
+        description: session.note ?? 'A workspace already had it checked out, so this went there.',
+        color: 'info',
+      })
+    }
+
     router.push(`/sessions/${session.id}`)
   } catch (e) {
+    // The one refusal that names somewhere to go: a session mid-turn on that
+    // branch. Nothing here interrupts it, but the person asked about it.
+    const held = errorSessionId(e)
+    if (held) {
+      toast.add({ title: 'Already working on that branch', description: errorMessage(e), color: 'warning' })
+      router.push(`/sessions/${held}`)
+      return
+    }
+
     toast.add({ title: 'Could not start there', description: errorMessage(e), color: 'error' })
   } finally {
     startingFrom.value = false

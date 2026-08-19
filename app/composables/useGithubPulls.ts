@@ -68,6 +68,21 @@ export interface PullsReading {
   readAt: number
 }
 
+/** What pressing a row gives back. */
+export interface StartedOnPull {
+  id: string
+  /** The turn was not started, and this is why. The session exists regardless. */
+  startError?: string
+  /**
+   * Whether a workspace was made, or one that already had this branch was
+   * continued or taken over. Same session either way as far as the URL is
+   * concerned; not the same news.
+   */
+  how?: 'created' | 'continued' | 'adopted'
+  /** Something the server did on the way in, worth repeating once. */
+  note?: string
+}
+
 const EMPTY: PullsReading = {
   ok: true, repo: null, viewer: null, reviewing: [], mine: [],
   summary: { onYou: 0, toReview: 0, toMerge: 0, waiting: 0 },
@@ -133,11 +148,16 @@ export function useGithubPulls() {
    * The intent is left to the server when it is not given: it re-reads the pull
    * request anyway, and the row's suggestion should come from the same reading
    * the prompt is built from rather than from whatever this page loaded with.
+   *
+   * Pressing a row twice does not make two workspaces. A review is a detached
+   * checkout and can happen any number of times; the intents that change the
+   * branch land in the workspace that already has it, and `how` says which of
+   * those happened so the page can tell you rather than imply a fresh start.
    */
   async function work(number: number, intent?: WorkIntent) {
     busy.value = number
     try {
-      const session = await $fetch<{ id: string; startError?: string }>('/api/github/pulls/work', {
+      const session = await $fetch<StartedOnPull>('/api/github/pulls/work', {
         method: 'POST',
         body: { number, intent },
       })

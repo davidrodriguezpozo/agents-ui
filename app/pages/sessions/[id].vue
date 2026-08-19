@@ -959,6 +959,18 @@ const totalChanges = computed(() => {
         -->
         <span v-if="session" class="flex items-center gap-1.5 min-w-0">
           <span class="font-mono type-detail ink-accent truncate">{{ session.branch }}</span>
+          <!--
+            A review workspace names the branch it is reading without holding
+            it, which is the whole reason two reviews of one pull request are
+            possible. Marked, because "on this branch" and "reading this branch"
+            are different situations and the second one cannot commit.
+          -->
+          <span
+            v-if="session.detached"
+            class="fs-micro px-1 rounded shrink-0"
+            style="background: var(--badge-subtle-bg); color: var(--text-tertiary);"
+            title="Detached: the commit is checked out, the branch is not. Reviewing does not take the branch from anything working on it."
+          >reading</span>
           <template v-if="baseBranch">
             <UIcon name="i-lucide-arrow-right" class="size-3 shrink-0 ink-4" />
             <span
@@ -1112,8 +1124,16 @@ const totalChanges = computed(() => {
             <!-- Where this session is working, stated plainly -->
             <div class="rounded-md px-4 py-3 space-y-1" style="background: var(--surface-raised); border: 1px solid var(--border-subtle);">
               <div class="flex items-center gap-2">
-                <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0 ink-4" />
-                <span class="type-detail ink-2">
+                <UIcon
+                  :name="session.detached ? 'i-lucide-git-commit-horizontal' : 'i-lucide-git-branch'"
+                  class="size-3.5 shrink-0 ink-4"
+                />
+                <span v-if="session.detached" class="type-detail ink-2">
+                  Reading <span class="font-mono ink-accent">{{ session.branch }}</span>
+                  at <span class="font-mono">{{ session.baseSha.slice(0, 7) }}</span> —
+                  detached, so no branch is checked out here
+                </span>
+                <span v-else class="type-detail ink-2">
                   Working on <span class="font-mono ink-accent">{{ session.branch }}</span>,
                   branched from <span class="font-mono">{{ session.baseBranch }}</span>
                 </span>

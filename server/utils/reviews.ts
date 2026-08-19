@@ -391,10 +391,25 @@ Do not reply on GitHub and do not resolve any threads. Tell me what you did and 
   return reviewPrompt(pull, head)
 }
 
+/**
+ * The one prompt whose workspace has no branch in it.
+ *
+ * A review reads and reports; it does not commit and does not push. So the
+ * workspace is a detached checkout of the head commit rather than the branch —
+ * which is what lets you review the same pull request twice, and review one
+ * while a session is fixing it. The prompt says the commit out loud for the
+ * same reason the fix prompt does: a review of "the branch" is a review of
+ * whatever it happened to say, and by the time you read the findings that may
+ * be a different change.
+ */
 function reviewPrompt(pull: Pull, head: string): string {
+  // Empty when `gh` did not give one, which is rare and not worth a sentence
+  // about — the workspace is still the right code either way.
+  const at = pull.headSha ? ` at \`${pull.headSha.slice(0, 12)}\`` : ''
+
   return `${head}
 
-Opened by ${pull.author}, ${pull.changedFiles} ${pull.changedFiles === 1 ? 'file' : 'files'} changed against \`${pull.baseBranch}\`. My review was requested. The branch is checked out in this workspace.
+Opened by ${pull.author}, ${pull.changedFiles} ${pull.changedFiles === 1 ? 'file' : 'files'} changed against \`${pull.baseBranch}\`. My review was requested. The pull request's code is checked out in this workspace, detached${at} — no branch, on purpose, so reviewing it does not take the branch away from anything working on it. Do not commit, push, or make a branch here; if something needs changing, that is a separate session.
 
 Read the change — \`git diff ${pull.baseBranch}...HEAD\` — and then read around it. Most of what is wrong with a diff is not visible in the diff: a caller this now breaks, an assumption two files away that no longer holds, an error path nobody added.
 

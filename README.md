@@ -547,12 +547,23 @@ A person outranks a robot: a pull request that is both red *and* has a reviewer 
 reads as the second, because only one of those is somebody sitting at the other end.
 
 **Then the row turns into a session.** That is the part a list of links cannot do. One
-press cuts a worktree with the branch checked out and starts a turn that knows why it is
+press cuts a worktree with the pull request in it and starts a turn that knows why it is
 there — read this diff and tell me what is wrong with it; work out why CI went red and
 fix the failure rather than the check; do what the reviewer asked, and say so where you
 think they are wrong. Nothing is posted to GitHub by any of them. The review comes back
 into the session for you to read, because a review left under your name that you have not
 read is the worst thing this could possibly do for you.
+
+**And pressing it again works.** Git allows a branch in exactly one working copy, which
+used to make a second press on the same row a dead end: "fatal: branch X is already
+checked out at Y" — about the pull request you were looking at. A review does not commit
+or push, so it no longer asks for the branch at all: it gets a detached checkout of the
+head commit, named in the prompt, and any number of those can exist at once — including
+while a session is fixing that same branch. The three actions that *do* change the branch
+land in the workspace that already has it and continue that session, or take over one no
+session claims any more, and the page says which of those happened. The only refusal left
+is a branch held by a session mid-turn, or by your own checkout, and both name where it is
+rather than leaving you to find it.
 
 Merging is the exception and is treated like one: it only appears on your own pull
 request, only when it is genuinely ready, and the page re-reads GitHub at the moment you
