@@ -3,7 +3,7 @@ import { errorMessage, errorSessionId } from '~/utils/errors'
 import { findSimilar } from '~/utils/similarSession'
 import { isSendKey } from '~/utils/keys'
 import type { RunQuery } from '~/composables/useRuns'
-import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
+import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type { Session } from '~/composables/useSessions'
 import type { WallPull } from '~/utils/wall'
 import {
@@ -100,7 +100,7 @@ const showExisting = ref(false)
  * it on every session is the kind of small tax that gets a feature ignored.
  */
 const TRUST_KEY = 'agents-ui:session-trust'
-const startTrust = ref<TrustLevel>('edits')
+const startTrust = ref<TrustLevel>(DEFAULT_TRUST)
 
 onMounted(() => {
   const stored = localStorage.getItem(TRUST_KEY)

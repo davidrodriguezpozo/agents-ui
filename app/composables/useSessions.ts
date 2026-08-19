@@ -140,6 +140,17 @@ export interface BranchPullRequest {
 
 export type TrustLevel = 'readonly' | 'edits' | 'full'
 
+/**
+ * What a session that never recorded a trust level runs as.
+ *
+ * Mirrors `DEFAULT_TRUST` in `server/utils/trust.ts`, which is the authority —
+ * the server decides what a turn is actually permitted, and this exists so the
+ * control on the page cannot show a different answer from the one the next turn
+ * will use. The reasoning for the value is over there; if it changes, it changes
+ * in both places or the page starts lying.
+ */
+export const DEFAULT_TRUST: TrustLevel = 'full'
+
 /** What each level means for a session you are watching, in its own words. */
 export const TRUST_CHOICES: { value: TrustLevel; label: string; hint: string }[] = [
   { value: 'readonly', label: 'Plan only', hint: 'Reads and proposes. Changes nothing at all.' },

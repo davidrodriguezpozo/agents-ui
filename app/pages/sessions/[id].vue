@@ -5,7 +5,7 @@ import { isSendKey } from '~/utils/keys'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
-import { TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
+import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type {
   BranchPullRequest, DiffFile, MergePreview, PullRequestPreview, Session, SessionTurn,
   TranscriptMessage,
@@ -881,7 +881,7 @@ async function sendReview() {
  * applies from the next turn, because a run that was told to stop asking has
  * nothing left to intercept.
  */
-const trust = computed<TrustLevel>(() => session.value?.trust ?? 'edits')
+const trust = computed<TrustLevel>(() => session.value?.trust ?? DEFAULT_TRUST)
 
 async function onTrust(level: TrustLevel) {
   if (level === trust.value) return

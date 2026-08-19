@@ -1,4 +1,5 @@
 import { findSession } from './sessions'
+import { asksNothing } from './trust'
 
 /**
  * Whether a run's session has *since* been set to Auto.
@@ -23,7 +24,12 @@ export async function nowTrustedFully(sessionId: string | undefined): Promise<bo
   if (!sessionId) return false
 
   try {
-    return (await findSession(sessionId))?.trust === 'full'
+    // Through `asksNothing`, so a session that never recorded a level is read
+    // the same way here as it is when the turn's permission mode is chosen. Two
+    // answers to "it never said" is how a session ends up being asked about
+    // something the run was told it could do.
+    const session = await findSession(sessionId)
+    return Boolean(session) && asksNothing(session!.trust)
   } catch {
     // A session that cannot be read has granted nothing. Failing closed here
     // costs a prompt; failing open would run a command nobody approved.

@@ -108,8 +108,19 @@ describe('permissionModeFor', () => {
     expect(permissionModeFor('full')).toBe('bypassPermissions')
   })
 
-  it('falls back to the middle ground for anything unrecognised', () => {
-    // Rituals written before trust levels existed reach this path.
-    expect(permissionModeFor(undefined as never)).toBe('acceptEdits')
+  it('does not decide what a legacy ritual runs as — the store does', () => {
+    /*
+     * This used to assert that an absent permission falls back to `acceptEdits`,
+     * on the reasoning that rituals written before trust levels existed reach
+     * this path. They do not: `scheduleStore` fills the field in on read, and the
+     * shared fallback is now the *session* default, which is Auto.
+     *
+     * So the assertion moved to where the guarantee is — see
+     * `ritualPermission.test.ts`, which reads a schedules.json with no permission
+     * in it. What is worth pinning here is only that the two are different
+     * answers, so a ritual can never quietly inherit the session one.
+     */
+    expect(permissionModeFor(undefined as never)).toBe('bypassPermissions')
+    expect(permissionModeFor('edits')).not.toBe(permissionModeFor(undefined as never))
   })
 })

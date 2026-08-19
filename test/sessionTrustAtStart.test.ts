@@ -63,12 +63,16 @@ describe('starting a session with a trust level', () => {
     expect(permissionModeFor(started.trust)).toBe('plan')
   })
 
-  it('still defaults to editing files when nothing was chosen', async () => {
-    // Every session created before this existed, and every caller that does not
-    // care. Silence must not read as "anything it needs".
+  it('runs at Auto when nothing was chosen, and records nothing', async () => {
+    /*
+     * Every caller that has no picker to offer: a pull request row, the Fleet
+     * screen, a batch of twenty. The record still stores nothing — silence is
+     * kept as silence, so changing the default later changes these sessions too
+     * rather than leaving a generation of them pinned to a value nobody chose.
+     */
     const started = await startSession.startSession({ repoDir: repo, title: 'default one' })
 
     expect(started.trust).toBeUndefined()
-    expect(permissionModeFor(started.trust)).toBe('acceptEdits')
+    expect(permissionModeFor(started.trust)).toBe('bypassPermissions')
   })
 })

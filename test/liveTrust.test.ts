@@ -49,9 +49,13 @@ afterAll(async () => {
 
 describe('honouring Auto on the turn already running', () => {
   it('says yes once the session has been set to Auto, not when it started', async () => {
-    // Exactly the shape that produced this bug: the session opens at the
-    // default, the long first turn is already underway, and Auto is pressed.
-    const started = await startSession.startSession({ repoDir: repo, title: 'flipped mid-turn' })
+    // Exactly the shape that produced this bug: the session is at a level that
+    // asks, the long first turn is already underway, and Auto is pressed. Started
+    // explicitly at `edits` rather than left to the default, which is now Auto —
+    // the bug needs a session that was asking to begin with.
+    const started = await startSession.startSession({
+      repoDir: repo, title: 'flipped mid-turn', trust: 'edits',
+    })
     expect(await liveTrust.nowTrustedFully(started.id)).toBe(false)
 
     await sessions.patchSession(started.id, { trust: 'full' })
