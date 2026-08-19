@@ -112,6 +112,15 @@ export interface Session {
   driftedTo?: string | null
   /** Its work is in the base branch already — see the sessions index endpoint. */
   landed?: boolean
+  /**
+   * When you said you were done with this session.
+   *
+   * The one signal for "finished with" that nothing infers and nothing can
+   * argue with. Set means History regardless of what the workspace holds;
+   * cleared by the next turn, because sending an instruction to a session is
+   * the plainest possible statement that you are not done with it.
+   */
+  filedAt?: number
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity
   pendingPermissions: number
@@ -399,6 +408,22 @@ export function useSessions() {
     return result.messages
   }
 
+  /**
+   * File a session away, or take it back out.
+   *
+   * Nothing is deleted and no worktree is touched — this only answers "am I
+   * still working on this", which is the question the In flight tab asks and
+   * could not previously be told the answer to.
+   */
+  async function setAside(id: string, aside = true) {
+    const updated = await $fetch<Session>(`/api/sessions/${encodeURIComponent(id)}/file`, {
+      method: 'POST',
+      body: { aside },
+    })
+    await fetchAll()
+    return updated
+  }
+
   /** Takes effect on the next turn — the SDK is told once, when a run starts. */
   async function setTrust(id: string, trust: TrustLevel) {
     return $fetch<Session>(`/api/sessions/${encodeURIComponent(id)}/trust`, {
@@ -505,6 +530,7 @@ export function useSessions() {
     send,
     fetchTranscript,
     setTrust,
+    setAside,
     previewPullRequest,
     openPullRequest,
     watchPullRequest,

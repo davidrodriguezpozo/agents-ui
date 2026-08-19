@@ -218,6 +218,10 @@ export async function startTurn(
   await patchSession(session.id, {
     status: 'running',
     runIds: [...session.runIds, run.id],
+    // Sending a session an instruction is the clearest statement there is that
+    // you are not finished with it, so a session you had set aside comes back
+    // out of History rather than taking a second click to retrieve.
+    filedAt: undefined,
   })
 
   const startedAt = Date.now()

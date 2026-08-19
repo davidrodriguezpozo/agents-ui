@@ -655,6 +655,15 @@ asking the opposite question. A session you might still interrupt and a ritual t
 on Tuesday are both work, but nobody looks for both at once, and in one list the finished
 rows win on volume: forty of them, and the two you could act on at the bottom.
 
+In flight does not mean "something is running". A session that answered your question,
+committed nothing and opened no pull request has stopped, and is the most in-flight it will
+ever be — the next thing due to happen is you typing. So the cut between the two tabs is
+whether the work is *finished with*, and there are only three ways for a session to get
+there: its commits land in the base branch, you set it aside from the session's own menu,
+or it produced nothing at all and a week went by. Work sitting unmerged in a workspace
+never ages out on its own, and sending a session an instruction pulls it back out of
+History.
+
 Filter by what started it and how it ended, and search what a run *said* rather than only
 what it was called. Searching covers the whole log, not the page of it on screen.
 

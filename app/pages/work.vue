@@ -7,7 +7,8 @@ import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/use
 import type { Session } from '~/composables/useSessions'
 import type { WallPull } from '~/utils/wall'
 import {
-  buildWorkList, onTab, removableRuns, statusCounts, tabOf, WORK_ORIGIN, WORK_STATUS,
+  buildWorkList, onTab, removableRuns, statusCounts, tabCounts as countByTab, tabOf,
+  WORK_ORIGIN, WORK_STATUS,
   type WorkItem, type WorkOrigin, type WorkStatus, type WorkTab,
 } from '~/utils/workList'
 
@@ -488,13 +489,7 @@ const work = computed(() => onTab(
   tab.value,
 ))
 
-const tabCounts = computed(() => {
-  const counts = statusCounts(everything.value)
-  return {
-    flight: counts.running + counts['needs-you'],
-    history: counts.done + counts.failed,
-  }
-})
+const tabCounts = computed(() => countByTab(everything.value))
 
 const statusChips = computed(() => {
   const counts = statusCounts(everything.value)
@@ -715,11 +710,18 @@ async function switchTo(path: string) {
     <!--
       Two tabs, because they are two jobs.
 
-      In flight is a thing you might interrupt: the composer, what is running,
-      what is stuck, and the workspaces they are sitting in. History is a thing
-      you read: last night as a picture, and every finished row underneath it.
-      Held in one list the finished rows win on volume — forty of them, and the
-      two you could act on at the bottom.
+      In flight is a thing you might interrupt or reply to: the composer, what is
+      running, what is stuck, what is waiting on a word from you, and the
+      workspaces they are sitting in. History is a thing you read: last night as
+      a picture, and every finished row underneath it. Held in one list the
+      finished rows win on volume — forty of them, and the two you could act on
+      at the bottom.
+
+      "In flight" is not "a process is alive", and that distinction cost a
+      release: a session that answered a question, committed nothing and opened
+      no pull request was filed as finished, when the next thing due to happen
+      was you typing. The cut is whether the work is finished *with* — see
+      `TAB_STATUSES` and `isSettled`.
     -->
     <div class="page-container page-container--measure pt-3">
       <div class="flex items-center gap-0.5 p-0.5 rounded-md w-fit" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
@@ -1281,7 +1283,7 @@ async function switchTo(path: string) {
           ? 'Nothing is running'
           : (scope === 'here' ? 'Nothing has finished in this project' : 'Nothing has finished yet')"
         :description="tab === 'flight'
-          ? 'Start a session above to give Claude its own copy of this project. It turns up here while it works, and moves to History when it is done.'
+          ? 'Start a session above to give Claude its own copy of this project. It stays here while it works and while it is waiting on you, and moves to History once its work lands or you set it aside.'
           : 'Sessions, rituals and commands land here once they have finished, with what each of them came to.'"
       />
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  buildWorkList, fromRun, fromSession, onTab, removableRuns, statusCounts, tabOf,
+  buildWorkList, fromRun, fromSession, onTab, removableRuns, statusCounts, tabCounts, tabOf,
   type WorkItem,
 } from '~/utils/workList'
 import type { Session } from '~/composables/useSessions'
@@ -59,11 +59,12 @@ describe('a row is a piece of work, not a turn', () => {
 describe('a session says where it got to in its own words', () => {
   it('separates work waiting to land from work that produced nothing', () => {
     // The distinction the whole sessions list exists for, and the one a shared
-    // status enum would have flattened: both are "done".
+    // status enum would have flattened. `nothing` is dated 1970 by the factory,
+    // so it has aged out; a fresh one is a conversation, and tested below.
     const ready = fromSession(session({ worktree: changed }))
     const nothing = fromSession(session())
 
-    expect([ready.status, ready.outcome]).toEqual(['done', 'Ready to land'])
+    expect([ready.status, ready.outcome]).toEqual(['yours', 'Ready to land'])
     expect([nothing.status, nothing.outcome]).toEqual(['done', 'Nothing came of it'])
   })
 
@@ -85,6 +86,73 @@ describe('a session says where it got to in its own words', () => {
   it('reports a missing workspace without calling it a failure', () => {
     const item = fromSession(session({ activity: 'missing' }))
     expect([item.status, item.outcome]).toEqual(['done', 'Workspace gone'])
+  })
+})
+
+/**
+ * The bug this exists for: a session that answered a question and is waiting for
+ * the follow-up had every automatic mark of being over — no live process, no
+ * commits, no pull request — and so was filed under History, which is where you
+ * go to read about things rather than to do them.
+ */
+describe('a session waiting on you is still in flight', () => {
+  const fresh = (over: Partial<Session> = {}) => session({ updatedAt: Date.now(), ...over })
+
+  it('keeps a session that answered and changed nothing on the flight tab', () => {
+    const item = fromSession(fresh())
+    expect([item.status, item.outcome]).toEqual(['yours', 'Your turn'])
+    expect(tabOf(item.status)).toBe('flight')
+  })
+
+  it('keeps work waiting to be merged there too, however quiet it has gone', () => {
+    // Twelve uncommitted files and no process running is the most in-flight a
+    // session gets, and it used to read as finished.
+    const item = fromSession(fresh({ worktree: changed }))
+    expect([item.status, item.outcome]).toEqual(['yours', 'Ready to land'])
+    expect(tabOf(item.status)).toBe('flight')
+  })
+
+  it('does not need a pull request to count as live', () => {
+    expect(fromSession(fresh({ worktree: changed, prUrl: undefined })).status).toBe('yours')
+  })
+
+  it('lets go once the work has landed', () => {
+    const item = fromSession(fresh({ worktree: changed, landed: true }))
+    expect([item.status, item.outcome]).toEqual(['done', 'Merged'])
+  })
+
+  it('lets go when you say you are done with it, whatever is in the workspace', () => {
+    const aside = fromSession(fresh({ worktree: changed, filedAt: Date.now() }))
+    expect([aside.status, aside.outcome]).toEqual(['done', 'Set aside'])
+    expect(tabOf(aside.status)).toBe('history')
+
+    const empty = fromSession(fresh({ filedAt: Date.now() }))
+    expect([empty.status, empty.outcome]).toEqual(['done', 'Set aside'])
+  })
+
+  it('ages an empty session out on its own, so the tab cannot silt up', () => {
+    const stale = fromSession(session({ updatedAt: Date.now() - 8 * 24 * 3600_000 }))
+    expect([stale.status, stale.outcome]).toEqual(['done', 'Nothing came of it'])
+  })
+
+  it('never ages out a session with work sitting in it', () => {
+    // Filing that away quietly a week later is the same bug, just slower.
+    const old = fromSession(session({
+      updatedAt: Date.now() - 40 * 24 * 3600_000,
+      worktree: changed,
+    }))
+    expect(old.status).toBe('yours')
+  })
+
+  it('sorts your turn below what is running and above what is over', () => {
+    const items = buildWorkList({
+      sessions: [fresh({ id: 'mine', title: 'your turn' })],
+      runs: [
+        run({ id: 'r-run', status: 'running', title: 'running' }),
+        run({ id: 'r-done', status: 'completed', title: 'over' }),
+      ],
+    })
+    expect(items.map(i => i.title)).toEqual(['running', 'your turn', 'over'])
   })
 })
 
@@ -260,6 +328,7 @@ describe('which half of /work a row belongs to', () => {
   it('puts what you could still interrupt on one tab and what is over on the other', () => {
     expect(tabOf('running')).toBe('flight')
     expect(tabOf('needs-you')).toBe('flight')
+    expect(tabOf('yours')).toBe('flight')
     expect(tabOf('done')).toBe('history')
     expect(tabOf('failed')).toBe('history')
   })
@@ -272,9 +341,19 @@ describe('which half of /work a row belongs to', () => {
       fromRun(run({ id: 'r-done', status: 'completed' })),
       fromRun(run({ id: 'r-fail', status: 'failed' })),
       fromSession(session({ id: 'blocked', activity: 'awaiting-permission' })),
+      fromSession(session({ id: 'yours', updatedAt: Date.now() })),
     ]
     const split = [...onTab(items, 'flight'), ...onTab(items, 'history')]
     expect(split).toHaveLength(items.length)
+  })
+
+  it('counts both tabs off the same mapping, so a new status cannot be missed', () => {
+    const items = [
+      fromRun(run({ id: 'r-run', status: 'running' })),
+      fromSession(session({ id: 'yours', updatedAt: Date.now() })),
+      fromRun(run({ id: 'r-done', status: 'completed' })),
+    ]
+    expect(tabCounts(items)).toEqual({ flight: 2, history: 1 })
   })
 
   it('keeps a blocked session out of history, however long it has been stuck', () => {
