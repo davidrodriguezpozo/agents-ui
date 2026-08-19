@@ -22,8 +22,12 @@ export interface SessionShape {
   worktree?: Pick<WorktreeState, 'changedFiles' | 'dirty'> | null
 }
 
-/** Whether anything was actually produced, which is what makes a session worth a decision. */
-function producedSomething(session: SessionShape): boolean {
+/**
+ * Whether anything was actually produced, which is what makes a session worth a
+ * decision. Asks for the worktree and nothing else, because both shapes in this
+ * file carry one and neither has any business knowing about the other's fields.
+ */
+function producedSomething(session: Pick<SessionShape, 'worktree'>): boolean {
   const worktree = session.worktree
   if (!worktree) return false
   return worktree.changedFiles > 0 || worktree.dirty
