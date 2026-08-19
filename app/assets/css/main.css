@@ -5,6 +5,54 @@
   --font-display: "Geist Sans", "Geist", system-ui, sans-serif;
   --font-sans: "Geist Sans", "Geist", system-ui, sans-serif;
   --font-mono: "Geist Mono", "SF Mono", ui-monospace, monospace;
+
+  /**
+   * The terminal is not code, and it does not want --font-mono.
+   *
+   * A shell prompt worth having — powerlevel10k, starship, oh-my-posh — draws
+   * its separators, git branch and status arrows from the Private Use Area, and
+   * Geist Mono has none of it. The result is a row of tofu boxes where the
+   * prompt should be: the terminal works perfectly and looks broken.
+   *
+   * So this stack asks for the patched fonts people actually install first, in
+   * rough order of how common they are on a developer's machine, and only then
+   * falls back to the app's own mono. A locally installed font needs nothing
+   * downloaded and matches iTerm2 exactly, which is the point — this pane is
+   * standing in for that one.
+   *
+   * "Symbols Nerd Font Mono" sits second-to-last on purpose. It is bundled
+   * below with a unicode-range covering the icon blocks alone, so it supplies
+   * glyphs to a machine with no Nerd Font installed while leaving every letter
+   * and digit to Geist Mono. A reader with MesloLGS NF never reaches it.
+   */
+  --font-terminal:
+    "MesloLGS NF", "MesloLGS Nerd Font Mono", "MesloLGS Nerd Font",
+    "JetBrainsMono Nerd Font", "FiraCode Nerd Font", "Hack Nerd Font",
+    "Symbols Nerd Font Mono",
+    "Geist Mono", "SF Mono", ui-monospace, monospace;
+}
+
+/**
+ * Icons only, for machines with no patched font of their own.
+ *
+ * `unicode-range` is what keeps this from being a second body font: the browser
+ * only downloads and consults it for codepoints in these blocks, so text keeps
+ * Geist Mono's metrics and the icons stop being boxes. `font-display: block`
+ * rather than `swap` because an icon that arrives late does not reflow into
+ * place the way a word does — it redraws a prompt that was already wrong.
+ *
+ * The ranges are the Nerd Font ones: the two Private Use Areas plus the handful
+ * of assigned codepoints the patched sets also override.
+ */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url("/fonts/SymbolsNerdFontMono-Regular.woff") format("woff");
+  unicode-range:
+    U+23FB-23FE, U+2665, U+26A1, U+2B58,
+    U+E000-F8FF, U+F0000-FFFFD, U+100000-10FFFD;
 }
 
 /* Nuxt UI reads --ui-* for its own components; keep them on our accent so a

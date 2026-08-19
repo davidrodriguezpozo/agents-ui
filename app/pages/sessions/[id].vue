@@ -1718,7 +1718,10 @@ const totalChanges = computed(() => {
           </div>
 
           <div v-if="opened.has('terminal') && session" v-show="pane === 'terminal'">
-            <TerminalPane :session-id="session.id" />
+            <TerminalPane
+              :post-url="`/api/sessions/${encodeURIComponent(session.id)}/terminal`"
+              :stream-url="`/api/sessions/${encodeURIComponent(session.id)}/terminal/stream`"
+            />
           </div>
 
           <!-- Changes -->
