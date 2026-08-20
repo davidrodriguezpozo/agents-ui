@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage, errorSessionId } from '~/utils/errors'
+import { workByPull } from '~/utils/pullWork'
 import { relativeTime } from '~/utils/time'
 import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
 
@@ -28,7 +29,7 @@ import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
 const {
   reading, summary, loading, loaded, busy, refresh, watchContinuously, stopWatching, work, merge,
 } = useGithubPulls()
-const { sessions } = useSessions()
+const { sessions, fetchAll: fetchSessions } = useSessions()
 const { workingDir } = useWorkingDir()
 const { projects } = useProjects()
 const toast = useToast()
@@ -39,8 +40,10 @@ const confirming = ref<number | null>(null)
 onMounted(() => watchContinuously())
 onUnmounted(stopWatching)
 
-// Another project is another repository and another set of pull requests.
-watch(workingDir, () => { void refresh() })
+// Another project is another repository and another set of pull requests — and
+// another answer to `inCurrentProject`, which is what decides whose sessions
+// may be shown against those pull requests.
+watch(workingDir, () => { void refresh(); void fetchSessions() })
 
 const nothingOnGithub = computed(() =>
   reading.value.ok && !reading.value.reviewing.length && !reading.value.mine.length
@@ -55,6 +58,54 @@ const nothingOnGithub = computed(() =>
  */
 const mineOnYou = computed(() => reading.value.mine.filter(p => p.verdict.onYou))
 const mineWaiting = computed(() => reading.value.mine.filter(p => !p.verdict.onYou))
+
+/* ----------------------------------------------------- already started it -- */
+
+/**
+ * Which pull requests you have already started on.
+ *
+ * Every row here offers to start a session, and until now none of them knew
+ * whether you had — so the page invited you to begin work that was sitting
+ * open, occasionally mid-turn, two screens away. The join is local: both halves
+ * are already loaded, and the rule for what counts is in `~/utils/pullWork`.
+ *
+ * Restricted to this project's sessions, because the reading is this project's
+ * repository and the sessions store holds every project on the machine. #482
+ * exists everywhere.
+ */
+const sessionsHere = computed(() => sessions.value.filter(s => s.inCurrentProject))
+
+const workOnPulls = computed(() =>
+  workByPull([...reading.value.reviewing, ...reading.value.mine], sessionsHere.value))
+
+/**
+ * Sessions go stale on this page in a way they do not on /work.
+ *
+ * Nothing else here refetches them — the app fetches once at start-up — so a
+ * chip saying "Working on it" would keep saying it for the rest of the day.
+ * Polled on the same terms /work uses: only while something could actually
+ * change on its own, and never overlapping itself.
+ */
+let sessionPoll: ReturnType<typeof setInterval> | null = null
+let pollingSessions = false
+
+onMounted(() => {
+  void fetchSessions()
+
+  sessionPoll = setInterval(async () => {
+    if (pollingSessions) return
+    if (!sessions.value.some(s => s.activity === 'working')) return
+
+    pollingSessions = true
+    try {
+      await fetchSessions()
+    } finally {
+      pollingSessions = false
+    }
+  }, 5000)
+})
+
+onUnmounted(() => { if (sessionPoll) clearInterval(sessionPoll) })
 
 /**
  * Press a row, land in the session for it.
@@ -308,6 +359,7 @@ const nothingAnywhere = computed(() =>
                 :key="pull.number"
                 :pull="pull"
                 :busy="busy === pull.number"
+                :work="workOnPulls.get(pull.number) ?? null"
                 class="stagger-item"
                 @work="intent => startWork(pull, intent)"
               />
@@ -319,6 +371,7 @@ const nothingAnywhere = computed(() =>
                 <PullCard
                   :pull="pull"
                   :busy="busy === pull.number"
+                  :work="workOnPulls.get(pull.number) ?? null"
                   :can-merge="pull.verdict.state === 'ready'"
                   @work="intent => startWork(pull, intent)"
                   @merge="confirmMerge(pull)"
@@ -359,6 +412,7 @@ const nothingAnywhere = computed(() =>
                 :key="pull.number"
                 :pull="pull"
                 :busy="busy === pull.number"
+                :work="workOnPulls.get(pull.number) ?? null"
                 class="stagger-item"
                 @work="intent => startWork(pull, intent)"
               />
