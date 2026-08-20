@@ -135,7 +135,9 @@ function displayName(server: McpServer): string {
           <div
             v-for="server in sorted"
             :key="server.name"
-            class="rounded-lg px-4 py-3 bg-card"
+            data-row
+            tabindex="0"
+            class="rounded-lg px-4 py-3 bg-card focus-ring"
           >
             <div class="flex items-start gap-3">
               <UIcon
@@ -165,7 +167,14 @@ function displayName(server: McpServer): string {
                   word "Connected" is the same thing said twice.
                 -->
                 <div v-if="server.detail" class="mt-1">
+                  <!--
+                    The only thing there is to open on a server: why it is not
+                    working. A connected one has no destination, so Enter on it
+                    does nothing rather than pressing the nearest button, which
+                    on the row below this would be "Sign in".
+                  -->
                   <button
+                    data-row-open
                     class="type-detail underline hover:opacity-80"
                     :style="{ color: LOOKS[server.status].colour }"
                     @click="expanded = expanded === server.name ? null : server.name"

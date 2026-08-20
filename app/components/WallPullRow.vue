@@ -76,8 +76,10 @@ const unresolved = computed(() => {
     :content="{ collisionPadding: 8 }"
     @update:open="open => emit('menu-open', open)"
   >
+    <!-- Already a link, so Enter needs nothing declaring: the browser opens it. -->
     <a
-      class="pull"
+      data-row
+      class="pull focus-ring"
       :href="pull.url"
       target="_blank"
       rel="noopener"

@@ -138,6 +138,39 @@ export function isTypingTarget(target: EventTarget | null): boolean {
 }
 
 /**
+ * Whether Enter on this element already does something without our help.
+ *
+ * The rows that were keyboard-reachable first are all links — `EntityRow`,
+ * `RunCard`, `SessionCard` — and the browser opens a focused anchor on Enter by
+ * itself. Clicking it again from the handler would open it twice, which on a
+ * `NuxtLink` is a duplicate navigation and on a `target="_blank"` one is two
+ * tabs.
+ */
+export function opensItself(el: HTMLElement | null): boolean {
+  const tag = el?.tagName?.toLowerCase()
+  if (!tag) return false
+  if (tag === 'button') return true
+  return tag === 'a' && el!.hasAttribute('href')
+}
+
+/**
+ * What Enter should press on a row that is not itself a link.
+ *
+ * Declared by the row rather than guessed at, because "the first link inside"
+ * is wrong on every row that has two: a `PullCard` for work you have already
+ * started leads with a chip linking to that session, and the pull request — the
+ * thing the row is about — is the second anchor. A row that means to be openable
+ * says which element it opens.
+ *
+ * Null is a legitimate answer. An MCP server that is connected and a marketplace
+ * source have no destination to go to, and inventing one out of the nearest
+ * button would make Enter install things.
+ */
+export function rowAction(row: HTMLElement): HTMLElement | null {
+  return row.querySelector<HTMLElement>('[data-row-open]')
+}
+
+/**
  * Whether the keypress is inside the embedded shell.
  *
  * Everything else that swallows keys does it because a letter is a letter; this

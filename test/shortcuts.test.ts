@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { join, relative, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import {
   ACTION_SHORTCUTS, EDITOR_SHORTCUTS, JUMP_SHORTCUTS, LIST_SHORTCUTS, PALETTE_SHORTCUTS,
   NAV_SHORTCUTS, chordHint, chordTarget, isBareKey, isTerminalTarget, isTypingTarget, navShortcuts,
@@ -155,5 +158,194 @@ describe('the cheatsheet', () => {
     // the glyphs is how somebody ends up pressing ⌘d and bookmarking the page.
     const borrowed = [...LIST_SHORTCUTS, ...JUMP_SHORTCUTS, ...PALETTE_SHORTCUTS]
     expect(borrowed.filter(row => row.keys.includes('⌘'))).toEqual([])
+  })
+})
+
+/*
+ * ── Whether the list keys actually reach anything ──────────────────────────────
+ *
+ * The tests above check the tables. These check the pages, which is where the
+ * keyboard layer was broken on arrival: `j`/`k` resolve rows through
+ * `main [data-row]`, no page sets that attribute itself, and it was carried by
+ * exactly four components — so Land, Fleet, Daily, Plugins, MCP and Explore
+ * rendered lists the keyboard could not see. Every one of them shipped a working
+ * `g l` to a page where `j` did nothing, which is worse than no keyboard support
+ * because the half that works implies the other half does.
+ *
+ * Source text rather than a mounted DOM on purpose: the failure being guarded
+ * against is a new list page that never opts in, and a test that has to render
+ * the page to notice is a test that needs the page to exist in a fixture first.
+ */
+
+const appDir = fileURLToPath(new URL('../app', import.meta.url))
+
+function vueFilesIn(dir: string): string[] {
+  const out: string[] = []
+  for (const entry of readdirSync(dir)) {
+    const full = join(dir, entry)
+    if (statSync(full).isDirectory()) out.push(...vueFilesIn(full))
+    else if (entry.endsWith('.vue')) out.push(full)
+  }
+  return out
+}
+
+/**
+ * Markup with the prose taken out.
+ *
+ * These files are heavily commented, and a comment that says `<main>` while
+ * explaining which element scrolls is not a second `<main>` — `settings.vue`
+ * has exactly that, and the first version of the test below failed on it.
+ */
+function withoutComments(text: string): string {
+  return text
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*(?:\/\/|\*).*$/gm, '')
+}
+
+const vue = vueFilesIn(appDir).map(path => ({
+  path: relative(appDir, path).split(sep).join('/'),
+  text: readFileSync(path, 'utf8'),
+}))
+
+/** `data-row`, not `data-row-open`, which is a different attribute. */
+const ROW_ATTR = /(?:^|\s)data-row(?=\s|$|=)/
+const OPEN_ATTR = /(?:^|\s)data-row-open(?=\s|$|=)/
+
+/**
+ * Every element opening tag, as `{ tag, attrs }`.
+ *
+ * The quoted-string alternation is what makes this safe on a Vue template: a
+ * `>` inside `:style="{ ... }"` or `@click="a > b"` must not end the tag.
+ */
+function openingTags(text: string): { tag: string; attrs: string }[] {
+  const out: { tag: string; attrs: string }[] = []
+  const re = /<([A-Za-z][\w.-]*)((?:[^<>"']|"[^"]*"|'[^']*')*?)\/?>/g
+  for (const match of text.matchAll(re)) out.push({ tag: match[1]!, attrs: match[2]! })
+  return out
+}
+
+/** The rows declared in a file, with the tag they were declared on. */
+function rowsIn(file: { path: string; text: string }) {
+  return openingTags(file.text)
+    .filter(el => ROW_ATTR.test(el.attrs))
+    .map(el => ({ ...el, file: file.path }))
+}
+
+const allRows = vue.flatMap(rowsIn)
+
+/**
+ * Tags that are their own link or button, so the browser presses them on Enter.
+ *
+ * `component` is `NowQueue`'s row, which is `:is="item.href ? 'a' : 'NuxtLink'"`
+ * — an anchor either way.
+ */
+const SELF_OPENING = new Set(['a', 'button', 'NuxtLink', 'component'])
+
+describe('the rows the list keys walk', () => {
+  it('finds some at all, so a broken scan fails loudly rather than passing empty', () => {
+    expect(allRows.length).toBeGreaterThan(10)
+  })
+
+  it('can be focused, because `j` moves the cursor by focusing the next one', () => {
+    // A `data-row` on a plain div with no tabindex is invisible to `land()`:
+    // `focus()` on a non-focusable element does nothing, so `j` appears to be
+    // dead when in fact it moved and nothing took the focus.
+    const unfocusable = allRows
+      .filter(row => !SELF_OPENING.has(row.tag) && !/(?:^|\s)tabindex(?=\s|=)/.test(row.attrs))
+      .map(row => `${row.file}  <${row.tag}>`)
+
+    expect(unfocusable).toEqual([])
+  })
+
+  it('shows a focus ring, so you can see which row Enter would open', () => {
+    const invisible = allRows
+      .filter(row => !/focus-ring/.test(row.attrs))
+      .map(row => `${row.file}  <${row.tag}>`)
+
+    expect(invisible).toEqual([])
+  })
+
+  /**
+   * Rows with nothing to open, and why. Not an oversight list — Enter is
+   * documented as "open it", and the only action on each of these is a write:
+   * adopting a suggested ritual, installing a plugin, updating or removing a
+   * marketplace. A keyboard layer that installs something because you pressed
+   * Enter while reading is worse than one where Enter is quiet.
+   */
+  const NOTHING_TO_OPEN = new Set(['components/MarketplaceSourceRow.vue'])
+
+  it('declares what Enter opens, or is a link that opens itself', () => {
+    const orphaned = vue
+      .filter(file => rowsIn(file).some(row => !SELF_OPENING.has(row.tag)))
+      .filter(file => !OPEN_ATTR.test(file.text))
+      .filter(file => !NOTHING_TO_OPEN.has(file.path))
+      .map(file => file.path)
+
+    expect(orphaned).toEqual([])
+  })
+
+  it('has no `data-row-open` stranded in a file with no row', () => {
+    // The marker is only read through a focused `[data-row]`. One left behind in
+    // a file whose row was removed or renamed is dead code that reads as working.
+    const stranded = vue
+      .filter(file => OPEN_ATTR.test(file.text) && !rowsIn(file).length)
+      .map(file => file.path)
+
+    expect(stranded).toEqual([])
+  })
+})
+
+/**
+ * The pages that show a list, and must therefore be walkable.
+ *
+ * Settings and Graph are deliberately absent: one is a form and the other a
+ * canvas, and on both `⌃d`/`⌃u` fall through to scrolling the page, which is
+ * what `halfPage` does when it finds no rows. Detail pages are absent for the
+ * same reason.
+ */
+const LIST_PAGES = [
+  'pages/index.vue',
+  'pages/work.vue',
+  'pages/land.vue',
+  'pages/library.vue',
+  'pages/schedules.vue',
+  'pages/plugins/index.vue',
+  'pages/mcp.vue',
+  'pages/explore.vue',
+  'pages/wall.vue',
+  'pages/workflows/index.vue',
+]
+
+describe('every list page', () => {
+  /** Component tag name → whether that component declares a row. */
+  const carriers = new Set(
+    vue.filter(file => rowsIn(file).length).map(file => file.path.replace(/^.*\//, '').replace(/\.vue$/, '')),
+  )
+
+  it('is a real file, so a rename turns into a failure and not a silent gap', () => {
+    const missing = LIST_PAGES.filter(path => !vue.some(file => file.path === path))
+    expect(missing).toEqual([])
+  })
+
+  it('renders rows the keyboard can find', () => {
+    const deaf = LIST_PAGES.filter((path) => {
+      const file = vue.find(f => f.path === path)!
+      if (rowsIn(file).length) return false
+      return ![...carriers].some(name => new RegExp(`<${name}[\\s/>]`).test(file.text))
+    })
+
+    expect(deaf).toEqual([])
+  })
+
+  it('keeps the shell as the only `main`, because that is what the row scan queries', () => {
+    // `visibleRows()` reads `main [data-row]` and `scroller()` takes the first
+    // `main` in the document. Fleet used to nest a second one inside the shell's,
+    // which made both of those mean two different elements on one page.
+    const nested = vue
+      .filter(file => file.path !== 'app.vue' && /<main[\s>]/.test(withoutComments(file.text)))
+      .map(file => file.path)
+
+    expect(nested).toEqual([])
   })
 })

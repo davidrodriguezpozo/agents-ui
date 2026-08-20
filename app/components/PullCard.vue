@@ -130,8 +130,15 @@ const workNote = computed(() => {
 </script>
 
 <template>
+  <!--
+    A row the keyboard can reach. `tabindex` because the root is a div and has
+    to be — the card carries a merge button and a link to a session, and an
+    anchor wrapping either is a link inside a link.
+  -->
   <div
-    class="relative flex gap-3 rounded-lg overflow-hidden transition-all hover-card"
+    data-row
+    tabindex="0"
+    class="relative flex gap-3 rounded-lg overflow-hidden transition-all hover-card focus-ring"
     style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
     :style="pull.verdict.onYou ? { borderColor: 'var(--border-default)' } : undefined"
   >
@@ -174,7 +181,13 @@ const workNote = computed(() => {
       </div>
 
       <div class="min-w-0">
+        <!--
+          What Enter opens. Marked here rather than left to be guessed: the chip
+          above links to a session, so on a pull request you have already started
+          the first anchor in this card is not the pull request.
+        -->
         <a
+          data-row-open
           :href="pull.url"
           target="_blank"
           rel="noopener"

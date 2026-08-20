@@ -1,4 +1,4 @@
-import { CHORD_TIMEOUT_MS, chordTarget, isBareKey, isTerminalTarget, isTypingTarget } from '~/utils/shortcuts'
+import { CHORD_TIMEOUT_MS, chordTarget, isBareKey, isTerminalTarget, isTypingTarget, opensItself, rowAction } from '~/utils/shortcuts'
 
 /**
  * One listener for the whole app.
@@ -35,8 +35,18 @@ export function useShortcuts() {
  * can arrow onto is worse than one you cannot.
  */
 function visibleRows(): HTMLElement[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('main [data-row]'))
+  const rows = Array.from(document.querySelectorAll<HTMLElement>('main [data-row]'))
     .filter(el => el.offsetParent !== null)
+
+  /*
+   * A row inside a row is not a row. `currentRow` matches the outer one first,
+   * because it contains whatever has focus, so a nested pair turns `j` into
+   * "walk from this row onto its own child" — and the pages that stack lists
+   * invite exactly that: a ritual on Daily opens a strip of its own runs, and a
+   * plugin card holds a link to the plugin. The outer one wins, because it is
+   * the thing the page is a list of.
+   */
+  return rows.filter(el => !rows.some(other => other !== el && other.contains(el)))
 }
 
 /** The page's scrolling element, which is `main` rather than the document. */
@@ -298,6 +308,33 @@ export function useShortcutBindings() {
         event.preventDefault()
         moveRow(-takeCount())
         return
+
+      /**
+       * Open what you are on.
+       *
+       * A row that is its own link needs none of this — the browser opens a
+       * focused anchor by itself, which is why the four components that had
+       * `data-row` first never needed an Enter branch. The rows that are not
+       * links, because they carry a toggle and a menu of their own, name the
+       * element Enter presses with `data-row-open`.
+       */
+      case 'Enter': {
+        // Only when the row itself has focus. Tab into a control inside it and
+        // that control owns its Enter: the toggle on a plugin row means to be
+        // flipped, not to navigate away from what you were flipping.
+        const active = document.activeElement as HTMLElement | null
+        if (!active?.matches?.('[data-row]')) return
+
+        clearPending()
+        if (opensItself(active)) return
+
+        const open = rowAction(active)
+        if (!open) return
+
+        event.preventDefault()
+        open.click()
+        return
+      }
 
       case '?':
         event.preventDefault()

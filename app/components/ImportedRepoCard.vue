@@ -66,7 +66,7 @@ function formatDate(iso: string) {
 </script>
 
 <template>
-  <div class="rounded-lg overflow-hidden bg-card">
+  <div data-row tabindex="0" class="rounded-lg overflow-hidden bg-card focus-ring">
     <div class="p-4 space-y-3">
       <div class="flex items-center gap-2.5">
         <div
@@ -136,6 +136,7 @@ function formatDate(iso: string) {
 
     <div class="px-4 py-3 flex items-center justify-between" style="border-top: 1px solid var(--border-subtle);">
       <a
+        data-row-open
         :href="entry.url"
         target="_blank"
         rel="noopener"

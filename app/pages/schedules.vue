@@ -240,7 +240,9 @@ function nextLabel(schedule: Schedule) {
         <div
           v-for="schedule in schedules"
           :key="schedule.id"
-          class="rounded-lg"
+          data-row
+          tabindex="0"
+          class="rounded-lg focus-ring"
           style="border: 1px solid var(--border-subtle);"
           :style="{ opacity: schedule.enabled ? 1 : 0.6 }"
         >
@@ -420,7 +422,11 @@ function nextLabel(schedule: Schedule) {
               <span class="field-toggle__track"><span class="field-toggle__thumb" /></span>
             </label>
 
-            <button class="p-1 rounded hover-bg shrink-0 text-meta" title="Edit" @click="edit(schedule)">
+            <!--
+              What Enter opens. A ritual has no page of its own — this modal is
+              it — so editing is what "go into this one" means here.
+            -->
+            <button data-row-open class="p-1 rounded hover-bg shrink-0 text-meta" title="Edit" @click="edit(schedule)">
               <UIcon name="i-lucide-pencil" class="size-3.5" />
             </button>
             <button class="p-1 rounded hover-bg shrink-0 ink-error" title="Remove" @click="onRemove(schedule)">
@@ -468,10 +474,17 @@ function nextLabel(schedule: Schedule) {
       <!-- Suggested by whoever maintains your team's plugins -->
       <div v-if="unadopted.length" class="space-y-2">
         <h2 class="text-section-label">Suggested by your team</h2>
+        <!--
+          No `data-row-open`: the only thing this row does is adopt the ritual,
+          and Enter is documented as "open it", not "add it". j/k walk these;
+          Enter waits for the button.
+        -->
         <div
           v-for="ritual in unadopted"
           :key="ritual.command"
-          class="flex items-center gap-3 px-4 py-3 rounded-lg"
+          data-row
+          tabindex="0"
+          class="flex items-center gap-3 px-4 py-3 rounded-lg focus-ring"
           style="border: 1px dashed var(--border-subtle);"
         >
           <UIcon name="i-lucide-sparkles" class="size-4 shrink-0" style="color: var(--plugin);" />

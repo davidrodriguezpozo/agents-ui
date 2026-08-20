@@ -422,7 +422,9 @@ async function onRemove(owner: string, repo: string) {
             <div
               v-for="template in templates"
               :key="template.id"
-              class="rounded-lg overflow-hidden bg-card group flex flex-col"
+              data-row
+              tabindex="0"
+              class="rounded-lg overflow-hidden bg-card group flex flex-col focus-ring"
             >
               <div class="p-4 space-y-3 flex-1">
                 <div class="flex items-center gap-2.5">
@@ -464,6 +466,7 @@ async function onRemove(owner: string, repo: string) {
                   {{ template.frontmatter.description }}
                 </p>
                 <button
+                  data-row-open
                   class="fs-sm text-meta hover:text-label transition-colors"
                   @click="
                     previewId = previewId === template.id ? null : template.id
@@ -521,7 +524,9 @@ async function onRemove(owner: string, repo: string) {
             <div
               v-for="template in filteredCommandTemplates"
               :key="template.id"
-              class="rounded-lg overflow-hidden bg-card group"
+              data-row
+              tabindex="0"
+              class="rounded-lg overflow-hidden bg-card group focus-ring"
             >
               <div class="p-4 space-y-3">
                 <div class="flex items-center gap-2.5">
@@ -547,6 +552,7 @@ async function onRemove(owner: string, repo: string) {
                   {{ template.frontmatter.description }}
                 </p>
                 <button
+                  data-row-open
                   class="fs-sm text-meta hover:text-label transition-colors"
                   @click="
                     previewId = previewId === template.id ? null : template.id
@@ -669,7 +675,9 @@ async function onRemove(owner: string, repo: string) {
               <div
                 v-for="plugin in group"
                 :key="plugin.id"
-                class="rounded-lg overflow-hidden bg-card group flex flex-col"
+                data-row
+                tabindex="0"
+                class="rounded-lg overflow-hidden bg-card group flex flex-col focus-ring"
               >
                 <div class="p-4 space-y-3 flex-1">
                   <div class="flex items-center gap-2.5">
@@ -705,7 +713,7 @@ async function onRemove(owner: string, repo: string) {
                   </div>
                 </div>
                 <div class="px-4 py-3 flex items-center justify-between" style="border-top: 1px solid var(--border-subtle);">
-                  <NuxtLink :to="`/plugins/${plugin.id}`" class="fs-sm text-meta hover:text-label transition-colors">
+                  <NuxtLink data-row-open :to="`/plugins/${plugin.id}`" class="fs-sm text-meta hover:text-label transition-colors">
                     View details
                   </NuxtLink>
                   <UButton
@@ -736,7 +744,9 @@ async function onRemove(owner: string, repo: string) {
               <div
                 v-for="plugin in group"
                 :key="plugin.name"
-                class="rounded-lg overflow-hidden bg-card group flex flex-col"
+                data-row
+                tabindex="0"
+                class="rounded-lg overflow-hidden bg-card group flex flex-col focus-ring"
               >
                 <div class="p-4 space-y-3 flex-1">
                   <div class="flex items-center gap-2.5">

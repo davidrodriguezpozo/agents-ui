@@ -89,7 +89,9 @@ function formatDate(iso: string) {
             <div
               v-for="plugin in group"
               :key="plugin.id"
-              class="flex items-center gap-3 px-3 py-2.5 rounded-md group hover-row"
+              data-row
+              tabindex="0"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-md group hover-row focus-ring"
             >
               <!-- Toggle -->
               <label class="field-toggle shrink-0" @click.stop>
@@ -105,6 +107,7 @@ function formatDate(iso: string) {
 
               <!-- Clickable area for navigation -->
               <NuxtLink
+                data-row-open
                 :to="`/plugins/${encodeURIComponent(plugin.id)}`"
                 class="flex items-center gap-3 flex-1 min-w-0 focus-ring rounded"
               >

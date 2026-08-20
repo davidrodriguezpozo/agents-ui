@@ -107,9 +107,11 @@ function openRun(cmd: Command) {
         <div v-for="group in grouped" :key="group.key" class="space-y-2.5">
           <h2 class="text-section-label">{{ group.label }}</h2>
           <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            <!-- A button, so Enter runs it without the handler's help. -->
             <button
               v-for="cmd in group.commands"
               :key="cmd.slug"
+              data-row
               class="text-left rounded-lg p-3.5 focus-ring hover-card bg-card group"
               @click="openRun(cmd)"
             >
@@ -165,6 +167,7 @@ function openRun(cmd: Command) {
           <button
             v-for="skill in mySkills"
             :key="skill.slug"
+            data-row
             class="text-left rounded-lg p-3.5 focus-ring hover-card bg-card"
             @click="prefillSkill(skill.frontmatter.name)"
           >

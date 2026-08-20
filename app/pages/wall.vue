@@ -802,7 +802,7 @@ onUnmounted(() => {
       below is the last it said.
     </p>
 
-    <main class="wall-main">
+    <div class="wall-main">
       <!--
         The table. Grouped by repository only when there is more than one, because
         a single header over every row on the screen is a header that says nothing.
@@ -1049,7 +1049,7 @@ onUnmounted(() => {
 
        </div>
       </div>
-    </main>
+    </div>
 
     <!--
       The heartbeat, and the controls that used to be in the corner.

@@ -133,7 +133,13 @@ function answer(behavior: 'allow' | 'deny', scope?: 'once' | 'session') {
     :content="{ collisionPadding: 8 }"
     @update:open="open => emit('menu-open', open)"
   >
-    <div class="row" :class="[`is-${urgency}`, { 'is-open': prompt }]" :style="{ '--row-tone': TONES[urgency] }">
+    <div
+      data-row
+      tabindex="0"
+      class="row focus-ring"
+      :class="[`is-${urgency}`, { 'is-open': prompt }]"
+      :style="{ '--row-tone': TONES[urgency] }"
+    >
       <div class="row-line">
         <UIcon
           :name="badge.icon"
@@ -147,7 +153,7 @@ function answer(behavior: 'allow' | 'deny', scope?: 'once' | 'session') {
           <span class="row-branch">{{ row.branch }}</span>
         </NuxtLink>
 
-        <NuxtLink :to="`/sessions/${row.sessionId}`" class="row-title" :title="row.title">
+        <NuxtLink data-row-open :to="`/sessions/${row.sessionId}`" class="row-title" :title="row.title">
           {{ row.title }}
         </NuxtLink>
 
