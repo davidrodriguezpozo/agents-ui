@@ -418,7 +418,16 @@ function ensureCliBuilt() {
   execSync('node scripts/build-cli.mjs', { cwd: root, stdio: 'inherit' })
 }
 
-function tui() {
+/**
+ * Everything the client side of this can do, handed to the bundled CLI.
+ *
+ * The launcher's job is to know whether this is a checkout or an install and to
+ * have built what it needs; deciding what `work --json` means is the CLI's, and
+ * it parses the rest of the arguments itself.
+ */
+const CLIENT_COMMANDS = new Set(['tui', 'work', 'land', 'daily', 'fleet', 'inbox', 'new', 'watch'])
+
+function client() {
   ensureBuilt()
   ensureCliBuilt()
   process.env.AGENTS_STUDIO_SERVER_ENTRY = outputServer
@@ -430,11 +439,21 @@ const command = process.argv[2]
 if (command === 'install') await install()
 else if (command === 'uninstall') uninstall()
 else if (command === 'status') await status()
-else if (command === 'tui') await tui()
-else if (command === 'help' || command === '--help') {
-  console.log('agents-studio              start in the foreground')
+else if (CLIENT_COMMANDS.has(command)) await client()
+else if (command === 'help' || command === '--help' || command === '-h') {
+  console.log('agents-studio              start the server in the foreground')
   console.log('agents-studio tui          the same app, in this terminal')
+  console.log('agents-studio work         what is in flight, and what wants you')
+  console.log('agents-studio land         pull requests with your name on them')
+  console.log('agents-studio daily        rituals: when they fire, how they went')
+  console.log('agents-studio fleet        everything running, and what today cost')
+  console.log('agents-studio inbox        what is waiting elsewhere')
+  console.log('agents-studio new <text>   start a session on it')
+  console.log('agents-studio watch        follow what happens, a line at a time')
   console.log('agents-studio install      run in the background, at login and after a crash')
   console.log('agents-studio uninstall    stop doing that')
   console.log('agents-studio status       is it installed, is it answering')
+  console.log('')
+  console.log('Any client command takes --json, --quiet, --project DIR and --port N.')
+  console.log('They exit 2 when something is waiting on you, so a shell can branch on it.')
 } else await start()

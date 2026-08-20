@@ -29,28 +29,20 @@ export function baseUrlFor(port: number): string {
 }
 
 /**
- * Which port to talk to.
+ * Is something answering, and is it this app?
  *
- * `--port` beats the environment so a second instance can be reached without
- * exporting anything, and `PORT` matches what `agents-studio install` bakes
- * into the service definition.
+ * Both halves matter. A 200 on `/api/system/health` from whatever else happens
+ * to hold port 3000 used to count as "found it", and every request after that
+ * failed in a less obvious place — so the body has to look like ours too.
  */
-export function portFrom(argv: string[], env: NodeJS.ProcessEnv): number {
-  const flagIndex = argv.findIndex(arg => arg === '--port' || arg === '-p')
-  const flagValue = flagIndex >= 0 ? argv[flagIndex + 1] : undefined
-  const inline = argv.find(arg => arg.startsWith('--port='))?.split('=')[1]
-
-  const candidate = Number(flagValue ?? inline ?? env.PORT)
-  return Number.isFinite(candidate) && candidate > 0 ? candidate : 3000
-}
-
-/** Is something answering, and is it this app? */
 export async function answering(baseUrl: string, timeoutMs = 1500): Promise<boolean> {
   try {
     const response = await fetch(new URL('/api/system/health', baseUrl), {
       signal: AbortSignal.timeout(timeoutMs),
     })
-    return response.ok
+    if (!response.ok) return false
+    const body = await response.json() as { claudeDir?: unknown }
+    return typeof body?.claudeDir === 'string'
   } catch {
     return false
   }

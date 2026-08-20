@@ -22,7 +22,7 @@ SERVER := node bin/start.mjs
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup dev start tui build test watch typecheck check \
+.PHONY: help setup dev start tui tui-watch build test watch typecheck check \
         service service-status service-restart service-stop service-logs \
         demo demo-stop clean
 
@@ -45,6 +45,9 @@ start: ## Run the built server in this terminal
 
 tui: ## The same app, in this terminal
 	$(SERVER) tui
+
+tui-watch: ## Rebuild the terminal app as you change it
+	node scripts/build-cli.mjs --watch
 
 build: ## Build into .output/
 	$(PKG) run build

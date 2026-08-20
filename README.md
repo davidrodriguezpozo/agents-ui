@@ -102,8 +102,31 @@ agents-studio tui
 ```
 
 It talks to the local server — starts one if nothing is listening — and leaves it
-running when you quit, so rituals keep firing. `h`/`l` move between Work, Land, Daily,
-Fleet, Inbox and Projects (or `1`–`6` to jump). `?` lists every key.
+running when you quit, so rituals keep firing. Run it inside a repository and it
+opens on that repository. `h`/`l` move between Work, Land, Daily, Fleet, Inbox and
+Projects, or `g` and a letter goes straight there — `g w`, `g l`, `g d`, `g m` — the
+same chords as the browser. `j`/`k`, `5j`, `gg`, `G` and `⌃d`/`⌃u` move in any list
+or transcript. `?` lists the keys for wherever you are.
+
+It rings the terminal when something is actually blocked on you, and answering a
+permission prompt is `y`, `a`, `n`, or `N` to deny and say why.
+
+And because everything is an endpoint, it is scriptable:
+
+```bash
+agents-studio work                 # what is in flight here, and what wants you
+agents-studio daily                # rituals: when they fire, how they went
+agents-studio fleet --json | jq    # everything running, for a pipe
+agents-studio new "fix the flaky test"
+agents-studio watch                # follow what happens, a line at a time
+```
+
+Every one of those exits `2` when something is waiting on you, so a prompt segment
+or a git hook can branch on it without parsing anything:
+
+```bash
+agents-studio work -q || echo "something needs you"
+```
 
 > **You'll need:** Node.js 18+, and Claude Code installed and signed in on this machine.
 > Sessions, rituals and workflows run through the Claude Agent SDK, which spawns that
@@ -135,6 +158,7 @@ agents-studio install     # start at login and after a crash
 agents-studio status      # is it installed, is it answering
 agents-studio uninstall   # stop doing that — nothing you own is touched
 agents-studio tui         # the same app, in this terminal
+agents-studio work        # or just the answer, without opening anything
 ```
 
 <details>

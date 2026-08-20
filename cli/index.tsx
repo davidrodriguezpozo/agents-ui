@@ -1,35 +1,31 @@
 import { render } from 'ink'
 import { createApi } from './api'
+import { parseArgs, usage } from './args'
 import { StudioClient } from './client'
-import { answering, baseUrlFor, connect, portFrom, serverEntry } from './connect'
+import { runCommand, scopeInvocation } from './commands'
+import { answering, baseUrlFor, connect, serverEntry } from './connect'
+import { gitRoot } from './cwd'
 import { describeError } from './errors'
 import { App } from './ui/App'
 
-function usage(): string {
-  return [
-    'agents-studio tui            open the terminal app',
-    'agents-studio tui --port N   talk to a server on that port',
-    '',
-    'Connects to the local Agents Studio server, and starts one if nothing is',
-    'listening. Quitting does not stop the server — rituals keep running.',
-  ].join('\n')
-}
-
 async function main() {
-  const argv = process.argv.slice(2).filter(arg => arg !== 'tui')
-  if (argv.includes('--help') || argv.includes('-h')) {
-    console.log(usage())
-    return
-  }
+  // `tui` is still accepted as the first word for the launcher's sake, and
+  // everything after it is parsed rather than dropped.
+  const invocation = parseArgs(process.argv.slice(2), process.env)
 
-  if (!process.stdout.isTTY) {
-    console.error('agents-studio tui needs a terminal.')
+  if (invocation.errors.length) {
+    for (const error of invocation.errors) console.error(error)
+    console.error(`\n${usage()}`)
     process.exitCode = 1
     return
   }
 
-  const port = portFrom(argv, process.env)
-  const baseUrl = baseUrlFor(port)
+  if (invocation.command === 'help') {
+    console.log(usage())
+    return
+  }
+
+  const baseUrl = baseUrlFor(invocation.port)
   const entry = serverEntry(process.env)
 
   let started = false
@@ -38,7 +34,7 @@ async function main() {
       baseUrl,
       entry,
       onStarting: () => {
-        process.stderr.write(`Nothing on :${port} — starting the server…\n`)
+        process.stderr.write(`Nothing on :${invocation.port} — starting the server…\n`)
       },
     })
     started = connection.started
@@ -56,11 +52,61 @@ async function main() {
 
   const client = new StudioClient(baseUrl)
   const api = createApi(client)
-  render(<App api={api} baseUrl={baseUrl} />, {
-    // console.log from anything else on the process would paint over the frame
-    // and look like the list was blinking.
-    patchConsole: true,
-  })
+
+  /**
+   * One row per line, and a line that fits.
+   *
+   * Only when a person is reading it: wrapping is the terminal's business and
+   * a fifteen-line inbox that wraps to forty is unreadable, but a pipe wants
+   * every character — and `--json` must not be touched at all.
+   *
+   * Clipped rather than run through `truncate`, which collapses whitespace and
+   * would take the columns out with it.
+   */
+  const width = process.stdout.isTTY && !invocation.json
+    ? Math.max(40, process.stdout.columns ?? 100)
+    : 0
+  const fit = (line: string) => (width && line.length > width ? `${line.slice(0, width - 1)}…` : line)
+
+  if (invocation.command !== 'tui') {
+    try {
+      // Scoped before anything asks for a list: the repository you are standing
+      // in, or `--project`, or whatever the app was last pointed at. Nothing is
+      // written back, so a command cannot move the browser's floor.
+      await scopeInvocation(api, invocation)
+      process.exitCode = await runCommand(api, invocation, {
+        out: line => process.stdout.write(`${fit(line)}\n`),
+        err: line => process.stderr.write(`${fit(line)}\n`),
+      })
+    } catch (error) {
+      console.error(describeError(error))
+      process.exitCode = 1
+    }
+    return
+  }
+
+  if (!process.stdout.isTTY) {
+    console.error('agents-studio tui needs a terminal. For a pipe, try `agents-studio work --json`.')
+    process.exitCode = 1
+    return
+  }
+
+  render(
+    <App
+      api={api}
+      baseUrl={baseUrl}
+      bell={invocation.bell}
+      initialView={invocation.view}
+      initialSession={invocation.session ?? null}
+      project={invocation.project ?? null}
+      here={gitRoot()}
+    />,
+    {
+      // console.log from anything else on the process would paint over the frame
+      // and look like the list was blinking.
+      patchConsole: true,
+    },
+  )
 }
 
 main().catch((error) => {

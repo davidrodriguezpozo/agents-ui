@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { build } from 'esbuild'
+import { build, context } from 'esbuild'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -16,7 +16,9 @@ import { fileURLToPath } from 'node:url'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const outfile = join(root, '.output', 'cli', 'index.mjs')
 
-await build({
+const watch = process.argv.includes('--watch')
+
+const options = {
   entryPoints: [join(root, 'cli', 'index.tsx')],
   outfile,
   bundle: true,
@@ -44,6 +46,18 @@ await build({
     ].join('\n'),
   },
   logLevel: 'info',
-})
+}
 
-console.log(`Bundled the terminal app into ${outfile}`)
+/*
+ * Watch mode exists because the alternative is a manual `node
+ * scripts/build-cli.mjs` between every change, which is the sort of loop that
+ * quietly stops you from polishing anything.
+ */
+if (watch) {
+  const ctx = await context(options)
+  await ctx.watch()
+  console.log(`Watching. Run the app with: node ${outfile} tui`)
+} else {
+  await build(options)
+  console.log(`Bundled the terminal app into ${outfile}`)
+}
