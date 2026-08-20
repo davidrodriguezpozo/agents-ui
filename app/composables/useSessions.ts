@@ -1,3 +1,4 @@
+import type { Overlap } from '~/utils/overlap'
 export interface WorktreeState {
   path: string
   exists: boolean
@@ -90,6 +91,23 @@ export interface Session {
   trust?: TrustLevel
   /** Set once this session's branch has a pull request open. */
   prUrl?: string
+  /**
+   * The pull request this session was opened to *read*, and the commit it read.
+   *
+   * The opposite fact from `prUrl`: this session's work is somebody else's pull
+   * request, held as a detached checkout. Its presence is what puts the Review
+   * tab on the strip — see `ReviewPane.vue`.
+   */
+  reviewOf?: { number: number; headSha: string; url?: string }
+  /**
+   * Other sessions changing files this one changes.
+   *
+   * Computed on the server from paths it already had, and absent when there are
+   * none — which is the usual case. The complement to `worktree.behind`: that
+   * one becomes true once somebody else has merged, this one is true while it is
+   * still cheap to know. See `~/utils/overlap`.
+   */
+  overlaps?: Overlap[]
   /** Absent means nothing is following that pull request. */
   prWatch?: SessionPrWatch
   /** Absent means the checks have never run here — not that they passed. */

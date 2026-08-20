@@ -659,6 +659,108 @@ async function readThreadCounts(
 }
 
 /**
+ * What the unresolved threads on one pull request actually say.
+ *
+ * The counts above are deliberately cheap and deliberately thin: "3 threads
+ * still open" is the right thing on a list of eight pull requests, and the wrong
+ * thing the moment you are deciding what to do about one of them. The difference
+ * between "rename this variable" and "this whole approach is wrong" is the entire
+ * decision, and it was one browser tab away.
+ *
+ * So this is the same question asked for one pull request, on demand — when a row
+ * is expanded, never while a list is drawn. One pull request rather than eight is
+ * what makes the bodies affordable at all.
+ *
+ * `isOutdated` threads are left out for the same reason the count leaves them
+ * out: a comment on a line since rewritten has been answered in the only way
+ * that matters.
+ */
+export interface ReviewThread {
+  author: string
+  path: string | null
+  line: number | null
+  /** The first comment — what the thread is about. */
+  body: string
+  /** How many replies came after it. */
+  replies: number
+  at: string | null
+}
+
+export async function readThreads(repoDir: string, number: number): Promise<{
+  ok: boolean
+  threads: ReviewThread[]
+  reason?: string
+}> {
+  let owner = ''
+  let name = ''
+  try {
+    const nameWithOwner = JSON.parse(await gh(repoDir, ['repo', 'view', '--json', 'nameWithOwner']))?.nameWithOwner ?? ''
+    ;[owner = '', name = ''] = nameWithOwner.split('/')
+  } catch {
+    return { ok: false, threads: [], reason: 'This project has no GitHub repository behind it.' }
+  }
+
+  if (!owner || !name) {
+    return { ok: false, threads: [], reason: 'This project has no GitHub repository behind it.' }
+  }
+
+  const query = `
+    query($owner: String!, $name: String!, $number: Int!) {
+      repository(owner: $owner, name: $name) {
+        pullRequest(number: $number) {
+          reviewThreads(first: 50) {
+            nodes {
+              isResolved
+              isOutdated
+              path
+              line
+              comments(first: 20) {
+                totalCount
+                nodes { author { login } body createdAt }
+              }
+            }
+          }
+        }
+      }
+    }
+  `
+
+  try {
+    const stdout = await gh(repoDir, [
+      'api', 'graphql',
+      '-f', `query=${query}`,
+      '-F', `owner=${owner}`,
+      '-F', `name=${name}`,
+      '-F', `number=${number}`,
+    ], 45_000)
+
+    const parsed = JSON.parse(stdout)
+    const nodes = parsed?.data?.repository?.pullRequest?.reviewThreads?.nodes ?? []
+
+    const threads: ReviewThread[] = nodes
+      .filter((t: any) => t && !t.isResolved && !t.isOutdated)
+      .map((t: any) => {
+        const first = t.comments?.nodes?.[0]
+        return {
+          author: first?.author?.login ?? 'somebody',
+          path: t.path ?? null,
+          line: typeof t.line === 'number' ? t.line : null,
+          body: (first?.body ?? '').trim(),
+          replies: Math.max(0, (t.comments?.totalCount ?? 1) - 1),
+          at: first?.createdAt ?? null,
+        }
+      })
+      .filter((t: ReviewThread) => t.body)
+
+    return { ok: true, threads }
+  } catch (e: any) {
+    // Said rather than swallowed. Unlike the count, somebody pressed something
+    // to get here and is waiting for an answer.
+    return { ok: false, threads: [], reason: e?.message ?? 'GitHub could not be asked.' }
+  }
+}
+
+/**
  * Why a reading could not be taken, as something other than prose.
  *
  * The reason is written for a person and is the only thing the reviews page needs.

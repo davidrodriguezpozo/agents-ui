@@ -32,6 +32,57 @@ const props = defineProps<{
 const emit = defineEmits<{ work: [WorkIntent | undefined]; merge: [] }>()
 
 /**
+ * The open threads, read on the press.
+ *
+ * Kept on the row rather than lifted to the page, because it is state about one
+ * row and there can be twenty of them: hoisting it would mean the page holding a
+ * map keyed by pull request number to answer a question only the row asks.
+ */
+interface ReviewThread {
+  author: string
+  path: string | null
+  line: number | null
+  body: string
+  replies: number
+}
+
+const threadsOpen = ref(false)
+const threadsLoading = ref(false)
+const threadsError = ref<string | null>(null)
+const threads = ref<ReviewThread[]>([])
+
+async function toggleThreads() {
+  if (threadsOpen.value) {
+    threadsOpen.value = false
+    return
+  }
+
+  // Read once and kept. A thread that has been resolved since is a stale reading
+  // of a list somebody is about to act on anyway, and re-fetching on every
+  // expand would make the button feel like it is doing work twice.
+  if (threads.value.length || threadsError.value) {
+    threadsOpen.value = true
+    return
+  }
+
+  threadsLoading.value = true
+  try {
+    const result = await $fetch<{ ok: boolean; threads: ReviewThread[]; reason?: string }>(
+      '/api/github/pulls/threads',
+      { query: { number: props.pull.number } },
+    )
+    if (result.ok) threads.value = result.threads
+    else threadsError.value = result.reason ?? 'GitHub could not be asked.'
+    threadsOpen.value = true
+  } catch (e: any) {
+    threadsError.value = e?.data?.data?.message ?? e?.message ?? 'GitHub could not be asked.'
+    threadsOpen.value = true
+  } finally {
+    threadsLoading.value = false
+  }
+}
+
+/**
  * A colour per state, in the two roles a row uses it: the stripe and the badge.
  *
  * Red is spent only on things that are actually wrong. A pull request waiting
@@ -237,6 +288,59 @@ const workNote = computed(() => {
           >
             {{ label.name }}
           </span>
+        </div>
+      </div>
+
+      <!--
+        What the open threads actually say.
+        
+        The count on the verdict above answers "does somebody want something",
+        which is the right question on a list. It cannot answer the one that
+        decides what you do next — the difference between "rename this variable"
+        and "this whole approach is wrong" is the entire decision, and it used to
+        be a browser tab away.
+        
+        Fetched on the press rather than with the list: the bodies are affordable
+        for the one pull request you have decided to look at, and were not for
+        eight at once. See `readThreads`.
+      -->
+      <div v-if="pull.unresolved" class="space-y-1.5">
+        <button
+          class="inline-flex items-center gap-1.5 fs-mono focus-ring cursor-pointer"
+          style="color: var(--text-disabled);"
+          :disabled="threadsLoading"
+          @click="toggleThreads"
+        >
+          <UIcon
+            :name="threadsLoading ? 'i-lucide-loader-2' : threadsOpen ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'"
+            class="size-3"
+            :class="{ 'animate-spin': threadsLoading }"
+          />
+          {{ threadsOpen ? 'Hide' : 'Read' }} the {{ pull.unresolved }}
+          {{ pull.unresolved === 1 ? 'open comment' : 'open comments' }}
+        </button>
+
+        <div v-if="threadsOpen" class="space-y-1.5">
+          <p v-if="threadsError" class="type-detail" style="color: var(--error);">{{ threadsError }}</p>
+          <p
+            v-else-if="!threads.length"
+            class="type-detail"
+            style="color: var(--text-tertiary);"
+          >
+            Nothing unresolved left — the count came from a reading taken a moment ago.
+          </p>
+          <div
+            v-for="(thread, i) in threads"
+            :key="i"
+            class="px-2.5 py-1.5 rounded space-y-0.5"
+            style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+          >
+            <p class="type-mono-meta" style="color: var(--text-tertiary);">
+              {{ thread.author }}<template v-if="thread.path"> · {{ thread.path }}<template v-if="thread.line">:{{ thread.line }}</template></template>
+              <template v-if="thread.replies"> · {{ thread.replies }} {{ thread.replies === 1 ? 'reply' : 'replies' }}</template>
+            </p>
+            <p class="type-detail whitespace-pre-wrap" style="color: var(--text-secondary);">{{ thread.body }}</p>
+          </div>
         </div>
       </div>
 

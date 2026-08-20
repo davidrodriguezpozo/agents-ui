@@ -8,6 +8,7 @@ import { isStale } from '../../utils/checks'
 import { getActive, readRun } from '../../utils/runStore'
 import { listPending } from '../../utils/permissionBroker'
 import { checkoutDrifted } from '~/utils/checkout'
+import { findOverlaps } from '~/utils/overlap'
 
 /**
  * Sessions with the live state of their worktree and their current run.
@@ -88,7 +89,7 @@ export default defineEventHandler(async (event) => {
     ),
   })))
 
-  return sessions.map((session, index) => {
+  const rows = sessions.map((session, index) => {
     const { status: worktree, fingerprint } = states[index]!
     const { lastRunId, status, pending } = runs[index]!
 
@@ -141,6 +142,29 @@ export default defineEventHandler(async (event) => {
       // Everything is returned so nothing is silently hidden, but the caller is
       // told which belong to the folder currently selected.
       inCurrentProject: !projectDir || session.repoDir === projectDir,
+    }
+  })
+
+  /**
+   * Which sessions are changing the same files as which.
+   *
+   * Computed here rather than in the browser, and its input dropped rather than
+   * sent. The paths were read for the changed-files count either way, so the
+   * comparison is free — but twenty sessions with two hundred paths each is a
+   * poll response nobody needs, and the answer is three lines long.
+   *
+   * After `landed` is decided, because a session whose work is in cannot collide
+   * with anything and would otherwise be the most-overlapping row on the page.
+   */
+  const overlaps = findOverlaps(rows)
+
+  return rows.map(({ worktree, ...row }) => {
+    const { changedPaths: _dropped, ...rest } = worktree
+    return {
+      ...row,
+      worktree: rest,
+      /** Absent when nothing else touches these files, which is the usual case. */
+      overlaps: overlaps.get(row.id),
     }
   })
 })

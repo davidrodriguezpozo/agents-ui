@@ -59,6 +59,38 @@ const nothingOnGithub = computed(() =>
 const mineOnYou = computed(() => reading.value.mine.filter(p => p.verdict.onYou))
 const mineWaiting = computed(() => reading.value.mine.filter(p => !p.verdict.onYou))
 
+/**
+ * Reviews composed on this machine and not yet sent.
+ *
+ * Read from the draft store alone — no git and no GitHub — so this poll costs
+ * nothing next to the one beside it. Its own request rather than a field on the
+ * pull request reading, because it survives GitHub being unreachable: a review
+ * you have already written and read is still yours to send when it comes back.
+ */
+interface DraftedReview {
+  sessionId: string
+  pr: number
+  title: string
+  comments: number
+  blocking: number
+  event: 'COMMENT' | 'REQUEST_CHANGES' | 'APPROVE'
+  inCurrentProject: boolean
+}
+
+const draftedReviews = ref<DraftedReview[]>([])
+
+async function loadDraftedReviews() {
+  try {
+    const { pending } = await $fetch<{ pending: DraftedReview[] }>('/api/sessions/reviews')
+    draftedReviews.value = pending
+  } catch {
+    // A rollup that cannot be read is a missing band, not an error on a page
+    // whose actual job is the pull requests below it.
+  }
+}
+
+onMounted(loadDraftedReviews)
+
 /* ----------------------------------------------------- already started it -- */
 
 /**
@@ -327,6 +359,43 @@ const nothingAnywhere = computed(() =>
         </div>
 
         <template v-else>
+          <!--
+            Reviews composed here and not yet sent.
+            
+            Above the GitHub numbers because it is the only band on this page
+            where the next move is a single press rather than a piece of work:
+            the review is written, read and waiting on the one thing a machine
+            must not do on its own.
+          -->
+          <div v-if="draftedReviews.length" class="space-y-2">
+            <h3 class="text-section-label">Reviews waiting to be sent</h3>
+            <NuxtLink
+              v-for="review in draftedReviews"
+              :key="review.sessionId"
+              :to="`/sessions/${encodeURIComponent(review.sessionId)}`"
+              class="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors"
+              style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+            >
+              <UIcon name="i-lucide-message-square-code" class="size-4 shrink-0 ink-accent" />
+              <div class="min-w-0 flex-1">
+                <p class="type-strong text-body truncate">#{{ review.pr }} {{ review.title }}</p>
+                <p class="type-detail">
+                  {{ review.comments }} {{ review.comments === 1 ? 'comment' : 'comments' }}
+                  <template v-if="review.blocking">
+                    · {{ review.blocking }} blocking
+                  </template>
+                  <template v-if="review.event === 'REQUEST_CHANGES'">
+                    · as a request for changes
+                  </template>
+                  <template v-if="!review.inCurrentProject">
+                    · in another project
+                  </template>
+                </p>
+              </div>
+              <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0" style="color: var(--text-disabled);" />
+            </NuxtLink>
+          </div>
+
           <!-- Four numbers that answer "is there anything here for me" from the doorway -->
           <div v-if="!nothingOnGithub" class="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <div

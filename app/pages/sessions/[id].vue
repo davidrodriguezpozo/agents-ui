@@ -55,7 +55,7 @@ const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
  * One at a time instead, chosen from a strip. `null` is all of them closed,
  * which is what a session opens as.
  */
-type Pane = 'changes' | 'files' | 'preview' | 'terminal'
+type Pane = 'changes' | 'files' | 'preview' | 'terminal' | 'review'
 
 const pane = ref<Pane | null>(null)
 
@@ -1071,6 +1071,13 @@ const totalChanges = computed(() => {
               { id: 'files' as const, label: 'Files', icon: 'i-lucide-folder-open' },
               { id: 'preview' as const, label: 'Preview', icon: 'i-lucide-monitor-play' },
               { id: 'terminal' as const, label: 'Terminal', icon: 'i-lucide-square-terminal' },
+              // Only on a session that was opened to read somebody's pull
+              // request. Everywhere else there is no review to compose, and a
+              // tab that opens onto an explanation of why it is empty is worse
+              // than no tab.
+              ...(session?.reviewOf
+                ? [{ id: 'review' as const, label: 'Review', icon: 'i-lucide-message-square-code' }]
+                : []),
             ]"
             :key="tab.id"
             class="flex items-center gap-1.5 px-2 py-1 rounded fs-sm transition-all"
@@ -1715,6 +1722,10 @@ const totalChanges = computed(() => {
 
           <div v-if="opened.has('preview') && session" v-show="pane === 'preview'">
             <PreviewPane :session-id="session.id" />
+          </div>
+
+          <div v-if="opened.has('review') && session" v-show="pane === 'review'">
+            <ReviewPane :session-id="session.id" />
           </div>
 
           <div v-if="opened.has('terminal') && session" v-show="pane === 'terminal'">

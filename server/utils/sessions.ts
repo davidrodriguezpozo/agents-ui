@@ -19,6 +19,14 @@ import type { TrustLevel } from './trust'
 
 export type SessionStatus = 'idle' | 'running' | 'archived'
 
+/** Which pull request a session is reading, and at which commit. */
+export interface SessionReviewOf {
+  number: number
+  /** The head commit checked out here — what the findings are about. */
+  headSha: string
+  url?: string
+}
+
 export interface Session {
   id: string
   title: string
@@ -62,6 +70,22 @@ export interface Session {
   trust?: TrustLevel
   /** Set once this session's branch has a pull request open. */
   prUrl?: string
+  /**
+   * The pull request this session was opened to *read*, and the commit it read.
+   *
+   * Not the same fact as `prUrl`, which says this session's own work has a pull
+   * request open. This one says the opposite: the session is a review of
+   * somebody else's, holding a detached checkout of their head commit.
+   *
+   * It exists because the review has to be postable afterwards. Everything
+   * needed to do that — which pull request, and which commit the findings
+   * describe — was known at the moment the workspace was cut and then thrown
+   * away, leaving a session whose whole purpose was a pull request it could not
+   * name. The commit is the load-bearing half: a review composed against a head
+   * the author has since pushed past is anchored to lines that no longer exist,
+   * and posting it would attach real comments to the wrong code.
+   */
+  reviewOf?: SessionReviewOf
   /**
    * Whether this session is still following the pull request it opened —
    * reading the checks GitHub ran, fixing them when they go red, and landing it
