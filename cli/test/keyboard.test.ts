@@ -379,6 +379,40 @@ describe('the layout', () => {
     }
   })
 
+  it('never lets the transcript move the cursor', async () => {
+    /*
+     * The frame is a stream of bytes, and some of them are commands. A `\r` in a
+     * session's text — a paste, a progress bar, anything from a Windows machine —
+     * snaps the terminal to column 0 mid-row, and the rest of the line overwrites
+     * the rail beside it. Colour codes from a test runner are the same class of
+     * problem. This is the assertion that the frame carries text only.
+     */
+    const nasty = `Something went wrong\rand this overwrote the rail. `
+      + `\x1b[31mred from a test runner\x1b[0m and \x1b]0;a new title\x07 too.`
+
+    const { stdin, stdout } = await mount({
+      session: async () => session({
+        turns: [{ id: 'r1', input: nasty, output: nasty, status: 'completed', createdAt: 1 }],
+      }),
+    })
+
+    stdin.write('\r')
+    await settle()
+
+    /*
+     * Ink's own redraw sequences lead every frame, so the check is on what comes
+     * after them: the content must carry no carriage return and no OSC, and the
+     * words themselves must survive.
+     */
+    const frame = stdout.frames.at(-1) ?? ''
+    const content = frame.slice(frame.indexOf('PANE') === -1 ? 0 : frame.indexOf('PANE'))
+    expect(content).not.toContain('\r')
+    expect(content).not.toContain('\x1b]')
+    expect(content).not.toMatch(/\x1b\[[0-9;]*[ABDHJK]/)
+    expect(stdout.screen).toContain('and this overwrote the rail')
+    expect(stdout.screen).toContain('red from a test runner')
+  })
+
   it('draws a row as a title and a reason to pick it', async () => {
     const { stdout } = await mount()
     expect(stdout.screen).toContain('Fix the flaky terminal test')

@@ -1,6 +1,6 @@
 import { describeToolCall, presentVerb } from '~/utils/toolCalls'
 import type { WallTile } from '~/utils/wall'
-import type { Tone } from './format'
+import { plain, type Tone } from './format'
 
 /**
  * The prompts waiting on a person, as a queue you can work through.
@@ -93,7 +93,7 @@ export function promptDetail(
 
   const command = text('command')
   if (command) {
-    for (const line of command.split('\n').slice(0, max)) lines.push({ text: line, tone: 'green' })
+    for (const line of plain(command).split('\n').slice(0, max)) lines.push({ text: line, tone: 'green' })
     const description = text('description')
     if (description) lines.push({ text: description, tone: 'gray' })
     return lines
@@ -103,25 +103,25 @@ export function promptDetail(
   const added = text('new_string') ?? text('content')
   if (removed || added) {
     const room = Math.max(2, Math.floor(max / (removed && added ? 2 : 1)))
-    for (const line of (removed ?? '').split('\n').slice(0, room)) {
+    for (const line of plain(removed ?? '').split('\n').slice(0, room)) {
       if (removed) lines.push({ text: `- ${line}`, tone: 'red' })
     }
-    for (const line of (added ?? '').split('\n').slice(0, room)) {
+    for (const line of plain(added ?? '').split('\n').slice(0, room)) {
       if (added) lines.push({ text: `+ ${line}`, tone: 'green' })
     }
     return lines
   }
 
   const url = text('url')
-  if (url) return [{ text: url, tone: 'green' }]
+  if (url) return [{ text: plain(url), tone: 'green' }]
 
   const pattern = text('pattern') ?? text('query')
-  if (pattern) return [{ text: pattern, tone: 'green' }]
+  if (pattern) return [{ text: plain(pattern), tone: 'green' }]
 
   // Anything else: its own fields, which is more than the verb alone.
   for (const [key, value] of Object.entries(input).slice(0, max)) {
     if (value == null || typeof value === 'object') continue
-    lines.push({ text: `${key}  ${String(value)}`, tone: 'gray' })
+    lines.push({ text: plain(`${key}  ${String(value)}`), tone: 'gray' })
   }
 
   if (lines.length === 0) {
@@ -137,7 +137,8 @@ export function promptHeadline(
   root?: string,
 ): string {
   const { target } = describeToolCall({ toolName: prompt.toolName, input: prompt.input }, root)
-  return `wants to ${presentVerb(prompt.toolName)}${target ? `  ${target}` : ''}`
+  // Built from the tool's own input, which is to say from somewhere else.
+  return plain(`wants to ${presentVerb(prompt.toolName)}${target ? `  ${target}` : ''}`)
 }
 
 /**

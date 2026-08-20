@@ -1,6 +1,6 @@
 import { Box, Text, useInput } from 'ink'
 import { useState } from 'react'
-import { toLines } from '../format'
+import { plain, toLines } from '../format'
 import { canRemember, promptDetail, promptHeadline, type Waiting } from '../prompts'
 import { TextField } from './components'
 import { useStudio } from './context'
@@ -117,7 +117,7 @@ export function PromptQueue({
 
       <Box paddingTop={1} flexDirection="column">
         <Text wrap="truncate">
-          <Text bold>{waiting.title}</Text>
+          <Text bold>{plain(waiting.title)}</Text>
           <Text color="gray">{`    ${waiting.repo} · ${waiting.branch}`}</Text>
         </Text>
         <Box paddingTop={1}>

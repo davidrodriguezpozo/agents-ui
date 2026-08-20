@@ -2,7 +2,7 @@ import { describeToolCall } from '~/utils/toolCalls'
 import { formatCost, formatDuration } from '~/utils/time'
 import type { LiveRun } from './runStream'
 import { isFinished } from './runStream'
-import { toLines, type Tone } from './format'
+import { plain, toLines, type Tone } from './format'
 import { markdownLines, type Span } from './markdown'
 import type { RunStats, SessionDetail, SessionTurn, ToolCall } from './types'
 
@@ -214,7 +214,8 @@ function statsLine(turn: DisplayTurn): string | null {
 }
 
 function truncateTo(text: string, width: number): string {
+  const safe = plain(text).replace(/[\n\t]+/g, ' ')
   if (width <= 0) return ''
-  if (text.length <= width) return text
-  return width <= 1 ? text.slice(0, width) : `${text.slice(0, width - 1)}…`
+  if (safe.length <= width) return safe
+  return width <= 1 ? safe.slice(0, width) : `${safe.slice(0, width - 1)}…`
 }

@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink'
 import { useInput } from 'ink'
 import { useState } from 'react'
-import { compactAge, toLines } from '../../format'
+import { compactAge, plain, toLines } from '../../format'
 import type { Pull } from '../../types'
 import { Confirm, EmptyState, Glyph } from '../components'
 import { useStudio } from '../context'
@@ -80,7 +80,7 @@ export function PullPane({
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text wrap="truncate">
-        <Text color={ACCENT} bold>{`#${pull.number}  ${pull.title}`}</Text>
+        <Text color={ACCENT} bold>{plain(`#${pull.number}  ${pull.title}`)}</Text>
       </Text>
       <Box paddingTop={1} paddingBottom={1} flexShrink={0}>
         <Text wrap="truncate">

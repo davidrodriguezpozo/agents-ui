@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { sessionBadge } from '~/utils/sessionBadge'
 import { anchorsFor, renderPatch } from '../../diffTool'
 import { fileAt, patchFiles, patchSummary, stepFile } from '../../diff'
-import { compactAge, spinnerFrame, toneForBadge, toneForDiffLine, windowOf } from '../../format'
+import { compactAge, plain, spinnerFrame, toneForBadge, toneForDiffLine, windowOf } from '../../format'
 import { promptDetail, promptHeadline } from '../../prompts'
 import { followRun, type LiveRun } from '../../runStream'
 import { composeInEditor, defaultEditor, defaultShell, runInTty } from '../../shell'
@@ -154,7 +154,7 @@ export function SessionPane({
   const diffBody = useMemo<Drawn[]>(() => {
     if (pane !== 'diff') return []
     if (rendered) return rendered.map(text => ({ kind: 'text', text }))
-    const raw = patch ? patch.split('\n') : ['No changes.']
+    const raw = patch ? plain(patch).split('\n') : ['No changes.']
     return raw.map(text => ({ kind: 'text', text, tone: toneForDiffLine(text) }))
   }, [pane, rendered, patch])
 
@@ -462,7 +462,7 @@ export function SessionPane({
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Text wrap="truncate">
-        <Text color={ACCENT} bold>{session.title}</Text>
+        <Text color={ACCENT} bold>{plain(session.title)}</Text>
         <Text color="gray">{`    ${session.branch} → ${session.baseBranch}`}</Text>
       </Text>
       <Box paddingTop={1} paddingBottom={1} flexShrink={0}>

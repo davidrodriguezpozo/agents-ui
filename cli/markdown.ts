@@ -1,4 +1,4 @@
-import type { Tone } from './format'
+import { plain, type Tone } from './format'
 
 /**
  * Markdown, for a terminal that cannot render it.
@@ -37,7 +37,9 @@ export function markdownLines(source: string, width: number): RichLine[] {
   if (width <= 0) return []
 
   const lines: RichLine[] = []
-  const raw = source.replace(/\r\n/g, '\n').split('\n')
+  // Sanitised once, here, so a fenced block cannot smuggle an escape sequence
+  // past the wrapping: what is inside a fence is drawn verbatim by design.
+  const raw = plain(source).split('\n')
 
   let fence: string | null = null
 

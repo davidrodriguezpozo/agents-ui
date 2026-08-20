@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactAge, matchesFilter, maxOffset, pad, toLines, toneForWorkStatus, truncate, windowAround, windowOf } from '../format'
+import { compactAge, matchesFilter, maxOffset, pad, plain, toLines, toneForWorkStatus, truncate, windowAround, windowOf } from '../format'
 
 describe('truncate', () => {
   it('fits, or ellipsises, and never exceeds width', () => {
@@ -68,5 +68,41 @@ describe('toneForWorkStatus', () => {
     expect(toneForWorkStatus('running')).toBe('cyan')
     expect(toneForWorkStatus('done')).toBe('green')
     expect(toneForWorkStatus('failed')).toBe('red')
+  })
+})
+
+describe('plain', () => {
+  it('turns a carriage return into the newline it was standing in for', () => {
+    // The bug this exists for: a `\r` in a session's text snaps the terminal to
+    // column 0 mid-row, and everything after it overwrites the pane to its left.
+    expect(plain('one\rtwo')).toBe('one\ntwo')
+    expect(plain('one\r\ntwo')).toBe('one\ntwo')
+  })
+
+  it('drops somebody else\u2019s colours and cursor moves', () => {
+    expect(plain('\x1b[31mred\x1b[0m')).toBe('red')
+    expect(plain('up\x1b[2Aand\x1b[Kback')).toBe('upandback')
+    expect(plain('\x1b]0;a new window title\x07here')).toBe('here')
+  })
+
+  it('drops the other control characters and keeps the text', () => {
+    expect(plain('a\x00b\x7fc\x08d')).toBe('abcd')
+    expect(plain('tabs\tsurvive')).toBe('tabs\tsurvive')
+    expect(plain('plain text')).toBe('plain text')
+  })
+})
+
+describe('wrapping text that came off the wire', () => {
+  it('wraps a long line that contains a carriage return, and keeps none of it', () => {
+    const text = `${'a'.repeat(40)}\r${'b'.repeat(40)}`
+    const lines = toLines(text, 20)
+    expect(lines.every(line => !line.includes('\r'))).toBe(true)
+    expect(lines.every(line => line.length <= 20)).toBe(true)
+    // The `\r` became a break, so the two runs do not end up on one line.
+    expect(lines).toContain('a'.repeat(20))
+  })
+
+  it('never lets an escape sequence through a truncation', () => {
+    expect(truncate('\x1b[31mred alert\x1b[0m', 8)).toBe('red ale…')
   })
 })

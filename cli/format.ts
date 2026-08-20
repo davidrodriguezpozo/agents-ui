@@ -88,6 +88,32 @@ export function toneForDiffLine(line: string): Tone {
 }
 
 /**
+ * Text with everything that would move the cursor taken out.
+ *
+ * A terminal is not a canvas you draw on; it is a stream that some bytes
+ * *command*. A carriage return in the middle of a session's text snaps the
+ * cursor to column 0 and the rest of the line overwrites whatever was there —
+ * which, in a two-column layout, is the rail. An escape sequence can change the
+ * colour of everything after it, move the cursor anywhere, or retitle the
+ * window.
+ *
+ * None of that is hypothetical: agents paste, tests print colour, progress bars
+ * are made of `\r`, and this text arrives from the machine rather than from a
+ * literal. A `\r` becomes the newline the author almost certainly meant, and
+ * everything else that is not text is dropped.
+ */
+export function plain(text: string): string {
+  return text
+    .replace(/\r\n?/g, '\n')
+    // CSI — colours and cursor moves.
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    // OSC — window titles, hyperlinks, notifications, terminated either way.
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)?/g, '')
+    // Anything else below a space, and the delete character.
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '')
+}
+
+/**
  * Cut a string to fit, with an ellipsis when something was lost.
  *
  * Ink will wrap or clip on its own, but neither is right for a list row: a
@@ -95,7 +121,7 @@ export function toneForDiffLine(line: string): Tone {
  * down, and a clip gives no sign that there was more.
  */
 export function truncate(text: string, width: number): string {
-  const flat = text.replace(/\s+/g, ' ').trim()
+  const flat = plain(text).replace(/\s+/g, ' ').trim()
   if (width <= 0) return ''
   if (flat.length <= width) return flat
   return width <= 1 ? flat.slice(0, width) : `${flat.slice(0, width - 1)}…`
@@ -114,7 +140,7 @@ export function toLines(text: string, width: number): string[] {
 
   const lines: string[] = []
 
-  for (const paragraph of text.split('\n')) {
+  for (const paragraph of plain(text).split('\n')) {
     if (!paragraph.length) {
       lines.push('')
       continue

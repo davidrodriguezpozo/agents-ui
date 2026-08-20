@@ -2,7 +2,7 @@ import { Box, Text, useInput } from 'ink'
 import type { ReactNode } from 'react'
 import { useState } from 'react'
 import type { Tone } from '../format'
-import { pad, spinnerFrame, truncate } from '../format'
+import { pad, plain, spinnerFrame, truncate } from '../format'
 import type { Span } from '../markdown'
 import type { Job } from './hooks'
 import type { Keymap, Surface } from '../keymap'
@@ -105,7 +105,7 @@ export function MessageBar({
   return (
     <Box paddingTop={1} height={2}>
       <Text color={tone === 'error' ? 'red' : ACCENT} wrap="truncate">
-        {text ? `${spinning ? `${spinnerFrame(tick ?? 0)} ` : ''}${text}` : ' '}
+        {text ? `${spinning ? `${spinnerFrame(tick ?? 0)} ` : ''}${plain(text)}` : ' '}
       </Text>
     </Box>
   )

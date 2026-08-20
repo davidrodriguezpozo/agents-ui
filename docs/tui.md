@@ -542,6 +542,15 @@ and a jumplist on `⌃o`, they would be a second way to do the same thing.
   supports Node 18; revisit when that floor moves.
 - **Wide and combining characters** break naive column maths. Truncation is
   centralised in `format.ts` so there is one place to fix it if it shows up.
+- **The frame is a stream, and some bytes are commands.** A carriage return in
+  a session's text snaps the terminal to column 0 mid-row, and everything after
+  it overwrites the rail beside the pane; an escape sequence from a test runner
+  recolours the rest of the screen. None of that is hypothetical — agents paste,
+  tests print colour, progress bars are made of `\r`. Everything that arrives
+  from the server goes through `plain()` in `format.ts` on its way to a `Text`,
+  which turns a `\r` into the newline it was standing in for and drops the rest.
+  The one exception is a patch that `delta` rendered, whose escape codes were
+  asked for.
 - **Ink's layout fails silently and destructively.** Yoga shrinks a flex child
   that does not fit, and Ink then draws the child's content anyway — one line on
   top of another. A two-line row squeezed to one renders its detail *over* its

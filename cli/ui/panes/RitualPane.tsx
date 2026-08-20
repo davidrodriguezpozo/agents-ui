@@ -1,7 +1,7 @@
 import { Box, Text, useInput } from 'ink'
 import { useState } from 'react'
 import { untilLabel } from '~/utils/wall'
-import { compactAge, pad } from '../../format'
+import { compactAge, pad, plain } from '../../format'
 import type { RitualHistory, Schedule } from '../../types'
 import { Confirm, EmptyState } from '../components'
 import { useStudio } from '../context'
@@ -81,7 +81,7 @@ export function RitualPane({
             schedule.nextRunAt ? `next ${untilLabel(schedule.nextRunAt, Date.now())}` : 'not scheduled',
           ].filter(Boolean).join(' · ')}
         </Text>
-        <Box paddingTop={1}><Text wrap="truncate">{schedule.input}</Text></Box>
+        <Box paddingTop={1}><Text wrap="truncate">{plain(schedule.input)}</Text></Box>
       </Box>
 
       <Box paddingTop={1} flexDirection="column" flexGrow={1} overflow="hidden">
