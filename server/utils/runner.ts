@@ -9,6 +9,7 @@ import { notify } from './notify'
 import { budgetStoppedMessage } from './budget'
 import { tokenUsageOf } from './usage'
 import { nowTrustedFully } from './liveTrust'
+import { paragraphBreaks } from './textBlocks'
 
 function toolResultText(content: unknown): string {
   return typeof content === 'string'
@@ -107,6 +108,9 @@ export async function executeRun(
    */
   const commandById = new Map<string, string>()
 
+  /** Where one block of the answer ends and the next begins. */
+  const breaks = paragraphBreaks()
+
   try {
     for await (const message of query({
       prompt: run.input,
@@ -134,13 +138,19 @@ export async function executeRun(
       if (message.type === 'stream_event' && message.event) {
         const evt = message.event as {
           type: string
+          content_block?: { type?: string }
           delta?: { type: string; text?: string; thinking?: string }
+        }
+        if (evt.type === 'content_block_start') {
+          breaks.startBlock(evt.content_block?.type)
         }
         if (evt.type === 'content_block_delta') {
           if (evt.delta?.type === 'text_delta' && evt.delta.text) {
-            emit(run.id, { type: 'text', text: evt.delta.text })
+            const text = breaks.delta('text', evt.delta.text)
+            if (text) emit(run.id, { type: 'text', text })
           } else if (evt.delta?.type === 'thinking_delta' && evt.delta.thinking) {
-            emit(run.id, { type: 'thinking', text: evt.delta.thinking })
+            const text = breaks.delta('thinking', evt.delta.thinking)
+            if (text) emit(run.id, { type: 'thinking', text })
           }
         }
       }

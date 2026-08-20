@@ -2,6 +2,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { resolveRunOptions, toQueryOptions } from '../utils/runOptions'
 import { createPermissionBroker, newPermissionOwnerId } from '../utils/permissionBroker'
 import { tokenUsageOf } from '../utils/usage'
+import { paragraphBreaks } from '../utils/textBlocks'
 import type { PermissionMode } from '~/types'
 
 interface ChatMessage {
@@ -93,6 +94,9 @@ export default defineEventHandler(async (event) => {
 
   let sessionId = body.sessionId || null
 
+  /** Where one block of the answer ends and the next begins. */
+  const breaks = paragraphBreaks()
+
   try {
     let resultText = ''
 
@@ -117,14 +121,17 @@ export default defineEventHandler(async (event) => {
           content_block?: { type: string }
           delta?: { type: string; text?: string; thinking?: string }
         }
-        if (evt.type === 'content_block_start' && evt.content_block?.type === 'thinking') {
-          sendEvent('thinking_start', {})
+        if (evt.type === 'content_block_start') {
+          breaks.startBlock(evt.content_block?.type)
+          if (evt.content_block?.type === 'thinking') sendEvent('thinking_start', {})
         }
         if (evt.type === 'content_block_delta') {
           if (evt.delta?.type === 'text_delta' && evt.delta.text) {
-            sendEvent('text_delta', { text: evt.delta.text })
+            const text = breaks.delta('text', evt.delta.text)
+            if (text) sendEvent('text_delta', { text })
           } else if (evt.delta?.type === 'thinking_delta' && evt.delta.thinking) {
-            sendEvent('thinking_delta', { text: evt.delta.thinking })
+            const text = breaks.delta('thinking', evt.delta.thinking)
+            if (text) sendEvent('thinking_delta', { text })
           }
         }
       }
