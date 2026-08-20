@@ -260,7 +260,24 @@ async function mount(over: Partial<Api> = {}, record?: Recorded, columns = 140, 
       baseUrl: 'http://127.0.0.1:3000',
       keys: createKeymap(),
     }),
-    { stdin: stdin as never, stdout: stdout as never, patchConsole: false, exitOnCtrlC: false },
+    {
+      stdin: stdin as never,
+      stdout: stdout as never,
+      patchConsole: false,
+      exitOnCtrlC: false,
+      /*
+       * Not for debugging — for existing at all.
+       *
+       * Ink asks `is-in-ci` how to draw. On a terminal it writes each frame
+       * with the cursor moves that overwrite the last one; under `CI=true`
+       * those escapes would be noise in a log, so it keeps the frame in memory
+       * and writes *nothing* until unmount. Every assertion about `screen` then
+       * reads the empty string, on GitHub Actions only, on a suite that is
+       * green on every laptop. Debug mode writes the whole frame every render,
+       * which is what a fake terminal wants in either place.
+       */
+      debug: true,
+    },
   )
   running = instance
   await settle()
