@@ -43,6 +43,20 @@ export interface WorktreeStatus {
   branch: string | null
   /** Files changed relative to the base — uncommitted or committed. */
   changedFiles: number
+  /**
+   * Which files those are.
+   *
+   * Computed here already — the count below is this set's size — and thrown away
+   * until something wanted to compare two sessions. Two sessions editing the
+   * same file is knowable for nothing, and was not knowable at all: `behind`
+   * catches a session whose base has moved, and nothing caught the case where
+   * the base has not moved yet because the other session has not merged.
+   *
+   * Not sent to the browser. Twenty sessions with two hundred changed files each
+   * is a poll response nobody needs; the comparison happens on the server and
+   * only its result travels. See `overlap.ts`.
+   */
+  changedPaths: string[]
   /** Uncommitted changes sitting in the worktree. */
   dirty: boolean
   ahead: number
@@ -742,7 +756,16 @@ export async function worktreeStatus(
   baseBranch?: string,
 ): Promise<WorktreeStatus> {
   if (!existsSync(worktreePath)) {
-    return { path: worktreePath, exists: false, branch: null, changedFiles: 0, dirty: false, ahead: 0, behind: 0 }
+    return {
+      path: worktreePath,
+      exists: false,
+      branch: null,
+      changedFiles: 0,
+      changedPaths: [],
+      dirty: false,
+      ahead: 0,
+      behind: 0,
+    }
   }
 
   const count = (range: string) =>
@@ -769,11 +792,14 @@ export async function worktreeStatus(
   const committed = nameOnly ? nameOnly.split('\n').filter(Boolean) : []
   const uncommitted = entries.map(l => l.slice(3).trim())
 
+  const changed = new Set([...committed, ...uncommitted])
+
   return {
     path: worktreePath,
     exists: true,
     branch: header ? parseStatusBranch(header) : await currentBranch(worktreePath).then(b => (b === 'HEAD' ? null : b)),
-    changedFiles: new Set([...committed, ...uncommitted]).size,
+    changedFiles: changed.size,
+    changedPaths: [...changed],
     dirty: entries.length > 0,
     ahead,
     behind,

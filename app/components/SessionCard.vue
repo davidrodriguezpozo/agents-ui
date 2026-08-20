@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { Session } from '~/composables/useSessions'
 import { driftNote } from '~/utils/checkout'
+import { describeOverlap } from '~/utils/overlap'
 import type { WallPull } from '~/utils/wall'
 
 /**
@@ -166,6 +167,25 @@ const accent = computed(() => {
           >
             <UIcon name="i-lucide-git-merge" class="size-3 shrink-0" />
             in {{ session.baseBranch }}
+          </span>
+          <!--
+            Two sessions changing the same file. The complement to `behind`,
+            which only becomes true once one of them has merged — by which point
+            the other is already judged against a base it does not have. This is
+            the same collision said while it is still cheap to know.
+
+            Deliberately not amber. Two sessions on one file is ordinary and
+            often intended; it is worth a glance, not a warning, and nothing is
+            blocked by it.
+          -->
+          <span
+            v-if="session.overlaps?.length"
+            class="flex items-center gap-1"
+            style="color: var(--text-tertiary);"
+            :title="describeOverlap(session.overlaps)"
+          >
+            <UIcon name="i-lucide-git-compare-arrows" class="size-3 shrink-0" />
+            shared {{ session.overlaps.length === 1 ? 'files' : `with ${session.overlaps.length}` }}
           </span>
           <span v-if="session.turnCount" class="flex items-center gap-1">
             <UIcon name="i-lucide-message-square" class="size-3 shrink-0" />

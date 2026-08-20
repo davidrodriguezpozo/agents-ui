@@ -13,6 +13,7 @@ import { withRunSlot } from './runQueue'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
+import { composeAfterTurn } from './reviewDraft'
 import { clearRepair, planRepair } from './sessionRepair'
 import type { SessionCheck } from './checks'
 
@@ -270,6 +271,19 @@ export async function startTurn(
       const after = await worktreeFingerprint(session.worktreePath)
       if (after && after !== fingerprintBefore) {
         void summariseAfterTurn(session.id, after)
+      }
+
+      // A review session's turn produces a report rather than a change, so the
+      // fingerprint above is deliberately not the trigger — a review that
+      // changed no files is the ordinary case and the only one worth composing.
+      //
+      // Composed here rather than when somebody opens the pane, because a review
+      // nobody has opened is exactly the one worth telling them about: the count
+      // on Land is the whole point of composing eagerly, and it cannot count what
+      // has not been composed. It is a parser over text this run already
+      // produced, so the only cost is two git calls to place the findings.
+      if (session.reviewOf && finished?.status !== 'cancelled') {
+        void composeAfterTurn(session.id)
       }
     })
 

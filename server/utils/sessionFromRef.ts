@@ -283,6 +283,12 @@ async function detachedSession(
     detached: true,
     // No branch is checked out here, so there is certainly none to delete.
     borrowedBranch: true,
+    // Recorded here rather than by the caller, because this is the only place
+    // that knows both facts at once: which pull request was asked for, and which
+    // commit actually landed in the workspace. GitHub's answer and the checkout
+    // can differ by a push that happened in between, and the findings will be
+    // about the one on disk.
+    ...(prNumber !== undefined ? { reviewOf: { number: prNumber, headSha: head, url: record.prUrl } } : {}),
   })
 }
 

@@ -26,6 +26,7 @@ vi.mock('../server/utils/worktrees', () => ({
       exists: true,
       branch: 'some-branch',
       changedFiles: 1,
+      changedPaths: ['src/a.ts'],
       dirty: false,
       ahead: 1,
       behind: 0,
