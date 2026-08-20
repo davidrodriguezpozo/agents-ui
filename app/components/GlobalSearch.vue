@@ -26,15 +26,49 @@ const { isSimple, toggle: toggleMode } = useUiMode()
 const colorMode = useColorMode()
 
 /**
- * Owned by the parent as well as by ⌘K.
+ * Owned by the app rather than by this component.
  *
  * The sidebar's "Search ⌘K" button set a `showSearch` ref in app.vue that
- * nothing read, because this component kept `open` to itself — so the button had
- * never opened anything since the day it was added.
+ * nothing read, because this component kept `open` to itself and bound ⌘K to
+ * itself — so the button had never opened anything since the day it was added.
+ * The key now lives with every other global key, and the state with it.
  */
-const open = defineModel<boolean>('open', { default: false })
+const { paletteOpen: open, shortcutsOpen } = useShortcuts()
 const query = ref('')
 const selected = ref(0)
+
+/**
+ * What you picked last time, so the panel opens on it.
+ *
+ * Kept as keys rather than whole rows: a session that has since been archived,
+ * or a skill a plugin took away with it, should quietly stop appearing rather
+ * than turn into a row that goes nowhere. Resolving against the live list every
+ * time is what makes that free.
+ */
+const RECENT_KEY = 'agents-ui:palette-recent'
+const RECENT_MAX = 20
+const recent = ref<string[]>([])
+
+onMounted(() => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')
+    if (Array.isArray(stored)) recent.value = stored.filter(k => typeof k === 'string')
+  } catch {
+    // A blocked or corrupt store costs the ordering, not the palette.
+  }
+})
+
+function remember(key: string) {
+  // The Recent section re-keys its own rows; recording those would build a
+  // `recent:recent:` key that resolves to nothing on the next open.
+  const canonical = key.startsWith('recent:') ? key.slice('recent:'.length) : key
+  recent.value = [canonical, ...recent.value.filter(k => k !== canonical)].slice(0, RECENT_MAX)
+  try {
+    localStorage.setItem(RECENT_KEY, JSON.stringify(recent.value))
+  } catch {
+    // As above.
+  }
+}
 
 const groups = computed(() => buildPalette({
   capabilities: toCapabilities(agents.value, commands.value, skills.value),
@@ -45,6 +79,7 @@ const groups = computed(() => buildPalette({
     .map(s => ({ id: s.id, title: s.title, branch: s.branch, activity: s.activity })),
   projects: projects.value.map(p => ({ path: p.path, name: p.name, branch: p.branch })),
   currentProject: workingDir.value,
+  recent: recent.value,
   isDark: colorMode.value === 'dark',
   isSimple: isSimple.value,
 }, query.value))
@@ -64,6 +99,17 @@ function close() {
   selected.value = 0
 }
 
+/**
+ * The cheatsheet, from inside the panel it is mostly about.
+ *
+ * `?` cannot do it from here — the cursor is in a text box, where a question
+ * mark is a question mark — so the footer hint is a control rather than a label.
+ */
+function showShortcuts() {
+  close()
+  shortcutsOpen.value = true
+}
+
 async function perform(action: PaletteAction) {
   if (action.type === 'toggle-theme') {
     colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
@@ -79,20 +125,79 @@ async function perform(action: PaletteAction) {
 }
 
 async function choose(item: PaletteItem) {
+  remember(item.key)
   close()
   if (item.run) await perform(item.run)
   else if (item.to) router.push(item.to)
 }
 
+/**
+ * Moving through the results without leaving the home row.
+ *
+ * The arrow keys were the only way, which on a panel you open forty times a day
+ * means forty trips to the corner of the keyboard. ⌃n/⌃p is the readline
+ * spelling, ⌃j/⌃k the vim one, and both cost nothing to support because they
+ * are the same two branches.
+ */
+function move(delta: number) {
+  if (!flat.value.length) {
+    selected.value = 0
+    return
+  }
+  selected.value = (selected.value + delta + flat.value.length) % flat.value.length
+}
+
+/**
+ * The scrolling region, so a selection driven from the keyboard stays on screen.
+ *
+ * Without this ⌃n past the sixth row moved a highlight nobody could see, which
+ * is worse than no keyboard support: you cannot tell what ↵ is about to run.
+ */
+const list = ref<HTMLElement | null>(null)
+
+watch(selected, async () => {
+  await nextTick()
+  list.value
+    ?.querySelector<HTMLElement>(`[data-index="${selected.value}"]`)
+    ?.scrollIntoView({ block: 'nearest' })
+})
+
 function onKeydown(e: KeyboardEvent) {
+  if (e.ctrlKey && !e.metaKey && !e.altKey) {
+    const key = e.key.toLowerCase()
+    if (key === 'n' || key === 'j') {
+      e.preventDefault()
+      move(1)
+      return
+    }
+    if (key === 'p' || key === 'k') {
+      e.preventDefault()
+      move(-1)
+      return
+    }
+    if (key === 'c') {
+      // On a platform where ⌃c is copy, a selection means they meant copy.
+      const input = e.target as HTMLInputElement | null
+      if (input && input.selectionStart !== input.selectionEnd) return
+      e.preventDefault()
+      close()
+      return
+    }
+    return
+  }
+
   if (e.key === 'ArrowDown') {
     e.preventDefault()
-    selected.value = flat.value.length ? (selected.value + 1) % flat.value.length : 0
+    move(1)
   } else if (e.key === 'ArrowUp') {
     e.preventDefault()
-    selected.value = flat.value.length
-      ? (selected.value - 1 + flat.value.length) % flat.value.length
-      : 0
+    move(-1)
+  } else if (e.key === 'Home') {
+    e.preventDefault()
+    selected.value = 0
+  } else if (e.key === 'End') {
+    e.preventDefault()
+    selected.value = Math.max(0, flat.value.length - 1)
   } else if (e.key === 'Enter') {
     const item = flat.value[selected.value]
     if (!item) return
@@ -101,18 +206,14 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-// Global ⌘K
-if (import.meta.client) {
-  const handler = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-      e.preventDefault()
-      if (open.value) close()
-      else open.value = true
-    }
+// Closing has to reset the query wherever it was closed from — Escape and the
+// scrim go through the model, not through `close()`.
+watch(open, (isOpen) => {
+  if (!isOpen) {
+    query.value = ''
+    selected.value = 0
   }
-  onMounted(() => document.addEventListener('keydown', handler))
-  onUnmounted(() => document.removeEventListener('keydown', handler))
-}
+})
 </script>
 
 <template>
@@ -124,13 +225,13 @@ if (import.meta.client) {
           <input
             v-model="query"
             class="flex-1 bg-transparent fs-base outline-none"
-            placeholder="Search or run a command…"
+            placeholder="Search or run anything — try a few letters"
             autofocus
             @keydown="onKeydown"
           />
         </div>
 
-        <div class="flex-1 overflow-auto py-1.5">
+        <div ref="list" class="flex-1 overflow-auto py-1.5">
           <div v-if="!flat.length" class="flex flex-col items-center justify-center py-8 gap-1">
             <p class="type-strong">Nothing matches that</p>
             <p class="type-detail">Try a shorter word, or part of a name.</p>
@@ -142,6 +243,7 @@ if (import.meta.client) {
             <button
               v-for="item in group.items"
               :key="item.key"
+              :data-index="indexOf(item)"
               class="w-full flex items-center gap-3 px-4 py-2 text-left transition-colors"
               :style="{ background: indexOf(item) === selected ? 'var(--surface-hover)' : 'transparent' }"
               @mouseenter="selected = indexOf(item)"
@@ -173,6 +275,13 @@ if (import.meta.client) {
                 class="size-3 shrink-0 ink-accent"
                 title="Happens straight away"
               />
+
+              <!-- And how to skip the panel entirely next time -->
+              <kbd
+                v-if="item.shortcut"
+                class="kbd-key shrink-0"
+                title="Works from anywhere"
+              >{{ item.shortcut }}</kbd>
             </button>
           </div>
         </div>
@@ -182,13 +291,21 @@ if (import.meta.client) {
           style="border-top: 1px solid var(--border-subtle); background: var(--surface-base);"
         >
           <span class="type-meta flex items-center gap-1.5">
-            <kbd class="fs-micro font-mono px-1 py-px rounded badge badge-subtle">↑↓</kbd> move
+            <kbd class="kbd-key">↑↓</kbd>
+            <kbd class="kbd-key">⌃n</kbd>
+            <kbd class="kbd-key">⌃p</kbd> move
           </span>
           <span class="type-meta flex items-center gap-1.5">
-            <kbd class="fs-micro font-mono px-1 py-px rounded badge badge-subtle">↵</kbd> run
+            <kbd class="kbd-key">↵</kbd> run
           </span>
+          <button
+            class="type-meta flex items-center gap-1.5 hover:text-label"
+            @click="showShortcuts"
+          >
+            <kbd class="kbd-key">?</kbd> all shortcuts
+          </button>
           <span class="type-meta flex items-center gap-1.5 ml-auto">
-            <kbd class="fs-micro font-mono px-1 py-px rounded badge badge-subtle">esc</kbd> close
+            <kbd class="kbd-key">esc</kbd> close
           </span>
         </div>
       </div>

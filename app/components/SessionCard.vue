@@ -96,6 +96,7 @@ const accent = computed(() => {
 <template>
   <NuxtLink
     :to="`/sessions/${session.id}`"
+    data-row
     class="block rounded-md p-4 focus-ring hover-card bg-card"
     :style="accent"
   >

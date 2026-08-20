@@ -204,6 +204,7 @@ async function resolve(item: NowItem) {
             :to="item.href ? undefined : item.to"
             :href="item.href"
             :target="item.href ? '_blank' : undefined"
+            data-row
             class="type-strong block truncate focus-ring rounded"
           >
             {{ item.title }}

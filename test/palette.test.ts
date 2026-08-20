@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildPalette, flattenPalette, scoreItem, type PaletteItem, type PaletteSource } from '~/utils/palette'
+import { buildPalette, flattenPalette, isSubsequence, scoreItem, type PaletteItem, type PaletteSource } from '~/utils/palette'
 import type { Capability } from '~/utils/capabilities'
 
 const capability = (over: Partial<Capability> = {}): Capability => ({
@@ -187,5 +187,92 @@ describe('sessions and library', () => {
 describe('no matches', () => {
   it('returns nothing rather than an empty section', () => {
     expect(buildPalette(source(), 'zzzzzz')).toEqual([])
+  })
+})
+
+describe('fuzzy matching', () => {
+  const item = (label: string, over: Partial<PaletteItem> = {}): PaletteItem => ({
+    key: label, kind: 'library', label, icon: 'x', ...over,
+  })
+
+  it('finds a word by its consonants, the way people actually type', () => {
+    expect(isSubsequence('wkfl', 'workflows')).toBe(true)
+    expect(isSubsequence('dfpu', '/defender:pickup')).toBe(true)
+    expect(isSubsequence('wlkf', 'workflows')).toBe(false)
+  })
+
+  it('ranks a scattered match below every literal one', () => {
+    const literal = scoreItem(item('workflows'), 'work')!
+    const scattered = scoreItem(item('workflows'), 'wkfl')!
+    expect(scattered).toBeGreaterThan(literal)
+    expect(scattered).toBeGreaterThan(scoreItem(item('x', { keywords: 'wkfl' }), 'wkfl')!)
+  })
+
+  it('will not match on a single letter, which every row contains', () => {
+    expect(scoreItem(item('workflows'), 'q')).toBeNull()
+    expect(scoreItem(item('nothing like it'), 'zzz')).toBeNull()
+  })
+
+  it('reaches a destination nothing else would have found', () => {
+    const items = flattenPalette(buildPalette(source(), 'wkfl'))
+    expect(items.some(i => i.to === '/workflows')).toBe(true)
+  })
+})
+
+describe('recent picks', () => {
+  it('opens on what you last chose, before anything else', () => {
+    const groups = buildPalette(source({ recent: ['go:settings', 'go:land'] }), '')
+    expect(groups[0]!.kind).toBe('recent')
+    expect(groups[0]!.items.map(i => i.to)).toEqual(['/settings', '/land'])
+  })
+
+  it('does not also leave them where they were', () => {
+    const groups = buildPalette(source({ recent: ['go:settings'] }), '')
+    const goto = groups.find(g => g.kind === 'goto')!
+    expect(goto.items.some(i => i.to === '/settings')).toBe(false)
+  })
+
+  it('re-keys them, so the arrow keys cannot land on two rows at once', () => {
+    const keys = flattenPalette(buildPalette(source({ recent: ['go:settings'] }), '')).map(i => i.key)
+    expect(new Set(keys).size).toBe(keys.length)
+  })
+
+  it('drops a key that no longer resolves rather than showing a dead row', () => {
+    const groups = buildPalette(source({ recent: ['session:gone-for-good'] }), '')
+    expect(groups.some(g => g.kind === 'recent')).toBe(false)
+  })
+
+  it('gets out of the way once you type, but breaks ties in its favour', () => {
+    const groups = buildPalette(source({
+      capabilities: [
+        capability({ key: 'skill:alpha', slug: 'alpha', name: 'deploy-alpha' }),
+        capability({ key: 'skill:beta', slug: 'beta', name: 'deploy-beta' }),
+      ],
+      recent: ['lib:skill:beta'],
+    }), 'deploy')
+
+    expect(groups.some(g => g.kind === 'recent')).toBe(false)
+    const library = groups.find(g => g.kind === 'library')!
+    expect(library.items.map(i => i.label)).toEqual(['deploy-beta', 'deploy-alpha'])
+  })
+
+  it('shows at most a handful', () => {
+    const recent = ['go:settings', 'go:land', 'go:work', 'go:library', 'go:wall', 'go:explore', 'go:now']
+    const groups = buildPalette(source({ recent }), '')
+    expect(groups[0]!.items.length).toBeLessThanOrEqual(5)
+  })
+})
+
+describe('chord hints', () => {
+  it('tells a destination row how to get there without the panel', () => {
+    const items = flattenPalette(buildPalette(source(), 'work'))
+    expect(items.find(i => i.to === '/work')!.shortcut).toBe('g w')
+  })
+
+  it('says nothing about a row with no chord', () => {
+    const groups = buildPalette(source({
+      sessions: [{ id: 'a', title: 'thing', branch: 'b', activity: 'idle' }],
+    }), 'thing')
+    expect(flattenPalette(groups)[0]!.shortcut).toBeUndefined()
   })
 })

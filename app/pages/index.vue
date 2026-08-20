@@ -9,6 +9,7 @@ const { settings, load: loadSettings } = useSettings();
 const { sessions } = useSessions();
 const { digest } = useDigest();
 const { isSimple } = useUiMode();
+const { shortcutsOpen } = useShortcuts();
 
 const dirInput = ref("");
 const settingDir = ref(false);
@@ -177,21 +178,21 @@ const otherwise = computed(() => Boolean(running.value || landed.value || money.
         </div>
       </details>
 
-      <!-- Keyboard shortcuts -->
-      <div class="flex items-center gap-4 px-2 text-meta">
-        <span class="fs-sm flex items-center gap-1.5">
-          <kbd class="fs-micro font-mono px-1 py-px rounded badge-subtle"
-            >&#x2318;K</kbd
-          >
-          Search
-        </span>
-        <span class="fs-sm flex items-center gap-1.5">
-          <kbd class="fs-micro font-mono px-1 py-px rounded badge-subtle"
-            >&#x2318;S</kbd
-          >
-          Save
-        </span>
-      </div>
+      <!--
+        One line, not a legend.
+
+        This used to list ⌘K and ⌘S — two of about twenty, picked because they
+        were the two that existed when it was written. There is a cheatsheet now,
+        so this points at it instead of competing with it.
+      -->
+      <button
+        class="flex items-center gap-2 px-2 text-meta hover:text-label"
+        @click="shortcutsOpen = true"
+      >
+        <kbd class="kbd-key">?</kbd>
+        <span class="fs-sm">Keyboard shortcuts</span>
+      </button>
+
     </div>
   </div>
 </template>

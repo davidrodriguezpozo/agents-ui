@@ -41,6 +41,7 @@ const accent = computed(() => {
 <template>
   <NuxtLink
     :to="item.to"
+    data-row
     class="group block rounded-md p-4 focus-ring hover-card bg-card"
     :style="accent"
   >

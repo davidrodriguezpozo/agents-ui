@@ -1,5 +1,6 @@
 import type { Capability } from '~/utils/capabilities'
 import { CAPABILITY_LOOK } from '~/utils/capabilities'
+import { chordHint } from '~/utils/shortcuts'
 
 /**
  * The command palette's contents.
@@ -13,7 +14,7 @@ import { CAPABILITY_LOOK } from '~/utils/capabilities'
  * behaviour can be tested without mounting anything.
  */
 
-export type PaletteKind = 'action' | 'goto' | 'session' | 'library'
+export type PaletteKind = 'recent' | 'action' | 'goto' | 'session' | 'library'
 
 /** Something the palette does rather than somewhere it goes. */
 export type PaletteAction =
@@ -34,9 +35,12 @@ export interface PaletteItem {
   run?: PaletteAction
   /** Extra words this should match on but not display. */
   keywords?: string
+  /** The chord that gets here without opening this panel at all. */
+  shortcut?: string
 }
 
 export const KIND_LABELS: Record<PaletteKind, string> = {
+  recent: 'Recent',
   action: 'Actions',
   goto: 'Go to',
   session: 'Sessions',
@@ -44,7 +48,7 @@ export const KIND_LABELS: Record<PaletteKind, string> = {
 }
 
 /** The order sections appear in, and the tie-break between equal matches. */
-const KIND_ORDER: PaletteKind[] = ['action', 'goto', 'session', 'library']
+const KIND_ORDER: PaletteKind[] = ['recent', 'action', 'goto', 'session', 'library']
 
 export interface PaletteSource {
   /** Every capability, already mapped — the Library page builds the same list. */
@@ -54,6 +58,14 @@ export interface PaletteSource {
   projects: { path: string; name: string; branch?: string | null }[]
   /** The one currently selected, which is not worth offering to switch to. */
   currentProject?: string | null
+  /**
+   * Keys of what was picked here before, most recent first.
+   *
+   * A palette that opens on the same alphabetical list every time makes you read
+   * it every time. Four out of five presses are one of the last few things you
+   * did, so those go at the top and the rest is still one word away.
+   */
+  recent?: string[]
   isDark: boolean
   isSimple: boolean
 }
@@ -81,6 +93,14 @@ function navigation(isSimple: boolean): PaletteItem[] {
   }
 
   items.push({ key: 'go:explore', kind: 'goto', label: 'Explore', icon: 'i-lucide-compass', to: '/explore', keywords: 'add tools templates install' })
+
+  // The panel teaches its own way out: a destination with a chord says so, so
+  // the second time you look something up you do not have to.
+  for (const item of items) {
+    const hint = item.to ? chordHint(item.to, isSimple) : null
+    if (hint) item.shortcut = hint
+  }
+
   return items
 }
 
@@ -92,7 +112,7 @@ function actions(source: PaletteSource): PaletteItem[] {
       label: 'Start a session',
       hint: 'Give Claude its own copy of this project',
       icon: 'i-lucide-plus',
-      to: '/work',
+      to: '/work?new=1',
       keywords: 'new work branch',
     },
     {
@@ -215,7 +235,30 @@ export function scoreItem(item: PaletteItem, query: string): number | null {
   const keywords = (item.keywords ?? '').toLowerCase()
   if (keywords.includes(q)) return 4
 
+  /**
+   * Last resort: the letters in order, anywhere.
+   *
+   * This is what lets `wkfl` find Workflows and `dfpu` find `/defender:pickup`,
+   * which is how anybody who has used a palette before actually types. It ranks
+   * below every literal match because on its own it is generous enough to match
+   * half the library — it is the tier that catches what would otherwise have
+   * been an empty panel, not the one that decides the order of a good query.
+   *
+   * Single letters are excluded: every row contains an `a` somewhere.
+   */
+  if (q.length >= 2 && isSubsequence(q, label)) return 5
+
   return null
+}
+
+/** Every character of `needle`, in order, somewhere in `haystack`. */
+export function isSubsequence(needle: string, haystack: string): boolean {
+  let i = 0
+  for (const char of haystack) {
+    if (char === needle[i]) i++
+    if (i === needle.length) return true
+  }
+  return i === needle.length
 }
 
 export interface PaletteGroup {
@@ -233,6 +276,9 @@ export interface PaletteGroup {
  * which is the exact failure this whole change was meant to fix.
  */
 const PER_KIND: Record<PaletteKind, number> = {
+  // Short on purpose: a "recent" list long enough to need reading is a second
+  // library, not a shortcut.
+  recent: 5,
   action: 12,
   goto: Infinity,
   session: 6,
@@ -256,13 +302,46 @@ export function buildPalette(source: PaletteSource, query: string): PaletteGroup
 
   const q = query.trim()
 
+  /**
+   * How recently a row was picked. Missing means never, which sorts last —
+   * a number rather than Infinity because two Infinities subtract to NaN and a
+   * comparator that returns NaN silently stops sorting.
+   */
+  const order = new Map((source.recent ?? []).map((key, i) => [key, i]))
+  const recencyOf = (item: PaletteItem) => order.get(item.key) ?? Number.MAX_SAFE_INTEGER
+
+  /**
+   * The rows the Recent section is showing, so they are not also sitting three
+   * inches below in their own section. Only on an empty query: once you have
+   * typed something you are looking for a specific thing and want it wherever
+   * it lives.
+   */
+  const recentItems = q
+    ? []
+    : (source.recent ?? [])
+        .map(key => all.find(item => item.key === key))
+        .filter((item): item is PaletteItem => Boolean(item))
+        .slice(0, PER_KIND.recent)
+
+  const promoted = new Set(recentItems.map(item => item.key))
+
   const scored = all
     .map(item => ({ item, score: scoreItem(item, q) }))
     .filter((entry): entry is { item: PaletteItem; score: number } => entry.score !== null)
 
   return KIND_ORDER
     .map((kind) => {
-      let items = scored.filter(entry => entry.item.kind === kind)
+      if (kind === 'recent') {
+        return {
+          kind,
+          label: KIND_LABELS.recent,
+          // Re-keyed: the same destination in two sections with one key would
+          // put the arrow keys on both rows at once.
+          items: recentItems.map(item => ({ ...item, key: `recent:${item.key}` })),
+        }
+      }
+
+      let items = scored.filter(entry => entry.item.kind === kind && !promoted.has(entry.item.key))
 
       if (!q) {
         // With nothing typed, the Library is 247 rows of nothing in particular;
@@ -278,7 +357,10 @@ export function buildPalette(source: PaletteSource, query: string): PaletteGroup
         kind,
         label: KIND_LABELS[kind],
         items: items
-          .sort((a, b) => a.score - b.score || a.item.label.localeCompare(b.item.label))
+          .sort((a, b) =>
+            a.score - b.score
+            || recencyOf(a.item) - recencyOf(b.item)
+            || a.item.label.localeCompare(b.item.label))
           .slice(0, PER_KIND[kind])
           .map(entry => entry.item),
       }
