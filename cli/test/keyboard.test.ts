@@ -127,6 +127,35 @@ function tile(over: Record<string, unknown> = {}) {
   }
 }
 
+/**
+ * The notification stream, with a hand on it.
+ *
+ * The app learns that something changed by being told: a frame on the stream
+ * nudges every poll. A test that waits for the four-second timer instead is a
+ * test that waits four seconds.
+ */
+function stream() {
+  const frames: Record<string, unknown>[] = []
+  let wake: (() => void) | null = null
+
+  return {
+    send(frame: Record<string, unknown>) {
+      frames.push(frame)
+      wake?.()
+      wake = null
+    },
+    async *events(_path: string, options: { signal?: AbortSignal }) {
+      while (!options.signal?.aborted) {
+        while (frames.length) yield frames.shift()!
+        await new Promise<void>((resolve) => {
+          wake = resolve
+          options.signal?.addEventListener('abort', () => resolve(), { once: true })
+        })
+      }
+    },
+  }
+}
+
 interface Recorded {
   answers: { id: string; behavior: string; opts?: unknown }[]
   started: string[]
@@ -708,5 +737,92 @@ describe('what it did', () => {
     stdin.write('Z')
     await settle()
     expect(stdout.screen).toContain('bun test --filter flaky-terminal')
+  })
+})
+
+describe('when the thing in the pane goes away', () => {
+  /**
+   * The keys have to come back with it.
+   *
+   * Dismissing what the pane is showing used to leave the keys pointing at a
+   * pane that had silently repointed itself at the top of the rail — so `tab`
+   * was the only way out, and on a pane that never handled `esc` the footer's
+   * promise of `esc rail` was a lie.
+   */
+  const three = [
+    session({ id: 's1', title: 'The one you are reading', updatedAt: 3 }),
+    session({ id: 's2', title: 'The one below it', updatedAt: 2 }),
+    session({ id: 's3', title: 'The one below that', updatedAt: 1 }),
+  ]
+
+  it('hands the keys back to the rail, on the row that took its place', async () => {
+    let list = three
+    const told = stream()
+    const { stdin, stdout } = await mount({
+      sessions: async () => list,
+      client: { projectDirValue: null, events: told.events } as never,
+    })
+
+    // Down one, so the row that vanishes is not the one the fallback picks.
+    stdin.write('j')
+    await settle()
+    stdin.write('\r')
+    await settle()
+    expect(stdout.screen).toContain('PANE')
+
+    list = [three[0]!, three[2]!]
+    told.send({ kind: 'finished', id: 'n1', title: 'Closed', at: 1 })
+    await settle(20)
+
+    expect(stdout.screen).toContain('RAIL')
+    // The cursor is where the row was, not back at the top of the rail.
+    expect(stdout.screen).toContain('The one below that')
+  })
+
+  it('keeps the pane when the rail is merely filtered away from it', async () => {
+    const { stdin, stdout } = await mount({ sessions: async () => three })
+
+    stdin.write('\r')
+    await settle()
+    expect(stdout.screen).toContain('PANE')
+
+    stdin.write('g')
+    await settle(2)
+    stdin.write('d')
+    await settle()
+
+    // A filter hides it; it has not gone anywhere, so neither have the keys.
+    expect(stdout.screen).toContain('PANE')
+  })
+})
+
+describe('esc, from every pane', () => {
+  /**
+   * The footer says `esc rail` whichever pane has the keys, and it was only
+   * true of two of them.
+   */
+  const source = {
+    key: 'github',
+    label: 'GitHub',
+    requires: [],
+    checkedAt: 5,
+    items: [{ id: 'i1', title: 'A review is waiting', url: 'https://example.test/1', why: 'You are a reviewer' }],
+  }
+
+  it('gives the keys back from the inbox pane', async () => {
+    const { stdin, stdout } = await mount({ inbox: async () => ({ sources: [source] }) })
+
+    stdin.write('g')
+    await settle(2)
+    stdin.write('i')
+    await settle()
+    stdin.write('\r')
+    await settle()
+    expect(stdout.screen).toContain('PANE')
+    expect(stdout.screen).toContain('A review is waiting')
+
+    stdin.write('\x1b')
+    await settle()
+    expect(stdout.screen).toContain('RAIL')
   })
 })

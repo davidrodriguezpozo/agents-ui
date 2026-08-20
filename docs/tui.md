@@ -138,10 +138,18 @@ much it wants you rather than by which page it used to live on. `Work`, `Land`,
 are the same list underneath.
 
 A bar in the margin is the cursor; a dot is a row that has said something since
-you last looked at it. `tab` moves the keys between the rail and the pane, so
-switching between two running agents is a keypress rather than a trip out to a
-list and back. Below a hundred columns the two take turns instead of sharing,
-which is the behaviour the six views had all along.
+you last looked at it. `tab` moves the keys between the rail and the pane and
+`esc` gives them back from any pane, so switching between two running agents is
+a keypress rather than a trip out to a list and back. Below a hundred columns
+the two take turns instead of sharing, which is the behaviour the six views had
+all along.
+
+When the row the pane is showing stops existing — a session closed, an inbox
+item dismissed from inside its own pane — the keys go back to the rail with it,
+onto the row that took its place. The alternative is what it used to do: the
+selection fell through to the top of the list, so the pane silently repointed
+itself at something unrelated while still holding the keys. A filter that hides
+the row is not the same thing and does not move them.
 
 A turn's tool calls arrive folded, as the one line with the count on it. Thirty
 of them printed in full is the transcript — the answer underneath is off the

@@ -12,20 +12,21 @@ export function InboxPane({
   itemId,
   focused,
   width,
+  onBack,
   onChanged,
 }: {
   source: InboxSource | undefined
   itemId: string
   focused: boolean
   width: number
+  onBack: () => void
   onChanged: () => void
 }) {
-  const { api, keys, jobs, openBrowser } = useStudio()
+  const { api, keys, jobs, mode, openBrowser } = useStudio()
   const [confirming, setConfirming] = useState(false)
   const item = source?.items.find(entry => entry.id === itemId)
 
   useInput((input, key) => {
-    if (!source) return
     if (confirming) {
       if (input === 'y') {
         setConfirming(false)
@@ -34,10 +35,17 @@ export function InboxPane({
       if (input === 'n' || key.escape) setConfirming(false)
       return
     }
+    // Before the missing-source guard: a pane with nothing in it is the one you
+    // most want to leave.
+    if (key.escape) {
+      onBack()
+      return
+    }
+    if (!source) return
     if (keys.matches('inbox.look', input, key)) setConfirming(true)
     if (keys.matches('inbox.dismiss', input, key) && item) void dismiss()
     if ((keys.matches('browser', input, key) || key.return) && item) openBrowser(item.url)
-  }, { isActive: focused })
+  }, { isActive: focused && mode === 'nav' })
 
   async function look() {
     if (!source) return

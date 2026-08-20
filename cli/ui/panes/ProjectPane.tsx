@@ -17,20 +17,26 @@ export function ProjectPane({
   project,
   focused,
   width,
+  onBack,
 }: {
   project: Project | undefined
   focused: boolean
   width: number
+  onBack: () => void
 }) {
-  const { keys, projects, scope, setScope, makeDefault, openBrowser } = useStudio()
+  const { keys, mode, projects, scope, setScope, makeDefault, openBrowser } = useStudio()
   const home = projects?.home ?? ''
 
   useInput((input, key) => {
+    if (key.escape) {
+      onBack()
+      return
+    }
     if (!project) return
     if (keys.matches('project.focus', input, key)) setScope(project.path)
     if (keys.matches('project.default', input, key)) void makeDefault(project.path)
     if (keys.matches('browser', input, key)) openBrowser('/')
-  }, { isActive: focused })
+  }, { isActive: focused && mode === 'nav' })
 
   if (!project) return <EmptyState>That project is gone.</EmptyState>
 

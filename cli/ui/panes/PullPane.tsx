@@ -19,14 +19,16 @@ export function PullPane({
   number,
   focused,
   width,
+  onBack,
   onWork,
 }: {
   number: number
   focused: boolean
   width: number
+  onBack: () => void
   onWork: (sessionId: string) => void
 }) {
-  const { api, keys, jobs, openBrowser, nudge, scope } = useStudio()
+  const { api, keys, jobs, mode, openBrowser, nudge, scope } = useStudio()
   const [confirming, setConfirming] = useState(false)
 
   const poll = usePoll(signal => api.pulls(signal), { every: 120_000, deps: [scope, nudge] })
@@ -42,10 +44,14 @@ export function PullPane({
       if (input === 'n' || key.escape) setConfirming(false)
       return
     }
+    if (key.escape) {
+      onBack()
+      return
+    }
     if (keys.matches('pull.work', input, key)) void work()
     if (keys.matches('pull.merge', input, key)) setConfirming(true)
     if (keys.matches('browser', input, key) && pull) openBrowser(pull.url)
-  }, { isActive: focused })
+  }, { isActive: focused && mode === 'nav' })
 
   async function work() {
     if (!pull) return

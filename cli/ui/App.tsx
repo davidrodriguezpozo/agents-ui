@@ -229,6 +229,32 @@ export function App({
   }, [current?.key, current?.stamp, mark])
 
   /*
+   * When the thing you were looking at stops existing, the keys come back.
+   *
+   * Dismiss an inbox item or close a session from inside its own pane and the
+   * row leaves the rail. The selection then falls through to the top of the
+   * list — so the pane silently repointed itself at something unrelated while
+   * still holding the keys, and `tab` was the only way out of it.
+   *
+   * The test is the *unfiltered* rail rather than the visible one, which is
+   * what separates "it is gone" from "a filter is hiding it": `g d` should
+   * leave the pane exactly where it was.
+   */
+  const shown = useRef<{ key: string; at: number } | null>(null)
+  useEffect(() => {
+    const was = shown.current
+    shown.current = selected ? { key: selected, at: index } : null
+    if (!was || was.key === selected) return
+    // Still on the rail somewhere, so the cursor moved rather than the row.
+    if (items.some(item => item.key === was.key)) return
+
+    // The row that slid up into its place, not the first one in the list.
+    const next = filtered[Math.min(was.at, filtered.length - 1)]
+    setChosen(next?.key ?? null)
+    if (focus === 'pane') setFocus('rail')
+  }, [selected, index, items, filtered, focus])
+
+  /*
    * Nothing is new when you have only just opened the app.
    *
    * "Since you looked" starts now, so the first full rail is marked seen — the
@@ -952,6 +978,7 @@ function Pane({
           number={Number(item.id)}
           focused={focused}
           width={width}
+          onBack={onBack}
           onWork={sessionId => onSelect(`session:${sessionId}`)}
         />
       )
@@ -962,6 +989,7 @@ function Pane({
           history={sources.histories[item.id]}
           focused={focused}
           width={width}
+          onBack={onBack}
           onChanged={onChanged}
         />
       )
@@ -973,6 +1001,7 @@ function Pane({
           itemId={item.id}
           focused={focused}
           width={width}
+          onBack={onBack}
           onChanged={onChanged}
         />
       )
@@ -983,6 +1012,7 @@ function Pane({
           project={sources.projects.find(project => project.path === item.id)}
           focused={focused}
           width={width}
+          onBack={onBack}
         />
       )
   }

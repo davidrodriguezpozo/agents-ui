@@ -18,19 +18,20 @@ export function RitualPane({
   history,
   focused,
   width,
+  onBack,
   onChanged,
 }: {
   schedule: Schedule | undefined
   history: RitualHistory | undefined
   focused: boolean
   width: number
+  onBack: () => void
   onChanged: () => void
 }) {
-  const { api, keys, jobs, openBrowser } = useStudio()
+  const { api, keys, jobs, mode, openBrowser } = useStudio()
   const [confirming, setConfirming] = useState(false)
 
   useInput((input, key) => {
-    if (!schedule) return
     if (confirming) {
       if (input === 'y') {
         setConfirming(false)
@@ -39,10 +40,15 @@ export function RitualPane({
       if (input === 'n' || key.escape) setConfirming(false)
       return
     }
+    if (key.escape) {
+      onBack()
+      return
+    }
+    if (!schedule) return
     if (keys.matches('ritual.toggle', input, key)) void toggle()
     if (keys.matches('ritual.run', input, key)) setConfirming(true)
     if (keys.matches('browser', input, key)) openBrowser('/schedules')
-  }, { isActive: focused })
+  }, { isActive: focused && mode === 'nav' })
 
   async function toggle() {
     if (!schedule) return
