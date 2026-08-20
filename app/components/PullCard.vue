@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { relativeTime } from '~/utils/time'
+import type { PullWork, PullWorkTone } from '~/utils/pullWork'
 import type { Pull, PullState, WorkIntent } from '~/composables/useGithubPulls'
 
 /**
@@ -21,6 +22,11 @@ const props = defineProps<{
   busy?: boolean
   /** Whether this row offers to merge — only ever your own, only when ready. */
   canMerge?: boolean
+  /**
+   * Work you have already started on this pull request. Null means none — see
+   * `~/utils/pullWork`, which is where the decision is made.
+   */
+  work?: PullWork | null
 }>()
 
 const emit = defineEmits<{ work: [WorkIntent | undefined]; merge: [] }>()
@@ -44,6 +50,24 @@ const TONES: Record<PullState, { fg: string; bg: string; icon: string }> = {
 }
 
 const tone = computed(() => TONES[props.pull.verdict.state])
+
+/**
+ * The colours of "you have already started this".
+ *
+ * Deliberately quieter than the verdict beside it, and never red for merely
+ * existing. The verdict is what the pull request needs; this is a fact about
+ * your own machine, and a row where both chips shout reads as two problems when
+ * one of them is a shortcut.
+ */
+const WORK_TONES: Record<PullWorkTone, { fg: string; bg: string }> = {
+  attention: { fg: 'var(--accent)', bg: 'var(--accent-muted)' },
+  problem: { fg: 'var(--error)', bg: 'var(--error-tint)' },
+  live: { fg: 'var(--accent)', bg: 'var(--accent-muted)' },
+  ready: { fg: 'var(--text-secondary)', bg: 'var(--badge-subtle-bg)' },
+  quiet: { fg: 'var(--text-disabled)', bg: 'var(--badge-subtle-bg)' },
+}
+
+const workTone = computed(() => props.work ? WORK_TONES[props.work.tone] : null)
 
 /** Mirrors `INTENT_LABELS` on the server, which is what the prompt is built from. */
 const INTENT_LABELS: Record<WorkIntent, string> = {
@@ -75,6 +99,34 @@ const size = computed(() => {
  * kind of confident wrong number that costs a page its credibility.
  */
 const approvals = computed(() => props.pull.approvals || 0)
+
+/**
+ * What the button will really do when work on this already exists.
+ *
+ * Three different things, and the difference is worth having on the hover
+ * rather than in a toast afterwards: a review is a fresh detached checkout and
+ * can happen any number of times, an intent that changes the branch lands in
+ * the workspace that already holds it, and neither of those touches a session
+ * that is mid-turn — that one gets opened. This mirrors `pulls/work.post.ts`;
+ * the server is the authority.
+ */
+const workNote = computed(() => {
+  const work = props.work
+  if (!work) return null
+
+  if (props.pull.intent === 'review') {
+    return 'You already have a session on this. Reviewing again opens a second, read-only checkout.'
+  }
+
+  // A review holds no branch — that is the point of it — so it cannot be what
+  // the instruction lands in. Only a session that holds the branch can be.
+  const holder = work.workers.find(w => !w.reviewing)
+  if (!holder) return 'You have a review of this open. This starts work on the branch itself.'
+
+  return holder.activity === 'working'
+    ? 'A session is mid-turn on this branch. This opens it rather than starting anything.'
+    : 'A session already has this branch. The instruction goes there rather than to a second one.'
+})
 </script>
 
 <template>
@@ -100,6 +152,23 @@ const approvals = computed(() => props.pull.approvals || 0)
           />
           {{ pull.verdict.label }}
         </span>
+
+        <!--
+          Work you have already started, next to the verdict because it changes
+          what the row is asking. "Address it" over a session that is mid-turn on
+          this branch is not an invitation to start; it is an invitation to go
+          and look — and this chip is the link that does it.
+        -->
+        <NuxtLink
+          v-if="work && workTone"
+          :to="`/sessions/${work.primary.id}`"
+          class="inline-flex items-center gap-1.5 fs-micro font-medium px-2 py-0.5 rounded-full shrink-0 focus-ring hover:underline"
+          :style="{ background: workTone.bg, color: workTone.fg }"
+          :title="work.detail"
+        >
+          <UIcon :name="work.icon" class="size-3" :class="{ 'animate-spin': work.spin }" />
+          {{ work.label }}
+        </NuxtLink>
 
         <span class="type-meta truncate">{{ pull.verdict.detail }}</span>
       </div>
@@ -200,7 +269,7 @@ const approvals = computed(() => props.pull.approvals || 0)
         class="inline-flex items-center gap-1.5 fs-mono px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer transition-colors"
         style="background: var(--accent-muted); color: var(--accent);"
         :disabled="busy"
-        :title="`Start a session on this branch, already working on it`"
+        :title="workNote ?? 'Start a session on this branch, already working on it'"
         @click="emit('work', undefined)"
       >
         <UIcon
