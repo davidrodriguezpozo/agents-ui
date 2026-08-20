@@ -137,6 +137,14 @@ much it wants you rather than by which page it used to live on. `Work`, `Land`,
 `Daily` and `Inbox` are filters on it, reached with `g` and a letter, and they
 are the same list underneath.
 
+The group a row lands in is never the rail's own opinion. A pull request is
+placed by `verdict.onYou` from `server/utils/reviews.ts`, which is the field
+`/land` groups by too — so a review somebody asked of you is under `Needs you`
+here and under "Waiting for your review" there, and the verdict itself (`CI
+red`, `Conflicts`, `Checks running`) is what the row *says* rather than where it
+lives. The rail used to re-derive that placement from the checks, which is how
+the same pull request ended up in two different places on two screens.
+
 A bar in the margin is the cursor; a dot is a row that has said something since
 you last looked at it. `tab` moves the keys between the rail and the pane and
 `esc` gives them back from any pane, so switching between two running agents is

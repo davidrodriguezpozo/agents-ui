@@ -105,23 +105,42 @@ describe('whether the next move is yours', () => {
     expect(verdict.onYou).toBe(false)
   })
 
-  it('is still yours when they asked for your review and their checks are running', () => {
+  it('is yours for anything of theirs, whatever state it is in', () => {
     /*
      * Found on a real one: a pull request with a review requested from me sat
      * under `Quiet` in the terminal rail while the page had it under "Waiting
      * for your review", because one unfinished CI job outranked the person who
-     * asked. Your review is not waiting on their build.
+     * asked.
+     *
+     * The rule is the list it came from, not the state it is in. Somebody
+     * else's pull request is only ever here because GitHub answered
+     * `review-requested:@me` with it, so the move is yours until you review it
+     * — and the state still decides what the row *says*, which is the same
+     * division `/land` has always drawn.
      */
-    const verdict = verdictFor(pull({ mine: false, checks: 'pending' }))
-    expect(verdict.onYou).toBe(true)
+    const states: Partial<Pull>[] = [
+      {},
+      { draft: true },
+      { checks: 'pending' },
+      { checks: 'failing', failing: [{ name: 'build', url: '' }] },
+      { mergeable: 'CONFLICTING' },
+      { reviewDecision: 'CHANGES_REQUESTED' },
+      { reviewDecision: 'APPROVED' },
+      { unresolved: 2 },
+    ]
+
+    for (const state of states) {
+      const verdict = verdictFor(pull({ mine: false, ...state }))
+      expect(verdict.onYou, JSON.stringify(state)).toBe(true)
+    }
   })
 
-  it('is yours when the review was asked of you', () => {
-    expect(verdictFor(pull({ mine: false })).onYou).toBe(true)
-  })
-
-  it('is not yours when somebody else opened a draft', () => {
-    expect(verdictFor(pull({ mine: false, draft: true })).onYou).toBe(false)
+  it('still says what state theirs is in, which is the row and not the group', () => {
+    // The whole point of grouping by `onYou` rather than by the state: nothing
+    // about the verdict is lost, it just stops deciding where the row lives.
+    expect(verdictFor(pull({ mine: false, checks: 'failing', failing: [{ name: 'build', url: '' }] })).label)
+      .toBe('CI red')
+    expect(verdictFor(pull({ mine: false, mergeable: 'CONFLICTING' })).label).toBe('Conflicts')
   })
 })
 

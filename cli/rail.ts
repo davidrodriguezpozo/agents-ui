@@ -198,6 +198,17 @@ function toneOfWork(item: WorkItem): Tone {
   }
 }
 
+/**
+ * The two lists, as rows, grouped the way `/land` groups them.
+ *
+ * `verdict.onYou` is the whole of it, and that is deliberate: the page puts
+ * every pull request whose review was requested of you under "Waiting for your
+ * review" and lets the verdict be the badge on the row rather than the group it
+ * sits in, so the rail reads the same field and gets the same answer. It used to
+ * second-guess it — a red one under `Broken`, an approved one under `Ready to
+ * land` — and the two screens then disagreed about where the same pull request
+ * lived. The label still says `CI red`; the group says whose move it is.
+ */
 function fromPulls(pulls: RailInput['pulls']): RailItem[] {
   if (!pulls) return []
 
@@ -213,12 +224,8 @@ function fromPulls(pulls: RailInput['pulls']): RailItem[] {
       pull.draft ? 'draft' : null,
     ].filter(Boolean).join(' · '),
     status: pull.verdict.label,
-    urgency: pull.verdict.onYou
-      ? 'needs-you' as const
-      : pull.checks === 'failing'
-        ? 'broken' as const
-        : pull.verdict.state === 'ready' ? 'ready' as const : 'quiet' as const,
-    tone: pull.verdict.onYou ? 'yellow' as const : pull.checks === 'failing' ? 'red' as const : 'gray' as const,
+    urgency: pull.verdict.onYou ? 'needs-you' as const : 'quiet' as const,
+    tone: pull.verdict.onYou ? 'yellow' as const : 'gray' as const,
     at: pull.updatedAt,
     repo: pull.mine ? undefined : pull.author,
     browserPath: pull.url,

@@ -120,11 +120,20 @@ export interface PullVerdict {
   /**
    * Whether the next move is yours.
    *
-   * The whole list is sorted by this, so it is worth being exact about what it
-   * means: not "you are involved", which is true of everything here, but "this
-   * does not move until you do something". A pull request of yours waiting on a
-   * reviewer is not on you. One that has been approved is — it is sitting there
-   * asking to be merged.
+   * The whole list is sorted and grouped by this, so it is worth being exact
+   * about what it means: not "you are involved", which is true of everything
+   * here, but "this does not move until you do something".
+   *
+   * Which makes somebody else's pull request the easy half. The only reason one
+   * is ever in front of you is that GitHub answered `review-requested:@me` with
+   * it — see `listPulls`, and note that `readPulls` takes your own out of that
+   * list — so the move is yours by definition, whatever the checks or the other
+   * reviewers are doing. That is the rule `/land` has always drawn, by putting
+   * the whole `reviewing` list under "Waiting for your review" and letting the
+   * verdict be the badge on the row rather than the group it sits in.
+   *
+   * Yours is the half with the judgement in it: waiting on a reviewer or on a
+   * build is not your move; approved, conflicted, criticised or red is.
    */
   onYou: boolean
 }
@@ -156,8 +165,10 @@ export function verdictFor(pull: Pull): PullVerdict {
     return {
       state: 'draft',
       label: 'Draft',
-      detail: mine ? 'Not asking for review yet' : 'Marked draft — not ready for you',
-      onYou: mine,
+      detail: mine
+        ? 'Not asking for review yet'
+        : 'Still a draft, and your review was requested anyway',
+      onYou: true,
     }
   }
 
@@ -166,7 +177,7 @@ export function verdictFor(pull: Pull): PullVerdict {
       state: 'conflicted',
       label: 'Conflicts',
       detail: `Conflicts with ${pull.baseBranch}, so nothing here can land until it is brought forward`,
-      onYou: mine,
+      onYou: true,
     }
   }
 
@@ -177,7 +188,7 @@ export function verdictFor(pull: Pull): PullVerdict {
       detail: pull.unresolved
         ? `${pull.unresolved} ${pull.unresolved === 1 ? 'thread' : 'threads'} still open`
         : 'A reviewer asked for something',
-      onYou: mine,
+      onYou: true,
     }
   }
 
@@ -186,7 +197,7 @@ export function verdictFor(pull: Pull): PullVerdict {
       state: 'unanswered',
       label: 'Unanswered',
       detail: `${pull.unresolved} review ${pull.unresolved === 1 ? 'comment' : 'comments'} nobody has resolved`,
-      onYou: mine,
+      onYou: true,
     }
   }
 
@@ -197,7 +208,7 @@ export function verdictFor(pull: Pull): PullVerdict {
       state: 'checks-failing',
       label: 'CI red',
       detail: named ? `${named}${more} failing` : 'A check failed',
-      onYou: mine,
+      onYou: true,
     }
   }
 
@@ -208,16 +219,8 @@ export function verdictFor(pull: Pull): PullVerdict {
       detail: mine
         ? 'No verdict yet'
         : 'No verdict yet — which is not what your review is waiting on',
-      /*
-       * Nothing for the author to do but wait. A reviewer is not waiting on the
-       * build: the code is readable now, and GitHub only put this in front of
-       * you because somebody asked you to read it.
-       *
-       * Reading it as nobody's move is what filed a pull request with a review
-       * requested from you under `Quiet` in the rail, while the page had it
-       * under "Waiting for your review" — the page groups by which list it came
-       * from and never asked the verdict.
-       */
+      // Nothing for the author to do but wait. A reviewer is not waiting on the
+      // build: the code is readable now.
       onYou: !mine,
     }
   }
@@ -231,7 +234,7 @@ export function verdictFor(pull: Pull): PullVerdict {
         : pull.mergeable === 'MERGEABLE'
           ? 'Approved and green'
           : 'Approved and green — GitHub is still working out whether it merges cleanly',
-      onYou: mine,
+      onYou: true,
     }
   }
 

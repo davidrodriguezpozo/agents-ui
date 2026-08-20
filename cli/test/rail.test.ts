@@ -133,24 +133,38 @@ describe('buildRail', () => {
     expect(item!.browserPath).toContain('github.com')
   })
 
-  it('files a review somebody asked for under Needs you, whatever CI is doing', () => {
+  it('files a review somebody asked for under Needs you, whatever state it is in', () => {
     /*
-     * The verdict is the server's — see `verdictFor`, which now says a review
-     * request is on you even while the build runs. This is the rail's half of
-     * it: the row that produced this went under `Quiet`, while the page had the
-     * same pull request under "Waiting for your review".
+     * The verdict is the server's — see `verdictFor`, where a pull request whose
+     * review was requested of you is on you whatever the checks are doing. This
+     * is the rail's half: the group follows that one field and nothing else.
+     *
+     * It used to second-guess it, and the states below are the three ways that
+     * went wrong — `Quiet` for a build still running, `Broken` for a red one,
+     * `Ready to land` for one somebody else had approved — while `/land` had all
+     * three under "Waiting for your review".
      */
-    const [item] = buildRail(input({
-      pulls: {
-        reviewing: [pull({
-          checks: 'pending',
-          verdict: { state: 'checks-running', label: 'Checks running', detail: '', onYou: true },
-        })],
-        mine: [],
-      },
-    }))
+    const states = [
+      { checks: 'pending' as const, verdict: { state: 'checks-running', label: 'Checks running' } },
+      { checks: 'failing' as const, verdict: { state: 'checks-failing', label: 'CI red' } },
+      { checks: 'passing' as const, verdict: { state: 'ready', label: 'Ready to merge' } },
+    ]
 
-    expect(item!.urgency).toBe('needs-you')
+    for (const state of states) {
+      const [item] = buildRail(input({
+        pulls: {
+          reviewing: [pull({
+            checks: state.checks,
+            verdict: { ...state.verdict, detail: '', onYou: true },
+          })],
+          mine: [],
+        },
+      }))
+
+      expect(item!.urgency, state.verdict.label).toBe('needs-you')
+      // Nothing about the verdict is lost — it is the row, not the group.
+      expect(item!.status, state.verdict.label).toBe(state.verdict.label)
+    }
   })
 
   it('counts a project as a row, so switching is not a separate screen', () => {
@@ -173,7 +187,7 @@ describe('buildRail', () => {
 describe('onFilter', () => {
   const items = buildRail(input({
     sessions: [session({ activity: 'awaiting-permission', pendingPermissions: 1 })],
-    pulls: { reviewing: [], mine: [pull({ mine: true, verdict: { state: 'ready', label: 'ready to merge', detail: '', onYou: false } })] },
+    pulls: { reviewing: [], mine: [pull({ mine: true, verdict: { state: 'ready', label: 'ready to merge', detail: '', onYou: true } })] },
     schedules: [schedule()],
     projects: [{ path: '/repo', exists: true, isRepo: true, branch: 'main', hasClaudeDir: true, sessionCount: 1 }],
   }))
