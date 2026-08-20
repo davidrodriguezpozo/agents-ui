@@ -98,11 +98,22 @@ describe('whether the next move is yours', () => {
     expect(verdictFor(pull({ mine: true, reviewDecision: 'APPROVED' })).onYou).toBe(true)
   })
 
-  it('is nobody while the checks are still running', () => {
+  it('is nobody while the checks on yours are still running', () => {
     // Not on you and not on them: there is nothing to do but wait, and a badge
     // saying otherwise would be a badge that is wrong every few minutes.
     const verdict = verdictFor(pull({ mine: true, checks: 'pending' }))
     expect(verdict.onYou).toBe(false)
+  })
+
+  it('is still yours when they asked for your review and their checks are running', () => {
+    /*
+     * Found on a real one: a pull request with a review requested from me sat
+     * under `Quiet` in the terminal rail while the page had it under "Waiting
+     * for your review", because one unfinished CI job outranked the person who
+     * asked. Your review is not waiting on their build.
+     */
+    const verdict = verdictFor(pull({ mine: false, checks: 'pending' }))
+    expect(verdict.onYou).toBe(true)
   })
 
   it('is yours when the review was asked of you', () => {

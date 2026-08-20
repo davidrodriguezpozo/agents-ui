@@ -205,9 +205,20 @@ export function verdictFor(pull: Pull): PullVerdict {
     return {
       state: 'checks-running',
       label: 'Checks running',
-      detail: 'No verdict yet',
-      // Nothing to do but wait, and that is true whoever opened it.
-      onYou: false,
+      detail: mine
+        ? 'No verdict yet'
+        : 'No verdict yet — which is not what your review is waiting on',
+      /*
+       * Nothing for the author to do but wait. A reviewer is not waiting on the
+       * build: the code is readable now, and GitHub only put this in front of
+       * you because somebody asked you to read it.
+       *
+       * Reading it as nobody's move is what filed a pull request with a review
+       * requested from you under `Quiet` in the rail, while the page had it
+       * under "Waiting for your review" — the page groups by which list it came
+       * from and never asked the verdict.
+       */
+      onYou: !mine,
     }
   }
 

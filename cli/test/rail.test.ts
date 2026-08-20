@@ -133,6 +133,26 @@ describe('buildRail', () => {
     expect(item!.browserPath).toContain('github.com')
   })
 
+  it('files a review somebody asked for under Needs you, whatever CI is doing', () => {
+    /*
+     * The verdict is the server's — see `verdictFor`, which now says a review
+     * request is on you even while the build runs. This is the rail's half of
+     * it: the row that produced this went under `Quiet`, while the page had the
+     * same pull request under "Waiting for your review".
+     */
+    const [item] = buildRail(input({
+      pulls: {
+        reviewing: [pull({
+          checks: 'pending',
+          verdict: { state: 'checks-running', label: 'Checks running', detail: '', onYou: true },
+        })],
+        mine: [],
+      },
+    }))
+
+    expect(item!.urgency).toBe('needs-you')
+  })
+
   it('counts a project as a row, so switching is not a separate screen', () => {
     const items = buildRail(input({
       projects: [{ path: '/repo', exists: true, isRepo: true, branch: 'main', hasClaudeDir: true, sessionCount: 3 }],
