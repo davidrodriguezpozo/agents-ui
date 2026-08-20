@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
+import { chordHint } from '~/utils/shortcuts'
 const route = useRoute()
 const { claudeDir, exists: claudeDirExists, configured: claudeConfigured, load: loadConfig } = useClaudeDir()
 const { fetchAll: fetchAgents, agents } = useAgents()
@@ -11,8 +12,6 @@ const { fetchAll: fetchSessions } = useSessions()
 const { sources: inboxSources, load: loadInbox } = useInbox()
 
 const initialized = ref(false)
-const showSearch = ref(false)
-const sidebarOpen = ref(false)
 const { isPanelOpen: chatOpen } = useChat()
 const { workingDir } = useWorkingDir()
 const { createScope, canUseProjectScope, projectClaudeExists, refresh: refreshScope, initProject } = useScope()
@@ -25,8 +24,6 @@ function toggleTheme() {
   colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
 }
 
-watch(() => route.path, () => { sidebarOpen.value = false })
-
 /**
  * How wide the navigation is, and whether it says anything.
  *
@@ -38,39 +35,22 @@ watch(() => route.path, () => { sidebarOpen.value = false })
  *
  * So it is an ordinary page, and the sidebar collapses to its icons instead —
  * which is the same 150px back on a dense screen, available everywhere, and
- * reversible by a person who can see the control that did it.
- *
- * Remembered, because a width is a preference and re-collapsing it on every load
- * is the kind of small tax that gets a feature turned off and left off.
+ * reversible by a person who can see the control that did it. The state moved
+ * to a composable when `.` started collapsing it too: a key cannot toggle a ref
+ * only this component can see.
  */
-const COLLAPSED_KEY = 'agents-ui:sidebar-collapsed'
-const sidebarCollapsed = ref(false)
-
-onMounted(() => {
-  try {
-    sidebarCollapsed.value = localStorage.getItem(COLLAPSED_KEY) === '1'
-  } catch {
-    // A blocked store costs the memory, not the control.
-  }
-})
-
-function toggleSidebar() {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-  try {
-    localStorage.setItem(COLLAPSED_KEY, sidebarCollapsed.value ? '1' : '0')
-  } catch {
-    // As above.
-  }
-}
+const { drawerOpen: sidebarOpen, narrow, toggle: toggleSidebar } = useSidebar()
 
 /**
- * The drawer wins over the preference.
+ * Every global key, bound once, here.
  *
- * On a phone the sidebar is a drawer you slid open on purpose, and honouring a
- * collapse there would answer that with 56px of icons — the one width that is
- * useless when you have just asked to see the navigation.
+ * ⌘K used to be bound inside the dialog it opens and ⌘J inside this file, and
+ * the sidebar's "Search ⌘K" button set a ref nothing read. One listener, one
+ * table of what the keys do — see `utils/shortcuts.ts`.
  */
-const narrow = computed(() => sidebarCollapsed.value && !sidebarOpen.value)
+const { paletteOpen, shortcutsOpen, pendingKeys } = useShortcutBindings()
+
+watch(() => route.path, () => { sidebarOpen.value = false })
 
 /**
  * Sessions are in here for a reason. `inCurrentProject` is worked out on the
@@ -120,18 +100,6 @@ async function createProjectConfig() {
   } finally {
     initializingProject.value = false
   }
-}
-
-// Cmd+J to toggle chat
-if (import.meta.client) {
-  const chatHandler = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'j') {
-      e.preventDefault()
-      chatOpen.value = !chatOpen.value
-    }
-  }
-  onMounted(() => document.addEventListener('keydown', chatHandler))
-  onUnmounted(() => document.removeEventListener('keydown', chatHandler))
 }
 
 const { attention, watchContinuously, stopWatching } = useAttention()
@@ -233,6 +201,16 @@ const navSecondary = computed(() => isSimple.value
     ]
 )
 
+/**
+ * What a nav item says when you hover it: what it is, why it is shouting, and
+ * the two keys that get there without the mouse you are currently holding.
+ */
+function navTitle(link: { label: string; to: string }) {
+  const hint = chordHint(link.to, isSimple.value)
+  const base = attentionFor(link.to)?.title ?? link.label
+  return hint ? `${base} — ${hint}` : base
+}
+
 function isActive(to: string) {
   if (to === '/') return route.path === '/'
   return route.path.startsWith(to)
@@ -305,6 +283,13 @@ function badgeFor(to: string) {
 
 <template>
   <UApp>
+    <!--
+      Navigation is client-side and usually instant, but "usually" is the
+      problem: the one route that waits on a git call looked like a dead click.
+      A 2px bar costs nothing and answers it.
+    -->
+    <NuxtLoadingIndicator color="var(--accent)" :height="2" />
+
     <div class="flex h-screen overflow-hidden" style="background: var(--surface-base);">
       <!-- Mobile hamburger (md:hidden) -->
       <button
@@ -358,7 +343,7 @@ function badgeFor(to: string) {
             :to="link.to"
             class="nav-item group flex items-center gap-2.5 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
             :class="[{ 'nav-item--active': isActive(link.to) }, narrow ? 'px-0 justify-center' : 'px-3']"
-            :title="narrow ? (attentionFor(link.to)?.title ?? link.label) : undefined"
+            :title="navTitle(link)"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
               fontWeight: isActive(link.to) ? '500' : '400',
@@ -416,7 +401,7 @@ function badgeFor(to: string) {
             :to="link.to"
             class="nav-item group flex items-center gap-2.5 py-[7px] rounded-md fs-base transition-all duration-150 relative focus-ring"
             :class="narrow ? 'px-0 justify-center' : 'px-3'"
-            :title="narrow ? link.label : undefined"
+            :title="navTitle(link)"
             :style="{
               color: isActive(link.to) ? 'var(--text-primary)' : 'var(--text-tertiary)',
               fontWeight: isActive(link.to) ? '500' : '400',
@@ -438,16 +423,16 @@ function badgeFor(to: string) {
           <button
             class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring cursor-pointer press-scale"
             :class="narrow ? 'px-0 justify-center' : 'px-3'"
-            :title="narrow ? 'Search — ⌘K' : undefined"
+            title="Search — ⌘K, or just /"
             style="color: var(--text-disabled); background: var(--input-bg); border: 1px solid var(--border-subtle);"
             @mouseenter="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-default)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-tertiary)'"
             @mouseleave="($event.currentTarget as HTMLElement).style.borderColor = 'var(--border-subtle)'; ($event.currentTarget as HTMLElement).style.color = 'var(--text-disabled)'"
-            @click="showSearch = true"
+            @click="paletteOpen = true"
           >
             <UIcon name="i-lucide-search" class="size-3.5 shrink-0" />
             <template v-if="!narrow">
               <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Search</span>
-              <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘K</kbd>
+              <kbd class="kbd-key">⌘K</kbd>
             </template>
           </button>
         </div>
@@ -474,7 +459,7 @@ function badgeFor(to: string) {
             </div>
             <template v-if="!narrow">
               <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
-              <kbd class="fs-micro font-mono px-1.5 py-0.5 rounded" style="background: var(--badge-subtle-bg); color: var(--text-disabled);">⌘J</kbd>
+              <kbd class="kbd-key">⌘J</kbd>
             </template>
           </button>
         </div>
@@ -508,6 +493,29 @@ function badgeFor(to: string) {
             <span v-if="!narrow" class="fs-sm" style="font-family: var(--font-sans);">
               {{ colorMode.value === 'dark' ? 'Light mode' : 'Dark mode' }}
             </span>
+          </button>
+        </div>
+
+        <!--
+          The keyboard layer, advertised.
+
+          `?` opens it, which is only useful to somebody who already knows that,
+          so there is a row that says so — the same reason the collapse control
+          below stays on screen rather than living behind a shortcut.
+        -->
+        <div class="pb-1" :class="narrow ? 'px-2' : 'px-2.5'">
+          <button
+            class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
+            :class="narrow ? 'px-0 justify-center' : 'px-3'"
+            style="color: var(--text-tertiary);"
+            title="Keyboard shortcuts — ?"
+            @click="shortcutsOpen = true"
+          >
+            <UIcon name="i-lucide-keyboard" class="size-4 shrink-0" />
+            <template v-if="!narrow">
+              <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Shortcuts</span>
+              <kbd class="kbd-key">?</kbd>
+            </template>
           </button>
         </div>
 
@@ -639,8 +647,28 @@ function badgeFor(to: string) {
         </div>
       </main>
     </div>
-    <GlobalSearch v-model:open="showSearch" />
+    <GlobalSearch />
     <ChatPanel v-model:open="chatOpen" />
+    <ShortcutsOverlay />
+
+    <!--
+      A half-typed sequence, shown.
+
+      `g` on its own does nothing visible, and neither does the `5` in front of
+      `5j`, so without this the app looks like it swallowed the keypress. This is
+      vim's own answer — the pending command in the corner — and it is the thing
+      that makes a count feel safe to start typing.
+    -->
+    <Transition name="fade">
+      <div
+        v-if="pendingKeys"
+        class="fixed bottom-4 right-4 z-50 flex items-center gap-2 px-3 py-2 rounded-md shadow-lg"
+        style="background: var(--surface-overlay); border: 1px solid var(--border-default);"
+      >
+        <kbd class="kbd-key">{{ pendingKeys }}</kbd>
+        <span class="type-meta">pending — ? for the list</span>
+      </div>
+    </Transition>
   </UApp>
 </template>
 

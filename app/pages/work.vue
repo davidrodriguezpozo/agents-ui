@@ -85,6 +85,26 @@ function pullFor(session: Session): WallPull | null {
 
 const prompt = ref('')
 const creating = ref(false)
+
+/**
+ * The box, and the one key that puts the cursor in it.
+ *
+ * `n` from anywhere lands here with `?new=1`, which this clears again the moment
+ * it has focused — otherwise the second `n` is a navigation to the URL you are
+ * already on and nothing happens, which is the worst way for a shortcut to fail.
+ */
+const promptBox = ref<HTMLTextAreaElement | null>(null)
+const route = useRoute()
+
+async function focusComposer() {
+  // The composer only exists on the in-flight tab, so `n` from History has to
+  // move you there first rather than focusing nothing.
+  tab.value = 'flight'
+  await nextTick()
+  promptBox.value?.focus()
+  promptBox.value?.scrollIntoView({ block: 'center' })
+}
+
 const existingRef = ref('')
 const startingFrom = ref(false)
 
@@ -415,6 +435,12 @@ const scope = useState<'here' | 'all'>('sessions-scope', () => 'here')
  * thing you go and look at.
  */
 const tab = useState<WorkTab>('work-tab', () => 'flight')
+
+watch(() => route.query.new, (wants) => {
+  if (!wants) return
+  focusComposer()
+  router.replace({ query: { ...route.query, new: undefined } })
+}, { immediate: true })
 
 /**
  * A status chip is only meaningful on the tab that owns it, so choosing one on
@@ -848,6 +874,7 @@ async function switchTo(path: string) {
         <template v-if="!batchMode">
           <div class="flex gap-2 items-start">
             <textarea
+              ref="promptBox"
               v-model="prompt"
               rows="2"
               class="field-input flex-1 resize-y"

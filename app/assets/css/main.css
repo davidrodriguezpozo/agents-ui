@@ -1246,6 +1246,30 @@ body {
   background: var(--badge-subtle-bg);
   color: var(--text-disabled);
 }
+
+/**
+ * A key you press, printed.
+ *
+ * There were nine hand-rolled versions of this — `fs-micro font-mono px-1 py-px
+ * rounded badge badge-subtle` and six near-misses — which is how the ⌘K in the
+ * sidebar ended up a different size to the ⌘K in the panel it opens. Now that
+ * the app has a keyboard layer worth advertising, the advert is one class.
+ */
+.kbd-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  padding: 1px 5px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  background: var(--badge-subtle-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  white-space: nowrap;
+}
 .badge-accent {
   background: var(--accent-muted);
   color: var(--accent);

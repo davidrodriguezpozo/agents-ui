@@ -35,6 +35,7 @@ withDefaults(defineProps<{
 <template>
   <NuxtLink
     :to="to"
+    data-row
     class="entity-row flex items-center gap-3 px-3 py-2.5 rounded-md group focus-ring hover-row"
   >
     <UIcon
