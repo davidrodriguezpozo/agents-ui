@@ -60,6 +60,15 @@ export function SessionPane({
   const [overlay, setOverlay] = useState<Overlay | null>(null)
   const [answered, setAnswered] = useState<string[]>([])
   const [reason, setReason] = useState('')
+  /**
+   * The turns whose steps are open.
+   *
+   * Folded is the default and this starts empty, so a session you have just
+   * opened is the conversation rather than a log of file reads. Held per pane
+   * rather than per turn, because "show me what it did there" is a thing you
+   * ask once and then stop caring about.
+   */
+  const [openSteps, setOpenSteps] = useState<Set<string>>(() => new Set())
 
   const composing = mode === 'insert'
   const draftKey = `session:${id}`
@@ -124,9 +133,12 @@ export function SessionPane({
     [session, live, pendingInput],
   )
   const lines = useMemo(
-    () => transcriptLines(turns, width, session?.worktreePath),
-    [turns, width, session?.worktreePath],
+    () => transcriptLines(turns, width, { worktreeRoot: session?.worktreePath, expanded: openSteps }),
+    [turns, width, session?.worktreePath, openSteps],
   )
+
+  /** The turns there is anything to unfold on. */
+  const withSteps = useMemo(() => turns.filter(turn => turn.toolCalls.length), [turns])
 
   const patch = diff.data?.patch || ''
   const files = useMemo(() => patchFiles(patch), [patch])
@@ -215,6 +227,14 @@ export function SessionPane({
       setPane('diff')
       return
     }
+    if (keys.matches('session.steps', input, key)) {
+      toggleSteps()
+      return
+    }
+    if (keys.matches('session.stepsAll', input, key)) {
+      setOpenSteps(current => (current.size ? new Set() : new Set(withSteps.map(turn => turn.id))))
+      return
+    }
     if (keys.matches('session.checks', input, key)) void checks()
     if (keys.matches('session.repair', input, key)) void repair()
     if (keys.matches('session.update', input, key)) void updateBase()
@@ -231,6 +251,33 @@ export function SessionPane({
       diff.refresh()
     }
   }, { isActive: focused && mode === 'nav' })
+
+  /**
+   * Fold or unfold the turn you are looking at.
+   *
+   * There is no cursor in a transcript, so the turn is inferred from the window:
+   * the lowest line on screen that belongs to a turn with steps. Scroll to a
+   * turn and press it, which is as close to `za` as a pane without a cursor
+   * gets. Nothing on screen has steps — you are inside one long answer — and it
+   * falls back to the newest turn that does.
+   */
+  function toggleSteps() {
+    const ids = new Set(withSteps.map(turn => turn.id))
+    let target: string | null = null
+    for (let at = visible.length - 1; at >= 0 && !target; at--) {
+      const id = visible[at]!.turn
+      if (id && ids.has(id)) target = id
+    }
+    target ??= withSteps.length ? withSteps[withSteps.length - 1]!.id : null
+    if (!target) return
+
+    const id = target
+    setOpenSteps((current) => {
+      const next = new Set(current)
+      if (!next.delete(id)) next.add(id)
+      return next
+    })
+  }
 
   /** Jump the window to the next or previous file in the patch. */
   function stepTo(direction: 1 | -1) {
@@ -457,7 +504,7 @@ export function SessionPane({
 
   const footer = pane === 'diff'
     ? keys.hint(['diff.file', 'diff.back', 'session.shell'])
-    : keys.hint(['session.write', 'session.editor', 'session.diff', 'session.checks', 'session.repair', 'session.stop'])
+    : keys.hint(['session.write', 'session.editor', 'session.diff', 'session.steps', 'session.checks', 'session.repair', 'session.stop'])
 
   return (
     <Box flexDirection="column" flexGrow={1}>

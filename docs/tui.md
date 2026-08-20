@@ -118,15 +118,15 @@ bin/start.mjs  tui  ─▶  .output/cli/index.mjs  ─▶  http://127.0.0.1:3000
                                         The terminal test fails one run in five on CI.
   · ▲  Port the wall to a grid
       Working · feat/wall-grid          ─ claude ─────────────────────────────────────
-                                        Read    test/terminal.test.ts
-  ─ Broken  4 ─────────────────────     Ran     bun test terminal
+                                        ▸ 6 steps · Read ×4 · Ran ×2
+  ─ Broken  4 ─────────────────────
     ✕  Morning triage
       3 failed · every day at 08:00     It waits on a fixed 50ms timer, so a loaded
                                         machine misses it…
     ✕  #418 Cache the pull lookup       $0.42 · 16.5s
       failing · marta · 12 files
                                         ›  i to write
-    12 more                             i write   I $EDITOR   d diff   c checks   f fix
+    12 more                             i write   I $EDITOR   d diff   z steps   c checks
 
   tab focus   esc rail   Y answer all   : command   ? keys
 ```
@@ -142,6 +142,14 @@ you last looked at it. `tab` moves the keys between the rail and the pane, so
 switching between two running agents is a keypress rather than a trip out to a
 list and back. Below a hundred columns the two take turns instead of sharing,
 which is the behaviour the six views had all along.
+
+A turn's tool calls arrive folded, as the one line with the count on it. Thirty
+of them printed in full is the transcript — the answer underneath is off the
+bottom of the screen and the instruction above is off the top — and toning the
+colour down made them quieter without making them shorter. `z` opens the turn
+you are reading, `Z` opens every one, and a turn that is still running folds to
+the step it is on rather than to a tally, because while it is going that line is
+the only sign it is moving.
 
 `Fleet` is still a whole screen of its own, because it is a different job:
 ambient rather than interactive, the thing you leave on a second monitor.

@@ -29,6 +29,13 @@ export interface TranscriptLine {
    * scroll arithmetic, tests — does not have to know about the styling.
    */
   spans?: Span[]
+  /**
+   * Which turn drew this line.
+   *
+   * A pane that can fold a turn's steps needs to know which turn the reader is
+   * looking at, and the only thing it has is the window of lines on screen.
+   */
+  turn?: string
 }
 
 export interface DisplayTurn {
@@ -121,14 +128,23 @@ function statsOf(turn: SessionTurn): RunStats | undefined {
   }
 }
 
+export interface TranscriptOptions {
+  worktreeRoot?: string
+  /** The turns whose steps are open. Everything else shows the one-line fold. */
+  expanded?: ReadonlySet<string>
+}
+
 export function transcriptLines(
   turns: DisplayTurn[],
   width: number,
-  worktreeRoot?: string,
+  options: TranscriptOptions = {},
 ): TranscriptLine[] {
+  const { worktreeRoot, expanded } = options
   const lines: TranscriptLine[] = []
 
   for (const turn of turns) {
+    const from = lines.length
+
     if (lines.length) lines.push({ kind: 'blank', text: '' })
 
     pushRule(lines, 'you', width)
@@ -137,15 +153,7 @@ export function transcriptLines(
     lines.push({ kind: 'blank', text: '' })
     pushRule(lines, turn.live ? 'claude · working' : 'claude', width)
 
-    for (const call of turn.toolCalls) {
-      const described = describeToolCall(call, worktreeRoot)
-      const target = described.target ? `  ${described.target}` : ''
-      lines.push({
-        kind: 'tool',
-        text: truncateTo(described.verb.padEnd(8) + target, width),
-        tone: call.isError ? 'red' : 'gray',
-      })
-    }
+    pushToolCalls(lines, turn, width, worktreeRoot, Boolean(expanded?.has(turn.id)))
 
     /*
      * Rendered rather than printed. Everything an agent writes is Markdown, and
@@ -170,9 +178,94 @@ export function transcriptLines(
 
     const summary = statsLine(turn)
     if (summary) lines.push({ kind: 'dim', text: truncateTo(summary, width), tone: 'gray' })
+
+    // Whose lines these are, decided once rather than passed to every push.
+    for (let at = from; at < lines.length; at++) lines[at]!.turn = turn.id
   }
 
   return lines
+}
+
+/**
+ * What it did, as one line you can open.
+ *
+ * A turn is often thirty tool calls long, and thirty lines of `Read …/a.ts` is
+ * the transcript: the answer underneath them is off the bottom of the screen
+ * and the reasoning above them is off the top. Toning the colour down made them
+ * quieter without making them shorter. So they arrive folded — a count, and
+ * enough of a summary to know whether opening it is worth it.
+ *
+ * A live turn folds to what it is doing *now* rather than to a tally, because
+ * while a run is going that line is the only sign it is moving.
+ */
+function pushToolCalls(
+  lines: TranscriptLine[],
+  turn: DisplayTurn,
+  width: number,
+  worktreeRoot: string | undefined,
+  open: boolean,
+) {
+  const calls = turn.toolCalls
+  if (!calls.length) return
+
+  const steps = calls.map(call => ({ call, ...describeToolCall(call, worktreeRoot) }))
+  const failed = calls.filter(call => call.isError).length
+  const parts = [
+    `${calls.length} step${calls.length === 1 ? '' : 's'}`,
+    open ? '' : turn.live ? latest(steps) : tally(steps),
+    failed ? `${failed} failed` : '',
+  ].filter(Boolean)
+
+  lines.push({
+    kind: 'tool',
+    text: truncateTo(`${open ? '▾' : '▸'} ${parts.join(' · ')}`, width),
+    tone: failed ? 'red' : 'gray',
+  })
+
+  if (!open) return
+
+  // One column, as wide as the widest verb in this turn rather than a number
+  // picked once: `Searched for` is twelve characters and used to shove its
+  // target out of line with every `Read` above it.
+  const column = Math.min(14, Math.max(...steps.map(step => step.verb.length)))
+
+  for (const step of steps) {
+    const target = step.target ? `  ${step.target}` : ''
+    lines.push({
+      kind: 'tool',
+      text: truncateTo(`  ${step.verb.padEnd(column)}${target}`, width),
+      tone: step.call.isError ? 'red' : 'gray',
+    })
+  }
+}
+
+interface Step {
+  verb: string
+  target: string
+}
+
+/**
+ * `Read ×4 · Searched · Edited` — what the turn spent its steps on.
+ *
+ * The verbs lose their preposition here: `describeToolCall` writes them to sit
+ * in front of a target, and "Searched for ·" with nothing after it reads as a
+ * line that got cut off.
+ */
+function tally(steps: Step[]): string {
+  const counts = new Map<string, number>()
+  for (const step of steps) {
+    const verb = step.verb.replace(/ (for|at|in)$/, '')
+    counts.set(verb, (counts.get(verb) ?? 0) + 1)
+  }
+  return [...counts]
+    .map(([verb, count]) => (count === 1 ? verb : `${verb} ×${count}`))
+    .join(' · ')
+}
+
+/** The step it is on, which is the one worth showing while it runs. */
+function latest(steps: Step[]): string {
+  const step = steps[steps.length - 1]!
+  return [step.verb, step.target].filter(Boolean).join(' ')
 }
 
 function pushRule(lines: TranscriptLine[], label: string, width: number) {

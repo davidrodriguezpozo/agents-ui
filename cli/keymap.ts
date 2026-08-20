@@ -92,6 +92,8 @@ export const BINDINGS: Binding[] = [
   { id: 'session.editor', keys: 'I', label: 'Write it in $EDITOR', short: 'write in $EDITOR', surface: 'session', press: ['I'] },
   { id: 'session.scroll', keys: 'j k ⌃d ⌃u', label: 'Scroll', short: 'scroll', surface: 'session' },
   { id: 'session.diff', keys: 'd', label: 'The diff', short: 'diff', surface: 'session', press: ['d'] },
+  { id: 'session.steps', keys: 'z', label: 'Open or close what it did, on the turn you are reading', short: 'steps', surface: 'session', press: ['z'] },
+  { id: 'session.stepsAll', keys: 'Z', label: 'Open or close what it did, everywhere', short: 'all steps', surface: 'session', press: ['Z'] },
   { id: 'session.checks', keys: 'c', label: 'Run the checks', short: 'checks', surface: 'session', press: ['c'] },
   { id: 'session.repair', keys: 'f', label: 'Have it fix its own failing checks', short: 'fix checks', surface: 'session', press: ['f'] },
   { id: 'session.update', keys: 'u', label: 'Catch it up with the base branch', short: 'catch up', surface: 'session', press: ['u'] },

@@ -657,3 +657,56 @@ describe('the help page', () => {
     expect(stdout.screen).toContain('EVERYTHING')
   })
 })
+
+describe('what it did', () => {
+  /**
+   * The steps arrive folded.
+   *
+   * Thirty tool calls is thirty lines, and a transcript that is mostly file
+   * reads pushes the answer off the bottom of the screen. Toning the colour
+   * down made them quieter without making them shorter — so the pane draws one
+   * line with a count on it, and `z` opens the turn you are reading.
+   */
+  const busy = () => session({
+    turns: [{
+      id: 'r1',
+      input: 'Look at the test',
+      output: 'It waits on a timer.',
+      status: 'completed',
+      createdAt: 1,
+      toolCalls: [
+        { id: 't1', toolName: 'Read', input: { file_path: '/repo/.worktrees/s1/cli/terminal.ts' } },
+        { id: 't2', toolName: 'Read', input: { file_path: '/repo/.worktrees/s1/cli/test/terminal.test.ts' } },
+        { id: 't3', toolName: 'Bash', input: { command: 'bun test --filter flaky-terminal' } },
+      ],
+    }],
+  })
+
+  it('folds to a count, and z opens and closes it', async () => {
+    const { stdin, stdout } = await mount({ session: async () => busy() })
+    stdin.write('\r')
+    await settle()
+
+    expect(stdout.screen).toContain('3 steps')
+    expect(stdout.screen).toContain('Read ×2')
+    expect(stdout.screen).not.toContain('bun test --filter flaky-terminal')
+
+    stdin.write('z')
+    await settle()
+    expect(stdout.screen).toContain('bun test --filter flaky-terminal')
+
+    stdin.write('z')
+    await settle()
+    expect(stdout.screen).not.toContain('bun test --filter flaky-terminal')
+  })
+
+  it('opens every turn on Z', async () => {
+    const { stdin, stdout } = await mount({ session: async () => busy() })
+    stdin.write('\r')
+    await settle()
+
+    stdin.write('Z')
+    await settle()
+    expect(stdout.screen).toContain('bun test --filter flaky-terminal')
+  })
+})
