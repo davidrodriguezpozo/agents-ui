@@ -401,14 +401,40 @@ function start() {
   return import(outputServer)
 }
 
+const outputCli = resolve(root, '.output', 'cli', 'index.mjs')
+
+function ensureCliBuilt() {
+  if (existsSync(outputCli)) return
+
+  if (!fromSource) {
+    console.error('This copy of agents-studio has no terminal app in it.')
+    console.error('Reinstall it:  npm install -g agents-studio')
+    process.exit(1)
+  }
+
+  ensureBuilt()
+  if (existsSync(outputCli)) return
+  console.log('Building the terminal app...')
+  execSync('node scripts/build-cli.mjs', { cwd: root, stdio: 'inherit' })
+}
+
+function tui() {
+  ensureBuilt()
+  ensureCliBuilt()
+  process.env.AGENTS_STUDIO_SERVER_ENTRY = outputServer
+  return import(outputCli)
+}
+
 const command = process.argv[2]
 
 if (command === 'install') await install()
 else if (command === 'uninstall') uninstall()
 else if (command === 'status') await status()
+else if (command === 'tui') await tui()
 else if (command === 'help' || command === '--help') {
-  console.log('agents-ui              start in the foreground')
-  console.log('agents-ui install      run in the background, at login and after a crash')
-  console.log('agents-ui uninstall    stop doing that')
-  console.log('agents-ui status       is it installed, is it answering')
+  console.log('agents-studio              start in the foreground')
+  console.log('agents-studio tui          the same app, in this terminal')
+  console.log('agents-studio install      run in the background, at login and after a crash')
+  console.log('agents-studio uninstall    stop doing that')
+  console.log('agents-studio status       is it installed, is it answering')
 } else await start()

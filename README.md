@@ -95,6 +95,16 @@ To try it once without installing, `npx agents-studio` works too — though it r
 about 19MB whenever the cache misses, so the global install is the better home for
 something meant to keep running.
 
+The same app, without a browser:
+
+```bash
+agents-studio tui
+```
+
+It talks to the local server — starts one if nothing is listening — and leaves it
+running when you quit, so rituals keep firing. `h`/`l` move between Work, Land, Daily,
+Fleet, Inbox and Projects (or `1`–`6` to jump). `?` lists every key.
+
 > **You'll need:** Node.js 18+, and Claude Code installed and signed in on this machine.
 > Sessions, rituals and workflows run through the Claude Agent SDK, which spawns that
 > Claude Code and uses that login; there is no separate key to set up. It is found on
@@ -124,6 +134,7 @@ started in a terminal yesterday is not enough.
 agents-studio install     # start at login and after a crash
 agents-studio status      # is it installed, is it answering
 agents-studio uninstall   # stop doing that — nothing you own is touched
+agents-studio tui         # the same app, in this terminal
 ```
 
 <details>

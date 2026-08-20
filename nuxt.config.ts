@@ -13,6 +13,12 @@ export default defineNuxtConfig({
     claudeDir: process.env.CLAUDE_DIR || '',
   },
 
+  typescript: {
+    tsConfig: {
+      exclude: ['../cli'],
+    },
+  },
+
   app: {
     head: {
       title: 'Agents Studio',

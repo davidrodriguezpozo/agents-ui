@@ -51,6 +51,8 @@ app/
 ├── types/          # TypeScript interfaces
 └── utils/          # Helpers (colors, templates)
 
+cli/                # Terminal app (Ink). Bundled into .output/cli/
+
 server/
 ├── api/            # REST endpoints
 └── utils/          # Server-side helpers

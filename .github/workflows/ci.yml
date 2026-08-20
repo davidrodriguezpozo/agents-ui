@@ -23,7 +23,7 @@ jobs:
         run: bun run test
 
       - name: Type check
-        run: bunx nuxi typecheck
+        run: bun run typecheck
 
       - name: Build
-        run: bunx nuxi build
+        run: bun run build

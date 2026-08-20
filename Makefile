@@ -22,7 +22,7 @@ SERVER := node bin/start.mjs
 
 .DEFAULT_GOAL := help
 
-.PHONY: help setup dev start build test watch typecheck check \
+.PHONY: help setup dev start tui build test watch typecheck check \
         service service-status service-restart service-stop service-logs \
         demo demo-stop clean
 
@@ -42,6 +42,9 @@ dev: ## Run with hot reload, for working on the app
 
 start: ## Run the built server in this terminal
 	$(SERVER)
+
+tui: ## The same app, in this terminal
+	$(SERVER) tui
 
 build: ## Build into .output/
 	$(PKG) run build

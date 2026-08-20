@@ -53,7 +53,7 @@ jobs:
         run: bun run test
 
       - name: Type check
-        run: bunx nuxi typecheck
+        run: bun run typecheck
 
       # A release tagged v0.2.0 that ships 0.1.0 is the kind of mistake nobody
       # notices until someone reports a bug against a version that never existed.
