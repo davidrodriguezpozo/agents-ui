@@ -1,8 +1,10 @@
 import { Box, useInput } from 'ink'
 import { useMemo, useState } from 'react'
+import { hint } from '../keymap'
 import { matchesFilter, windowAround, type Tone } from '../format'
 import type { Pull } from '../types'
 import {
+  Confirm,
   EmptyState,
   FilterBar,
   Glyph,
@@ -11,10 +13,11 @@ import {
   Rule,
   Split,
   TwoLineRow,
+  position,
 } from './components'
 import { useStudio } from './context'
 import { usePoll, useSelection, useTerminalSize } from './hooks'
-import { isWide, listCapacity, listLayout } from './theme'
+import { CHROME, isWide, listCapacity, listLayout, splitWidths } from './theme'
 
 export function LandView({
   onOpenSession,
@@ -23,12 +26,24 @@ export function LandView({
   onOpenSession: (id: string) => void
   isActive: boolean
 }) {
-  const { api, mode, setMode, action, openBrowser } = useStudio()
+  const { api, mode, setMode, action, scope, openBrowser, motions, nudge, rowHeight } = useStudio()
   const { columns, rows } = useTerminalSize()
   const layout = listLayout(columns)
   const wide = isWide(columns)
+  const widths = splitWidths(columns)
   const [filter, setFilter] = useState('')
-  const poll = usePoll(signal => api.pulls(signal), 120_000)
+  const [confirming, setConfirming] = useState<Pull | null>(null)
+
+  /**
+   * Keyed on the project, because `/api/github/pulls` is scoped to it.
+   *
+   * Without that, `]` left this list showing another repository's pull requests
+   * for up to two minutes — and every key here acts on the selected row.
+   */
+  const poll = usePoll(signal => api.pulls(signal), {
+    every: 120_000,
+    deps: [scope, nudge],
+  })
   const reading = poll.data
 
   const reviewing = useMemo(
@@ -40,28 +55,38 @@ export function LandView({
     [reading, filter],
   )
   const pulls = useMemo(() => [...reviewing, ...mine], [reviewing, mine])
-  const [index] = useSelection(pulls.length, isActive && mode === 'nav')
+
+  const capacity = listCapacity(
+    rows,
+    [CHROME.meters, CHROME.rule, wide ? 0 : CHROME.inspector],
+    rowHeight,
+  )
+  const [index] = useSelection(pulls.length, motions, isActive && mode === 'nav' && !confirming, capacity)
   const selected = pulls[index]
-  const chrome = wide ? 11 : 14
-  const shown = windowAround(pulls, index, listCapacity(rows, chrome, 2))
+  const shown = windowAround(pulls, index, capacity)
   const summary = reading?.summary
-  const listWidth = wide ? Math.floor(columns * 0.52) : layout.inner
-  const inspectorWidth = wide ? Math.max(24, columns - listWidth - 8) : layout.inner
 
   useInput((input, key) => {
+    if (confirming) {
+      if (input === 'y') {
+        const pull = confirming
+        setConfirming(null)
+        void merge(pull)
+      }
+      if (input === 'n' || key.escape) setConfirming(null)
+      return
+    }
     if (input === '/') setMode('filter')
     if (key.return && selected) void work(selected)
-    if (input === 'm' && selected) void merge(selected)
+    // Merging somebody's pull request is not a keystroke. It used to be.
+    if (input === 'm' && selected) setConfirming(selected)
     if (input === 'r') poll.refresh()
-    if (input === 'o') {
-      if (selected) openBrowser(selected.url)
-      else openBrowser('/land')
-    }
+    if (input === 'o') openBrowser(selected ? selected.url : '/land')
   }, { isActive: isActive && mode === 'nav' })
 
   async function work(pull: Pull) {
     let id: string | null = null
-    const ok = await action.run('Starting a session…', async () => {
+    const ok = await action.run(`work:${pull.number}`, 'Starting a session…', async () => {
       const started = await api.workOnPull(pull.number)
       id = started.id
     })
@@ -69,21 +94,19 @@ export function LandView({
   }
 
   async function merge(pull: Pull) {
-    await action.run(`Merging #${pull.number}…`, () => api.mergePull(pull.number))
+    await action.run(`merge:${pull.number}`, `Merging #${pull.number}…`, () => api.mergePull(pull.number))
     poll.refresh()
   }
 
   const list = (
     <Box flexDirection="column" flexGrow={1}>
       {summary ? (
-        <Box paddingBottom={1}>
-          <Meters items={[
-            { value: String(summary.onYou), label: 'on you', tone: summary.onYou ? 'cyan' : 'gray' },
-            { value: String(summary.toMerge), label: 'to merge', tone: summary.toMerge ? 'green' : 'gray' },
-            { value: String(summary.waiting), label: 'waiting', tone: 'gray' },
-          ]}
-          />
-        </Box>
+        <Meters items={[
+          { value: String(summary.onYou), label: 'on you', tone: summary.onYou ? 'cyan' : 'gray' },
+          { value: String(summary.toMerge), label: 'to merge', tone: summary.toMerge ? 'green' : 'gray' },
+          { value: String(summary.waiting), label: 'waiting', tone: 'gray' },
+        ]}
+        />
       ) : null}
       {poll.loading && !poll.data ? (
         <EmptyState>Loading…</EmptyState>
@@ -101,10 +124,15 @@ export function LandView({
               {group !== prevGroup ? (
                 <Rule
                   label={`${group}  ${pull.mine ? mine.length : reviewing.length}`}
-                  width={listWidth}
+                  width={widths.list}
                 />
               ) : null}
-              <PullRow pull={pull} selected={pull.number === selected?.number} width={listWidth} />
+              <PullRow
+                pull={pull}
+                selected={pull.number === selected?.number}
+                width={widths.list}
+                spaced={rowHeight === 3}
+              />
             </Box>
           )
         })
@@ -116,26 +144,40 @@ export function LandView({
     <Box flexDirection="column" flexGrow={1}>
       <Split
         wide={wide}
-        listWidth={listWidth}
+        listWidth={widths.list}
         list={list}
         inspector={
           selected ? (
-            <LandInspector pull={selected} width={inspectorWidth} />
+            <LandInspector
+              pull={selected}
+              width={wide ? widths.inspector : layout.inner}
+              at={position(index, pulls.length, shown.length)}
+            />
           ) : (
             <Inspector
               title="Land"
               lines={['Pull requests with your name on them.']}
-              hint="⏎ start a session   m merge   o github"
-              width={inspectorWidth}
+              hint={hint(['land.work', 'land.merge', 'browser'])}
+              width={wide ? widths.inspector : layout.inner}
             />
           )
         }
       />
+      {confirming ? (
+        <Confirm
+          question={`Merge #${confirming.number} on GitHub?`}
+          detail={[
+            confirming.title,
+            `${confirming.headBranch} → ${confirming.baseBranch}`,
+            `checks ${confirming.checks}${confirming.mine ? '' : ` · opened by ${confirming.author}`}`,
+          ]}
+        />
+      ) : null}
       {mode === 'filter' && isActive ? (
         <FilterBar
           value={filter}
           onChange={setFilter}
-          onClose={clear => {
+          onClose={(clear) => {
             if (clear) setFilter('')
             setMode('nav')
           }}
@@ -157,7 +199,17 @@ function pullTone(pull: Pull): Tone {
   return 'gray'
 }
 
-function PullRow({ pull, selected, width }: { pull: Pull; selected: boolean; width: number }) {
+function PullRow({
+  pull,
+  selected,
+  width,
+  spaced,
+}: {
+  pull: Pull
+  selected: boolean
+  width: number
+  spaced: boolean
+}) {
   const tone = pullTone(pull)
   const files = pull.changedFiles
     ? `${pull.changedFiles} file${pull.changedFiles === 1 ? '' : 's'}  +${pull.additions}/−${pull.deletions}`
@@ -179,11 +231,12 @@ function PullRow({ pull, selected, width }: { pull: Pull; selected: boolean; wid
       trailing={pull.verdict.label}
       detail={detail}
       width={width}
+      spaced={spaced}
     />
   )
 }
 
-function LandInspector({ pull, width }: { pull: Pull; width: number }) {
+function LandInspector({ pull, width, at }: { pull: Pull; width: number; at?: string }) {
   return (
     <Inspector
       title={`#${pull.number}  ${pull.title}`}
@@ -195,9 +248,9 @@ function LandInspector({ pull, width }: { pull: Pull; width: number }) {
           ? `${pull.changedFiles} files  +${pull.additions}/−${pull.deletions}`
           : '',
         pull.intent ? `when you work on it: ${pull.intent}` : '',
-        pull.mine ? 'opened by you' : `opened by ${pull.author}`,
+        `${pull.mine ? 'opened by you' : `opened by ${pull.author}`}${at ? `   ${at}` : ''}`,
       ]}
-      hint="⏎ start a session   m merge   o github"
+      hint={hint(['land.work', 'land.merge', 'browser'])}
       width={width}
     />
   )

@@ -1,5 +1,6 @@
 import { Box, useInput } from 'ink'
 import { useState } from 'react'
+import { hint } from '../keymap'
 import { matchesFilter, shortenHome, windowAround, type Tone } from '../format'
 import type { Project } from '../types'
 import {
@@ -9,30 +10,43 @@ import {
   Inspector,
   Split,
   TwoLineRow,
+  position,
 } from './components'
 import { useStudio } from './context'
 import { useSelection, useTerminalSize } from './hooks'
-import { isWide, listCapacity, listLayout } from './theme'
+import { CHROME, isWide, listCapacity, listLayout, splitWidths } from './theme'
 
+/**
+ * Which project this window is looking at.
+ *
+ * Two answers, deliberately: `⏎` points this client somewhere, and `S` also
+ * writes it as the app's default. Pressing `]` used to do the second thing,
+ * so cycling projects here moved the browser's floor and whatever the service
+ * does with an unscoped request — a surprising amount of blast radius for a
+ * key you press while looking around.
+ */
 export function ProjectsView({ isActive }: { isActive: boolean }) {
-  const { projects, setActiveProject, mode, setMode, openBrowser } = useStudio()
+  const {
+    projects, scope, setScope, makeDefault, scopeIsLocal, mode, setMode, openBrowser, motions, rowHeight,
+  } = useStudio()
   const { columns, rows: termRows } = useTerminalSize()
   const layout = listLayout(columns)
   const wide = isWide(columns)
+  const widths = splitWidths(columns)
   const [filter, setFilter] = useState('')
   const home = projects?.home ?? ''
   const list = (projects?.projects ?? []).filter(p => matchesFilter(`${p.name ?? ''} ${p.path}`, filter))
-  const [index] = useSelection(list.length, isActive && mode === 'nav')
+
+  const capacity = listCapacity(termRows, [wide ? 0 : CHROME.inspector], rowHeight)
+  const [index] = useSelection(list.length, motions, isActive && mode === 'nav', capacity)
   const selected = list[index]
-  const chrome = wide ? 10 : 13
-  const shown = windowAround(list, index, listCapacity(termRows, chrome, 2))
-  const listWidth = wide ? Math.floor(columns * 0.52) : layout.inner
-  const inspectorWidth = wide ? Math.max(24, columns - listWidth - 8) : layout.inner
+  const shown = windowAround(list, index, capacity)
 
   useInput((input, key) => {
     if (input === '/') setMode('filter')
-    if (key.return && selected) void setActiveProject(selected.path)
-    if (input === 'x') void setActiveProject(null)
+    if (key.return && selected) setScope(selected.path)
+    if (input === 'S' && selected) void makeDefault(selected.path)
+    if (input === 'x') setScope(null)
     if (input === 'o') openBrowser('/')
   }, { isActive: isActive && mode === 'nav' })
 
@@ -46,9 +60,11 @@ export function ProjectsView({ isActive }: { isActive: boolean }) {
             key={project.path}
             project={project}
             home={home}
-            active={project.path === projects?.activePath}
+            here={project.path === scope}
+            isDefault={project.path === projects?.activePath}
             selected={project.path === selected?.path}
-            width={listWidth}
+            width={widths.list}
+            spaced={rowHeight === 3}
           />
         ))
       )}
@@ -59,22 +75,27 @@ export function ProjectsView({ isActive }: { isActive: boolean }) {
     <Box flexDirection="column" flexGrow={1}>
       <Split
         wide={wide}
-        listWidth={listWidth}
+        listWidth={widths.list}
         list={rows}
         inspector={
           selected ? (
             <ProjectInspector
               project={selected}
               home={home}
-              active={selected.path === projects?.activePath}
-              width={inspectorWidth}
+              here={selected.path === scope}
+              isDefault={selected.path === projects?.activePath}
+              width={wide ? widths.inspector : layout.inner}
+              at={position(index, list.length, shown.length)}
             />
           ) : (
             <Inspector
               title="Projects"
-              lines={[projects?.activePath ? shortenHome(projects.activePath, home) : 'None selected.']}
-              hint="⏎ switch   ] next   [ previous   x clear"
-              width={inspectorWidth}
+              lines={[
+                scope ? shortenHome(scope, home) : 'None selected — just ~/.claude.',
+                scopeIsLocal ? 'this window only; S makes it the app default' : '',
+              ]}
+              hint={hint(['projects.focus', 'projects.default', 'projects.clear'])}
+              width={wide ? widths.inspector : layout.inner}
             />
           )
         }
@@ -83,7 +104,7 @@ export function ProjectsView({ isActive }: { isActive: boolean }) {
         <FilterBar
           value={filter}
           onChange={setFilter}
-          onClose={clear => {
+          onClose={(clear) => {
             if (clear) setFilter('')
             setMode('nav')
           }}
@@ -97,27 +118,42 @@ export function ProjectsView({ isActive }: { isActive: boolean }) {
 function ProjectRow({
   project,
   home,
-  active,
+  here,
+  isDefault,
   selected,
   width,
+  spaced,
 }: {
   project: Project
   home: string
-  active: boolean
+  here: boolean
+  isDefault: boolean
   selected: boolean
   width: number
+  spaced: boolean
 }) {
-  const tone: Tone = !project.exists ? 'red' : active ? 'cyan' : 'gray'
+  const tone: Tone = !project.exists ? 'red' : here ? 'cyan' : 'gray'
+  const status = !project.exists
+    ? 'Missing'
+    : here && isDefault
+      ? 'Here'
+      : here
+        ? 'Here only'
+        : isDefault
+          ? 'App default'
+          : 'Saved'
+
   return (
     <TwoLineRow
       selected={selected}
       glyph={<Glyph tone={tone} />}
-      status={active ? 'Active' : project.exists ? 'Saved' : 'Missing'}
+      status={status}
       statusTone={tone}
       title={project.name || shortenHome(project.path, home)}
       trailing={project.branch || '—'}
       detail={`${shortenHome(project.path, home)} · ${project.sessionCount} session${project.sessionCount === 1 ? '' : 's'}`}
       width={width}
+      spaced={spaced}
     />
   )
 }
@@ -125,13 +161,17 @@ function ProjectRow({
 function ProjectInspector({
   project,
   home,
-  active,
+  here,
+  isDefault,
   width,
+  at,
 }: {
   project: Project
   home: string
-  active: boolean
+  here: boolean
+  isDefault: boolean
   width: number
+  at?: string
 }) {
   return (
     <Inspector
@@ -139,12 +179,13 @@ function ProjectInspector({
       lines={[
         shortenHome(project.path, home),
         project.branch ? `on ${project.branch}` : 'not a git repo',
-        active ? 'this is the active project' : '⏎ to switch here',
+        here ? 'this window is looking here' : '⏎ to look here',
+        isDefault ? 'the app default' : 'S to make it the app default too',
         `${project.sessionCount} session${project.sessionCount === 1 ? '' : 's'}`,
         project.hasClaudeDir ? 'has a .claude directory' : '',
-        project.exists ? '' : 'this path is missing on disk',
+        project.exists ? (at ?? '') : 'this path is missing on disk',
       ]}
-      hint="⏎ switch   x clear   o browser"
+      hint={hint(['projects.focus', 'projects.default', 'projects.clear', 'browser'])}
       width={width}
     />
   )

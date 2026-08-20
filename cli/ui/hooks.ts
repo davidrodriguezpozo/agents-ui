@@ -382,6 +382,8 @@ export function useScroll(total: number, height: number, bus: MotionBus, isActiv
     behind: clamped,
     atBottom: clamped === 0,
     toBottom: useCallback(() => setOffset(0), []),
+    /** Straight to a distance from the bottom, for jumping to a diff hunk. */
+    set: useCallback((next: number) => setOffset(Math.max(0, next)), []),
   }
 }
 

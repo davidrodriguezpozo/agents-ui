@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { applyRunEvent, emptyRun, isFinished } from '../cli/runStream'
-import type { PermissionRequest } from '../cli/types'
+import { applyRunEvent, emptyRun, isFinished } from '../runStream'
+import type { PermissionRequest } from '../types'
 
 describe('applyRunEvent', () => {
   it('folds a recorded stream into output, tools and a finished status', () => {

@@ -1,18 +1,21 @@
 import { Box, useInput } from 'ink'
 import { useMemo, useState } from 'react'
+import { hint } from '../keymap'
 import { compactAge, matchesFilter, windowAround, type Tone } from '../format'
 import type { InboxSource } from '../types'
 import {
+  Confirm,
   EmptyState,
   FilterBar,
   Glyph,
   Inspector,
   Split,
   TwoLineRow,
+  position,
 } from './components'
 import { useStudio } from './context'
 import { usePoll, useSelection, useTerminalSize } from './hooks'
-import { isWide, listCapacity, listLayout } from './theme'
+import { CHROME, isWide, listCapacity, listLayout, splitWidths } from './theme'
 
 interface Row {
   key: string
@@ -21,12 +24,15 @@ interface Row {
 }
 
 export function InboxView({ isActive }: { isActive: boolean }) {
-  const { api, mode, setMode, action, openBrowser } = useStudio()
+  const { api, mode, setMode, action, openBrowser, motions, nudge, rowHeight } = useStudio()
   const { columns, rows } = useTerminalSize()
   const layout = listLayout(columns)
   const wide = isWide(columns)
+  const widths = splitWidths(columns)
   const [filter, setFilter] = useState('')
-  const poll = usePoll(signal => api.inbox(signal), 30_000)
+  const [confirming, setConfirming] = useState<InboxSource | null>(null)
+
+  const poll = usePoll(signal => api.inbox(signal), { every: 60_000, deps: [nudge] })
   const sources = poll.data?.sources ?? []
 
   const rowsList: Row[] = useMemo(() => {
@@ -46,33 +52,49 @@ export function InboxView({ isActive }: { isActive: boolean }) {
     ))
   }, [sources, filter])
 
-  const [index] = useSelection(rowsList.length, isActive && mode === 'nav')
+  const capacity = listCapacity(rows, [wide ? 0 : CHROME.inspector], rowHeight)
+  const [index] = useSelection(
+    rowsList.length,
+    motions,
+    isActive && mode === 'nav' && !confirming,
+    capacity,
+  )
   const selected = rowsList[index]
-  const chrome = wide ? 10 : 13
-  const shown = windowAround(rowsList, index, listCapacity(rows, chrome, 2))
-  const waiting = sources.reduce((n, s) => n + s.items.length, 0)
-  const listWidth = wide ? Math.floor(columns * 0.52) : layout.inner
-  const inspectorWidth = wide ? Math.max(24, columns - listWidth - 8) : layout.inner
+  const shown = windowAround(rowsList, index, capacity)
+  const waiting = sources.reduce((total, source) => total + source.items.length, 0)
 
   useInput((input, key) => {
+    if (confirming) {
+      if (input === 'y') {
+        const source = confirming
+        setConfirming(null)
+        void look(source)
+      }
+      if (input === 'n' || key.escape) setConfirming(null)
+      return
+    }
     if (input === '/') setMode('filter')
-    if (input === 'r' && selected) void refresh(selected.source.key)
+    if (input === 'r') poll.refresh()
+    // Looking again spends an agent turn on every source it asks, so it is a
+    // capital letter and a question, next to the `r` that only re-reads.
+    if (input === 'R' && selected) setConfirming(selected.source)
     if (input === 'x' && selected?.item) void dismiss(selected)
     if (key.return && selected?.item) openBrowser(selected.item.url)
-    if (input === 'o') {
-      if (selected?.item) openBrowser(selected.item.url)
-      else openBrowser('/')
-    }
+    if (input === 'o') openBrowser(selected?.item ? selected.item.url : '/')
   }, { isActive: isActive && mode === 'nav' })
 
-  async function refresh(source: string) {
-    await action.run('Looking again — this can take a minute…', () => api.refreshInbox(source))
+  async function look(source: InboxSource) {
+    await action.run(
+      `look:${source.key}`,
+      'Looking again — this can take a minute…',
+      () => api.refreshInbox(source.key),
+    )
     poll.refresh()
   }
 
   async function dismiss(row: Row) {
     if (!row.item) return
-    await action.run(null, () => api.dismissInbox(row.source.key, row.item!.id))
+    await action.run(`dismiss:${row.item.id}`, null, () => api.dismissInbox(row.source.key, row.item!.id))
     poll.refresh()
   }
 
@@ -80,6 +102,8 @@ export function InboxView({ isActive }: { isActive: boolean }) {
     <Box flexDirection="column" flexGrow={1}>
       {poll.loading && !poll.data ? (
         <EmptyState>Loading…</EmptyState>
+      ) : poll.error && !poll.data ? (
+        <EmptyState>{`${poll.error}  ·  r to try again`}</EmptyState>
       ) : rowsList.length === 0 ? (
         <EmptyState>{filter ? 'Nothing matches.' : 'Nothing waiting elsewhere.'}</EmptyState>
       ) : (
@@ -88,7 +112,8 @@ export function InboxView({ isActive }: { isActive: boolean }) {
             key={row.key}
             row={row}
             selected={row.key === selected?.key}
-            width={listWidth}
+            width={widths.list}
+            spaced={rowHeight === 3}
           />
         ))
       )}
@@ -99,26 +124,39 @@ export function InboxView({ isActive }: { isActive: boolean }) {
     <Box flexDirection="column" flexGrow={1}>
       <Split
         wide={wide}
-        listWidth={listWidth}
+        listWidth={widths.list}
         list={list}
         inspector={
           selected ? (
-            <InboxInspector row={selected} width={inspectorWidth} />
+            <InboxInspector
+              row={selected}
+              width={wide ? widths.inspector : layout.inner}
+              at={position(index, rowsList.length, shown.length)}
+            />
           ) : (
             <Inspector
               title="Inbox"
               lines={[waiting ? `${waiting} waiting elsewhere` : 'Caught up.']}
-              hint="⏎ open   r look again   x dismiss"
-              width={inspectorWidth}
+              hint={hint(['open', 'inbox.look', 'inbox.dismiss'])}
+              width={wide ? widths.inspector : layout.inner}
             />
           )
         }
       />
+      {confirming ? (
+        <Confirm
+          question={`Look at ${confirming.label} again?`}
+          detail={[
+            'It reads the source with an agent, which takes a minute and costs money.',
+            confirming.costUsd != null ? `last look ${`$${confirming.costUsd.toFixed(2)}`}` : '',
+          ]}
+        />
+      ) : null}
       {mode === 'filter' && isActive ? (
         <FilterBar
           value={filter}
           onChange={setFilter}
-          onClose={clear => {
+          onClose={(clear) => {
             if (clear) setFilter('')
             setMode('nav')
           }}
@@ -133,15 +171,16 @@ function InboxRow({
   row,
   selected,
   width,
+  spaced,
 }: {
   row: Row
   selected: boolean
   width: number
+  spaced: boolean
 }) {
   const tone: Tone = row.source.error ? 'red' : row.item ? 'cyan' : 'gray'
   const title = row.item?.title ?? (row.source.error ? row.source.error : 'Nothing waiting')
-  const detail = row.item?.why
-    || (row.source.error ? row.source.error : 'Quiet')
+  const detail = row.item?.why || (row.source.error ? row.source.error : 'Quiet')
   const trailing = row.source.checkedAt ? compactAge(row.source.checkedAt) : ''
 
   return (
@@ -154,11 +193,12 @@ function InboxRow({
       trailing={trailing}
       detail={detail}
       width={width}
+      spaced={spaced}
     />
   )
 }
 
-function InboxInspector({ row, width }: { row: Row; width: number }) {
+function InboxInspector({ row, width, at }: { row: Row; width: number; at?: string }) {
   return (
     <Inspector
       title={row.item?.title ?? row.source.label}
@@ -167,8 +207,11 @@ function InboxInspector({ row, width }: { row: Row; width: number }) {
         row.item?.why ?? (row.source.error ?? 'Nothing waiting from this source.'),
         row.source.checkedAt ? `checked ${compactAge(row.source.checkedAt)} ago` : 'never checked',
         row.source.costUsd != null ? `last look $${row.source.costUsd.toFixed(2)}` : '',
+        at ?? '',
       ]}
-      hint={row.item ? '⏎ open   r look again   x dismiss' : 'r look again'}
+      hint={row.item
+        ? hint(['open', 'inbox.look', 'inbox.dismiss'])
+        : hint(['inbox.look', 'refresh'])}
       width={width}
     />
   )

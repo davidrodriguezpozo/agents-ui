@@ -1,8 +1,10 @@
 import { describeToolCall } from '~/utils/toolCalls'
+import { formatCost, formatDuration } from '~/utils/time'
 import type { LiveRun } from './runStream'
 import { isFinished } from './runStream'
 import { toLines, type Tone } from './format'
-import type { SessionDetail, SessionTurn, ToolCall } from './types'
+import { markdownLines, type Span } from './markdown'
+import type { RunStats, SessionDetail, SessionTurn, ToolCall } from './types'
 
 /**
  * A session's conversation as the rows a pane can draw.
@@ -20,6 +22,13 @@ export interface TranscriptLine {
   kind: LineKind
   text: string
   tone?: Tone
+  /**
+   * The line as styled pieces, when it came from Markdown.
+   *
+   * `text` is still the whole line, so anything measuring or matching on it —
+   * scroll arithmetic, tests — does not have to know about the styling.
+   */
+  spans?: Span[]
 }
 
 export interface DisplayTurn {
@@ -30,6 +39,17 @@ export interface DisplayTurn {
   error?: string
   toolCalls: ToolCall[]
   live: boolean
+  /**
+   * What it is reasoning about, while that is all there is.
+   *
+   * The stream carries this and the terminal was folding it and throwing it
+   * away, so a turn that had been thinking for thirty seconds showed a single
+   * dim ellipsis. It is the only thing on screen that says the run is doing
+   * something rather than stuck.
+   */
+  thinking?: string
+  /** What the turn cost and how long it took, once it has finished. */
+  stats?: RunStats
 }
 
 /**
@@ -58,6 +78,8 @@ export function displayTurns(
       error: live.error,
       toolCalls: live.toolCalls,
       live: true,
+      thinking: live.thinking,
+      stats: live.stats,
     })
   }
 
@@ -74,6 +96,8 @@ function fromRecorded(turn: SessionTurn, live: LiveRun | null): DisplayTurn {
       error: live.error || turn.error,
       toolCalls: live.toolCalls.length ? live.toolCalls : (turn.toolCalls ?? []),
       live: !isFinished(live.status),
+      thinking: live.thinking,
+      stats: live.stats ?? statsOf(turn),
     }
   }
 
@@ -85,6 +109,15 @@ function fromRecorded(turn: SessionTurn, live: LiveRun | null): DisplayTurn {
     error: turn.error,
     toolCalls: turn.toolCalls ?? [],
     live: false,
+    stats: statsOf(turn),
+  }
+}
+
+function statsOf(turn: SessionTurn): RunStats | undefined {
+  if (turn.costUsd == null && !turn.completedAt) return undefined
+  return {
+    costUsd: turn.costUsd,
+    durationMs: turn.completedAt ? turn.completedAt - turn.createdAt : undefined,
   }
 }
 
@@ -114,11 +147,29 @@ export function transcriptLines(
       })
     }
 
-    if (turn.output.trim()) pushWrapped(lines, turn.output.trim(), width, 'text')
+    /*
+     * Rendered rather than printed. Everything an agent writes is Markdown, and
+     * a pane that shows the punctuation instead of the point is the harder thing
+     * to read — a review with six `###` sections and forty backticked
+     * identifiers is genuinely worse as source than as prose.
+     */
+    if (turn.output.trim()) {
+      for (const line of markdownLines(turn.output.trim(), width)) {
+        lines.push({ kind: 'text', text: line.text, spans: line.spans })
+      }
+    }
     if (turn.error) pushWrapped(lines, turn.error, width, 'error', 'red')
-    if (turn.live && !turn.output.trim() && !turn.toolCalls.length && !turn.error) {
+
+    // Thinking is shown only while it is the whole story. Once there is an
+    // answer, the reasoning that led to it is noise above it.
+    if (turn.live && !turn.output.trim() && turn.thinking?.trim()) {
+      pushWrapped(lines, tail(turn.thinking.trim(), 400), width, 'dim', 'gray')
+    } else if (turn.live && !turn.output.trim() && !turn.toolCalls.length && !turn.error) {
       lines.push({ kind: 'dim', text: '…', tone: 'gray' })
     }
+
+    const summary = statsLine(turn)
+    if (summary) lines.push({ kind: 'dim', text: truncateTo(summary, width), tone: 'gray' })
   }
 
   return lines
@@ -143,6 +194,23 @@ function pushWrapped(
   for (const line of toLines(text, width)) {
     lines.push({ kind, text: line, tone })
   }
+}
+
+/** The last of a long thought, which is the part that is still relevant. */
+function tail(text: string, max: number): string {
+  return text.length <= max ? text : `…${text.slice(text.length - max)}`
+}
+
+/**
+ * What the turn cost, in the same words the browser uses.
+ *
+ * Only for turns that have finished: a running cost that updates every frame
+ * reads as a meter rather than as a fact.
+ */
+function statsLine(turn: DisplayTurn): string | null {
+  if (turn.live || !turn.stats) return null
+  const parts = [formatCost(turn.stats.costUsd), formatDuration(turn.stats.durationMs)].filter(Boolean)
+  return parts.length ? parts.join(' · ') : null
 }
 
 function truncateTo(text: string, width: number): string {

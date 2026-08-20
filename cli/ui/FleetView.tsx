@@ -1,5 +1,5 @@
 import { Box, Text, useInput } from 'ink'
-import { useMemo } from 'react'
+import { useMemo, useRef } from 'react'
 import { describeToolCall, presentVerb } from '~/utils/toolCalls'
 import {
   URGENCY_LABELS,
@@ -17,6 +17,7 @@ import {
   type WallSnapshot,
   type WallTile,
 } from '~/utils/wall'
+import { hint } from '../keymap'
 import { compactAge, spinnerFrame, toneForUrgency, truncate, windowAround, type Tone } from '../format'
 import {
   EmptyState,
@@ -28,10 +29,11 @@ import {
   Rule,
   Split,
   TwoLineRow,
+  position,
 } from './components'
 import { useStudio } from './context'
 import { usePoll, useSelection, useTerminalSize, useTick } from './hooks'
-import { isWide, listCapacity, listLayout } from './theme'
+import { CHROME, isWide, listCapacity, listLayout, splitWidths } from './theme'
 
 /**
  * The fleet, as a dashboard rather than another list.
@@ -49,12 +51,23 @@ export function FleetView({
   onOpenSession: (id: string) => void
   isActive: boolean
 }) {
-  const { api, mode, action, openBrowser } = useStudio()
+  const { api, mode, action, openBrowser, motions, nudge, rowHeight } = useStudio()
   const { columns, rows } = useTerminalSize()
   const layout = listLayout(columns)
   const wide = isWide(columns)
+  const widths = splitWidths(columns, 0.55)
 
-  const poll = usePoll(signal => api.wall(signal), 3000)
+  // Three seconds is right while agents are working and profligate when the
+  // fleet is asleep, which is most of the day. The browser's own wall settles
+  // at ten; this settles at fifteen and gets nudged awake by the notification
+  // stream the moment anything happens.
+  const moving = useRef(true)
+  const poll = usePoll(signal => api.wall(signal), {
+    every: 3_000,
+    idle: 15_000,
+    live: moving.current,
+    deps: [nudge],
+  })
   const snapshot = poll.data
   const tiles = useMemo(() => {
     if (!snapshot) return []
@@ -62,13 +75,19 @@ export function FleetView({
   }, [snapshot])
 
   const working = tiles.some(tile => tile.activity === 'working')
+  moving.current = working || tiles.some(tile => tile.prompts.length > 0)
   const tick = useTick(working, 1000)
   const clocks = Date.now()
 
-  const [index] = useSelection(tiles.length, isActive && mode === 'nav')
+  const meterRows = (snapshot?.spend.capUsd ? 1 : 0) + (snapshot?.quota ? 1 : 0)
+  const capacity = listCapacity(
+    rows,
+    [CHROME.meters + meterRows, CHROME.rule, wide ? 0 : CHROME.inspector],
+    rowHeight,
+  )
+  const [index] = useSelection(tiles.length, motions, isActive && mode === 'nav', capacity)
   const selected = tiles[index]
-  const chrome = wide ? 14 : 16
-  const shown = windowAround(tiles, index, listCapacity(rows, chrome, 2))
+  const shown = windowAround(tiles, index, capacity)
   const counts = countUrgency(tiles)
   const mood = moodOf(tiles)
   const spend = snapshot ? spendMeter(snapshot.spend.todayUsd, snapshot.spend.capUsd) : null
@@ -77,10 +96,7 @@ export function FleetView({
   useInput((input, key) => {
     if (key.return && selected) onOpenSession(selected.sessionId)
     if (input === 'r') poll.refresh()
-    if (input === 'o') {
-      if (selected?.prUrl) openBrowser(selected.prUrl)
-      else openBrowser('/wall')
-    }
+    if (input === 'o') openBrowser(selected?.prUrl ? selected.prUrl : '/wall')
     if (input === 'x' && selected?.runId) void stop(selected)
     if (input === 'y' && selected) void answer(selected, 'allow', 'once')
     if (input === 'a' && selected) void answer(selected, 'allow', 'session')
@@ -89,19 +105,20 @@ export function FleetView({
 
   async function stop(tile: WallTile) {
     if (!tile.runId) return
-    await action.run('Stopping…', () => api.cancelRun(tile.runId!))
+    await action.run(`stop:${tile.sessionId}`, 'Stopping…', () => api.cancelRun(tile.runId!))
     poll.refresh()
   }
 
   async function answer(tile: WallTile, behavior: 'allow' | 'deny', scope?: 'once' | 'session') {
     const prompt = tile.prompts[0]
     if (!prompt) return
-    await action.run(null, () => api.answerPermission(prompt.id, behavior, scope))
+    await action.run(
+      `permission:${prompt.id}`,
+      null,
+      () => api.answerPermission(prompt.id, behavior, { scope }),
+    )
     poll.refresh()
   }
-
-  const listWidth = wide ? Math.floor(columns * 0.55) : layout.inner
-  const inspectorWidth = wide ? Math.max(24, columns - listWidth - 8) : layout.inner
 
   const list = (
     <Box flexDirection="column" flexGrow={1}>
@@ -113,29 +130,25 @@ export function FleetView({
       ]}
       />
       {spend && snapshot?.spend.capUsd ? (
-        <Box paddingBottom={1}>
-          <MeterBar
-            fraction={spend.fraction}
-            width={Math.min(18, Math.floor(listWidth / 6))}
-            tone={spendTone(spend.tone)}
-            label={spend.label}
-          />
-        </Box>
+        <MeterBar
+          fraction={spend.fraction}
+          width={Math.min(18, Math.floor(widths.list / 6))}
+          tone={spendTone(spend.tone)}
+          label={spend.label}
+        />
       ) : null}
       {quota ? (
-        <Box paddingBottom={1}>
-          <MeterBar
-            fraction={quota.fraction}
-            width={Math.min(18, Math.floor(listWidth / 6))}
-            tone={spendTone(quota.tone)}
-            label={quota.label}
-          />
-        </Box>
+        <MeterBar
+          fraction={quota.fraction}
+          width={Math.min(18, Math.floor(widths.list / 6))}
+          tone={spendTone(quota.tone)}
+          label={quota.label}
+        />
       ) : null}
       {poll.loading && !snapshot ? (
         <EmptyState>Loading…</EmptyState>
       ) : poll.error && !snapshot ? (
-        <EmptyState>{poll.error}</EmptyState>
+        <EmptyState>{`${poll.error}  ·  r to try again`}</EmptyState>
       ) : tiles.length === 0 ? (
         <EmptyState>
           {mood === 'quiet'
@@ -150,17 +163,15 @@ export function FleetView({
           return (
             <Box key={tile.sessionId} flexDirection="column">
               {group !== prevGroup ? (
-                <Rule
-                  label={`${URGENCY_LABELS[group]}  ${counts[group]}`}
-                  width={listWidth}
-                />
+                <Rule label={`${URGENCY_LABELS[group]}  ${counts[group]}`} width={widths.list} />
               ) : null}
               <FleetRow
                 tile={tile}
                 selected={tile.sessionId === selected?.sessionId}
-                width={listWidth}
+                width={widths.list}
                 frame={spinnerFrame(tick)}
                 now={clocks}
+                spaced={rowHeight === 3}
               />
             </Box>
           )
@@ -173,18 +184,23 @@ export function FleetView({
     <Box flexDirection="column" flexGrow={1}>
       <Split
         wide={wide}
-        listWidth={listWidth}
+        listWidth={widths.list}
         list={list}
         inspector={
           selected ? (
             <FleetInspector
               tile={selected}
               snapshot={snapshot}
-              width={inspectorWidth}
+              width={wide ? widths.inspector : layout.inner}
               now={clocks}
+              at={position(index, tiles.length, shown.length)}
             />
           ) : (
-            <FleetEmptyInspector snapshot={snapshot} width={inspectorWidth} now={clocks} />
+            <FleetEmptyInspector
+              snapshot={snapshot}
+              width={wide ? widths.inspector : layout.inner}
+              now={clocks}
+            />
           )
         }
       />
@@ -231,12 +247,14 @@ function FleetRow({
   width,
   frame,
   now,
+  spaced,
 }: {
   tile: WallTile
   selected: boolean
   width: number
   frame: string
   now: number
+  spaced: boolean
 }) {
   const urgency = urgencyOf(tile)
   const tone = toneForUrgency(urgency)
@@ -253,6 +271,7 @@ function FleetRow({
       trailing={`${tile.repo}  ${trailing}`}
       detail={tileDoing(tile)}
       width={width}
+      spaced={spaced}
     />
   )
 }
@@ -262,11 +281,13 @@ function FleetInspector({
   snapshot,
   width,
   now,
+  at,
 }: {
   tile: WallTile
   snapshot: WallSnapshot | null
   width: number
   now: number
+  at?: string
 }) {
   const prompt = tile.prompts[0]
   const lines = [
@@ -277,22 +298,24 @@ function FleetInspector({
       ? `running ${elapsedLabel(tile.startedAt, now)}`
       : `updated ${compactAge(tile.updatedAt, now)}`,
     tile.check ? `checks ${tile.check.status}${tile.checkStale ? ' (stale)' : ''}` : '',
-    `${tile.turns} turn${tile.turns === 1 ? '' : 's'}`,
+    `${tile.turns} turn${tile.turns === 1 ? '' : 's'}${at ? `   ${at}` : ''}`,
   ]
-
-  const hint = prompt
-    ? 'y once   a for this run   n deny   ⏎ open   x stop'
-    : tile.runId
-      ? '⏎ open   x stop   o browser'
-      : '⏎ open   o browser'
 
   return (
     <Box flexDirection="column">
-      <Inspector title={tile.title} lines={lines} hint={hint} width={width} />
+      <Inspector
+        title={tile.title}
+        lines={lines}
+        hint={prompt
+          ? `${hint(['session.allow', 'session.deny'])}   ⏎ open`
+          : hint(['open', 'fleet.stop', 'browser'])}
+        width={width}
+      />
       {prompt ? (
         <PermissionFrame
           verb={presentVerb(prompt.toolName)}
           target={describeToolCall({ toolName: prompt.toolName, input: prompt.input }).target}
+          reason={<Text color="gray">y once     a for this run     n deny     ⏎ open it to say why</Text>}
         />
       ) : null}
       {snapshot ? <Upcoming snapshot={snapshot} width={width} now={now} /> : null}
@@ -321,7 +344,7 @@ function FleetEmptyInspector({
             : '',
           paused ? `${paused} ritual${paused === 1 ? '' : 's'} paused by the scheduler` : '',
         ]}
-        hint="⏎ open a tile   o browser"
+        hint={hint(['open', 'browser'])}
         width={width}
       />
       {snapshot ? <Upcoming snapshot={snapshot} width={width} now={now} /> : null}
@@ -362,7 +385,7 @@ function Upcoming({ snapshot, width, now }: { snapshot: WallSnapshot; width: num
 function Ticker({ snapshot, width }: { snapshot: WallSnapshot | null; width: number }) {
   const ticks = snapshot?.ticker.slice(0, 4) ?? []
   if (ticks.length === 0) return null
-  const parts = ticks.map(tick => {
+  const parts = ticks.map((tick) => {
     const { verb, target } = describeToolCall({ toolName: tick.toolName, input: tick.input })
     return `${tick.repo}  ${[verb, target].filter(Boolean).join(' ')}`
   })

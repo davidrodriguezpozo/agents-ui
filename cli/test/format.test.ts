@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { compactAge, matchesFilter, maxOffset, pad, toLines, toneForWorkStatus, truncate, windowAround, windowOf } from '../cli/format'
-import { portFrom } from '../cli/connect'
+import { compactAge, matchesFilter, maxOffset, pad, toLines, toneForWorkStatus, truncate, windowAround, windowOf } from '../format'
 
 describe('truncate', () => {
   it('fits, or ellipsises, and never exceeds width', () => {
@@ -69,16 +68,5 @@ describe('toneForWorkStatus', () => {
     expect(toneForWorkStatus('running')).toBe('cyan')
     expect(toneForWorkStatus('done')).toBe('green')
     expect(toneForWorkStatus('failed')).toBe('red')
-  })
-})
-
-describe('portFrom', () => {
-  it('prefers --port over PORT, and defaults to 3000', () => {
-    expect(portFrom(['tui', '--port', '3001'], {})).toBe(3001)
-    expect(portFrom(['--port=4000'], { PORT: '3001' })).toBe(4000)
-    expect(portFrom(['-p', '9'], {})).toBe(9)
-    expect(portFrom([], { PORT: '3002' })).toBe(3002)
-    expect(portFrom([], {})).toBe(3000)
-    expect(portFrom(['--port', 'nope'], {})).toBe(3000)
   })
 })

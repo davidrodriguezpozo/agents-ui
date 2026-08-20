@@ -1,32 +1,40 @@
 import { Box, Text, useInput } from 'ink'
 import { useMemo, useState } from 'react'
+import { untilLabel } from '~/utils/wall'
+import { hint } from '../keymap'
 import { compactAge, matchesFilter, pad, windowAround, type Tone } from '../format'
 import type { RitualHistory, Schedule } from '../types'
-import { untilLabel } from '~/utils/wall'
 import {
+  Confirm,
   EmptyState,
   FilterBar,
   Glyph,
   Inspector,
   Split,
   TwoLineRow,
+  position,
 } from './components'
 import { useStudio } from './context'
 import { usePoll, useSelection, useTerminalSize } from './hooks'
-import { ACCENT, isWide, listCapacity, listLayout } from './theme'
+import { ACCENT, CHROME, isWide, listCapacity, listLayout, splitWidths } from './theme'
 
 export function RitualsView({ isActive }: { isActive: boolean }) {
-  const { api, mode, setMode, action, openBrowser } = useStudio()
+  const { api, mode, setMode, action, openBrowser, motions, nudge, rowHeight } = useStudio()
   const { columns, rows } = useTerminalSize()
   const layout = listLayout(columns)
   const wide = isWide(columns)
+  const widths = splitWidths(columns)
   const [filter, setFilter] = useState('')
   const [historyFor, setHistoryFor] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<Schedule | null>(null)
 
-  const poll = usePoll(signal => Promise.all([
-    api.schedules(signal),
-    api.scheduleHistory(signal),
-  ]).then(([schedules, histories]) => ({ schedules, histories })), 15_000)
+  const poll = usePoll(
+    signal => Promise.all([
+      api.schedules(signal),
+      api.scheduleHistory(signal),
+    ]).then(([schedules, histories]) => ({ schedules, histories })),
+    { every: 30_000, deps: [nudge] },
+  )
 
   const schedules = poll.data?.schedules ?? []
   const histories = poll.data?.histories ?? {}
@@ -34,15 +42,28 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
     () => schedules.filter(s => matchesFilter(`${s.title} ${s.description} ${s.input}`, filter)),
     [schedules, filter],
   )
-  const [index] = useSelection(visible.length, isActive && mode === 'nav' && !historyFor)
+
+  const capacity = listCapacity(rows, [wide ? 0 : CHROME.inspector], rowHeight)
+  const [index] = useSelection(
+    visible.length,
+    motions,
+    isActive && mode === 'nav' && !historyFor && !confirming,
+    capacity,
+  )
   const selected = visible[index]
-  const chrome = wide ? 10 : 13
-  const shown = windowAround(visible, index, listCapacity(rows, chrome, 2))
+  const shown = windowAround(visible, index, capacity)
   const paused = schedules.filter(s => s.pausedReason).length
-  const listWidth = wide ? Math.floor(columns * 0.52) : layout.inner
-  const inspectorWidth = wide ? Math.max(24, columns - listWidth - 8) : layout.inner
 
   useInput((input, key) => {
+    if (confirming) {
+      if (input === 'y') {
+        const schedule = confirming
+        setConfirming(null)
+        void runNow(schedule)
+      }
+      if (input === 'n' || key.escape) setConfirming(null)
+      return
+    }
     if (historyFor) {
       if (key.escape) setHistoryFor(null)
       return
@@ -50,12 +71,18 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
     if (input === '/') setMode('filter')
     if (key.return && selected) setHistoryFor(selected.id)
     if (input === 'e' && selected) void toggle(selected)
-    if (input === 'r' && selected) void runNow(selected)
+    /**
+     * `r` refreshes, everywhere. It used to start an agent run on this one
+     * screen, which the footer and the help page both described as "refresh" —
+     * a mistyped key that costs money is not a key worth saving.
+     */
+    if (input === 'r') poll.refresh()
+    if (input === 'R' && selected) setConfirming(selected)
     if (input === 'o') openBrowser('/schedules')
-  }, { isActive: isActive && (mode === 'nav' || Boolean(historyFor)) })
+  }, { isActive: isActive && (mode === 'nav') })
 
   async function toggle(schedule: Schedule) {
-    await action.run(null, () => api.saveSchedule({
+    await action.run(`toggle:${schedule.id}`, null, () => api.saveSchedule({
       ...schedule,
       title: schedule.title,
       input: schedule.input,
@@ -65,7 +92,7 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
   }
 
   async function runNow(schedule: Schedule) {
-    await action.run('Starting…', () => api.startRun({
+    await action.run(`run:${schedule.id}`, 'Starting it…', () => api.startRun({
       input: schedule.input,
       title: schedule.title,
       invocation: schedule.invocation,
@@ -77,12 +104,10 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
   }
 
   if (historyFor) {
-    const schedule = schedules.find(s => s.id === historyFor)
-    const history = histories[historyFor]
     return (
       <History
-        title={schedule?.title || historyFor}
-        history={history}
+        title={schedules.find(s => s.id === historyFor)?.title || historyFor}
+        history={histories[historyFor]}
       />
     )
   }
@@ -92,7 +117,7 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
       {poll.loading && !poll.data ? (
         <EmptyState>Loading…</EmptyState>
       ) : poll.error && !poll.data ? (
-        <EmptyState>{poll.error}</EmptyState>
+        <EmptyState>{`${poll.error}  ·  r to try again`}</EmptyState>
       ) : visible.length === 0 ? (
         <EmptyState>{filter ? 'Nothing matches.' : 'No rituals. Press o to write one in the browser.'}</EmptyState>
       ) : (
@@ -102,7 +127,8 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
             schedule={schedule}
             history={histories[schedule.id]}
             selected={schedule.id === selected?.id}
-            width={listWidth}
+            width={widths.list}
+            spaced={rowHeight === 3}
           />
         ))
       )}
@@ -113,14 +139,15 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
     <Box flexDirection="column" flexGrow={1}>
       <Split
         wide={wide}
-        listWidth={listWidth}
+        listWidth={widths.list}
         list={list}
         inspector={
           selected ? (
             <DailyInspector
               schedule={selected}
               history={histories[selected.id]}
-              width={inspectorWidth}
+              width={wide ? widths.inspector : layout.inner}
+              at={position(index, visible.length, shown.length)}
             />
           ) : (
             <Inspector
@@ -129,17 +156,26 @@ export function RitualsView({ isActive }: { isActive: boolean }) {
                 `${schedules.length} ritual${schedules.length === 1 ? '' : 's'}`,
                 paused ? `${paused} paused by the scheduler` : '',
               ]}
-              hint="⏎ history   e enable/disable   r run now"
-              width={inspectorWidth}
+              hint={hint(['daily.history', 'daily.toggle', 'daily.run'])}
+              width={wide ? widths.inspector : layout.inner}
             />
           )
         }
       />
+      {confirming ? (
+        <Confirm
+          question={`Run "${confirming.title}" now?`}
+          detail={[
+            'It starts an agent, which costs money and may write to the repository.',
+            confirming.projectDir ? `in ${confirming.projectDir}` : '',
+          ]}
+        />
+      ) : null}
       {mode === 'filter' && isActive ? (
         <FilterBar
           value={filter}
           onChange={setFilter}
-          onClose={clear => {
+          onClose={(clear) => {
             if (clear) setFilter('')
             setMode('nav')
           }}
@@ -171,11 +207,13 @@ function RitualRow({
   history,
   selected,
   width,
+  spaced,
 }: {
   schedule: Schedule
   history?: RitualHistory
   selected: boolean
   width: number
+  spaced: boolean
 }) {
   const tone = ritualTone(schedule, history)
   const detail = [
@@ -193,6 +231,7 @@ function RitualRow({
       trailing={schedule.nextRunAt ? untilLabel(schedule.nextRunAt, Date.now()) : ''}
       detail={detail}
       width={width}
+      spaced={spaced}
     />
   )
 }
@@ -201,10 +240,12 @@ function DailyInspector({
   schedule,
   history,
   width,
+  at,
 }: {
   schedule: Schedule
   history?: RitualHistory
   width: number
+  at?: string
 }) {
   const last = history?.runs[0]
   return (
@@ -216,8 +257,9 @@ function DailyInspector({
         schedule.nextRunAt ? `next ${untilLabel(schedule.nextRunAt, Date.now())}` : 'not scheduled',
         last ? `last ${last.outcome}${last.costUsd != null ? ` · $${last.costUsd.toFixed(2)}` : ''}` : 'no runs yet',
         schedule.input,
+        at ?? '',
       ]}
-      hint="⏎ history   e enable/disable   r run now   o browser"
+      hint={hint(['daily.history', 'daily.toggle', 'daily.run', 'refresh'])}
       width={width}
     />
   )
@@ -236,7 +278,7 @@ function History({ title, history }: { title: string; history?: RitualHistory })
           <EmptyState>No runs recorded yet.</EmptyState>
         ) : (
           runs.slice(0, 16).map(run => (
-            <Text key={run.id} color="gray">
+            <Text key={run.id} color="gray" wrap="truncate">
               {pad(run.outcome, 10)}
               {compactAge(run.at).padEnd(6)}
               {run.costUsd != null ? `  $${run.costUsd.toFixed(2)}` : ''}
