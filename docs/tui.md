@@ -36,6 +36,15 @@ send the next instruction, land the work — without opening a URL.
    programs in it. Every list here is one endpoint, so `work --json | jq` and an
    exit status meaning "something wants you" cost almost nothing, and make the
    whole app scriptable.
+7. **Focus, not navigation.** Pages are cheap in a browser because a sidebar
+   makes them cheap. In a terminal the good tools — lazygit, k9s, tig — move
+   focus between panes that are all on screen and filter one list rather than
+   maintaining six. So: one rail that never goes away, and the pane beside it
+   shows whatever it is pointing at.
+8. **One decision at a time, for the things that come in a stream.** Permission
+   prompts arrive continuously when several agents are running. Answering them
+   one screen at a time, from anywhere, is the thing a terminal does better than
+   a tab — see the queue below.
 
 ## Architecture
 
@@ -59,6 +68,14 @@ bin/start.mjs  tui  ─▶  .output/cli/index.mjs  ─▶  http://127.0.0.1:3000
   browser's work page has had this rule all along, because the session list costs
   several `git` invocations per session; this shares it, and the notification
   stream covers the gap a slack timer would otherwise leave.
+- **The whole screen.** The app enters the alternate buffer, like `vim` and
+  `less`, and leaves it however the process ends. Ink otherwise draws in the main
+  buffer by moving the cursor up and erasing, which is right for a progress bar
+  and wrong for something that fills the window: a resize, or anything else
+  printing to the same buffer, leaves residue that the next frame draws *over*.
+  Quitting now restores the scrollback exactly as it was, and handing the
+  terminal to `$SHELL` means stepping out of our screen rather than into another
+  one.
 - **Authentication.** None needed, and none invented.
   `server/middleware/sameOrigin.ts` deliberately lets a request with no `Origin`
   and no `Sec-Fetch-Site` through: that is curl, an editor extension, or this —
@@ -87,6 +104,72 @@ bin/start.mjs  tui  ─▶  .output/cli/index.mjs  ─▶  http://127.0.0.1:3000
   ends up documented and dead — the same reason the browser keeps its keyboard
   in `app/utils/shortcuts.ts`. Asking for a key that does not exist throws, in a
   test rather than on screen.
+
+## The shape of it
+
+```
+  RAIL  Needs you                         4 new · $2.40 · ~/code/agents-ui · main
+
+  NEEDS YOU  6                  1/6    Fix the flaky terminal test    feat/flaky → main
+
+  ─ Needs you  2 ──────────────────     ● Needs you · 4 files · 2 ahead · checks failed
+  ▌ ▲  Fix the flaky terminal test
+      Checks fail · feat/flaky          ─ you ────────────────────────────────────────
+                                        The terminal test fails one run in five on CI.
+  · ▲  Port the wall to a grid
+      Working · feat/wall-grid          ─ claude ─────────────────────────────────────
+                                        Read    test/terminal.test.ts
+  ─ Broken  4 ─────────────────────     Ran     bun test terminal
+    ✕  Morning triage
+      3 failed · every day at 08:00     It waits on a fixed 50ms timer, so a loaded
+                                        machine misses it…
+    ✕  #418 Cache the pull lookup       $0.42 · 16.5s
+      failing · marta · 12 files
+                                        ›  i to write
+    12 more                             i write   I $EDITOR   d diff   c checks   f fix
+
+  tab focus   esc rail   Y answer all   : command   ? keys
+```
+
+The rail is everything that might want you — sessions, runs, pull requests,
+rituals, what is waiting elsewhere, and the projects themselves — grouped by how
+much it wants you rather than by which page it used to live on. `Work`, `Land`,
+`Daily` and `Inbox` are filters on it, reached with `g` and a letter, and they
+are the same list underneath.
+
+A bar in the margin is the cursor; a dot is a row that has said something since
+you last looked at it. `tab` moves the keys between the rail and the pane, so
+switching between two running agents is a keypress rather than a trip out to a
+list and back. Below a hundred columns the two take turns instead of sharing,
+which is the behaviour the six views had all along.
+
+`Fleet` is still a whole screen of its own, because it is a different job:
+ambient rather than interactive, the thing you leave on a second monitor.
+
+## Answering, as a queue
+
+```
+  ANSWERING                                                        3 waiting · s skips
+
+  Fix the flaky terminal test          agents-ui · feat/flaky
+  wants to run  gh pr create --fill
+
+  ┌──────────────────────────────────────────────────────────────────────────────┐
+  │ gh pr create --fill --base main                                              │
+  │ open a pull request for the flaky-test fix                                   │
+  └──────────────────────────────────────────────────────────────────────────────┘
+
+  y once   a for the run   n deny   N say why   s skip   ⏎ open   esc leave
+```
+
+`Y` from anywhere. One prompt on screen, one key each way, and it advances by
+itself — eleven prompts in eleven keystrokes without choosing where to look.
+`git add -p` solved this shape of problem a long time ago.
+
+It shows the command it would run, or the lines it would write, because "allow
+this?" with no sight of what would happen is the question the queue exists to
+stop asking. The wall reports every prompt on the machine, across projects,
+which is the right scope: being blocked somewhere else is still being blocked.
 
 ## Scope
 
@@ -157,10 +240,15 @@ Terminal UIs go wrong by decorating. The look here comes from restraint:
 - **A glyph gutter** carrying state as shape as well as colour: `●` needs you,
   `◐` working, `✓` pass, `✕` failed, `▲` warning, `○` quiet. Colour alone says
   nothing on a monochrome terminal or to a red-green colourblind reader.
-- **A bar in the margin** (`▌`) for the selected row, by the same argument
-  applied to the one thing the glyphs did not cover. Selection was colour and
-  weight only, so over a connection that has flattened the accent to a
-  sixteen-colour approximation the cursor was invisible.
+- **The selected row is reversed out**, and carries a bar in the margin (`▌`)
+  when the rail has the keyboard, a thin one (`│`) when it does not. Selection
+  used to be colour and weight alone, which is too subtle at the bottom of a long
+  rail and invisible the moment anything else has gone wrong on screen. Inverse
+  video is the one thing every terminal draws the same way, and it is what `fzf`
+  and `lazygit` use for the same job.
+- **A dot in the margin** for a row that has said something since you last looked
+  at it. Same column as the cursor, because a row you are reading cannot also be
+  unread.
 - **Counts coloured by what they mean**, not by whether their tab is selected.
   The old rule tied the badge to selection, so "3 need you" sitting on another
   tab was the same grey as the chrome around it — which is exactly the case a
@@ -194,127 +282,49 @@ Terminal UIs go wrong by decorating. The look here comes from restraint:
   it does not recognise passes through and still reads, which is the failure mode
   to aim for.
 
-### Work (home)
+### What a person configures
 
-```
-  agents-studio                         1 need you · ~/code/agents-ui · main
-  w Work 1   l Land   d Daily   m Fleet 1   i Inbox   p Projects
-
-  In flight  3     History  11                                    1/3
-
-  ▌ ● Waiting for permission   Fix the flaky terminal test          2m
-      feat/flaky-test · 4 files · 3 turns
-    ◐ Working                  Port the wall to a new grid         now
-      feat/wall-grid · 11 files
-    ● Ready to land            Cache the pull request lookup       18m
-      feat/pr-cache · 2 files · checks pass
-
-  ─────────────────────────────────────────────────────────────────────
-  Fix the flaky terminal test
-  Waiting for permission
-  feat/flaky-test → main · 4 files, uncommitted
-  ⏎ open   n new   tab history   o browser
-```
-
-### Fleet
-
-```
-  3 need you    4 working    1 broken    $2.40 today
-
-  ─ Needs you  3 ──────────────────────────────────────────────────────
-  ● Fix the flaky test                                       agents-ui  2m
-    wants to run  gh pr create --fill
-  ─ Working  4 ────────────────────────────────────────────────────────
-  ◐ Port the wall                                            agents-ui  1:14
-    Edited  app/pages/wall.vue
-
-  agents-ui  Ran bun test   ·   agents-ui  Edited wall.ts
-```
-
-### A session
-
-```
-  ← Fix the flaky terminal test                  feat/flaky-test → main
-
-  ● Needs you · 4 files · 2 ahead · checks failed 18m ago
-
-  ─ you ──────────────────────────────────────────────────────────────
-  The terminal test fails about one run in five on CI.
-
-  ─ claude ───────────────────────────────────────────────────────────
-  Read    …/test/terminal.test.ts
-  Ran     bun run test terminal
-  Edited  …/server/utils/terminal.ts
-
-  It waits on a fixed 50ms timer for the shell to echo, so a loaded
-  machine misses it…
-
-  ┌ Allow this? ─────────────────────────────────────────────────────┐
-  │ wants to run   gh pr create --fill                               │
-  │ y once   a for this run   n deny   N deny and say why            │
-  └──────────────────────────────────────────────────────────────────┘
-
-  › _
-  i write   d diff   c checks   f fix checks   x stop   s shell   o browser
-```
-
-Anything that spends money, writes to somebody else's repository or throws work
-away asks first, in a framed question with the facts in it:
-
-```
-  ┌ Merge into main? ────────────────────────────────────────────────┐
-  │ 3 commits from feat/flaky-test                                   │
-  │ 2 uncommitted files, committed first                             │
-  │ checks failing — this overrules them                             │
-  │ y yes     n no                                                   │
-  └──────────────────────────────────────────────────────────────────┘
-```
-
-Which ones those are is a field in the keymap rather than a decision at each
-call site: closing a session asked all along, while merging a pull request and
-filing one did not, and the only reason was the order they were written in.
-
-### Daily
-
-```
-  ✓ Morning triage        every day at 08:00      ran 6h ago      $0.42
-  ✓ Dependency sweep      Mondays at 09:00        ran 2d ago      $1.10
-  ▲ Flaky test hunt       every day at 22:00      3 failures in a row
-  ○ Changelog draft       Fridays at 17:00        disabled
-
-  ↑↓ select   ⏎ history   e enable/disable   r run now   o browser
-```
-
-### Land
-
-```
-  2 on you    1 to merge    3 waiting
-
-  ─ Asked of you  2 ───────────────────────────────────────────────────
-  ● #407  Add sandbox violation reporting                 waiting on you
-    marta · 8 files  +40/−12 · checks pass
-  ─ Yours  3 ──────────────────────────────────────────────────────────
-  ● #418  Cache the pull request lookup                   ready to merge
-    yours · 12 files  +80/−12 · checks pass
-```
+- **`~/.claude/agents-studio/keys.json`** — `{ "session.checks": "C" }`, a binding
+  id and what to press. The keymap was already data; this is a file read rather
+  than a feature, and the help page and the footers print whatever they find
+  there because they read the same binding the handler does. A broken file is
+  ignored with a line on stderr: losing a remap is a small disappointment,
+  refusing to start over a stray comma is a big one.
+- **`$EDITOR`** — `I` writes the instruction in it, on a Markdown scratch file,
+  and sends what was saved. `git commit` settled this argument long ago: a
+  one-line field inside a terminal app will never be good at prose, and a
+  non-zero exit means "forget it".
+- **`delta`, `diff-so-fancy` or `bat`** — used for the diff if one is installed,
+  because somebody who installed `delta` has already decided how a diff should
+  look and three colours of our own is a worse version of a thing they chose.
+  `AGENTS_STUDIO_DIFF` picks one, takes its own flags, or `none` keeps the
+  built-in colouring.
+- **`--no-bell`** — for people who share an office.
 
 ## Keys
 
-The table lives in `cli/keymap.ts`; this is it in prose. `?` prints the part of
-it that applies to where you are, which is the part you wanted.
+The table lives in `cli/keymap.ts` and it is what answers them: a handler asks
+`matches('session.checks', input, key)`, so remapping is a file rather than a
+patch. `?` prints the part of it that applies to where you are, which is the part
+you wanted.
 
 | Key | Everywhere |
 | --- | --- |
-| `h` `l` | Previous / next view |
-| `g` + `w l d m i p` | Straight to Work · Land · Daily · Fleet · Inbox · Projects — the browser's own chords |
+| `tab` / `⌃w` | Move the keys between the rail and the pane |
+| `Y` | Answer everything that is waiting, one at a time |
+| `:` | A command line — `:new`, `:only prs`, `:trust full`, `:merge --override` |
+| `/` | Filter the rail by text |
+| `g` + `a n s p d i j` | What the rail shows: everything, needs-you, sessions, pull requests, daily, elsewhere, projects |
+| `g m` / `F` | The fleet, full screen |
+| `⌃n` | Next row that has said something since you looked |
+| `⌃o` `⌃i` | Back and forward, where you were |
 | `[` `]` | Previous / next project, for this window |
+| `r` | Refresh now |
+| `o` | Open this in the browser |
 | `?` | The keys for where you are |
-| `r` | Refresh now — everywhere, and only that |
-| `o` | Open the current thing in the browser |
-| `q` | Quit from a list, back out of a session, the way `less` does |
-| `ctrl-c` | Quit |
+| `q` | Quit from the rail; from a pane it hands the keys back |
 
-| Key | Moving, in a list or a transcript |
+| Key | Moving, anywhere |
 | --- | --- |
 | `j` `k` / `↑↓` | One row, or one line |
 | `5j` | Five of them — counts work on `j`, `k` and `G` |
@@ -322,22 +332,25 @@ it that applies to where you are, which is the part you wanted.
 | `G` | Last row, newest line, or the nth with a count |
 | `⌃d` `⌃u` | Half a screen |
 
-Worked out once, in `App`, and published to whatever has the screen — so a count
-means the same thing to a list of sessions and to a transcript. Digits are counts
-rather than view numbers, which is why the tab strip prints `w Work` and not
-`1 Work`: a digit cannot be both a count and a destination, and `g w` is the
-chord the browser already has.
+Worked out once, in `App`, and published to whatever has the keys — so a count
+means the same thing to the rail and to a transcript. Digits are counts rather
+than view numbers, which is why the rail advertises `g s` and not `1`: a digit
+cannot be both a count and a destination.
 
-| Key | In a list | | Key | In a session |
+| Key | In the rail | | Key | In a session |
 | --- | --- | --- | --- | --- |
-| `⏎` | Open | | `i` | Write an instruction |
-| `/` | Filter — the server searches history | | `esc` | Back |
-| `n` | New session | | `d` | Diff, `tab` by file |
-| `a` | Continue a terminal conversation | | `c` `f` | Checks · have it fix them |
-| `tab` | In-flight / history | | `u` `t` | Catch up with base · trust |
-| `R` | Run it now, or look again — asks first | | `x` `s` `e` | Stop · shell · `$EDITOR` |
-| `e` | Enable or disable a ritual | | `p` `m` `D` | Pull request · merge · close — each asks first |
-| `S` | Make this project the app default | | `y` `a` `n` `N` | Allow once · for the run · deny · deny and say why |
+| `⏎` | Look at it in the pane | | `i` `I` | Write · write in `$EDITOR` |
+| `n` `a` | New session · adopt a terminal one | | `d` | Diff, `n`/`N` by file |
+| `x` | Stop a run · dismiss · no project | | `c` `f` | Checks · have it fix them |
+| `e` `R` | A ritual on/off · run it now | | `u` `t` | Catch up with base · trust |
+| `m` | Merge a pull request | | `x` `s` `e` | Stop · shell · `$EDITOR` |
+| `S` | Make this project the app default | | `p` `m` `D` | Pull request · merge · close |
+| | | | `y` `a` `n` `N` | Allow once · for the run · deny · deny and say why |
+| | | | `esc` | Hand the keys back to the rail |
+
+Everything that spends money, writes to somebody else's repository or throws
+work away asks first, in a framed question with the facts in it. Which keys those
+are is a field in the keymap rather than a decision at each call site.
 
 ## Files
 
@@ -346,26 +359,34 @@ cli/
 ├── index.tsx          entry — arguments, connect, render or print
 ├── args.ts            the command line (pure)
 ├── commands.ts        the one-shot answers, and their exit codes
-├── keymap.ts          every key, once (pure)
+├── keymap.ts          every key, and what answers it (pure)
+├── keys.ts            a person's own keys, off disk
+├── commandLine.ts     the `:` grammar (pure)
+├── rail.ts            everything that might want you, as one list (pure)
+├── prompts.ts         the queue of waiting prompts (pure)
 ├── client.ts          HTTP and event streams
 ├── connect.ts         find the server, or start one
 ├── cwd.ts             which project you are standing in (pure)
 ├── notify.ts          the notification stream, the bell
 ├── runStream.ts       run events → LiveRun, and the reconnect (pure)
 ├── transcript.ts      session + run → drawable lines (pure)
+├── markdown.ts        headings, code and lists, as weight and colour (pure)
 ├── diff.ts            a patch as the files it is made of (pure)
+├── diffTool.ts        delta / bat, if this machine has one
 ├── format.ts          wrap, truncate, scroll, tone (pure)
 ├── types.ts           the shapes the API returns
-├── shell.ts           suspend for $SHELL, $EDITOR, browser
-├── stubs/             build-time shim for Ink's devtools
+├── shell.ts           $SHELL, $EDITOR, the browser
+├── test/              the client's own tests, inside its own tsconfig
 └── ui/
-    ├── App.tsx        views, the keyboard, layout, scope
-    ├── theme.ts       accent, glyphs, columns, chrome
-    ├── hooks.ts       polling, keyed actions, motions, scroll
-    ├── components.tsx tabs, rows, inspector, meters, confirmations
-    ├── WorkView.tsx · SessionDetailView.tsx · FleetView.tsx
-    ├── RitualsView.tsx · LandView.tsx
-    ├── InboxView.tsx · ProjectsView.tsx
+    ├── App.tsx        the keyboard, the layout, the polls, the scope
+    ├── Rail.tsx       the one list
+    ├── PromptQueue.tsx one decision at a time
+    ├── FleetView.tsx  the whole screen, for the ambient job
+    ├── theme.ts       accent, glyphs, columns, and the height arithmetic
+    ├── hooks.ts       polling, jobs, motions, scroll, unread, jumps
+    ├── components.tsx status line, rail rows, command line, confirmations
+    └── panes/         SessionPane · RunPane · PullPane · RitualPane ·
+                       InboxPane · ProjectPane
 scripts/build-cli.mjs  esbuild bundle, `--watch` while working on it
 ```
 
@@ -406,18 +427,36 @@ and on the keyboard, which turned out to be reachable after all:
   literal, that a bullet's continuation lines up under its text, and that text
   with no markup in it comes out exactly as it went in.
 - `keymap` — no duplicate key on a surface, nothing claiming `q` or `?` from the
-  global handler, everything dangerous marked as asking first, and a hint for a
-  key that does not exist throwing rather than printing a blank.
+  global handler, everything dangerous marked as asking first, a hint for a key
+  that does not exist throwing rather than printing a blank, `ctrl+d` not
+  matching a bare `d`, `R` not matching `r`, and an override moving both the
+  binding and the way it is printed.
+- `rail` — that what wants you sorts above what does not, that another project's
+  sessions are not in it, that a filter shows one kind, and that "new" means the
+  row has moved since you looked at it.
+- `commandLine` — the whole grammar, including that every command `:help` offers
+  has a branch that parses it.
+- `prompts` — the queue oldest-first across projects, answered ones dropped, and
+  an edit shown as the lines it would write rather than as a filename.
+- `keys` and `diffTool` — a bad `keys.json` ignored rather than fatal, and a diff
+  renderer that is not installed falling back rather than failing.
 - `args` — the whole command line: unknown options refused, a bad port refused,
   an unquoted instruction read as one instruction.
 - `commands` — the exit codes, against a stub API. `2` when something needs you
   is the contract a shell depends on, and it is one `if` away from being wrong.
 - **The app itself, on a fake terminal.** Ink renders to any stream, so `App` is
-  mounted on a pair of fakes and typed at: `⏎` opens the selected session, `esc`
-  comes back, `q` in a session goes back rather than quitting, `g d` reaches
-  Daily without the `d` also reaching the list underneath, and — the two that
-  matter most — a permission prompt can be answered *while the checks are
-  running*, and it leaves the screen the moment it is answered.
+  mounted on a pair of fakes and typed at: `⏎` moves the keys to the pane and
+  `esc` gives them back, `tab` toggles, `q` in a pane hands them over rather than
+  quitting, `g d` filters the rail without the `d` also reaching it, a narrow
+  terminal takes turns instead of splitting, `Y` opens the queue and `y` answers
+  the prompt it is showing, `N` denies with a reason, `:` runs a command and says
+  what it does not understand, and a permission prompt can be answered *while the
+  checks are running*.
+- **That it fits.** The frame is measured at four terminal sizes, because the one
+  arithmetic bug this app can have reads as corruption: Ink draws the overflow on
+  top of what is already there, so a pane that thinks it has two rows more than
+  it does writes its footer over its own last line. Height is exactly what cannot
+  be eyeballed from a screenshot.
 
 These live in `cli/test/` rather than the repository's `test/`, because `nuxt
 typecheck` reads the whole tree with Vue's JSX settings: a test importing the Ink
@@ -470,6 +509,27 @@ the things that were never wrong on their own:
 - [x] **One-shot commands** with exit codes, because a terminal has pipes.
 - [x] **Markdown**, rendered rather than printed.
 
+### The redesign
+
+Read back against what a terminal is actually good at, rather than against the
+browser:
+
+- [x] **One rail instead of six views**, with the pane beside it — focus rather
+      than navigation, and Work / Land / Daily / Inbox as filters on one list.
+- [x] **The prompt queue**, which is the thing only a terminal does well.
+- [x] **`$EDITOR` for the composer**, and `delta` for the diff: compose with the
+      tools a person has already chosen.
+- [x] **A `:` command line** for the long tail, discoverable by typing `:help`.
+- [x] **Unread markers** and `⌃n`, because agents talk while you are reading
+      something else and no page in the browser shows that well either.
+- [x] **Background jobs** rather than one status line that can only describe
+      whichever slow thing finished last.
+- [x] **Remappable keys**, since the keymap is data and now answers the keys.
+- [x] **A status line** that says which mode has the keyboard.
+
+Left undone on purpose: numbered buffers and `⌃^`. With the rail always visible
+and a jumplist on `⌃o`, they would be a second way to do the same thing.
+
 ## Risks
 
 - **Suspending Ink for a shell** is the fiddliest part: raw mode off, stdin
@@ -482,6 +542,21 @@ the things that were never wrong on their own:
   supports Node 18; revisit when that floor moves.
 - **Wide and combining characters** break naive column maths. Truncation is
   centralised in `format.ts` so there is one place to fix it if it shows up.
+- **Ink's layout fails silently and destructively.** Yoga shrinks a flex child
+  that does not fit, and Ink then draws the child's content anyway — one line on
+  top of another. A two-line row squeezed to one renders its detail *over* its
+  title, which on screen reads as "the titles are missing" and is impossible to
+  diagnose from a screenshot. Everything with a fixed number of lines therefore
+  says `flexShrink={0}`, and every box that can give says `overflow="hidden"`, so
+  the failure is a clipped last row rather than garbage. There is a test for it,
+  because it cannot be seen in a string of the right length.
 - **Two clients, one server.** Nothing here writes shared state without being
   asked — scope is a header, not a PUT — but the app's active project is still
   global, and `S` is how you move it on purpose.
+- **The rail asks more sources at once** than any single view did. Pull requests
+  cost a `gh` call and the inbox costs an agent, so neither is polled while the
+  rail is filtered elsewhere and the pane is showing neither. If that gating is
+  ever loosened, this is where the bill shows up.
+- **An external diff renderer is somebody else's program** in the middle of a
+  frame. It is given four seconds and its output is thrown away on any failure,
+  which is the cheapest honest contract available.

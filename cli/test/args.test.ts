@@ -27,9 +27,12 @@ describe('parseArgs', () => {
     expect(parseArgs(['work', '--jsonn'], {}).errors).toEqual(['No such option: --jsonn'])
   })
 
-  it('opens a view, and refuses one that does not exist', () => {
-    expect(parseArgs(['tui', '--view', 'fleet'], {}).view).toBe('fleet')
-    expect(parseArgs(['tui', '--view', 'wall'], {}).errors[0]).toContain('No view called wall')
+  it('opens with the rail filtered, in words or in ids', () => {
+    expect(parseArgs(['tui', '--only', 'prs'], {}).only).toBe('pull')
+    expect(parseArgs(['tui', '--only', 'needs-you'], {}).only).toBe('needs-you')
+    // `--view` is what the flag was called when the app had six of them.
+    expect(parseArgs(['tui', '--view', 'daily'], {}).only).toBe('ritual')
+    expect(parseArgs(['tui', '--only', 'wall'], {}).errors[0]).toContain('Nothing called wall')
   })
 
   it('takes a session id as the thing to open, and complains about a second one', () => {

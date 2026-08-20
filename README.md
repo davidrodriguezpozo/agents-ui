@@ -103,13 +103,25 @@ agents-studio tui
 
 It talks to the local server — starts one if nothing is listening — and leaves it
 running when you quit, so rituals keep firing. Run it inside a repository and it
-opens on that repository. `h`/`l` move between Work, Land, Daily, Fleet, Inbox and
-Projects, or `g` and a letter goes straight there — `g w`, `g l`, `g d`, `g m` — the
-same chords as the browser. `j`/`k`, `5j`, `gg`, `G` and `⌃d`/`⌃u` move in any list
-or transcript. `?` lists the keys for wherever you are.
+opens on that repository.
 
-It rings the terminal when something is actually blocked on you, and answering a
-permission prompt is `y`, `a`, `n`, or `N` to deny and say why.
+One rail down the left holds everything that might want you — sessions, runs, pull
+requests, rituals, what is waiting elsewhere — sorted by how much it wants you;
+the pane beside it shows whatever the rail is pointing at. `tab` moves the keys
+between them, `g` and a letter filters the rail (`g s` sessions, `g p` pull
+requests, `g d` daily, `g m` the fleet), and `j`/`k`, `5j`, `gg`, `G`, `⌃d`/`⌃u`
+move in either half. A dot in the margin is something that has spoken since you
+last looked; `⌃n` goes to the next one. `?` lists the keys for wherever you are,
+and `~/.claude/agents-studio/keys.json` remaps any of them.
+
+**`Y` answers everything that is waiting**, one prompt at a time, showing the
+command it would run or the lines it would write: `y` once, `a` for the rest of
+the run, `n` no, `N` no and here is why, `s` skip. The terminal rings when
+something is actually blocked on you.
+
+`:` is a command line for the long tail — `:new fix the flaky test`, `:only prs`,
+`:trust full`, `:merge --override`, `:help`. `I` writes an instruction in
+`$EDITOR`, and if you have `delta` installed, diffs are rendered with it.
 
 And because everything is an endpoint, it is scriptable:
 

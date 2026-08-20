@@ -1,4 +1,4 @@
-import type { ViewId } from './ui/context'
+import { filterFrom, type RailFilter } from './commandLine'
 
 /**
  * What was asked for on the command line.
@@ -17,7 +17,7 @@ import type { ViewId } from './ui/context'
 export const COMMANDS = ['tui', 'work', 'land', 'daily', 'fleet', 'inbox', 'new', 'watch', 'help'] as const
 export type Command = typeof COMMANDS[number]
 
-const VIEWS: ViewId[] = ['work', 'land', 'daily', 'fleet', 'inbox', 'projects']
+
 
 export interface Invocation {
   command: Command
@@ -29,8 +29,8 @@ export interface Invocation {
   port: number
   /** Override the project this invocation is scoped to. */
   project?: string
-  /** Which view `tui` opens on. */
-  view?: ViewId
+  /** What the rail shows when `tui` opens. */
+  only?: RailFilter
   /** A session id to open straight away. */
   session?: string
   /** The instruction, for `new`. */
@@ -39,7 +39,7 @@ export interface Invocation {
   errors: string[]
 }
 
-const FLAGS_WITH_VALUES = new Set(['--port', '-p', '--project', '--view'])
+const FLAGS_WITH_VALUES = new Set(['--port', '-p', '--project', '--only', '--view'])
 
 export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): Invocation {
   const errors: string[] = []
@@ -51,7 +51,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): Invocati
   let bell = true
   let port: number | undefined
   let project: string | undefined
-  let view: ViewId | undefined
+  let only: RailFilter | undefined
   let help = false
 
   const args = [...argv]
@@ -98,9 +98,12 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): Invocati
         }
       }
       if (name === '--project') project = value
-      if (name === '--view') {
-        if (!VIEWS.includes(value as ViewId)) errors.push(`No view called ${value}. Try: ${VIEWS.join(', ')}.`)
-        else view = value as ViewId
+      // `--view` still works: it is what this flag was called when the app had
+      // six of them.
+      if (name === '--only' || name === '--view') {
+        const filter = filterFrom(value)
+        if (!filter) errors.push(`Nothing called ${value}. Try: all, needs-you, sessions, prs, daily, elsewhere, projects.`)
+        else only = filter
       }
       continue
     }
@@ -122,7 +125,7 @@ export function parseArgs(argv: string[], env: NodeJS.ProcessEnv = {}): Invocati
     bell,
     port: port ?? portFromEnv(env),
     project,
-    view,
+    only,
     errors,
   }
 
@@ -149,7 +152,7 @@ function portFromEnv(env: NodeJS.ProcessEnv): number {
 export function usage(): string {
   return [
     'agents-studio tui                 the app, in this terminal',
-    'agents-studio tui --view fleet    open on a view — work land daily fleet inbox projects',
+    'agents-studio tui --only prs      open with the rail filtered — all needs-you sessions prs daily elsewhere projects',
     'agents-studio tui <session-id>    open straight into a session',
     '',
     'agents-studio work                what is in flight, and what wants you',

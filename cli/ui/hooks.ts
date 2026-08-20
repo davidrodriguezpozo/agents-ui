@@ -140,11 +140,18 @@ export function usePoll<T>(
   }
 }
 
+/** Something slow, while it is happening. */
+export interface Job {
+  key: string
+  label: string
+  startedAt: number
+}
+
 export interface ActionState {
   /** Whether this particular action is in the air. */
   busy: (key?: string) => boolean
-  /** What is being waited on, for a spinner beside the message. */
-  pending: string | null
+  /** Everything in the air, for a region that says so. */
+  active: Job[]
   message: string | null
   tone: 'error' | 'info' | null
   run: (key: string, label: string | null, action: () => Promise<unknown>) => Promise<boolean>
@@ -156,17 +163,20 @@ const INFO_MS = 6_000
 const ERROR_MS = 30_000
 
 /**
- * Run something that changes state, and hold on to whether it worked.
+ * Run things that change state, and hold on to what is still running.
  *
  * Keyed, and this is not a detail: one shared `busy` flag meant that running
  * the checks — which the client allows ten minutes for — silently swallowed
  * every `y`, `x` and `i` until it finished, because `run` returned early and
- * said nothing. Answering a permission prompt while the tests run is exactly
- * the thing that has to work.
+ * said nothing.
+ *
+ * Keeping them as a list rather than a flag is the other half. The checks, a
+ * merge and an inbox refresh all take minutes; a single status line can only
+ * describe one of them, and the one it describes is whichever finished last.
+ * A job region says what is actually in flight, with the time it has taken.
  */
-export function useAction(): ActionState {
-  const [inFlight, setInFlight] = useState<string[]>([])
-  const [pending, setPending] = useState<string | null>(null)
+export function useJobs(now: () => number = Date.now): ActionState {
+  const [active, setActive] = useState<Job[]>([])
   const [message, setMessage] = useState<string | null>(null)
   const [tone, setTone] = useState<'error' | 'info' | null>(null)
   const mounted = useRef(true)
@@ -195,43 +205,33 @@ export function useAction(): ActionState {
 
   const run = useCallback(async (key: string, label: string | null, action: () => Promise<unknown>) => {
     let already = false
-    setInFlight((current) => {
-      already = current.includes(key)
-      return already ? current : [...current, key]
+    setActive((current) => {
+      already = current.some(job => job.key === key)
+      return already ? current : [...current, { key, label: label ?? key, startedAt: now() }]
     })
     // Two presses of the same key are one action; two different keys are two.
     if (already) return false
 
-    if (label) {
-      setPending(label)
-      say(label, 'info')
-    }
-
     try {
       await action()
-      if (mounted.current && label) {
-        setPending(null)
-        say(null, null)
-      }
+      if (mounted.current && label) say(null, null)
       return true
     } catch (e) {
-      if (mounted.current) {
-        setPending(null)
-        say(describeError(e), 'error')
-      }
+      if (mounted.current) say(describeError(e), 'error')
       return false
     } finally {
-      if (mounted.current) setInFlight(current => current.filter(item => item !== key))
+      if (mounted.current) setActive(current => current.filter(job => job.key !== key))
     }
-  }, [say])
+  }, [now, say])
 
-  const busy = useCallback((key?: string) => (
-    key ? inFlight.includes(key) : inFlight.length > 0
-  ), [inFlight])
+  const busy = useCallback(
+    (key?: string) => (key ? active.some(job => job.key === key) : active.length > 0),
+    [active],
+  )
 
   return {
     busy,
-    pending: inFlight.length ? pending : null,
+    active,
     message,
     tone,
     run,
@@ -351,17 +351,33 @@ export function useSelection(
  * Zero is the bottom, which is also what makes following live output the
  * default and holding your place the deliberate act.
  */
-export function useScroll(total: number, height: number, bus: MotionBus, isActive: boolean) {
-  const [offset, setOffset] = useState(0)
+export function useScroll(
+  total: number,
+  height: number,
+  bus: MotionBus,
+  isActive: boolean,
+  /**
+   * Where it opens. A transcript opens at the newest line; a help page opens at
+   * the first one, which is the same mechanism read from the other end.
+   */
+  start: 'bottom' | 'top' = 'bottom',
+) {
+  const [offset, setOffset] = useState(start === 'top' ? Number.MAX_SAFE_INTEGER : 0)
   const max = Math.max(0, total - height)
   const clamped = Math.min(offset, max)
+
+  // Every handler starts from the clamped value: the initial offset for a
+  // top-anchored pane is deliberately larger than any real one, and arithmetic
+  // on that would jump rather than step.
+  const move = (change: (from: number) => number) =>
+    setOffset(current => Math.min(max, Math.max(0, change(Math.min(current, max)))))
 
   useMotions(bus, isActive, (motion) => {
     switch (motion.kind) {
       case 'move':
         // `j` is down the page, which is towards the newest line — so it
         // *reduces* the distance from the bottom.
-        setOffset(o => Math.min(max, Math.max(0, o - motion.delta)))
+        move(from => from - motion.delta)
         break
       case 'first':
         setOffset(max)
@@ -370,7 +386,7 @@ export function useScroll(total: number, height: number, bus: MotionBus, isActiv
         setOffset(0)
         break
       case 'half':
-        setOffset(o => Math.min(max, Math.max(0, o - Math.floor(height / 2) * motion.direction)))
+        move(from => from - Math.floor(height / 2) * motion.direction)
         break
     }
   })
@@ -381,6 +397,7 @@ export function useScroll(total: number, height: number, bus: MotionBus, isActiv
     /** Lines below the window — "you are reading history, and it moved on". */
     behind: clamped,
     atBottom: clamped === 0,
+    atTop: clamped === max,
     toBottom: useCallback(() => setOffset(0), []),
     /** Straight to a distance from the bottom, for jumping to a diff hunk. */
     set: useCallback((next: number) => setOffset(Math.max(0, next)), []),
@@ -424,4 +441,65 @@ export function usePendingKeys(timeoutMs = 900) {
     () => ({ pending, push, clear, takeCount }),
     [pending, push, clear, takeCount],
   )
+}
+
+/**
+ * What has said something since you last looked at it.
+ *
+ * Agents produce output while you are reading something else, and which of them
+ * has news is information no page in the browser shows — an IRC client solves
+ * this better than any dashboard. Held in memory rather than on disk: "since I
+ * looked" means since this window opened, and pretending otherwise across
+ * restarts would mark everything read that happened while you were away.
+ */
+export function useSeen(): {
+  seen: Record<string, number>
+  mark: (key: string, stamp?: number) => void
+} {
+  const [seen, setSeen] = useState<Record<string, number>>({})
+
+  const mark = useCallback((key: string, stamp?: number) => {
+    if (stamp == null) return
+    setSeen(current => (current[key] === stamp ? current : { ...current, [key]: stamp }))
+  }, [])
+
+  return { seen, mark }
+}
+
+/**
+ * Where you were, and where you were before that.
+ *
+ * `⌃o` and `⌃i`, which is where a vim user's hands already go for "back". The
+ * list is of rail keys rather than of screens, because the pane is always
+ * showing whatever the rail is pointing at — one cursor, one history.
+ */
+export function useJumps(): {
+  push: (key: string) => void
+  back: () => string | null
+  forward: () => string | null
+} {
+  const trail = useRef<string[]>([])
+  const at = useRef(-1)
+
+  const push = useCallback((key: string) => {
+    if (trail.current[at.current] === key) return
+    // A new jump from the middle of the trail discards what was ahead, exactly
+    // as it does in a buffer: you did not go back to branch, you went back.
+    trail.current = [...trail.current.slice(0, at.current + 1), key].slice(-50)
+    at.current = trail.current.length - 1
+  }, [])
+
+  const back = useCallback(() => {
+    if (at.current <= 0) return null
+    at.current -= 1
+    return trail.current[at.current] ?? null
+  }, [])
+
+  const forward = useCallback(() => {
+    if (at.current >= trail.current.length - 1) return null
+    at.current += 1
+    return trail.current[at.current] ?? null
+  }, [])
+
+  return { push, back, forward }
 }

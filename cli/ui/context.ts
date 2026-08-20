@@ -1,61 +1,50 @@
 import { createContext, useContext } from 'react'
 import type { Api } from '../api'
+import type { DiffTool } from '../diffTool'
+import type { Keymap } from '../keymap'
+import type { RailFilter, RailItem } from '../rail'
 import type { ProjectState } from '../types'
 import type { ActionState, MotionBus } from './hooks'
-
-export type ViewId = 'work' | 'land' | 'daily' | 'fleet' | 'inbox' | 'projects'
-
-/**
- * The views, their numbers, and the letter that gets there after `g`.
- *
- * The chords are the browser's, from `app/utils/shortcuts.ts`: `g w` for Work,
- * `g l` for Land, `g d` for Daily, `g m` for Fleet. Two clients that disagree
- * about where `g l` goes would be worse than one of them not having chords.
- */
-export const VIEWS: { id: ViewId; key: string; chord: string; label: string; path: string }[] = [
-  { id: 'work', key: '1', chord: 'w', label: 'Work', path: '/work' },
-  { id: 'land', key: '2', chord: 'l', label: 'Land', path: '/land' },
-  { id: 'daily', key: '3', chord: 'd', label: 'Daily', path: '/schedules' },
-  { id: 'fleet', key: '4', chord: 'm', label: 'Fleet', path: '/wall' },
-  { id: 'inbox', key: '5', chord: 'i', label: 'Inbox', path: '/' },
-  { id: 'projects', key: '6', chord: 'p', label: 'Projects', path: '/' },
-]
 
 /**
  * What is capturing the keyboard.
  *
  * Ink delivers every key to every `useInput`. Without an exclusive owner, `/`
  * would both start a filter and type a slash into it, and `q` would quit while
- * you were naming a session. One mode at a time is the whole fix.
+ * you were naming a session. One mode at a time is the whole fix — and the
+ * status line says which, because a modal app that keeps that to itself is
+ * unusable.
  */
-export type InputMode = 'nav' | 'compose' | 'filter' | 'help'
+export type Mode = 'nav' | 'insert' | 'filter' | 'command' | 'help' | 'queue'
+
+/** Which half of the screen the keys go to. */
+export type Focus = 'rail' | 'pane'
 
 export interface StudioContextValue {
   api: Api
   baseUrl: string
+  /** Every key, with this person's overrides folded in. */
+  keys: Keymap
   projects: ProjectState | null
-  reloadProjects: () => void
   /**
    * The project this client is looking at.
    *
    * Its own, not the server's. Every scoped endpoint reads the `x-project-dir`
    * header, so a second client can look somewhere else without moving the
-   * browser's floor out from under it — pressing `]` here used to write the
-   * app's persisted active project, which is a surprising amount of blast
-   * radius for a key you press while browsing.
+   * browser's floor out from under it.
    */
   scope: string | null
   setScope: (path: string | null) => void
   /** Make this client's project the app's default too, deliberately. */
   makeDefault: (path: string | null) => Promise<void>
-  /** Whether this client is looking somewhere other than the app's default. */
   scopeIsLocal: boolean
-  mode: InputMode
-  setMode: (mode: InputMode) => void
-  action: ActionState
+  mode: Mode
+  setMode: (mode: Mode) => void
+  /** Long things, while they are happening. */
+  jobs: ActionState
   openBrowser: (path?: string) => void
   suspend: (task: () => Promise<void>) => Promise<void>
-  /** `5j`, `gg`, `⌃d` — decided once in `App`, obeyed by whatever has the screen. */
+  /** `5j`, `gg`, `⌃d` — decided once in `App`, obeyed by whatever has the keys. */
   motions: MotionBus
   /** Instructions survive backing out of a session, per session. */
   draft: (key: string) => string
@@ -67,6 +56,17 @@ export interface StudioContextValue {
   nudge: number
   /** Two-line rows, or two lines and some air. */
   rowHeight: 2 | 3
+  /** `delta`, if this machine has one. */
+  diffTool: DiffTool | null
+  /** Ask everything for fresh data. */
+  refreshAll: () => void
+  /** Point the rail at something, from a pane that has a reason to. */
+  select: (key: string) => void
+  /** What the rail is showing. */
+  filter: RailFilter
+  setFilter: (filter: RailFilter) => void
+  /** Everything in the rail, so a pane can find its neighbours. */
+  items: RailItem[]
 }
 
 export const StudioContext = createContext<StudioContextValue | null>(null)

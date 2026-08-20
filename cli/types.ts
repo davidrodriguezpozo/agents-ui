@@ -179,6 +179,8 @@ export interface Pull {
   draft: boolean
   headBranch: string
   baseBranch: string
+  createdAt: number
+  updatedAt: number
   additions: number
   deletions: number
   changedFiles: number

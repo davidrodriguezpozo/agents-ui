@@ -5,7 +5,11 @@ import { StudioClient } from './client'
 import { runCommand, scopeInvocation } from './commands'
 import { answering, baseUrlFor, connect, serverEntry } from './connect'
 import { gitRoot } from './cwd'
+import { pickDiffTool } from './diffTool'
+import { createKeymap } from './keymap'
+import { loadKeyOverrides } from './keys'
 import { describeError } from './errors'
+import { enterFullScreen } from './shell'
 import { App } from './ui/App'
 
 async function main() {
@@ -91,12 +95,36 @@ async function main() {
     return
   }
 
-  render(
+  // Both read once, at the door: a person's own keys, and whatever diff
+  // renderer this machine has. Neither changes while the app is open.
+  const { overrides, error } = loadKeyOverrides()
+  if (error) process.stderr.write(`Ignoring keys.json: ${error}\n`)
+
+  /*
+   * Entered before the first frame and left however this process ends —
+   * including a crash, which would otherwise leave the terminal in the
+   * alternate buffer with no way back except `reset`.
+   */
+  const leaveFullScreen = enterFullScreen(process.stdout)
+  const onExit = () => leaveFullScreen()
+  process.on('exit', onExit)
+  process.on('SIGINT', () => {
+    leaveFullScreen()
+    process.exit(0)
+  })
+  process.on('SIGTERM', () => {
+    leaveFullScreen()
+    process.exit(0)
+  })
+
+  const app = render(
     <App
       api={api}
       baseUrl={baseUrl}
+      keys={createKeymap(overrides)}
+      diffTool={pickDiffTool()}
       bell={invocation.bell}
-      initialView={invocation.view}
+      initialFilter={invocation.only}
       initialSession={invocation.session ?? null}
       project={invocation.project ?? null}
       here={gitRoot()}
@@ -107,6 +135,9 @@ async function main() {
       patchConsole: true,
     },
   )
+
+  await app.waitUntilExit()
+  leaveFullScreen()
 }
 
 main().catch((error) => {

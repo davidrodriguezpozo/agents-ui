@@ -4,116 +4,57 @@ import { useState } from 'react'
 import type { Tone } from '../format'
 import { pad, spinnerFrame, truncate } from '../format'
 import type { Span } from '../markdown'
-import { BINDINGS, bindingsFor, type Surface } from '../keymap'
-import { VIEWS, type ViewId } from './context'
+import type { Job } from './hooks'
+import type { Keymap, Surface } from '../keymap'
 import { ACCENT, CURSOR, GLYPH, LAYOUT, WORKING_GLYPH, inkColor } from './theme'
 
-export function Header({
-  left,
-  right,
+/**
+ * One line that says where you are, what is happening, and whether the server
+ * is still there.
+ *
+ * A vim statusline rather than a title: the mode first, because a modal app that
+ * does not say which mode it is in is the cruellest thing a text interface can
+ * do, then what the rail is showing, then the counts, then the project. The tab
+ * strip this replaces advertised six destinations that no longer exist — the
+ * rail is one surface, and what it shows is a filter rather than a place.
+ */
+export function StatusLine({
+  mode,
+  filter,
+  counts,
+  project,
+  local,
+  spend,
   problem,
   pending,
+  width,
 }: {
-  left: string
-  right: string
-  /** Said plainly rather than left to a stale list: the server can go away. */
+  mode: string
+  filter: string
+  counts: { needsYou: number; working: number; unread: number }
+  project: string
+  local: boolean
+  spend?: string
   problem?: string | null
-  /** A half-typed count or chord, so a dropped key looks different from a slow one. */
   pending?: string
+  width: number
 }) {
+  const right = [
+    counts.needsYou ? `${counts.needsYou} need you` : null,
+    counts.working ? `${counts.working} working` : null,
+    counts.unread ? `${counts.unread} new` : null,
+    spend,
+    `${project}${local ? ' · here only' : ''}`,
+  ].filter(Boolean).join(' · ')
+
   return (
-    <Box justifyContent="space-between">
+    <Box justifyContent="space-between" width={width}>
       <Box>
-        <Text color={ACCENT} bold>{left}</Text>
+        <Text color={ACCENT} bold>{mode.toUpperCase()}</Text>
+        <Text color="gray">{`  ${filter}`}</Text>
         {pending ? <Text color="yellow">{`  ${pending}`}</Text> : null}
       </Box>
-      <Text color={problem ? 'yellow' : 'gray'}>{problem || right}</Text>
-    </Box>
-  )
-}
-
-/**
- * The views, as a tab strip rather than a title you have to remember the
- * numbers for.
- *
- * A count next to a tab is only drawn when it is news — zero is not a badge —
- * and it is coloured by what it means rather than by whether the tab happens to
- * be selected. The old rule tied it to selection, so "3 need you" sitting on
- * another tab was the same grey as the chrome around it, which is precisely the
- * case a badge exists for.
- */
-export function NavTabs({
-  view,
-  counts,
-}: {
-  view: ViewId
-  counts?: Partial<Record<ViewId, { value: number; tone: Tone }>>
-}) {
-  return (
-    <Box paddingTop={1} paddingBottom={1}>
-      {VIEWS.map((item) => {
-        const selected = item.id === view
-        const count = counts?.[item.id]
-        return (
-          <Box key={item.id} marginRight={3}>
-            <Text color={selected ? ACCENT : 'gray'} dimColor={!selected}>
-              {item.chord}
-              {' '}
-            </Text>
-            <Text color={selected ? ACCENT : 'gray'} bold={selected} underline={selected}>
-              {item.label}
-            </Text>
-            {count?.value ? (
-              <Text color={inkColor(count.tone)} bold>{` ${count.value}`}</Text>
-            ) : null}
-          </Box>
-        )
-      })}
-    </Box>
-  )
-}
-
-export function SectionTitle({ title, meta }: { title: string; meta?: string }) {
-  return (
-    <Box justifyContent="space-between" paddingBottom={1}>
-      <Text color="gray" bold>{title.toUpperCase()}</Text>
-      {meta ? <Text color="gray">{meta}</Text> : null}
-    </Box>
-  )
-}
-
-/**
- * In-flight / history, or any other pair of filters that live *inside* a view.
- *
- * Carries the position in the list on its right, because a window onto eleven
- * rows that shows eight of them and says so is a list, and one that does not is
- * a mystery.
- */
-export function Chips({
-  items,
-  active,
-  position,
-}: {
-  items: { id: string; label: string; count?: number }[]
-  active: string
-  position?: string
-}) {
-  return (
-    <Box paddingBottom={1} justifyContent="space-between">
-      <Box>
-        {items.map((item) => {
-          const selected = item.id === active
-          return (
-            <Box key={item.id} marginRight={3}>
-              <Text color={selected ? ACCENT : 'gray'} bold={selected} underline={selected}>
-                {item.label}
-              </Text>
-              {item.count != null ? <Text color="gray">{` ${item.count}`}</Text> : null}
-            </Box>
-          )
-        })}
-      </Box>
-      {position ? <Text color="gray">{position}</Text> : null}
+      <Text color={problem ? 'yellow' : 'gray'} wrap="truncate">{problem || right}</Text>
     </Box>
   )
 }
@@ -251,7 +192,7 @@ export function TwoLineRow({
   )
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" flexShrink={0}>
       <Text wrap="truncate">
         <Text color={ACCENT}>{selected ? `${CURSOR} ` : '  '}</Text>
         {glyph}
@@ -588,52 +529,270 @@ export function Confirm({ question, detail }: { question: string; detail?: strin
 }
 
 /**
- * The keys that apply where you are, read off the one table the handlers read.
+ * The keys that apply where you are, as lines.
  *
- * Contextual rather than complete, and that is the point: the whole table is
- * fifty rows, which does not fit a terminal and had to be split into columns
- * that then collided with each other. What you want when you press `?` is the
- * keys for the thing in front of you.
+ * Flattened first so the page can be sliced rather than laid out and clipped:
+ * scrolling by pushing a box up with a negative margin left the rows bleeding
+ * into each other, and every other pane here scrolls by choosing which lines to
+ * draw. One mechanism.
  */
-export function HelpOverlay({ width, surfaces }: { width: number; surfaces: Surface[] }) {
-  const titles: Record<Surface, string> = {
-    global: 'Everywhere',
-    list: 'In a list',
-    work: 'Work',
-    land: 'Land',
-    daily: 'Daily',
-    fleet: 'Fleet',
-    inbox: 'Inbox',
-    projects: 'Projects',
-    session: 'In a session',
-    diff: 'The diff',
-    run: 'A run',
+export interface HelpLine {
+  kind: 'heading' | 'key' | 'blank'
+  keys?: string
+  label?: string
+  confirm?: boolean
+}
+
+const HELP_TITLES: Record<Surface, string> = {
+  global: 'Everywhere',
+  rail: 'The rail',
+  session: 'A session',
+  diff: 'The diff',
+  run: 'A run',
+  pull: 'A pull request',
+  ritual: 'A ritual',
+  inbox: 'Something elsewhere',
+  project: 'A project',
+  queue: 'Answering prompts',
+  fleet: 'The fleet',
+}
+
+export function helpLines(surfaces: Surface[], keys: Keymap): HelpLine[] {
+  const lines: HelpLine[] = []
+
+  for (const surface of surfaces) {
+    if (lines.length) lines.push({ kind: 'blank' })
+    lines.push({ kind: 'heading', label: HELP_TITLES[surface] })
+    for (const item of keys.bindingsFor(surface)) {
+      lines.push({ kind: 'key', keys: item.keys, label: item.label, confirm: item.confirm })
+    }
   }
 
+  return lines
+}
+
+export function HelpOverlay({
+  width,
+  lines,
+}: {
+  width: number
+  lines: HelpLine[]
+}) {
   return (
     <Box flexDirection="column">
-      {surfaces.map(surface => (
-        <Box key={surface} flexDirection="column" paddingBottom={1}>
-          <Text color="gray" bold>{titles[surface].toUpperCase()}</Text>
-          {bindingsFor(surface).map(item => (
-            <Text key={item.id} wrap="truncate">
-              <Text color={ACCENT}>{pad(item.keys, 10)}</Text>
-              <Text color="gray">{truncate(item.label, Math.max(10, width - 12))}</Text>
-              {item.confirm ? <Text color="yellow"> · asks first</Text> : null}
-            </Text>
-          ))}
-        </Box>
-      ))}
+      {lines.map((line, i) => {
+        if (line.kind === 'blank') return <Text key={i}> </Text>
+        if (line.kind === 'heading') {
+          return <Text key={i} color="gray" bold>{(line.label ?? '').toUpperCase()}</Text>
+        }
+        return (
+          <Text key={i} wrap="truncate">
+            <Text color={ACCENT}>{pad(line.keys ?? '', 10)}</Text>
+            <Text color="gray">{truncate(line.label ?? '', Math.max(10, width - 24))}</Text>
+            {line.confirm ? <Text color="yellow"> · asks first</Text> : null}
+          </Text>
+        )
+      })}
     </Box>
   )
 }
 
-/** A count of the keys that ask before they act, for the help page's footer. */
-export const CONFIRMED_KEYS = BINDINGS.filter(item => item.confirm).length
-
 export function Rule({ label, width }: { label: string; width: number }) {
   const body = `─ ${label} `
-  return <Text color="gray">{body + '─'.repeat(Math.max(0, width - body.length))}</Text>
+  return (
+    <Text color="gray" wrap="truncate">
+      {body + '─'.repeat(Math.max(0, width - body.length))}
+    </Text>
+  )
 }
 
 export { LAYOUT }
+
+/**
+ * What is slow, while it is slow.
+ *
+ * The checks, a merge and a look at the inbox all take minutes, and a single
+ * status line can only describe one of them — whichever finished last. Two lines
+ * of "this is running, and for how long" is the smallest honest answer.
+ */
+export function JobsRegion({ jobs, now, width }: { jobs: Job[]; now: number; width: number }) {
+  if (jobs.length === 0) return null
+  const shown = jobs.slice(0, 2)
+
+  return (
+    <Box flexDirection="column">
+      {shown.map(job => (
+        <Text key={job.key} color="gray" wrap="truncate">
+          {truncate(`  ${job.label}   ${elapsed(job.startedAt, now)}`, width)}
+        </Text>
+      ))}
+      {jobs.length > shown.length ? (
+        <Text color="gray">{`  and ${jobs.length - shown.length} more`}</Text>
+      ) : null}
+    </Box>
+  )
+}
+
+function elapsed(from: number, now: number): string {
+  const seconds = Math.max(0, Math.round((now - from) / 1000))
+  return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, '0')}`
+}
+
+/**
+ * The `:` line.
+ *
+ * At the bottom, where a command line belongs, with what it would complete to
+ * beside it — discoverability without a modal, which is the argument for having
+ * one of these rather than a fuzzy palette.
+ */
+export function CommandLine({
+  value,
+  onChange,
+  onSubmit,
+  onCancel,
+  completions,
+  width,
+}: {
+  value: string
+  onChange: (next: string) => void
+  onSubmit: () => void
+  onCancel: () => void
+  completions: string[]
+  width: number
+}) {
+  const room = Math.max(20, Math.floor(width * 0.6))
+  return (
+    <Box>
+      <Box width={room}>
+        <TextField
+          value={value}
+          onChange={onChange}
+          onSubmit={onSubmit}
+          onCancel={onCancel}
+          isActive
+          prefix=":"
+          placeholder="help"
+          width={room}
+        />
+      </Box>
+      {completions.length ? (
+        <Text color="gray" wrap="truncate">
+          {truncate(completions.join(' '), Math.max(8, width - room))}
+        </Text>
+      ) : null}
+    </Box>
+  )
+}
+
+/**
+ * A row in the rail.
+ *
+ * Narrower than the rows the six views used, because a rail is a rail: what it
+ * wants, a dot if it has said something since you looked, the title, and one
+ * quiet line under it. Everything else belongs in the pane.
+ *
+ * The cursor is a bar when the rail has the keyboard and a thin line when it
+ * does not — a solid cursor in an unfocused list is a lie about where the next
+ * key will land.
+ */
+/**
+ * Why every row here says `flexShrink={0}`.
+ *
+ * Yoga's default is to shrink a flex child that does not fit, and Ink honours
+ * that by giving the box fewer lines than its content — then draws the content
+ * anyway, one line on top of another. A two-line row squeezed to one renders its
+ * detail *over* its title, which reads as "the titles are missing" and is
+ * impossible to diagnose from a screenshot. Clipping the last row off the bottom
+ * is the honest failure; overlapping text is not.
+ */
+export function RailRow({
+  selected,
+  focused,
+  glyph,
+  title,
+  status,
+  detail,
+  trailing,
+  unread,
+  width,
+  spaced,
+}: {
+  selected: boolean
+  focused: boolean
+  glyph: ReactNode
+  title: string
+  status?: string
+  detail?: string
+  trailing?: string
+  unread?: boolean
+  width: number
+  spaced?: boolean
+}) {
+  /*
+   * One column carries both marks, because they cannot both be true of a row
+   * you are looking at — reading it is what makes it read. A dot wedged against
+   * the status glyph looked like part of the glyph.
+   */
+  const mark = selected ? (focused ? CURSOR : '│') : unread ? '·' : ' '
+  const trailW = trailing ? Math.min(Math.max(trailing.length, 3), 12) : 0
+  // Two, not one: a title truncated to the character before the age reads as one
+  // word — `…Jan 1`.
+  const titleW = Math.max(8, width - 6 - (trailW ? trailW + 2 : 0))
+
+  /*
+   * The selected row is reversed out, not merely tinted.
+   *
+   * A cursor you have to hunt for is not a cursor. Colour and weight were doing
+   * that job alone, which is too subtle at the bottom of a long rail — and
+   * invisible the moment anything else has gone wrong on screen. Inverse video
+   * is the one thing every terminal draws the same way, and it is what `fzf` and
+   * `lazygit` use for exactly this.
+   */
+  return (
+    <Box flexDirection="column" flexShrink={0}>
+      <Text wrap="truncate">
+        <Text color={selected || unread ? ACCENT : 'gray'}>{`${mark} `}</Text>
+        {glyph}
+        <Text
+          color={selected ? ACCENT : 'white'}
+          inverse={selected}
+          bold={selected && focused}
+        >
+          {`  ${pad(title, titleW)}`}
+        </Text>
+        <Text color={selected ? ACCENT : 'gray'} inverse={selected}>
+          {trailing ? ` ${pad(trailing, trailW, 'right')}` : ''}
+        </Text>
+      </Text>
+      {detail || status ? (
+        <Text color="gray" wrap="truncate">
+          {`    ${truncate([status, detail].filter(Boolean).join(' · '), Math.max(8, width - 4))}`}
+        </Text>
+      ) : null}
+      {spaced ? <Text> </Text> : null}
+    </Box>
+  )
+}
+
+/** The rail's own heading: what it is showing, and where you are in it. */
+export function RailHeader({
+  label,
+  count,
+  position: at,
+  unread,
+  width,
+}: {
+  label: string
+  count: number
+  position?: string
+  unread: number
+  width: number
+}) {
+  const right = [at, unread ? `${unread} new` : null].filter(Boolean).join('  ')
+  return (
+    <Box justifyContent="space-between" width={width} paddingBottom={1}>
+      <Text color="gray" bold wrap="truncate">{`${label.toUpperCase()}  ${count}`}</Text>
+      <Text color="gray">{right}</Text>
+    </Box>
+  )
+}

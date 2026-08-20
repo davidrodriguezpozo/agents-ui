@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import type { Writable } from 'node:stream'
 
 /**
@@ -18,6 +20,39 @@ export function defaultShell(): string {
 
 export function defaultEditor(): string {
   return process.env.VISUAL || process.env.EDITOR || 'vi'
+}
+
+/**
+ * Write the instruction in a real editor.
+ *
+ * Instructions are prose — a paragraph, a list, a pasted stack trace — and a
+ * one-line field inside a terminal app will never be good at that. `git commit`
+ * settled this argument a long time ago: hand over a file, take back what was
+ * saved. You get your own bindings, your own wrapping, your own everything.
+ *
+ * Markdown, because that is what the other end reads, and because it means no
+ * comment header explaining itself: `#` is a heading here, not a comment, and a
+ * file that quietly ate your first line would be worse than no help at all.
+ */
+export async function composeInEditor(
+  draft: string,
+  run: (command: string, args: string[], cwd?: string) => Promise<number> = runInTty,
+): Promise<string | null> {
+  const dir = mkdtempSync(join(tmpdir(), 'agents-studio-'))
+  const file = join(dir, 'INSTRUCTION.md')
+
+  try {
+    writeFileSync(file, draft, 'utf8')
+    const code = await run(defaultEditor(), [file])
+    // A non-zero exit is how `:cq` says "forget it", and honouring that is the
+    // difference between an editor and a text box that happens to be elsewhere.
+    if (code !== 0) return null
+
+    const written = readFileSync(file, 'utf8').trim()
+    return written || null
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
 }
 
 export function runInTty(command: string, args: string[] = [], cwd?: string): Promise<number> {
@@ -131,22 +166,45 @@ export function openUrl(url: string): void {
 }
 
 /**
- * Swap to the alternate screen for a child, then come back.
+ * Take the whole screen, and give it back on the way out.
  *
- * Ink draws in the main buffer. Without this, a shell would start underneath
- * the last frame and leave that frame in the scrollback. The alternate screen
- * is what `less` and `vim` use for the same reason; unsupported terminals
- * ignore the sequence and you get the fallback of "the shell ran below".
+ * Ink draws in the main buffer by moving the cursor up and erasing, which is
+ * right for a progress bar and wrong for a program that fills the terminal: a
+ * frame the height of the window, a resize, or anything else printing to the
+ * same buffer leaves residue that the next frame draws *over* rather than
+ * replacing — text on top of text, columns bleeding into each other.
+ *
+ * `vim`, `less` and `htop` all solve this the same way, and get the same bonus:
+ * quitting restores the scrollback exactly as it was, so the app leaves no
+ * wreckage behind in the terminal you were working in.
  */
-export async function withAlternateScreen(stdout: Writable, task: () => Promise<void>): Promise<void> {
+export function enterFullScreen(stdout: Writable): () => void {
   stdout.write('\x1b[?1049h\x1b[2J\x1b[H')
+  let left = false
+  return () => {
+    if (left) return
+    left = true
+    stdout.write('\x1b[?1049l')
+  }
+}
+
+/**
+ * Hand the terminal to a child, then take it back.
+ *
+ * The app is on the alternate screen, so a child gets the main buffer — which is
+ * the right one for it: `git`, `$EDITOR` and a shell all expect the scrollback
+ * they were started from, and anything that wants its own full screen switches
+ * for itself and switches back.
+ *
+ * Coming back re-enters the app's screen and clears it. Ink has meanwhile drawn
+ * an empty frame (the tree is hidden while suspended), so its next write is a
+ * whole one rather than a patch against something the child scribbled over.
+ */
+export async function withMainScreen(stdout: Writable, task: () => Promise<void>): Promise<void> {
+  stdout.write('\x1b[?1049l')
   try {
     await task()
   } finally {
-    // Clear on the way back in as well. Ink erased its frame when the app
-    // stepped aside, but that erase went to the alternate screen — the main
-    // one still shows the frame it thinks is gone, and would keep it as
-    // scrollback above the redraw.
-    stdout.write('\x1b[?1049l\x1b[2J\x1b[H')
+    stdout.write('\x1b[?1049h\x1b[2J\x1b[H')
   }
 }

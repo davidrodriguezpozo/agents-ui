@@ -17,7 +17,7 @@ import {
   type WallSnapshot,
   type WallTile,
 } from '~/utils/wall'
-import { hint } from '../keymap'
+import type { Keymap } from '../keymap'
 import { compactAge, spinnerFrame, toneForUrgency, truncate, windowAround, type Tone } from '../format'
 import {
   EmptyState,
@@ -33,7 +33,7 @@ import {
 } from './components'
 import { useStudio } from './context'
 import { usePoll, useSelection, useTerminalSize, useTick } from './hooks'
-import { CHROME, isWide, listCapacity, listLayout, splitWidths } from './theme'
+import { CHROME, contentHeight, isWide, listLayout, rowsIn, splitWidths } from './theme'
 
 /**
  * The fleet, as a dashboard rather than another list.
@@ -51,7 +51,7 @@ export function FleetView({
   onOpenSession: (id: string) => void
   isActive: boolean
 }) {
-  const { api, mode, action, openBrowser, motions, nudge, rowHeight } = useStudio()
+  const { api, keys, mode, jobs, openBrowser, motions, nudge, rowHeight } = useStudio()
   const { columns, rows } = useTerminalSize()
   const layout = listLayout(columns)
   const wide = isWide(columns)
@@ -80,9 +80,8 @@ export function FleetView({
   const clocks = Date.now()
 
   const meterRows = (snapshot?.spend.capUsd ? 1 : 0) + (snapshot?.quota ? 1 : 0)
-  const capacity = listCapacity(
-    rows,
-    [CHROME.meters + meterRows, CHROME.rule, wide ? 0 : CHROME.inspector],
+  const capacity = rowsIn(
+    contentHeight(rows) - CHROME.meters - meterRows - CHROME.rule - (wide ? 0 : 8),
     rowHeight,
   )
   const [index] = useSelection(tiles.length, motions, isActive && mode === 'nav', capacity)
@@ -95,9 +94,9 @@ export function FleetView({
 
   useInput((input, key) => {
     if (key.return && selected) onOpenSession(selected.sessionId)
-    if (input === 'r') poll.refresh()
-    if (input === 'o') openBrowser(selected?.prUrl ? selected.prUrl : '/wall')
-    if (input === 'x' && selected?.runId) void stop(selected)
+    if (keys.matches('refresh', input, key)) poll.refresh()
+    if (keys.matches('browser', input, key)) openBrowser(selected?.prUrl ? selected.prUrl : '/wall')
+    if (keys.matches('fleet.stop', input, key) && selected?.runId) void stop(selected)
     if (input === 'y' && selected) void answer(selected, 'allow', 'once')
     if (input === 'a' && selected) void answer(selected, 'allow', 'session')
     if (input === 'n' && selected) void answer(selected, 'deny')
@@ -105,14 +104,14 @@ export function FleetView({
 
   async function stop(tile: WallTile) {
     if (!tile.runId) return
-    await action.run(`stop:${tile.sessionId}`, 'Stopping…', () => api.cancelRun(tile.runId!))
+    await jobs.run(`stop:${tile.sessionId}`, 'Stopping the run', () => api.cancelRun(tile.runId!))
     poll.refresh()
   }
 
   async function answer(tile: WallTile, behavior: 'allow' | 'deny', scope?: 'once' | 'session') {
     const prompt = tile.prompts[0]
     if (!prompt) return
-    await action.run(
+    await jobs.run(
       `permission:${prompt.id}`,
       null,
       () => api.answerPermission(prompt.id, behavior, { scope }),
@@ -161,7 +160,7 @@ export function FleetView({
           const group = urgencyOf(tile)
           const prevGroup = prev ? urgencyOf(prev) : null
           return (
-            <Box key={tile.sessionId} flexDirection="column">
+            <Box key={tile.sessionId} flexDirection="column" flexShrink={0}>
               {group !== prevGroup ? (
                 <Rule label={`${URGENCY_LABELS[group]}  ${counts[group]}`} width={widths.list} />
               ) : null}
@@ -194,12 +193,14 @@ export function FleetView({
               width={wide ? widths.inspector : layout.inner}
               now={clocks}
               at={position(index, tiles.length, shown.length)}
+              keys={keys}
             />
           ) : (
             <FleetEmptyInspector
               snapshot={snapshot}
               width={wide ? widths.inspector : layout.inner}
               now={clocks}
+              keys={keys}
             />
           )
         }
@@ -282,12 +283,14 @@ function FleetInspector({
   width,
   now,
   at,
+  keys,
 }: {
   tile: WallTile
   snapshot: WallSnapshot | null
   width: number
   now: number
   at?: string
+  keys: Keymap
 }) {
   const prompt = tile.prompts[0]
   const lines = [
@@ -307,8 +310,8 @@ function FleetInspector({
         title={tile.title}
         lines={lines}
         hint={prompt
-          ? `${hint(['session.allow', 'session.deny'])}   ⏎ open`
-          : hint(['open', 'fleet.stop', 'browser'])}
+          ? `${keys.hint(['session.allow', 'session.deny'])}   ⏎ open`
+          : keys.hint(['rail.open', 'fleet.stop', 'browser'])}
         width={width}
       />
       {prompt ? (
@@ -327,10 +330,12 @@ function FleetEmptyInspector({
   snapshot,
   width,
   now,
+  keys,
 }: {
   snapshot: WallSnapshot | null
   width: number
   now: number
+  keys: Keymap
 }) {
   const live = snapshot?.liveSessions ?? 0
   const paused = snapshot?.pausedRituals ?? 0
@@ -344,7 +349,7 @@ function FleetEmptyInspector({
             : '',
           paused ? `${paused} ritual${paused === 1 ? '' : 's'} paused by the scheduler` : '',
         ]}
-        hint={hint(['open', 'browser'])}
+        hint={keys.hint(['rail.open', 'browser'])}
         width={width}
       />
       {snapshot ? <Upcoming snapshot={snapshot} width={width} now={now} /> : null}

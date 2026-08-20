@@ -87,36 +87,88 @@ export const LAYOUT = {
 export const CHROME = {
   /** The root box's own vertical padding, plus the line Ink keeps for itself. */
   frame: 3,
-  header: 1,
-  tabs: 3,
+  /** The status line. */
+  status: 1,
   message: 2,
   footer: 2,
-  chips: 2,
+  /** What the rail spends on saying what it is showing. */
+  railHeader: 2,
+  /** A pane's title line, and the status line under it with its air. */
+  paneHeader: 4,
+  /** A pane's own hint line. */
+  paneFooter: 2,
+  /** The "there is more below" line every scrolling pane can grow. */
+  scrollNotice: 1,
   meters: 2,
   rule: 1,
-  filter: 2,
   compose: 2,
-  /** Title, a few lines and the divider, when the inspector sits under a list. */
-  inspector: 7,
 } as const
 
 /**
- * How many rows a list may draw, given what else is on screen.
+ * How many rows are left for the rail and the pane.
  *
- * `extras` are the `CHROME` pieces this particular view adds. Passing them in
- * rather than branching on view name keeps the one subtraction honest.
+ * One subtraction, in one place, from named parts. Every view used to carry its
+ * own guess — 11 here, 14 there, `rows - 12` in the session pane — and a guess
+ * two out overflows the frame, which in Ink means the terminal scrolls and half
+ * of the last frame stays above the new one.
  */
-export function listCapacity(rows: number, extras: number[] = [], lineHeight = 2): number {
-  const chrome = CHROME.frame + CHROME.header + CHROME.tabs + CHROME.message + CHROME.footer
-    + extras.reduce((total, extra) => total + extra, 0)
-  return Math.max(1, Math.floor(Math.max(lineHeight, rows - chrome) / lineHeight))
+export function contentHeight(rows: number, jobs = 0): number {
+  return Math.max(
+    4,
+    rows - CHROME.frame - CHROME.status - CHROME.message - CHROME.footer - jobs,
+  )
 }
 
-/** How many lines a full-height pane — a transcript, a diff — may draw. */
-export function paneHeight(rows: number, extras: number[] = []): number {
-  const chrome = CHROME.frame + CHROME.header + CHROME.message + CHROME.footer
-    + extras.reduce((total, extra) => total + extra, 0)
-  return Math.max(1, rows - chrome)
+/** How wide the rail is: enough to read a title, never more than a third. */
+export function railWidth(columns: number): number {
+  return Math.max(28, Math.min(46, Math.floor(columns * 0.34)))
+}
+
+/** Below this, the rail and the pane take turns instead of sharing. */
+export function isSplit(columns: number): boolean {
+  return columns >= 100
+}
+
+/** How many rows of a list fit in a given height. */
+export function rowsIn(height: number, lineHeight = 2): number {
+  return Math.max(1, Math.floor(Math.max(lineHeight, height) / lineHeight))
+}
+
+/**
+ * How many rail rows to draw.
+ *
+ * The rail spends lines on things that are not rows: a heading for each band it
+ * passes through, and the line that says how many rows it did not draw. Asking
+ * for the full height and then adding those pushes the last row off the bottom —
+ * which is the good outcome, and only because nothing can be squeezed. Reserving
+ * them is better than relying on that.
+ */
+export function railRowsIn(height: number, lineHeight: 2 | 3): number {
+  const reserved = URGENCY_BANDS + 1
+  return rowsIn(height - reserved, lineHeight)
+}
+
+/** How many bands a window can realistically show at once. */
+const URGENCY_BANDS = 3
+
+/**
+ * How many lines of transcript or diff a session pane may draw.
+ *
+ * Its own chrome, added up here rather than guessed at the call site: a title, a
+ * status line, the composer, the hint, and the row that says there is more below.
+ * Two rows out is not a cosmetic problem — Ink draws the overflow on top of what
+ * is already there, and the result reads as corruption.
+ */
+export function sessionBody(content: number): number {
+  return Math.max(
+    3,
+    content - CHROME.paneHeader - CHROME.compose - CHROME.paneFooter - CHROME.scrollNotice,
+  )
+}
+
+/** The same, for a run: no composer, so two rows more of output. */
+export function runBody(content: number): number {
+  return Math.max(3, content - CHROME.paneHeader - CHROME.paneFooter - CHROME.scrollNotice)
 }
 
 /**
