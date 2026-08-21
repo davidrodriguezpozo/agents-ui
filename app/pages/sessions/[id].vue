@@ -11,6 +11,12 @@ import type {
   TranscriptMessage,
 } from '~/composables/useSessions'
 
+/**
+ * The rail beside it, so leaving this session for the next one is a click rather
+ * than a trip out to a list and back. See `layouts/work.vue`.
+ */
+definePageMeta({ layout: 'work' })
+
 const route = useRoute()
 const router = useRouter()
 const id = route.params.id as string

@@ -79,13 +79,25 @@ export const ACTION_SHORTCUTS: ActionShortcut[] = [
   { keys: 'n', label: 'Start a session' },
   { keys: '⌘J', label: 'Ask Claude' },
   { keys: '.', label: 'Collapse or widen the sidebar' },
+  { keys: '\\', label: 'Hide or show the session rail' },
   { keys: 't', label: 'Light or dark' },
   { keys: '?', label: 'This list' },
 ]
 
+/**
+ * Walking a list, and — on the work surface — hopping between the pieces of work
+ * in it.
+ *
+ * `j`/`k` move a cursor and leave the pane where it is; `⇧J`/`⇧K` move the pane
+ * itself, which is the difference between considering a row and going to it. Both
+ * are here rather than in `ACTION_SHORTCUTS` because they are motions, and a
+ * count in front of either means what it means in a buffer.
+ */
 export const LIST_SHORTCUTS: ActionShortcut[] = [
   { keys: 'j', label: 'Next item' },
   { keys: 'k', label: 'Previous item' },
+  { keys: '⇧J', label: 'Next session in the rail — and open it' },
+  { keys: '⇧K', label: 'Previous one, opened' },
   { keys: '5j', label: 'Five of them — counts work on j, k and G' },
   { keys: 'gg', label: 'First item' },
   { keys: 'G', label: 'Last item, or the nth with a count' },

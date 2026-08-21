@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "brief": {
+    "enabled": true,
+    "pinned": "",
+    "facts": {
+      "sessions": [],
+      "moreSessions": 0,
+      "rituals": [],
+      "landed": [],
+      "waiting": []
+    },
+    "updatedAt": 1787319312897
+  }
+}

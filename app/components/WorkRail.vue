@@ -1,0 +1,226 @@
+<script setup lang="ts">
+import type { Session } from '~/composables/useSessions'
+import type { WorkItem } from '~/utils/workList'
+import { railGroups } from '~/utils/workList'
+
+/**
+ * Everything in flight, beside the thing you are doing about it.
+ *
+ * The Work page used to be a list you went *out* to: opening a session replaced
+ * the whole screen, so hopping from one to the next meant a trip back through the
+ * list, and while you were in one session you could not see that another had gone
+ * red. The TUI has never had that problem — `docs/tui.md` describes a rail of
+ * everything that might want you beside a pane showing the row you are on, where
+ * "switching between two running agents is a keypress rather than a trip out to a
+ * list and back". This is that rail.
+ *
+ * It is presentation and a filter box, nothing else. The fetching and the poll
+ * belong to `layouts/work.vue`, which is mounted for as long as the surface is —
+ * if they lived here, collapsing the rail would stop the poll that keeps the
+ * session you are *looking at* up to date.
+ */
+const {
+  groups: allGroups, inFlightCount, tabCounts, everything, sessions,
+  scope, elsewhere, elsewhereNeedsYou, pullFor,
+} = useWorkList()
+
+const { open, drawerOpen, width, toggle } = useWorkRail()
+const { workingDir } = useWorkingDir()
+const { nameFor } = useProjects()
+const { pane } = useWorkPane()
+
+const router = useRouter()
+const route = useRoute()
+
+/** Filtering the rail, which is not the same box as the one on History. */
+const filter = ref('')
+
+const groups = computed(() => {
+  const q = filter.value.trim().toLowerCase()
+  if (!q) return allGroups.value
+
+  return railGroups(
+    everything.value.filter(item =>
+      `${item.title} ${item.detail ?? ''} ${item.outcome}`.toLowerCase().includes(q),
+    ),
+  )
+})
+
+const matching = computed(() => groups.value.reduce((n, group) => n + group.items.length, 0))
+
+/** The session behind a row, when the row is one. `null` means it is a run. */
+function sessionFor(item: WorkItem): Session | null {
+  if (item.origin !== 'session') return null
+  const id = item.key.slice('session:'.length)
+  return sessions.value.find(s => s.id === id) ?? null
+}
+
+/**
+ * The repository a row belongs to, said only when the list spans more than one.
+ * Narrowed to "this project" it would be the same word on every row.
+ */
+function repoFor(item: WorkItem): string | null {
+  if (scope.value === 'here') return null
+  const session = sessionFor(item)
+  return session ? nameFor(session.repoDir) : null
+}
+
+/** Start something. The page focuses its composer off `?new=1`. */
+function startNew() {
+  pane.value = 'start'
+  router.push({ path: '/work', query: { new: '1' } })
+}
+
+function showHistory() {
+  pane.value = 'history'
+  router.push('/work')
+}
+
+/**
+ * Put it away. Over the pane that means dismissing the drawer; beside it, that
+ * means collapsing the column — and only the second one is remembered, because
+ * the drawer being shut is the resting state rather than a preference.
+ */
+function hide() {
+  if (drawerOpen.value) drawerOpen.value = false
+  else toggle()
+}
+
+// A row you tapped in the drawer has done what the drawer was opened for.
+watch(() => route.fullPath, () => { drawerOpen.value = false })
+</script>
+
+<template>
+  <!--
+    Below `lg` this same element is a drawer over the pane rather than a column
+    beside it — see the media query on `.rail` in main.css. One instance either
+    way: two would be two lists to keep in step, and `j` would walk through both
+    copies of every session.
+  -->
+  <aside
+    v-if="open || drawerOpen"
+    data-rail
+    class="rail"
+    :class="{ 'rail--shown': drawerOpen }"
+    :style="{ '--rail-w': `${width}px` }"
+    aria-label="Work in flight"
+  >
+    <!-- Heading, the count, and the way to put it away -->
+    <div
+      class="shrink-0 flex items-center gap-2 px-3"
+      :style="{ height: 'var(--header-h)', borderBottom: '1px solid var(--border-subtle)' }"
+    >
+      <span class="text-section-label flex-1 min-w-0">In flight</span>
+      <span v-if="inFlightCount" class="type-mono-meta">{{ inFlightCount }}</span>
+      <UButton
+        icon="i-lucide-panel-left-close"
+        size="xs"
+        variant="ghost"
+        color="neutral"
+        title="Hide the rail (\ brings it back)"
+        @click="hide"
+      />
+    </div>
+
+    <div class="px-2.5 pt-2.5 pb-1.5 space-y-1.5 shrink-0">
+      <UButton
+        label="New session"
+        icon="i-lucide-plus"
+        size="xs"
+        block
+        :disabled="!workingDir"
+        :title="workingDir ? 'Start a session — n' : 'Pick a project first'"
+        @click="startNew"
+      />
+
+      <!--
+        Only worth a box once there is enough here to lose something in. Below
+        that it is a control that can only ever narrow a list you can already
+        see all of.
+      -->
+      <input
+        v-if="inFlightCount > 5"
+        v-model="filter"
+        class="field-search w-full"
+        placeholder="Filter…"
+      />
+
+      <!--
+        Only worth a control when there is somewhere else to look. One project
+        means one possible answer, and a toggle with one position is furniture.
+      -->
+      <div
+        v-if="workingDir && elsewhere.length"
+        class="flex items-center gap-0.5 p-0.5 rounded-md"
+        style="background: var(--input-bg); border: 1px solid var(--border-subtle);"
+      >
+        <button
+          v-for="option in [{ value: 'here' as const, label: 'This project' }, { value: 'all' as const, label: 'All' }]"
+          :key="option.value"
+          class="flex-1 px-2 py-0.5 rounded fs-micro font-medium transition-all focus-ring flex items-center justify-center gap-1"
+          :style="{
+            background: scope === option.value ? 'var(--accent-muted)' : 'transparent',
+            color: scope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+          }"
+          @click="scope = option.value"
+        >
+          {{ option.label }}
+          <!--
+            The one number that justifies switching: work blocked in a project
+            this view is currently hiding.
+          -->
+          <span
+            v-if="option.value === 'all' && scope === 'here' && elsewhereNeedsYou"
+            style="color: var(--error);"
+          >{{ elsewhereNeedsYou }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="rail__list">
+      <template v-for="group in groups" :key="group.status">
+        <div class="rail-group">
+          <span class="flex-1 min-w-0">{{ group.title }}</span>
+          <span class="rail-group__count">{{ group.items.length }}</span>
+        </div>
+        <WorkRailRow
+          v-for="item in group.items"
+          :key="item.key"
+          :item="item"
+          :session="sessionFor(item)"
+          :pull="sessionFor(item) ? pullFor(sessionFor(item)!) : null"
+          :repo-name="repoFor(item)"
+        />
+      </template>
+
+      <!--
+        Two different empty states, because they are two different situations and
+        only one of them is a dead end.
+      -->
+      <p v-if="filter.trim() && !matching" class="type-meta px-3 py-4">
+        Nothing in flight matches “{{ filter.trim() }}”.
+      </p>
+      <p v-else-if="!inFlightCount" class="type-meta px-3 py-4 leading-relaxed">
+        Nothing is in flight. Start a session and it appears here while it works
+        and while it is waiting on you.
+      </p>
+    </div>
+
+    <!-- What is not in flight, and therefore not in the rail -->
+    <div
+      class="shrink-0 px-2.5 py-2"
+      style="border-top: 1px solid var(--border-subtle);"
+    >
+      <button
+        class="w-full flex items-center gap-2 px-2 py-1.5 rounded-md hover-row focus-ring fs-mono"
+        :style="{ color: pane === 'history' ? 'var(--accent)' : 'var(--text-tertiary)' }"
+        title="Sessions, rituals and commands that are finished with"
+        @click="showHistory"
+      >
+        <UIcon name="i-lucide-history" class="size-3.5 shrink-0" />
+        <span class="flex-1 text-left">History</span>
+        <span v-if="tabCounts.history" class="type-mono-meta">{{ tabCounts.history }}</span>
+      </button>
+    </div>
+  </aside>
+</template>

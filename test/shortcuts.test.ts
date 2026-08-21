@@ -349,3 +349,53 @@ describe('every list page', () => {
     expect(nested).toEqual([])
   })
 })
+
+/*
+ * ── Two lists on one screen ───────────────────────────────────────────────────
+ *
+ * The work surface puts a rail of rows beside a page of rows, both inside the
+ * shell's one `main` — so `visibleRows()` finds both and has to pick. It picks on
+ * `data-rail`, and these guard the three source facts that makes that work.
+ * Source text rather than a mounted DOM, like everything else in this file: the
+ * suite runs without one, and the failure being guarded against is a component
+ * dropping an attribute, which is visible here.
+ */
+describe('the rail and the page are walked separately', () => {
+  const rail = vue.find(file => file.path === 'components/WorkRail.vue')!
+  const railRow = vue.find(file => file.path === 'components/WorkRailRow.vue')!
+  const listener = readFileSync(join(appDir, 'composables/useShortcuts.ts'), 'utf8')
+
+  it('has a rail that says it is one', () => {
+    // Without this attribute the partition collapses and `j` on the History list
+    // starts at the top of the rail, walking every session before reaching the
+    // first row anybody was looking at.
+    expect(/(?:^|\s)data-rail(?=\s|$|=)/.test(withoutComments(rail.text))).toBe(true)
+  })
+
+  it('has exactly one, because the partition is a boolean', () => {
+    const declaring = vue
+      .filter(file => openingTags(withoutComments(file.text))
+        .some(el => /(?:^|\s)data-rail(?=\s|$|=)/.test(el.attrs)))
+      .map(file => file.path)
+
+    expect(declaring).toEqual(['components/WorkRail.vue'])
+  })
+
+  it('decides which list to walk from where the focus is', () => {
+    expect(listener).toContain('[data-rail]')
+  })
+
+  it('gives the hop keys their own rows to hop through', () => {
+    // `⇧J`/`⇧K` navigate on every press, so they read a narrower set than
+    // `j`/`k` — only the rail, never the page's rows.
+    expect(/(?:^|\s)data-rail-row(?=\s|$|=)/.test(railRow.text)).toBe(true)
+    expect(listener).toContain('main [data-rail-row]')
+  })
+
+  it('still lets the rail be walked, so the rows are ordinary rows too', () => {
+    // `data-rail-row` is for hopping; `data-row` is what makes `j`, `k`, `gg`,
+    // `G` and `zz` work once you are in the rail. A row with only the first is
+    // one the motions cannot see.
+    expect(/(?:^|\s)data-row(?=\s|$|=)/.test(railRow.text)).toBe(true)
+  })
+})

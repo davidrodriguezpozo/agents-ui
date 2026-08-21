@@ -3,6 +3,12 @@ import { errorMessage } from '~/utils/errors'
 import { renderMarkdown } from '~/utils/markdown'
 import type { PermissionRequest } from '~/types'
 
+/**
+ * On the work surface, so a ritual run you opened from the rail keeps the rail.
+ * See `layouts/work.vue`.
+ */
+definePageMeta({ layout: 'work' })
+
 const route = useRoute()
 const id = route.params.id as string
 
