@@ -1,4 +1,4 @@
-import { CHORD_TIMEOUT_MS, chordTarget, isBareKey, isTerminalTarget, isTypingTarget, opensItself, rowAction } from '~/utils/shortcuts'
+import { CHORD_TIMEOUT_MS, chordTarget, isBareKey, isRailToggle, isTerminalTarget, isTypingTarget, opensItself, rowAction } from '~/utils/shortcuts'
 
 /**
  * One listener for the whole app.
@@ -307,6 +307,28 @@ export function useShortcutBindings() {
       return
     }
 
+    /**
+     * The rail, away and back. `.` does this for the navigation sidebar, and
+     * this is the same act on the panel one step to its right — which is why it
+     * is the key next to it rather than a mnemonic.
+     *
+     * Above the bare-key guard, because on an ISO layout `\` is typed with ⌥
+     * held and that guard drops anything with a modifier on it. See
+     * `isRailToggle`. The overlay and typing guards below still apply to it, so
+     * they are repeated here rather than skipped.
+     *
+     * Bound globally even though the rail only exists on three routes: a key
+     * that works on some pages and is silently dead on others is worse than one
+     * that is harmlessly idle, and this is the control that gets a hidden panel
+     * back.
+     */
+    if (isRailToggle(event) && !isTypingTarget(event.target) && !overlayOpen()) {
+      event.preventDefault()
+      clearPending()
+      toggleRail()
+      return
+    }
+
     if (!isBareKey(event)) return
     if (isTypingTarget(event.target)) return
 
@@ -454,22 +476,6 @@ export function useShortcutBindings() {
         event.preventDefault()
         clearPending()
         toggleSidebar()
-        return
-
-      /**
-       * The rail, away and back. `.` does this for the navigation sidebar, and
-       * these are the same act on the panel one step to its right — which is why
-       * it is the key next to it rather than a mnemonic.
-       *
-       * Bound globally even though the rail only exists on three routes: a key
-       * that works on some pages and is silently dead on others is worse than
-       * one that is harmlessly idle, and this is the control that gets a hidden
-       * panel back.
-       */
-      case '\\':
-        event.preventDefault()
-        clearPending()
-        toggleRail()
         return
     }
 
