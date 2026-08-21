@@ -63,6 +63,19 @@ export interface SessionPrWatch {
   lastPolledAt?: number
 }
 
+/** Something you typed while it was working, waiting for the turn to end. */
+export interface QueuedMessage {
+  id: string
+  text: string
+  at: number
+}
+
+/**
+ * What came of saying something to a session: a turn started, or a message
+ * waiting for the one that is still running to end.
+ */
+export type SendResult = { runId: string; queued?: undefined } | { queued: QueuedMessage; runId?: undefined }
+
 export interface Session {
   id: string
   title: string
@@ -118,6 +131,13 @@ export interface Session {
   summary?: SessionSummary
   /** Absent means it has not tried to fix itself on this instruction. */
   repair?: SessionRepair
+  /**
+   * What was typed while a turn was running, oldest first.
+   *
+   * Held on the server — see `server/utils/sessionQueue.ts` — because the turn
+   * it waits for outlasts this tab. Absent or empty means nothing is waiting.
+   */
+  queued?: QueuedMessage[]
   worktree: WorktreeState
   /**
    * The branch the worktree is really on, when the record does not name it.
@@ -409,13 +429,44 @@ export function useSessions() {
     return result
   }
 
-  /** Returns the run id, which the caller attaches to for live output. */
-  async function send(id: string, input: string): Promise<string> {
-    const result = await $fetch<{ runId: string }>(`/api/sessions/${encodeURIComponent(id)}/message`, {
+  /**
+   * Say something to a session.
+   *
+   * Resolves with a run id when the turn started, and with the waiting message
+   * when the session was still working and kept it instead. Which of the two
+   * happens is the server's call, not the caller's: the page's idea of busy is
+   * as old as its last load, and deciding here is how a message typed a second
+   * before a turn ended used to be refused.
+   */
+  async function send(id: string, input: string): Promise<SendResult> {
+    return $fetch<SendResult>(`/api/sessions/${encodeURIComponent(id)}/message`, {
       method: 'POST',
       body: { input },
     })
+  }
+
+  /**
+   * Send what is queued now, rather than waiting for a turn that is not coming.
+   *
+   * Only needed when a turn ended in a way that holds the queue back — stopped
+   * by hand, or failed. Resolves with the run id, or null when there was
+   * nothing left to send.
+   */
+  async function sendQueued(id: string): Promise<string | null> {
+    const result = await $fetch<{ runId: string | null }>(
+      `/api/sessions/${encodeURIComponent(id)}/queue`,
+      { method: 'POST' },
+    )
     return result.runId
+  }
+
+  /** Drop one waiting message, or all of them when given no id. */
+  async function dropQueued(id: string, messageId?: string): Promise<QueuedMessage[]> {
+    const result = await $fetch<{ queued: QueuedMessage[] }>(
+      `/api/sessions/${encodeURIComponent(id)}/queue`,
+      { method: 'DELETE', body: { messageId } },
+    )
+    return result.queued
   }
 
   /** The terminal conversation an adopted session continues. History only. */
@@ -546,6 +597,8 @@ export function useSessions() {
     startFrom,
     fetchOne,
     send,
+    sendQueued,
+    dropQueued,
     fetchTranscript,
     setTrust,
     setAside,

@@ -7,8 +7,8 @@ import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolC
 import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
 import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type {
-  BranchPullRequest, DiffFile, MergePreview, PullRequestPreview, Session, SessionTurn,
-  TranscriptMessage,
+  BranchPullRequest, DiffFile, MergePreview, PullRequestPreview, QueuedMessage, Session,
+  SessionTurn, TranscriptMessage,
 } from '~/composables/useSessions'
 
 /**
@@ -22,7 +22,7 @@ const router = useRouter()
 const id = route.params.id as string
 
 const {
-  fetchOne, send, fetchTranscript, setTrust, fetchDiff,
+  fetchOne, send, sendQueued, dropQueued, fetchTranscript, setTrust, fetchDiff,
   previewPullRequest, openPullRequest, watchPullRequest, previewMerge, merge, runCheck, repair,
   updateFromBase, close, setAside,
 } = useSessions()
@@ -171,6 +171,16 @@ const liveRun = computed(() => (activeRunId.value ? live.value[activeRunId.value
 const prompts = computed(() => (activeRunId.value ? promptsFor(activeRunId.value).value : []))
 const isBusy = computed(() => session.value?.status === 'running' || liveRun.value?.status === 'running')
 
+/**
+ * What you typed while it was working, still waiting.
+ *
+ * Read off the session rather than kept here: the queue belongs to the session
+ * on the server, because the turn it is waiting for outlasts this tab. So it
+ * survives a reload, and it is the same list whichever window you look from.
+ */
+const queued = computed<QueuedMessage[]>(() => session.value?.queued ?? [])
+const dropping = ref<string | null>(null)
+
 async function load() {
   try {
     session.value = await fetchOne(id)
@@ -200,8 +210,34 @@ function watchRun(runId: string) {
       // is not news, and reloading on the back of it is what leaked.
       if (gone || controller !== own) return
       await load()
+      // Only a turn that finished releases what was queued behind it — one you
+      // stopped, or one that failed, leaves it standing on purpose. So there is
+      // nothing to wait for, and the page says so instead.
+      if (live.value[runId]?.status === 'completed') await awaitQueuedTurn()
       await refreshDiff()
     })
+}
+
+/**
+ * Wait for the message queued behind the turn that just ended to become a turn.
+ *
+ * The server drains the queue in the same breath as ending the turn, and this
+ * page learns the turn ended by its stream closing — the two happen at once, so
+ * a single reload lands on either side of the coin. Half the time that left a
+ * queued message looking ignored until somebody reloaded the page by hand.
+ *
+ * Bounded, and over the moment the session is running again: `load` attaches to
+ * the new run on its own.
+ */
+async function awaitQueuedTurn() {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    if (gone || !session.value?.queued?.length) return
+    if (session.value.status === 'running') return
+
+    await new Promise(resolve => setTimeout(resolve, 400))
+    if (gone) return
+    await load()
+  }
 }
 
 async function refreshDiff() {
@@ -269,20 +305,69 @@ onUnmounted(() => {
   controller?.abort()
 })
 
+/**
+ * Say the thing, whether or not it is listening yet.
+ *
+ * The composer used to be disabled for the whole of a turn, which is exactly
+ * when you have something to add — and a turn can run for ten minutes. Now it
+ * is always live, and a session that is busy keeps the message and sends it
+ * when the turn ends. Which of the two happened is the server's answer, not a
+ * guess made here: see `sendOrQueue`.
+ */
 async function onSend() {
   const value = input.value.trim()
-  if (!value || sending.value || isBusy.value) return
+  if (!value || sending.value) return
 
   sending.value = true
   try {
-    const runId = await send(id, value)
+    const result = await send(id, value)
     input.value = ''
     await load()
-    watchRun(runId)
+    if (result.runId) watchRun(result.runId)
   } catch (e) {
     toast.add({ title: 'Could not send', description: errorMessage(e), color: 'error' })
   } finally {
     sending.value = false
+  }
+}
+
+/**
+ * Send what is waiting now.
+ *
+ * Reachable only when the session is idle with something still queued, which
+ * means the turn it was waiting for was stopped or failed rather than finished.
+ * Both hold the queue back deliberately; this is the "yes, I still meant it".
+ */
+async function onSendQueued() {
+  if (sending.value || isBusy.value) return
+
+  sending.value = true
+  try {
+    const runId = await sendQueued(id)
+    await load()
+    if (runId) watchRun(runId)
+  } catch (e) {
+    toast.add({ title: 'Could not send', description: errorMessage(e), color: 'error' })
+  } finally {
+    sending.value = false
+  }
+}
+
+/** Changed your mind about one of them. The text goes back into the box. */
+async function onUnqueue(message: QueuedMessage) {
+  if (dropping.value) return
+
+  dropping.value = message.id
+  try {
+    await dropQueued(id, message.id)
+    if (session.value) session.value.queued = queued.value.filter(m => m.id !== message.id)
+    // Handed back rather than thrown away: you wrote it, and removing a queued
+    // message is usually the first half of rewording it.
+    input.value = input.value.trim() ? `${message.text}\n\n${input.value}` : message.text
+  } catch (e) {
+    toast.add({ title: 'Could not remove that', description: errorMessage(e), color: 'error' })
+  } finally {
+    dropping.value = null
   }
 }
 
@@ -911,11 +996,11 @@ async function sendReview() {
   const message = formatReview(comments.value)
   sending.value = true
   try {
-    const runId = await send(id, message)
+    const result = await send(id, message)
     comments.value = []
     showPatch.value = false
     await load()
-    watchRun(runId)
+    if (result.runId) watchRun(result.runId)
   } catch (e) {
     toast.add({ title: 'Could not send the review', description: errorMessage(e), color: 'error' })
   } finally {
@@ -1631,6 +1716,51 @@ const totalChanges = computed(() => {
               </span>
             </div>
 
+            <!--
+              What you typed while it was working, in the order it will be said.
+              Drawn above the box so a queue of three does not look like nothing
+              having happened three times.
+            -->
+            <div v-if="queued.length" class="space-y-1.5">
+              <div class="flex items-center justify-between gap-3">
+                <span class="type-meta flex items-center gap-1.5">
+                  <UIcon name="i-lucide-clock" class="size-3 shrink-0" />
+                  {{ queued.length === 1 ? 'Queued' : `${queued.length} queued` }} ·
+                  {{ isBusy ? 'goes when this turn ends' : 'nothing is running to release it' }}
+                </span>
+                <UButton
+                  v-if="!isBusy"
+                  label="Send now"
+                  icon="i-lucide-arrow-up"
+                  size="xs"
+                  variant="soft"
+                  :loading="sending"
+                  @click="onSendQueued"
+                />
+              </div>
+              <div
+                v-for="(message, index) in queued"
+                :key="message.id"
+                class="flex items-start gap-2 rounded-md px-3 py-2 group/queued"
+                style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+              >
+                <span class="type-mono-meta shrink-0 pt-px" style="color: var(--text-disabled);">
+                  {{ index + 1 }}
+                </span>
+                <span class="type-detail flex-1 min-w-0 line-clamp-2 whitespace-pre-wrap">{{ message.text }}</span>
+                <button
+                  class="opacity-0 group-hover/queued:opacity-100 transition-opacity focus-ring rounded shrink-0"
+                  style="color: var(--text-disabled);"
+                  :disabled="dropping === message.id"
+                  aria-label="Take this back out of the queue"
+                  title="Take it back out — the text returns to the box"
+                  @click="onUnqueue(message)"
+                >
+                  <UIcon name="i-lucide-x" class="size-3" />
+                </button>
+              </div>
+            </div>
+
             <!-- Composer -->
             <div class="flex gap-2 relative">
               <!-- Sits above the box, where what you are typing still shows -->
@@ -1644,15 +1774,33 @@ const totalChanges = computed(() => {
                 />
               </div>
 
+              <!--
+                Live throughout a turn. It was disabled for the whole of one,
+                which is the moment you most want it: the correction you thought
+                of watching it go the wrong way had to be held in your head for
+                ten minutes. Only a workspace that is gone takes the box away.
+              -->
               <textarea
                 v-model="input"
                 rows="2"
                 class="field-textarea flex-1"
-                :placeholder="isBusy ? 'Working…' : 'What should it do next? Type / for commands'"
-                :disabled="isBusy || !session.worktree.exists"
+                :placeholder="isBusy
+                  ? 'Working — type anyway, it goes when this turn ends'
+                  : 'What should it do next? Type / for commands'"
+                :disabled="!session.worktree.exists"
                 @keydown="onComposerKey"
               />
-              <!-- While it is working, the useful button is the one that stops it -->
+              <!-- Queueing is the same key and the same button, saying what it does -->
+              <UButton
+                :label="isBusy ? 'Queue' : 'Send'"
+                :icon="isBusy ? 'i-lucide-list-plus' : 'i-lucide-arrow-up'"
+                size="sm"
+                :variant="isBusy ? 'soft' : 'solid'"
+                :loading="sending"
+                :disabled="!input.trim() || !session.worktree.exists"
+                @click="onSend"
+              />
+              <!-- While it is working, the other useful button is the one that stops it -->
               <UButton
                 v-if="isBusy"
                 label="Stop"
@@ -1665,28 +1813,20 @@ const totalChanges = computed(() => {
                 @click="onStop"
               />
               <UButton
-                v-else
-                label="Send"
-                icon="i-lucide-arrow-up"
-                size="sm"
-                :loading="sending"
-                :disabled="!input.trim() || !session.worktree.exists"
-                @click="onSend"
-              />
-              <UButton
                 icon="i-lucide-slash"
                 size="sm"
                 variant="ghost"
                 color="neutral"
                 :title="`${commands.length} commands available`"
                 aria-label="Show commands"
-                :disabled="isBusy"
                 @click="() => { paletteOpen = !paletteOpen }"
               />
             </div>
 
             <!-- Said out loud, because the shortcut changed and muscle memory has not -->
-            <p v-if="!isBusy" class="type-meta pt-1.5">↵ Send · ⇧↵ New line</p>
+            <p class="type-meta pt-1.5">
+              {{ isBusy ? '↵ Queue for the next turn' : '↵ Send' }} · ⇧↵ New line
+            </p>
           </div>
         </div>
       </section>

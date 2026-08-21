@@ -298,7 +298,10 @@ export function SessionPane({
     setPendingInput(value)
     const ok = await jobs.run('send', null, async () => {
       const result = await api.send(id, value)
-      setRunId(result.runId)
+      // Absent when the session was already working and kept the message
+      // instead: there is no run to follow yet, and the one that is running is
+      // already being followed.
+      if (result.runId) setRunId(result.runId)
     })
     if (ok) {
       setDraft(draftKey, '')
@@ -499,6 +502,10 @@ export function SessionPane({
       ? `checks ${session.check.status}${session.checkStale ? ', stale' : ''} ${compactAge(session.check.at)}`
       : null,
     session.trust && session.trust !== 'readonly' ? `trust: ${session.trust}` : null,
+    // Typed during a turn and waiting for it: said here because the composer
+    // takes it without comment, and an instruction with no visible effect reads
+    // as one that went nowhere.
+    session.queued?.length ? `${session.queued.length} queued` : null,
     connected ? null : 'reconnecting…',
   ].filter(Boolean).join(' · ')
 

@@ -10,6 +10,9 @@ import { permissionModeFor } from './trust'
 import { ensureTranscriptFor } from './transcripts'
 import { checkBudget } from './budget'
 import { withRunSlot } from './runQueue'
+import {
+  clearQueue, queueMessage, requeueMessage, takeQueuedMessage, type QueuedMessage,
+} from './sessionQueue'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
@@ -77,6 +80,114 @@ export function turnRefusal(session: Session): { error: string; message: string 
   }
 
   return null
+}
+
+/**
+ * Whether this session's last turn is still going.
+ *
+ * Read from the run rather than from `session.status`, because the status is a
+ * field somebody has to remember to write and the run is the thing that is
+ * actually alive. Both the refusal in `startTurn` and the queue depend on the
+ * same answer, so there is one of them.
+ */
+export async function isTurnRunning(session: Session): Promise<boolean> {
+  const lastRunId = session.runIds.at(-1)
+  if (!lastRunId) return false
+
+  const previous = getActive(lastRunId)?.run ?? await readRun(lastRunId)
+  return !!previous && (previous.status === 'running' || previous.status === 'queued')
+}
+
+/**
+ * Start the next thing you typed while it was working, if there is one.
+ *
+ * Called when a turn ends and when a message is queued into a session that
+ * turns out to be free after all. Returns the run id it started, or null when
+ * there was nothing to send or nothing it could do with it.
+ *
+ * One message per call, oldest first. Queued messages are separate turns rather
+ * than one concatenated prompt: they were written minutes apart about different
+ * things, and a transcript that shows them as one paragraph loses which answer
+ * belonged to which instruction.
+ *
+ * Never throws. Everything that calls it is either detached from a turn that
+ * has already been reported or is doing this on the side of answering something
+ * else, and neither has anywhere useful to put an error.
+ */
+export async function flushQueue(sessionId: string): Promise<string | null> {
+  try {
+    const session = await findSession(sessionId)
+    if (!session?.queued?.length) return null
+
+    // Closed, or its workspace is gone. Nothing queued is ever going to send,
+    // so the queue is dropped rather than left claiming otherwise.
+    if (turnRefusal(session)) {
+      await clearQueue(sessionId)
+      return null
+    }
+
+    // Taken only once it is clear there is somewhere for it to go: taking first
+    // and putting it back is the same thing with a window in it where the
+    // message is on neither side.
+    if (await isTurnRunning(session)) return null
+
+    const next = await takeQueuedMessage(sessionId)
+    if (!next) return null
+
+    try {
+      return await startTurn(session, next.text)
+    } catch {
+      await requeueMessage(sessionId, next)
+      return null
+    }
+  } catch (e) {
+    console.error('[sessionQueue] could not send the next queued message', e)
+    return null
+  }
+}
+
+/**
+ * Send an instruction, or hold it until the session is free.
+ *
+ * The decision is made here rather than in the page because the page's idea of
+ * whether a session is busy is however old its last load was — and a composer
+ * that decides for itself either refuses a message the session would have
+ * taken, or sends one into a running turn and is told 409 for its trouble.
+ */
+export async function sendOrQueue(
+  session: Session,
+  input: string,
+): Promise<{ runId: string; queued?: undefined } | { queued: QueuedMessage; runId?: undefined }> {
+  const refusal = turnRefusal(session)
+  if (refusal) throw createError({ statusCode: 409, data: refusal })
+
+  /**
+   * Anything already waiting has to go first, even when the session is free.
+   *
+   * A queue left over from a turn you stopped is still a queue: sending
+   * straight past it would put the sentence you typed ten minutes ago after
+   * the one you typed just now, which is not what either of them meant.
+   */
+  const waiting = session.queued?.length ?? 0
+  if (!waiting && !await isTurnRunning(session)) {
+    return { runId: await startTurn(session, input) }
+  }
+
+  const queued = await queueMessage(session.id, input)
+  if (!queued) throw createError({ statusCode: 400, message: 'input is required' })
+
+  /**
+   * Sends the front of the queue if the session is free — which is both how a
+   * message added to a standing queue on an idle session gets going, and how
+   * the window between the check above and the write is closed: a turn that
+   * ended inside it ran its own flush before this message existed, so nothing
+   * would be coming back for it.
+   *
+   * Race-free either way: `takeQueuedMessage` is atomic, so of two flushers
+   * one gets the message and the other gets null.
+   */
+  const runId = await flushQueue(session.id)
+  return runId ? { runId } : { queued }
 }
 
 /**
@@ -154,15 +265,13 @@ export async function startTurn(
 
   // A second turn while one is still running would interleave two agents in
   // the same worktree, which is the exact problem sessions exist to prevent.
-  const lastRunId = session.runIds.at(-1)
-  if (lastRunId) {
-    const previous = getActive(lastRunId)?.run ?? await readRun(lastRunId)
-    if (previous && (previous.status === 'running' || previous.status === 'queued')) {
-      throw createError({
-        statusCode: 409,
-        data: { error: 'session_busy', message: 'This session is still working. Wait for it to finish or stop it.' },
-      })
-    }
+  // Typing during a turn is not refused any more — it queues, see `sendOrQueue`
+  // — but this stays as the guarantee underneath that.
+  if (await isTurnRunning(session)) {
+    throw createError({
+      statusCode: 409,
+      data: { error: 'session_busy', message: 'This session is still working. Wait for it to finish or stop it.' },
+    })
   }
 
   // Refused before the workspace is touched and before anything is spent, so
@@ -252,6 +361,28 @@ export async function startTurn(
 
       await announceTurn(session.id, session.title, finished, Date.now() - startedAt)
 
+      /**
+       * Anything typed during the turn goes now, before the checks below, so
+       * what it waits for is the turn you were watching and not a test suite
+       * after it.
+       *
+       * Only after a turn that finished, though. The two other endings are both
+       * reasons to hold on to what you wrote:
+       *
+       *   - Stopping is the one moment you are most certainly at the keyboard
+       *     and most certainly changing your mind. Having your own queued
+       *     sentence fire into the mess you just halted is the opposite of what
+       *     the button meant.
+       *   - A turn that failed usually failed for a reason the next turn will
+       *     hit as well — the conversation would not resume, the day's budget is
+       *     spent — and a queue of three would empty itself into three
+       *     identical failures without anybody being asked.
+       *
+       * Either way it stays queued, the page says why, and sending it anyway is
+       * one click.
+       */
+      const queuedRun = finished?.status === 'completed' ? await flushQueue(session.id) : null
+
       // Detached: the checks outlast the turn by minutes, and the session is
       // idle and usable throughout. The verdict lands on the record when it
       // arrives, and may start the next turn on its own.
@@ -259,7 +390,12 @@ export async function startTurn(
       // A turn you stopped by hand does not lead anywhere. You interrupted it
       // deliberately, and having it immediately restart itself to fix what it
       // was halfway through is the opposite of what stopping means.
-      if (finished?.status !== 'cancelled') {
+      //
+      // Nor does a turn with another one already running behind it: the checks
+      // would be a ten-minute suite over a workspace being edited underneath
+      // them, and a verdict about a state nobody will ever see again. The turn
+      // that queued behind this one runs them at its own end.
+      if (finished?.status !== 'cancelled' && !queuedRun) {
         void verifySessionAfterTurn(session.id, fingerprintBefore)
           .then(check => actOnVerdict(session.id, check))
       }

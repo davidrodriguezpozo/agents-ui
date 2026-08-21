@@ -1,13 +1,17 @@
 import { findSession } from '../../../utils/sessions'
-import { startTurn } from '../../../utils/sessionTurn'
+import { sendOrQueue } from '../../../utils/sessionTurn'
 
 /**
- * Send a turn to a session.
+ * Send a turn to a session, or queue it behind the one still running.
  *
  * Each turn is a fresh detached run pointed at the session's worktree and
  * resumed onto its SDK session, which is how continuity works — the SDK has no
  * long-lived handle of its own. Everything the run subsystem already does
  * (streaming, replay, permissions, persistence) applies unchanged.
+ *
+ * A session already working keeps the message instead of refusing it, and sends
+ * it the moment the turn ends. The reply says which of the two happened, so the
+ * page can attach to a run or draw a waiting message without guessing.
  */
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -22,5 +26,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, message: `Session not found: ${id}` })
   }
 
-  return { runId: await startTurn(session, body.input), sessionId: session.id }
+  const result = await sendOrQueue(session, body.input)
+
+  return { ...result, sessionId: session.id }
 })
