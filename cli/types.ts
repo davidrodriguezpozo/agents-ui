@@ -60,6 +60,18 @@ export interface Session {
   inCurrentProject: boolean
   /** One sentence about what it did, when the server has written one. */
   summary?: { text: string }
+  /**
+   * What was typed while a turn was running, waiting its turn. Empty or absent
+   * in the ordinary case — see `server/utils/sessionQueue.ts`.
+   */
+  queued?: QueuedMessage[]
+}
+
+/** Something said to a working session, held until the turn ends. */
+export interface QueuedMessage {
+  id: string
+  text: string
+  at: number
 }
 
 export interface SessionTurn {

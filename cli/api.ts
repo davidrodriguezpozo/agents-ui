@@ -7,6 +7,7 @@ import type {
   PrPreview,
   ProjectState,
   PullsReading,
+  QueuedMessage,
   RitualHistory,
   RunDetail,
   RunQuery,
@@ -44,8 +45,13 @@ export function createApi(client: StudioClient) {
         body,
       }),
 
+    /**
+     * Say something to a session. A session already working keeps it and sends
+     * it when the turn ends, which is why `runId` is optional: what comes back
+     * is either the turn that started or the message now waiting.
+     */
     send: (id: string, input: string) =>
-      client.request<{ runId: string; sessionId: string }>(`${at(id)}/message`, {
+      client.request<{ runId?: string; queued?: QueuedMessage; sessionId: string }>(`${at(id)}/message`, {
         method: 'POST',
         body: { input },
       }),

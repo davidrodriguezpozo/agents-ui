@@ -6,6 +6,7 @@ import type { SessionSummary } from './sessionSummary'
 import type { SessionLanded } from './landed'
 import type { SessionRepair } from './sessionRepair'
 import type { SessionPrWatch } from './prWatch'
+import type { QueuedMessage } from './sessionQueue'
 import type { TrustLevel } from './trust'
 
 /**
@@ -133,6 +134,14 @@ export interface Session {
    * know yet — see the note the session offers to send first.
    */
   adoptedAt?: number
+  /**
+   * What was typed while a turn was running, waiting its turn.
+   *
+   * Kept on the record rather than in the page because the turn being waited
+   * for outlasts the tab — see `sessionQueue.ts` for the whole of it. Drained
+   * one message per turn, oldest first.
+   */
+  queued?: QueuedMessage[]
 }
 
 /**
