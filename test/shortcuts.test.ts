@@ -4,7 +4,7 @@ import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   ACTION_SHORTCUTS, EDITOR_SHORTCUTS, JUMP_SHORTCUTS, LIST_SHORTCUTS, PALETTE_SHORTCUTS,
-  NAV_SHORTCUTS, chordHint, chordTarget, isBareKey, isTerminalTarget, isTypingTarget, navShortcuts,
+  NAV_SHORTCUTS, chordHint, chordTarget, isBareKey, isRailToggle, isTerminalTarget, isTypingTarget, navShortcuts,
 } from '~/utils/shortcuts'
 
 describe('the chord table', () => {
@@ -112,6 +112,28 @@ describe('modifiers', () => {
 
   it('does not count shift, because `?` is one', () => {
     expect(isBareKey(press({ shiftKey: true }))).toBe(true)
+  })
+
+  /*
+   * The rail's key is the exception, and it has to be: `\` is a bare key on a US
+   * keyboard and an Option key on every ISO one, so the guard above hid the only
+   * control that brings a collapsed rail back from everybody not typing on an
+   * American layout.
+   */
+  it('lets the rail toggle through with ⌥ held, because ISO layouts type it that way', () => {
+    expect(isRailToggle(press({ key: '\\' }))).toBe(true)
+    expect(isRailToggle(press({ key: '\\', altKey: true }))).toBe(true)
+    expect(isRailToggle(press({ key: '\\', altKey: true, shiftKey: true }))).toBe(true)
+  })
+
+  it('still leaves ⌘\\ and ⌃\\ to the browser and the shell', () => {
+    expect(isRailToggle(press({ key: '\\', metaKey: true }))).toBe(false)
+    expect(isRailToggle(press({ key: '\\', ctrlKey: true }))).toBe(false)
+  })
+
+  it('is the backslash and nothing else', () => {
+    expect(isRailToggle(press({ key: '|', altKey: true }))).toBe(false)
+    expect(isRailToggle(press({ key: 'ç' }))).toBe(false)
   })
 })
 

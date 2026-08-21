@@ -12,6 +12,17 @@ const OPEN_KEY = 'agents-ui:rail-open'
 export const RAIL_WIDTH = 264
 
 /**
+ * The widest window that puts the rail over the pane instead of beside it.
+ *
+ * The breakpoint itself lives in the `.rail` media query in `main.css` and in
+ * the `lg:hidden` controls in `layouts/work.vue` — this is the same number,
+ * named, because `toggle` has to know which of the two states `\` means on the
+ * window in front of you. Tailwind's `lg` is 1024px, so the drawer is everything
+ * below it.
+ */
+export const RAIL_DRAWER_MAX = 1023
+
+/**
  * Whether the session rail is showing, and the key that changes it.
  *
  * Remembered, for the same reason the sidebar's collapsed state and the
@@ -59,7 +70,21 @@ export function useWorkRail() {
     }
   }
 
+  /**
+   * What `\` does, which depends on which shape the rail is in.
+   *
+   * Below `lg` the column does not exist: the rail is a drawer, held open by
+   * `drawerOpen`, and `open` moves something that is off-canvas either way. So
+   * the key read as dead on exactly the windows where the rail has no column to
+   * come back to — and where, once the drawer had been dismissed, the only way
+   * back was the button that a wider window hides.
+   */
   function toggle() {
+    if (import.meta.client && window.matchMedia(`(max-width: ${RAIL_DRAWER_MAX}px)`).matches) {
+      drawerOpen.value = !drawerOpen.value
+      return
+    }
+
     setOpen(!open.value)
   }
 

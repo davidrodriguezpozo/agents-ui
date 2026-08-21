@@ -206,6 +206,22 @@ export function isBareKey(event: KeyboardEvent): boolean {
 }
 
 /**
+ * Whether this keypress is the rail's toggle.
+ *
+ * `\` is not a bare key on every keyboard. An ISO layout puts it behind Option —
+ * ⌥ç on Spanish, ⌥⇧7 on German — so `isBareKey` threw it away, and the one
+ * control that gets a hidden rail back was unreachable on any layout that is not
+ * American. What it typed is what matters, not which modifier the OS needed to
+ * type it, so this reads `key` and forgives ⌥.
+ *
+ * ⌘ and ⌃ are not forgiven. Those belong to the browser and the shell, and no
+ * layout composes a backslash with either.
+ */
+export function isRailToggle(event: KeyboardEvent): boolean {
+  return event.key === '\\' && !event.metaKey && !event.ctrlKey
+}
+
+/**
  * How long a half-pressed chord waits for its second key.
  *
  * Long enough to be a two-finger sequence rather than a race, short enough that
