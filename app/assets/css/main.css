@@ -1176,6 +1176,36 @@ body {
 }
 
 /**
+ * The row inside it, and the container everything in it measures itself against.
+ *
+ * `inline-size` rather than `size`: the height is `--header-h` and never depends
+ * on the contents, so containing it would buy nothing and cost the ability to
+ * grow if a page ever needs to.
+ */
+.page-header__row {
+  container: page-header / inline-size;
+}
+
+/**
+ * The workbench pane strip — the session's Changes / Files / Preview / Terminal.
+ *
+ * It sits in the header's `#right` cluster, which does not shrink, and its five
+ * labels are the widest thing in there. That was survivable while the pane had
+ * the whole window; the rail took 264px of it, and the same header stopped
+ * fitting. Which did not stay in the header: the shell's `<main>` is the scroll
+ * container for the rail *and* the page, so a header nobody could fit put a
+ * horizontal scrollbar under the whole work surface, rail included.
+ *
+ * Icons only, below the width where all of it fits. The tab keeps its title, so
+ * what it opens is still one hover away.
+ */
+@container page-header (max-width: 960px) {
+  .pane-tab__label {
+    display: none;
+  }
+}
+
+/**
  * Anchor targets clear the sticky header. Without this, jumping to a settings
  * section puts its heading underneath the header rather than below it.
  */

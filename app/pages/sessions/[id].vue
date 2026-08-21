@@ -1176,11 +1176,17 @@ const totalChanges = computed(() => {
               background: pane === tab.id ? 'var(--surface-raised)' : 'transparent',
               color: pane === tab.id ? 'var(--accent)' : 'var(--text-disabled)',
             }"
-            :title="pane === tab.id ? 'Close' : tab.label"
+            :title="pane === tab.id ? `Close ${tab.label}` : tab.label"
+            :aria-label="tab.label"
             @click="showPane(tab.id)"
           >
             <UIcon :name="tab.icon" class="size-3.5 shrink-0" />
-            <span>{{ tab.label }}</span>
+            <!--
+              Dropped for the icon on a header too narrow to hold the strip and
+              the actions beside it — see `.pane-tab__label`. The name is what
+              the title says, so nothing is lost but the width.
+            -->
+            <span class="pane-tab__label">{{ tab.label }}</span>
           </button>
         </div>
 
