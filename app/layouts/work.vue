@@ -74,7 +74,21 @@ onUnmounted(stopWatching)
       />
     </Transition>
 
-    <div class="flex-1 min-w-0">
+    <!--
+      `overflow-x-clip` is what keeps the rail still.
+
+      The shell's `<main>` is one scroll container for both columns, and
+      `overflow-y: auto` on it makes the *other* axis scroll too the moment
+      anything is wider than the pane. Nothing here is sticky sideways, so the
+      rail slid out of view along with the page — a session whose header did not
+      quite fit took the list of sessions off screen with it.
+
+      `clip` rather than `hidden`: hidden would make this a scroll container of
+      its own, and the page header's `sticky top-0` sticks to whichever ancestor
+      scrolls. It would then stick to a box that never scrolls, and scroll away
+      with the transcript.
+    -->
+    <div class="flex-1 min-w-0 overflow-x-clip">
       <!--
         The way back to the rail on a window too narrow to hold it. Offset past
         the shell's own hamburger below `md`, where both are on screen and both

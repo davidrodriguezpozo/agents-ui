@@ -40,8 +40,16 @@ withDefaults(defineProps<{
     :class="overlay ? 'absolute top-0 left-0 right-0' : 'sticky top-0'"
     :style="{ height: 'var(--header-h)' }"
   >
+    <!--
+      A query container, so the controls a page hangs off `#right` can answer to
+      how much header there actually is. Viewport media queries cannot: the
+      sidebar collapses to 56px and the work rail can be put away entirely, so
+      the same window gives this row anywhere from ~560px to the full width, and
+      a rule keyed to the window would drop labels on a header with room to
+      spare — or keep them on one without.
+    -->
     <div
-      class="h-full flex items-center gap-3"
+      class="h-full flex items-center gap-3 page-header__row"
       :class="bleed || overlay ? 'px-8' : ['page-container', { 'page-container--measure': measure }]"
     >
       <slot name="leading" />
