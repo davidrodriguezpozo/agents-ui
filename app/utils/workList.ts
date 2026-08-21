@@ -301,3 +301,57 @@ export function statusCounts(items: WorkItem[]): Record<WorkStatus, number> {
 export function removableRuns(items: WorkItem[]): WorkItem[] {
   return items.filter(item => item.runId && item.status !== 'running')
 }
+
+/**
+ * The rail's groups, in the order they are worth reading.
+ *
+ * Not `WORK_STATUS` and not `STATUS_RANK`, though it agrees with both. Those are
+ * a row of filter chips and a sort comparator; this is a set of headings, and a
+ * heading is written differently from a chip — "Needs you" above four rows, not
+ * "needs you" on a button you press.
+ *
+ * The order is urgency, which is deliberately *not* the order the statuses are
+ * declared in: something asking for a decision comes before something that is
+ * merely still going, because scrolling past the first one is a mistake and
+ * scrolling past the second one is not.
+ *
+ * Every status the in-flight tab owns has to appear here exactly once — see the
+ * guard in `test/workRail.test.ts`. A status missing from this table would be a
+ * session the rail silently never shows, which is the worst failure available to
+ * a list whose whole job is that nothing gets lost.
+ */
+export const RAIL_GROUPS: { status: WorkStatus; title: string }[] = [
+  { status: 'needs-you', title: 'Needs you' },
+  { status: 'running', title: 'Working' },
+  { status: 'yours', title: 'Your turn' },
+]
+
+export interface RailGroup {
+  status: WorkStatus
+  title: string
+  items: WorkItem[]
+}
+
+/**
+ * The in-flight work, grouped for the rail.
+ *
+ * Takes the whole list rather than a pre-filtered one and does the in-flight cut
+ * itself, so the rail cannot end up disagreeing with the tab about what "in
+ * flight" means. Empty groups are dropped: a heading with nothing under it is a
+ * claim that there is something there.
+ *
+ * Order within a group is left as given — `buildWorkList` has already sorted by
+ * urgency and then recency, and re-sorting here would quietly overrule it.
+ */
+export function railGroups(items: WorkItem[]): RailGroup[] {
+  const inFlight = onTab(items, 'flight')
+
+  return RAIL_GROUPS
+    .map(group => ({ ...group, items: inFlight.filter(item => item.status === group.status) }))
+    .filter(group => group.items.length > 0)
+}
+
+/** How many rows the rail is showing, for the count beside its heading. */
+export function railCount(items: WorkItem[]): number {
+  return onTab(items, 'flight').length
+}

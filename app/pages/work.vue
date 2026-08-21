@@ -3,26 +3,48 @@ import { errorMessage, errorSessionId } from '~/utils/errors'
 import { findSimilar } from '~/utils/similarSession'
 import { isSendKey } from '~/utils/keys'
 import type { RunQuery } from '~/composables/useRuns'
+import { RUNS_QUERY } from '~/composables/useWorkList'
 import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type { Session } from '~/composables/useSessions'
-import type { WallPull } from '~/utils/wall'
 import {
-  buildWorkList, onTab, removableRuns, statusCounts, tabCounts as countByTab, tabOf,
+  buildWorkList, onTab, removableRuns, statusCounts, tabOf,
   WORK_ORIGIN, WORK_STATUS,
-  type WorkItem, type WorkOrigin, type WorkStatus, type WorkTab,
+  type WorkItem, type WorkOrigin, type WorkStatus,
 } from '~/utils/workList'
 
-const {
-  sessions, here, elsewhere, workingCount, needsYouCount, loading,
-  fetchAll, create, createMany, startFrom,
-} = useSessions()
+/**
+ * The rail beside this page is what the in-flight half of it used to be. See
+ * `layouts/work.vue`.
+ */
+definePageMeta({ layout: 'work' })
+
+const { needsYouCount, create, createMany, startFrom, fetchAll } = useSessions()
 const { fetchAll: fetchWorktrees } = useWorktrees()
-const { runs, fetchRuns, hideRuns } = useRuns()
+const { fetchRuns, hideRuns } = useRuns()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
-const { projects, nameFor, activate, addProject, ensureLoaded: ensureProjectsLoaded } = useProjects()
+const { projects, nameFor, addProject } = useProjects()
 const router = useRouter()
 const toast = useToast()
+
+/**
+ * The list, shared with the rail.
+ *
+ * The fetching, the poll and the scope live in `useWorkList` now, because the
+ * rail shows the same work from the same data and the two have to agree — a rail
+ * saying a session is blocked next to a page that has not noticed is worse than
+ * either on its own. What is left here is what this page does *about* the work.
+ */
+const {
+  sessions, visibleSessions, runs, loading,
+  scope, runsQuery, tabCounts, pullFor,
+} = useWorkList()
+
+/**
+ * Which of this page's two jobs is on screen. The in-flight rows are the rail's
+ * now, so what is left is starting something and reading what finished.
+ */
+const { pane } = useWorkPane()
 
 /**
  * The shell docked to the bottom of this page.
@@ -40,49 +62,6 @@ const {
 
 bindTerminalShortcut()
 
-/**
- * Which pull request each session's work is behind.
- *
- * From the wall's reading rather than a request of its own: it covers every
- * project, is held for a minute on the server, and joins concurrent callers — so
- * a page with forty-five sessions on it costs the same as the Fleet screen
- * already does, and nothing here asks GitHub about a branch one at a time.
- *
- * What it will not know: a pull request that is neither yours nor one you were
- * asked to review, because that reading is about work with your name on it. A
- * card with no pull request to show says nothing, which is what it did before.
- */
-const { reading: pullsReading, watchPulls } = useWallPulls()
-watchPulls()
-
-const pullByBranch = computed(() => {
-  const map = new Map<string, WallPull>()
-
-  // Both lists, because a session can be behind a pull request you opened *or*
-  // one you were asked to look at — a review session is the second kind.
-  for (const pull of [...pullsReading.value.mine, ...pullsReading.value.reviewing]) {
-    if (pull.headBranch) map.set(`${pull.repoDir}\u0000${pull.headBranch}`, pull)
-  }
-
-  return map
-})
-
-/**
- * The pull request for one session.
- *
- * Keyed on the repository as well as the branch: five projects on one machine
- * routinely share branch names — `main`, and every `fix/typo` anybody has ever
- * pushed — and a card showing another repository's pull request would be a worse
- * lie than showing none.
- *
- * A drifted session is looked up by the branch it is *really* on, since that is
- * where its commits are and therefore which pull request they belong to.
- */
-function pullFor(session: Session): WallPull | null {
-  const branch = session.driftedTo || session.branch
-  return pullByBranch.value.get(`${session.repoDir}\u0000${branch}`) ?? null
-}
-
 const prompt = ref('')
 const creating = ref(false)
 
@@ -97,9 +76,9 @@ const promptBox = ref<HTMLTextAreaElement | null>(null)
 const route = useRoute()
 
 async function focusComposer() {
-  // The composer only exists on the in-flight tab, so `n` from History has to
-  // move you there first rather than focusing nothing.
-  tab.value = 'flight'
+  // The composer only exists on the Start view, so `n` from History has to move
+  // you there first rather than focusing nothing.
+  pane.value = 'start'
   await nextTick()
   promptBox.value?.focus()
   promptBox.value?.scrollIntoView({ block: 'center' })
@@ -246,7 +225,6 @@ async function onStartFrom() {
     startingFrom.value = false
   }
 }
-let poll: ReturnType<typeof setInterval> | null = null
 
 const adopting = ref<string | null>(null)
 const showTranscripts = ref(false)
@@ -277,41 +255,12 @@ async function onAdopt(sdkSessionId: string) {
   }
 }
 
-/**
- * Set while a poll is in the air, so the next tick skips rather than stacking.
- *
- * The list costs a few `git` invocations per session, and with enough sessions
- * open it can take longer to build than the gap between polls. Firing anyway
- * meant each tick started before the last had answered, which is self-
- * sustaining: the overlap is what made it slow. A skipped tick costs four
- * seconds of freshness; not skipping cost the whole app.
- */
-let polling = false
-
 onMounted(async () => {
-  await Promise.all([
-    fetchAll(), fetchWorktrees(), fetchTranscripts(), ensureProjectsLoaded(),
-    fetchRuns(runsQuery.value), countRemoved(),
-  ])
-
-  // Only poll while something could change on its own — but that now includes a
-  // ritual firing, which no session on this page would report.
-  poll = setInterval(async () => {
-    if (polling) return
-    const live = sessions.value.some(s => s.activity === 'working')
-      || runs.value.some(r => r.status === 'running' || r.status === 'queued')
-    if (!live) return
-
-    polling = true
-    try {
-      await Promise.all([fetchAll(), fetchRuns({ ...runsQuery.value, q: search.value.trim() })])
-    } finally {
-      polling = false
-    }
-  }, 4000)
+  // The sessions, the runs, the worktrees and the projects are the layout's — it
+  // owns them because the rail needs them on every route of this surface, not
+  // just this one. These two are only ever read here.
+  await Promise.all([fetchTranscripts(), countRemoved()])
 })
-
-onUnmounted(() => { if (poll) clearInterval(poll) })
 
 async function onCreate() {
   const value = prompt.value.trim()
@@ -341,13 +290,6 @@ async function onCreate() {
   }
 }
 
-/**
- * Which projects the list covers.
- *
- * Kept in shared state rather than in the component, so going into a session
- * and coming back does not quietly narrow the view again — a person who asked
- * to see everything meant it for longer than one navigation.
- */
 /**
  * A project that is not a git repository.
  *
@@ -424,18 +366,6 @@ const batchDuplicates = computed(() =>
     .filter((entry): entry is { line: string; hit: NonNullable<typeof entry.hit> } => Boolean(entry.hit)),
 )
 
-const scope = useState<'here' | 'all'>('sessions-scope', () => 'here')
-
-/**
- * Which half of the page you are on.
- *
- * Shared state for the same reason `scope` is: opening a session and coming back
- * should not quietly put you on the other tab. Defaults to what is happening
- * now, because that is what somebody who typed /work came for — history is a
- * thing you go and look at.
- */
-const tab = useState<WorkTab>('work-tab', () => 'flight')
-
 watch(() => route.query.new, (wants) => {
   if (!wants) return
   focusComposer()
@@ -443,50 +373,25 @@ watch(() => route.query.new, (wants) => {
 }, { immediate: true })
 
 /**
- * A status chip is only meaningful on the tab that owns it, so choosing one on
- * the other tab moves you there rather than filtering to nothing.
+ * The status chips, and what they filter.
+ *
+ * Only the History statuses are on offer now: the in-flight ones belong to the
+ * rail, which groups by them rather than filtering on them. A chip here for
+ * "running" would filter a list that, by construction, has nothing running in
+ * it.
  */
 function chooseStatus(value: WorkStatus) {
-  if (status.value === value) {
-    status.value = null
-    return
-  }
-  status.value = value
-  tab.value = tabOf(value)
+  status.value = status.value === value ? null : value
 }
-
-// With no project selected there is no "here" to narrow to, and the toggle
-// would be a control with one working position.
-watchEffect(() => { if (!workingDir.value) scope.value = 'all' })
-
-/** A session nobody has answered is the reason to look at another project. */
-function needsYou(list: Session[]) {
-  return list.filter(
-    s => s.activity === 'awaiting-permission'
-      || (s.activity === 'idle' && s.check?.status === 'failing'),
-  ).length
-}
-
-const elsewhereNeedsYou = computed(() => needsYou(elsewhere.value))
 
 /**
- * The work list: sessions and runs, filtered together.
+ * What has finished, filtered together.
  *
  * Runs whose source is a session are dropped by `buildWorkList` — that session
  * is its own row. `useRuns` is asked for the rest, and the search reaches the
  * server because that list is capped there; searching one loaded page of it
  * would silently miss everything past the cap.
  */
-/**
- * Runs a session owns are excluded on the server, not here.
- *
- * On a real machine 49 of the 50 most recent runs were turns of a session that
- * is already its own row, so filtering client-side spent the whole cap on rows
- * that were then discarded — and a ritual run from yesterday was invisible
- * behind fifty turns of one session.
- */
-const RUNS_QUERY: RunQuery = { exclude: ['session'], limit: 50, hidden: 'exclude' }
-
 /**
  * Looking at what has been taken off the list, rather than at the list.
  *
@@ -498,7 +403,6 @@ const RUNS_QUERY: RunQuery = { exclude: ['session'], limit: 50, hidden: 'exclude
 const REMOVED_QUERY: RunQuery = { exclude: ['session'], limit: 50, hidden: 'only' }
 
 const viewingRemoved = ref(false)
-const runsQuery = computed(() => (viewingRemoved.value ? REMOVED_QUERY : RUNS_QUERY))
 
 const status = ref<WorkStatus | null>(null)
 const origin = ref<WorkOrigin | null>(null)
@@ -510,42 +414,46 @@ function clearFilters() {
   status.value = null
   origin.value = null
   search.value = ''
+  void applyRunsQuery()
 }
 
-const visibleSessions = computed(() => (scope.value === 'here' ? here.value : sessions.value))
+/**
+ * What the runs half is asked for, published to the poll.
+ *
+ * `runsQuery` is shared state because the poll in `useWorkList` fires every four
+ * seconds and this page has two views of the same list. A poll hard-coded to the
+ * ordinary query would wipe the removed-rows view out from under the reader on
+ * the next tick.
+ */
+async function applyRunsQuery() {
+  const base = viewingRemoved.value ? REMOVED_QUERY : RUNS_QUERY
+  const q = search.value.trim()
+  runsQuery.value = q ? { ...base, q } : { ...base }
+  await fetchRuns(runsQuery.value)
+}
 
-/** Everything, both tabs, unfiltered — what the tab counts are read from. */
-const everything = computed(() => buildWorkList({
-  sessions: visibleSessions.value,
-  runs: runs.value,
-}))
-
-/** This tab's pile, unfiltered, so the chip counts describe it rather than a slice. */
-const allWork = computed(() => onTab(everything.value, tab.value))
+/** This view's pile, unfiltered, so the chip counts describe it rather than a slice. */
+const allWork = computed(() => onTab(
+  buildWorkList({ sessions: visibleSessions.value, runs: runs.value }),
+  'history',
+))
 
 const work = computed(() => onTab(
   buildWorkList(
     { sessions: visibleSessions.value, runs: runs.value },
     { status: status.value, origin: origin.value, query: search.value },
   ),
-  tab.value,
+  'history',
 ))
 
-const tabCounts = computed(() => countByTab(everything.value))
-
 const statusChips = computed(() => {
-  const counts = statusCounts(everything.value)
+  const counts = statusCounts(allWork.value)
   return WORK_STATUS
-    .filter(s => tabOf(s.value) === tab.value)
+    .filter(s => tabOf(s.value) === 'history')
     .map(s => ({ ...s, count: counts[s.value] }))
     // A chip with nothing behind it is a dead end, unless it is the one you have
     // already pressed — removing that under your cursor is worse.
     .filter(s => s.count > 0 || status.value === s.value)
-})
-
-// A filter left behind on the tab that owned it hides the whole of this one.
-watch(tab, () => {
-  if (status.value && tabOf(status.value) !== tab.value) status.value = null
 })
 
 /**
@@ -569,7 +477,7 @@ async function removeRuns(items: WorkItem[], label: string) {
   try {
     const { changed, skipped } = await hideRuns(ids, true)
     await Promise.all([
-      fetchRuns({ ...runsQuery.value, q: search.value.trim() }),
+      applyRunsQuery(),
       // Without this the "N removed" way back stays at whatever it was on load,
       // and the only route to an undo is a toast that expires.
       countRemoved(),
@@ -596,10 +504,7 @@ async function restoreRuns(ids: string[]) {
   if (!ids.length) return
   try {
     await hideRuns(ids, false)
-    await Promise.all([
-      fetchRuns({ ...runsQuery.value, q: search.value.trim() }),
-      countRemoved(),
-    ])
+    await Promise.all([applyRunsQuery(), countRemoved()])
   } catch (e) {
     toast.add({ title: 'Could not put that back', description: errorMessage(e), color: 'error' })
   }
@@ -638,7 +543,7 @@ async function countRemoved() {
 async function toggleRemovedView() {
   viewingRemoved.value = !viewingRemoved.value
   confirmingClear.value = false
-  await fetchRuns({ ...runsQuery.value, q: search.value.trim() })
+  await applyRunsQuery()
   if (!viewingRemoved.value) await countRemoved()
 }
 
@@ -664,7 +569,7 @@ const emptySessionIds = computed(() =>
 let searchDebounce: ReturnType<typeof setTimeout> | null = null
 watch(search, () => {
   if (searchDebounce) clearTimeout(searchDebounce)
-  searchDebounce = setTimeout(() => { void fetchRuns({ ...runsQuery.value, q: search.value.trim() }) }, 200)
+  searchDebounce = setTimeout(() => { void applyRunsQuery() }, 200)
 })
 onUnmounted(() => { if (searchDebounce) clearTimeout(searchDebounce) })
 
@@ -700,18 +605,6 @@ async function closeEmpty(key: string, ids: string[]) {
     closing.value = false
   }
 }
-
-/**
- * Switching to the project a row belongs to.
- *
- * The list is no longer grouped by repository — a run has no repository to group
- * under, so grouping by one would have applied to half the rows. Sessions carry
- * their repo name on the card instead, and this is still how you go there.
- */
-async function switchTo(path: string) {
-  await activate(path)
-  scope.value = 'here'
-}
 </script>
 
 <template>
@@ -719,28 +612,10 @@ async function switchTo(path: string) {
     <PageHeader title="Work" measure>
       <template #trailing>
         <!--
-          Only worth a control when there is somewhere else to look. One project
-          means one possible answer, and a toggle with one position is furniture.
+          Counts what is on screen, which is only ever a list on History. On
+          Start it would be a number over a composer, describing something else.
         -->
-        <div
-          v-if="workingDir && elsewhere.length"
-          class="flex items-center gap-0.5 p-0.5 rounded-md"
-          style="background: var(--input-bg); border: 1px solid var(--border-subtle);"
-        >
-          <button
-            v-for="option in [{ value: 'here' as const, label: 'This project' }, { value: 'all' as const, label: 'All projects' }]"
-            :key="option.value"
-            class="px-2 py-0.5 rounded fs-micro font-medium transition-all"
-            :style="{
-              background: scope === option.value ? 'var(--accent-muted)' : 'transparent',
-              color: scope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
-            }"
-            @click="scope = option.value"
-          >
-            {{ option.label }}
-          </button>
-        </div>
-        <span v-if="allWork.length" class="type-mono-meta">{{ allWork.length }}</span>
+        <span v-if="pane === 'history' && allWork.length" class="type-mono-meta">{{ allWork.length }}</span>
         <SessionStatus
           v-if="needsYouCount"
           activity="awaiting-permission"
@@ -765,35 +640,35 @@ async function switchTo(path: string) {
     </PageHeader>
 
     <!--
-      Two tabs, because they are two jobs.
+      Two views, because they are two jobs — and neither of them is the list of
+      what is in flight any more, because that is the rail.
 
-      In flight is a thing you might interrupt or reply to: the composer, what is
-      running, what is stuck, what is waiting on a word from you, and the
-      workspaces they are sitting in. History is a thing you read: last night as
-      a picture, and every finished row underneath it. Held in one list the
-      finished rows win on volume — forty of them, and the two you could act on
-      at the bottom.
+      Start is where work begins: the composer, the other two ways in, and the
+      workspaces already cut. History is a thing you read: last night as a
+      picture, and every finished row underneath it.
 
-      "In flight" is not "a process is alive", and that distinction cost a
-      release: a session that answered a question, committed nothing and opened
-      no pull request was filed as finished, when the next thing due to happen
-      was you typing. The cut is whether the work is finished *with* — see
-      `TAB_STATUSES` and `isSettled`.
+      This used to be "In flight" and "History", and the first of those was the
+      in-flight rows themselves. Keeping the name once the rows had moved to the
+      rail would have left a tab called "In flight" with nothing in flight on it.
+      What has *not* changed is where the line falls: `TAB_STATUSES` and
+      `isSettled` still decide what counts as finished with, and the rail takes
+      everything on the other side of it.
     -->
     <div class="page-container page-container--measure pt-3">
       <div class="flex items-center gap-0.5 p-0.5 rounded-md w-fit" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
         <button
           v-for="option in [
-            { value: 'flight' as const, label: 'In flight', count: tabCounts.flight },
+            // Start has nothing to count — it is a composer, not a list.
+            { value: 'start' as const, label: 'Start', count: null as number | null },
             { value: 'history' as const, label: 'History', count: tabCounts.history },
           ]"
           :key="option.value"
           class="px-2.5 py-1 rounded fs-mono font-medium transition-all focus-ring flex items-center gap-1.5"
           :style="{
-            background: tab === option.value ? 'var(--accent-muted)' : 'transparent',
-            color: tab === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+            background: pane === option.value ? 'var(--accent-muted)' : 'transparent',
+            color: pane === option.value ? 'var(--accent)' : 'var(--text-disabled)',
           }"
-          @click="tab = option.value"
+          @click="pane = option.value"
         >
           {{ option.label }}
           <span v-if="option.count" class="font-mono fs-micro opacity-70">{{ option.count }}</span>
@@ -824,7 +699,7 @@ async function switchTo(path: string) {
         usually sitting one directory down.
       -->
       <div
-        v-if="notARepo && tab === 'flight'"
+        v-if="notARepo && pane === 'start'"
         class="order-1 rounded-lg p-4 space-y-3"
         style="background: var(--warning-wash); border: 1px solid var(--warning-edge);"
       >
@@ -869,7 +744,7 @@ async function switchTo(path: string) {
       </div>
 
       <!-- Start a session -->
-      <div v-if="workingDir && tab === 'flight'" class="order-3 space-y-1.5">
+      <div v-if="workingDir && pane === 'start'" class="order-3 space-y-1.5">
         <!-- One session, told what to do in the same breath -->
         <template v-if="!batchMode">
           <div class="flex gap-2 items-start">
@@ -1063,7 +938,7 @@ async function switchTo(path: string) {
       </div>
 
       <div
-        v-else-if="tab === 'flight'"
+        v-else-if="pane === 'start'"
         class="rounded-md px-4 py-3 flex items-start gap-3"
         style="background: var(--accent-muted); border: 1px solid var(--accent-glow);"
       >
@@ -1081,7 +956,7 @@ async function switchTo(path: string) {
         and it sat between the composer and the actual list of work. The header
         still says how many are there, which is the part worth seeing every time.
       -->
-      <div v-if="workingDir && transcripts.length && tab === 'flight'" class="order-4">
+      <div v-if="workingDir && transcripts.length && pane === 'start'" class="order-4">
         <button
           class="flex items-center gap-2 py-1 focus-ring rounded"
           @click="showTranscripts = !showTranscripts"
@@ -1126,7 +1001,7 @@ async function switchTo(path: string) {
         </div>
       </div>
 
-      <div v-if="loading && !sessions.length" class="order-5 space-y-1">
+      <div v-if="pane === 'history' && loading && !sessions.length" class="order-5 space-y-1">
         <SkeletonRow v-for="i in 3" :key="i" />
       </div>
 
@@ -1153,11 +1028,11 @@ async function switchTo(path: string) {
 
         It was on Now, where it was the third of five bands on a page whose job
         is "what needs me" — and a timeline of what already finished is the one
-        thing that never does. Here it is the heading of the tab it describes.
+        thing that never does. Here it is the heading of the view it describes.
       -->
-      <NightShift v-if="tab === 'history'" class="order-5" />
+      <NightShift v-if="pane === 'history'" class="order-5" />
 
-      <div class="order-5 space-y-3">
+      <div v-if="pane === 'history'" class="order-5 space-y-3">
         <div class="flex items-center gap-1.5 flex-wrap">
           <button
             v-for="chip in statusChips"
@@ -1219,7 +1094,7 @@ async function switchTo(path: string) {
           a clear whose reach you cannot predict is one nobody presses twice.
         -->
         <div
-          v-if="tab === 'history' && (emptySessionIds.length || clearable.length || removedCount || viewingRemoved)"
+          v-if="pane === 'history' && (emptySessionIds.length || clearable.length || removedCount || viewingRemoved)"
           class="flex items-center justify-between gap-3 flex-wrap"
         >
           <p v-if="viewingRemoved" class="type-detail ink-2">
@@ -1338,45 +1213,24 @@ async function switchTo(path: string) {
       </div>
 
 
+      <!--
+        Only History can be empty in a way worth saying. Start is a composer, and
+        an empty state over a text box you are about to type in would be telling
+        you that the thing you are doing has not happened yet.
+      -->
       <EmptyState
-        v-if="workingDir && !work.length && !hasFilters && !loading"
+        v-if="workingDir && pane === 'history' && !work.length && !hasFilters && !loading"
         class="order-5"
-        :icon="tab === 'flight' ? 'i-lucide-git-branch' : 'i-lucide-history'"
-        :title="tab === 'flight'
-          ? 'Nothing is running'
-          : (scope === 'here' ? 'Nothing has finished in this project' : 'Nothing has finished yet')"
-        :description="tab === 'flight'
-          ? 'Start a session above to give Claude its own copy of this project. It stays here while it works and while it is waiting on you, and moves to History once its work lands or you set it aside.'
-          : 'Sessions, rituals and commands land here once they have finished, with what each of them came to.'"
+        icon="i-lucide-history"
+        :title="scope === 'here' ? 'Nothing has finished in this project' : 'Nothing has finished yet'"
+        description="Sessions, rituals and commands land here once they have finished, with what each of them came to. What is still in flight is in the rail."
       />
 
       <!--
-        The way back to work happening somewhere else. Only worth saying when
-        the current view is hiding some of it.
-      -->
-      <button
-        v-if="scope === 'here' && elsewhere.length"
-        class="order-7 w-full flex items-center gap-2 px-3 py-2.5 rounded-md hover-row focus-ring"
-        style="border: 1px dashed var(--border-subtle);"
-        @click="scope = 'all'"
-      >
-        <UIcon name="i-lucide-folders" class="size-3.5 shrink-0 text-meta" />
-        <span class="type-detail">
-          {{ elsewhere.length }} session{{ elsewhere.length === 1 ? '' : 's' }} in other projects
-        </span>
-        <span
-          v-if="elsewhereNeedsYou"
-          class="type-meta"
-          style="color: var(--error);"
-        >{{ elsewhereNeedsYou }} needing you</span>
-        <span class="ml-auto type-meta ink-accent">Show</span>
-      </button>
-
-      <!--
-        Always visible on this tab, so worktrees never accumulate unnoticed. Not
+        Always visible on Start, so worktrees never accumulate unnoticed. Not
         on History: a checkout that still exists is not history.
       -->
-      <WorktreePanel v-if="tab === 'flight'" class="order-8" />
+      <WorktreePanel v-if="pane === 'start'" class="order-8" />
     </div>
 
     <!--

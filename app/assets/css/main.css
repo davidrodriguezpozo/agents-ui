@@ -1450,6 +1450,171 @@ body {
   .work-row__summary { display: none; }
 }
 
+
+/* ============================================
+   The session rail
+   ============================================
+
+   The other row shape, and the reason there are two. `.work-row` is a wide
+   table: six columns on fixed axes, so the eye can run down any one of them
+   across forty rows. That shape needs about 900px, and the rail has 264 — so
+   the same content is stacked into two lines instead, title over status, with
+   the clock right-aligned on the second. Squeezing the table into the column
+   was tried first and produced six columns all truncated to two characters. */
+
+.rail {
+  width: var(--rail-w);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border-subtle);
+}
+
+/* Its own scroll, so a long list of sessions never moves the pane. */
+.rail__list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-bottom: var(--space-section);
+}
+
+/**
+ * A group heading. Sticky, because the whole point of the groups is knowing
+ * which one you are in — and with nine sessions working, the "Working" heading
+ * is off the top of the rail exactly when you are reading its rows.
+ */
+.rail-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px var(--space-row-x) 4px;
+  background: var(--sidebar-bg);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-disabled);
+}
+
+.rail-group__count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-disabled);
+}
+
+.rail-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  grid-template-areas:
+    "glyph title title"
+    ".     note  when";
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 1px;
+  padding: 6px var(--space-row-x);
+  box-shadow: inset 2px 0 0 0 var(--row-marker, transparent);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.rail-row:hover {
+  background: var(--surface-hover);
+}
+
+/**
+ * The row the pane is showing. `aria-current` rather than a class of our own:
+ * `NuxtLink` already sets it on an exact match, so the highlight cannot drift
+ * out of step with what is actually on screen — which is the one thing a
+ * selected row must never do.
+ */
+.rail-row[aria-current="page"] {
+  background: var(--accent-muted);
+}
+
+.rail-row[aria-current="page"] .rail-row__title {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.rail-row__glyph {
+  grid-area: glyph;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rail-row__title {
+  grid-area: title;
+  font-size: var(--fs-sm);
+  line-height: 1.35;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Where it got to, in its own words — the `outcome` off the work item. */
+.rail-row__note {
+  grid-area: note;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.rail-row__note > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-row__when {
+  grid-area: when;
+  font-size: var(--fs-micro);
+  color: var(--text-disabled);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/**
+ * The rail over the pane rather than beside it, on a window too narrow to hold
+ * both.
+ *
+ * A media query and one extra class, rather than a second `<WorkRail>` mounted
+ * behind a `lg:hidden`. Two instances would be two lists to keep in step, two
+ * filter boxes with different text in them, and — since the rows are found by
+ * querying the document — `j` walking through both copies of every session.
+ *
+ * The breakpoint is where nav + rail + a readable pane stop fitting: 200 + 264
+ * leaves under 560px of pane at 1024, and the session view splits that again.
+ */
+@media (max-width: 1023px) {
+  .rail {
+    position: fixed;
+    inset-block: 0;
+    left: 0;
+    z-index: 40;
+    height: 100%;
+    transform: translateX(-100%);
+    transition: transform 200ms var(--ease-out);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+  }
+
+  .rail--shown {
+    transform: none;
+  }
+}
+
 /* ============================================
    Semantic Surfaces
    ============================================ */

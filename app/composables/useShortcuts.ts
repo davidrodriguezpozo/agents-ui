@@ -46,12 +46,57 @@ function visibleRows(): HTMLElement[] {
    * plugin card holds a link to the plugin. The outer one wins, because it is
    * the thing the page is a list of.
    */
-  return rows.filter(el => !rows.some(other => other !== el && other.contains(el)))
+  const outer = rows.filter(el => !rows.some(other => other !== el && other.contains(el)))
+
+  /*
+   * Two lists on one screen, walked one at a time.
+   *
+   * The work surface put a rail of rows beside a page of rows, and both are
+   * inside `main` — so without this, `j` on the History list started in the rail
+   * and walked down through every session before reaching the first row you were
+   * looking at, and `⌃d` sized its jump off a rail row while scrolling a list of
+   * wide ones.
+   *
+   * Which list you are in is decided by where the focus is, which is the same
+   * answer `tab` and `esc` give in the TUI: walk the rail once you are in the
+   * rail, and the page whenever you are not. With focus nowhere — a fresh load —
+   * it is the page, because that is what you came to read.
+   */
+  const active = document.activeElement as HTMLElement | null
+  const inRail = Boolean(active?.closest?.('[data-rail]'))
+
+  return outer.filter(row => Boolean(row.closest('[data-rail]')) === inRail)
 }
 
 /** The page's scrolling element, which is `main` rather than the document. */
 function scroller(): HTMLElement | null {
   return document.querySelector('main')
+}
+
+/**
+ * The rail's rows, which are a subset of the walkable ones.
+ *
+ * `j` and `k` move a cursor and leave the pane alone; these are for hopping,
+ * where each press *is* the navigation. Kept separate because the rail is the
+ * only list in the app where the next row is a place you want to land rather
+ * than a row you want to consider.
+ */
+function railRows(): HTMLElement[] {
+  return Array.from(document.querySelectorAll<HTMLElement>('main [data-rail-row]'))
+    .filter(el => el.offsetParent !== null)
+}
+
+/**
+ * Which rail row the pane is currently showing, or -1 when it is showing
+ * something that is not in the rail at all — the Work page itself, or a session
+ * that has since settled out of it.
+ *
+ * Read off `aria-current`, which `NuxtLink` sets on an exact match, rather than
+ * off focus: the whole point of these two keys is that they work while your
+ * attention is in the pane, where nothing in the rail has focus.
+ */
+function currentRailRow(rows: HTMLElement[]): number {
+  return rows.findIndex(row => row.getAttribute('aria-current') === 'page')
 }
 
 /**
@@ -77,6 +122,7 @@ export function useShortcutBindings() {
   const { isPanelOpen: chatOpen } = useChat()
   const { isSimple } = useUiMode()
   const { toggle: toggleSidebar } = useSidebar()
+  const { toggle: toggleRail } = useWorkRail()
   const colorMode = useColorMode()
 
   let timer: ReturnType<typeof setTimeout> | null = null
@@ -168,6 +214,32 @@ export function useShortcutBindings() {
     const height = rows[0]!.getBoundingClientRect().height || 1
     const step = Math.max(1, Math.round((main.clientHeight / 2) / height))
     moveRow(step * direction)
+  }
+
+  /**
+   * `⇧J` and `⇧K`: the next piece of work in flight, opened.
+   *
+   * The one-keypress version of what the rail is for. `j`/`k`/`↵` already walk
+   * it, and that is the right default — a cursor that navigates on every press
+   * would make `5j` four route changes and four fetches nobody asked for. But
+   * hopping between two running agents is the thing you do over and over, and
+   * two keys for it is one more than the TUI needs.
+   *
+   * From somewhere that is not in the rail — the Work page, or a session that has
+   * settled out of it — it starts at the top rather than doing nothing, because
+   * "the first thing that wants me" is the useful answer to `⇧J` from there.
+   */
+  function hopRail(delta: number) {
+    const rows = railRows()
+    if (!rows.length) return
+
+    const current = currentRailRow(rows)
+    const next = current === -1
+      ? (delta > 0 ? 0 : rows.length - 1)
+      : Math.min(rows.length - 1, Math.max(0, current + delta))
+
+    const href = rows[next]?.getAttribute('href')
+    if (href && href !== route.fullPath) router.push(href)
   }
 
   function handler(event: KeyboardEvent) {
@@ -310,6 +382,21 @@ export function useShortcutBindings() {
         return
 
       /**
+       * Hop, rather than walk. Same letters shifted, because they are the same
+       * motion applied to the rail instead of to the page — and counts work on
+       * them for the same reason they work on `j`.
+       */
+      case 'J':
+        event.preventDefault()
+        hopRail(takeCount())
+        return
+
+      case 'K':
+        event.preventDefault()
+        hopRail(-takeCount())
+        return
+
+      /**
        * Open what you are on.
        *
        * A row that is its own link needs none of this — the browser opens a
@@ -367,6 +454,22 @@ export function useShortcutBindings() {
         event.preventDefault()
         clearPending()
         toggleSidebar()
+        return
+
+      /**
+       * The rail, away and back. `.` does this for the navigation sidebar, and
+       * these are the same act on the panel one step to its right — which is why
+       * it is the key next to it rather than a mnemonic.
+       *
+       * Bound globally even though the rail only exists on three routes: a key
+       * that works on some pages and is silently dead on others is worse than
+       * one that is harmlessly idle, and this is the control that gets a hidden
+       * panel back.
+       */
+      case '\\':
+        event.preventDefault()
+        clearPending()
+        toggleRail()
         return
     }
 

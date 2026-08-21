@@ -641,7 +641,15 @@ function badgeFor(to: string) {
           @complete="onSetupComplete"
         />
 
-        <NuxtPage v-else-if="initialized" />
+        <!--
+          `NuxtLayout` is here for exactly one layout: `work`, which puts the
+          session rail beside the page. Every other page takes `layouts/default`,
+          which is an element-free passthrough — so nothing outside the work
+          surface gained a wrapper in its DOM by this existing.
+        -->
+        <NuxtLayout v-else-if="initialized">
+          <NuxtPage />
+        </NuxtLayout>
         <div v-else class="flex items-center justify-center h-full">
           <UIcon name="i-lucide-loader-2" class="size-5 animate-spin ink-4" />
         </div>
