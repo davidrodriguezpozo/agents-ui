@@ -80,15 +80,19 @@ function relative(ts: number) {
 }
 
 /**
- * Two things earn a card an outline: it is waiting on you, or it has produced
+ * Two things earn a row a marker: it is waiting on you, or it has produced
  * something that does not work. Both are cases where scrolling past would be a
- * mistake, which is the only thing an outline is for.
+ * mistake, which is the only thing a marker is for.
+ *
+ * This was a border round the whole card. At row density that reads as a box
+ * drawn round a strip of text, so it is a bar in the left gutter now — see
+ * `--row-marker` in `.work-row`.
  */
-const accent = computed(() => {
+const marker = computed(() => {
   const { session } = props
-  if (session.activity === 'awaiting-permission') return 'border-color: var(--accent-glow);'
+  if (session.activity === 'awaiting-permission') return { '--row-marker': 'var(--accent)' }
   if (session.activity === 'idle' && session.check?.status === 'failing') {
-    return 'border-color: var(--error);'
+    return { '--row-marker': 'var(--error)' }
   }
   return undefined
 })
@@ -98,143 +102,114 @@ const accent = computed(() => {
   <NuxtLink
     :to="`/sessions/${session.id}`"
     data-row
-    class="block rounded-md p-4 focus-ring hover-card bg-card"
-    :style="accent"
+    class="work-row focus-ring"
+    :style="marker"
   >
-    <div class="flex items-start gap-3">
-      <div class="flex-1 min-w-0 space-y-1.5">
-        <div class="flex items-center gap-2 flex-wrap">
-          <span class="type-strong truncate">{{ session.title }}</span>
-          <!--
-            `check-stale` and `behind` were both missing here, so the row wore
-            plain green while the counters underneath it said the verdict was
-            void. The badge is the part people read.
-          -->
-          <SessionStatus
-            :activity="session.activity"
-            :changed-files="session.worktree.changedFiles"
-            :dirty="session.worktree.dirty"
-            :check="session.check"
-            :check-stale="session.checkStale"
-            :behind="session.worktree.behind"
-            :landed="session.landed"
-          />
-        </div>
+    <!-- Is it fine. A 14px mark on a fixed axis; the words are in its title. -->
+    <SessionStatus
+      glyph
+      :activity="session.activity"
+      :changed-files="session.worktree.changedFiles"
+      :dirty="session.worktree.dirty"
+      :check="session.check"
+      :check-stale="session.checkStale"
+      :behind="session.worktree.behind"
+      :landed="session.landed"
+    />
 
-        <!--
-          What it did, in words. The counts below say how much changed;
-          this is the only thing on the row that says what the change
-          was, which is what you actually decide on.
-        -->
-        <p v-if="session.summary" class="type-detail leading-snug ink-2">
-          {{ session.summary.text }}
-        </p>
+    <span class="work-row__title">{{ session.title }}</span>
 
-        <!-- What it has produced, which is what you decide on -->
-        <div class="flex items-center gap-3 type-meta">
-          <span v-if="session.worktree.changedFiles" class="flex items-center gap-1">
-            <UIcon name="i-lucide-file-diff" class="size-3 shrink-0" />
-            {{ session.worktree.changedFiles }} file{{ session.worktree.changedFiles === 1 ? '' : 's' }}
-          </span>
-          <span v-if="session.worktree.ahead" class="flex items-center gap-1">
-            <UIcon name="i-lucide-git-commit-horizontal" class="size-3 shrink-0" />
-            {{ session.worktree.ahead }} commit{{ session.worktree.ahead === 1 ? '' : 's' }}
-          </span>
-          <span v-if="session.worktree.dirty" style="color: var(--accent);">uncommitted</span>
-          <!--
-            Said on the row because it is the one that goes wrong quietly: merge
-            one session and every other one is now judged against a base it does
-            not have, while still showing the green it earned beforehand.
-          -->
-          <!--
-            Not for a session that has landed. It is behind by the very merge
-            commit that landed it, so saying so in warning amber asserts there is
-            something to do about work that is finished.
-          -->
-          <span
-            v-if="session.worktree.behind && !session.landed"
-            class="flex items-center gap-1"
-            style="color: var(--warning);"
-            :title="`${session.baseBranch} has moved on since this was last checked`"
-          >
-            <UIcon name="i-lucide-git-pull-request-arrow" class="size-3 shrink-0" />
-            {{ session.worktree.behind }} behind
-          </span>
-          <span
-            v-else-if="session.landed"
-            class="flex items-center gap-1"
-            style="color: var(--success);"
-            :title="`Its commits are in ${session.baseBranch}`"
-          >
-            <UIcon name="i-lucide-git-merge" class="size-3 shrink-0" />
-            in {{ session.baseBranch }}
-          </span>
-          <!--
-            Two sessions changing the same file. The complement to `behind`,
-            which only becomes true once one of them has merged — by which point
-            the other is already judged against a base it does not have. This is
-            the same collision said while it is still cheap to know.
+    <!--
+      What it did, in words — and the only column allowed to be truncated,
+      because it is the only one where half the fact is still a fact.
+    -->
+    <span class="work-row__summary">{{ session.summary?.text }}</span>
 
-            Deliberately not amber. Two sessions on one file is ordinary and
-            often intended; it is worth a glance, not a warning, and nothing is
-            blocked by it.
-          -->
-          <span
-            v-if="session.overlaps?.length"
-            class="flex items-center gap-1"
-            style="color: var(--text-tertiary);"
-            :title="describeOverlap(session.overlaps)"
-          >
-            <UIcon name="i-lucide-git-compare-arrows" class="size-3 shrink-0" />
-            shared {{ session.overlaps.length === 1 ? 'files' : `with ${session.overlaps.length}` }}
-          </span>
-          <span v-if="session.turnCount" class="flex items-center gap-1">
-            <UIcon name="i-lucide-message-square" class="size-3 shrink-0" />
-            {{ session.turnCount }}
-          </span>
-          <span v-if="!session.worktree.changedFiles && !session.turnCount">
-            Nothing yet
-          </span>
-        </div>
-      </div>
+    <!-- What it produced, which is what you decide on -->
+    <span class="work-row__meta">
+      <span v-if="session.worktree.changedFiles" class="flex items-center gap-1">
+        <UIcon name="i-lucide-file-diff" class="size-3 shrink-0" />
+        {{ session.worktree.changedFiles }}
+      </span>
+      <span v-if="session.worktree.ahead" class="flex items-center gap-1">
+        <UIcon name="i-lucide-git-commit-horizontal" class="size-3 shrink-0" />
+        {{ session.worktree.ahead }}
+      </span>
+      <span v-if="session.turnCount" class="flex items-center gap-1">
+        <UIcon name="i-lucide-message-square" class="size-3 shrink-0" />
+        {{ session.turnCount }}
+      </span>
+      <span v-if="session.worktree.dirty" class="ink-accent" title="Uncommitted changes in the workspace">
+        uncommitted
+      </span>
+      <!--
+        Said on the row because it is the one that goes wrong quietly: merge one
+        session and every other one is now judged against a base it does not
+        have, while still showing the green it earned beforehand.
 
-      <span class="type-mono-meta shrink-0">{{ relative(session.updatedAt) }}</span>
-    </div>
-
-    <!-- Branch detail last: useful, but not what you scan for -->
-    <div class="flex items-center gap-1.5 mt-2.5 pt-2.5 type-mono-meta" style="border-top: 1px solid var(--border-subtle);">
-      <UIcon name="i-lucide-git-branch" class="size-2.5 shrink-0" />
-      <span class="truncate">{{ session.branch }}</span>
-      <span class="shrink-0">from {{ session.baseBranch }}</span>
+        Not for a session that has landed. It is behind by the very merge commit
+        that landed it, so saying so in warning amber asserts there is something
+        to do about work that is finished.
+      -->
+      <span
+        v-if="session.worktree.behind && !session.landed"
+        class="ink-warn flex items-center gap-1"
+        :title="`${session.baseBranch} has moved on since this was last checked`"
+      >
+        <UIcon name="i-lucide-git-pull-request-arrow" class="size-3 shrink-0" />
+        {{ session.worktree.behind }}
+      </span>
+      <span
+        v-else-if="session.landed"
+        class="ink-ok flex items-center gap-1"
+        :title="`Its commits are in ${session.baseBranch}`"
+      >
+        <UIcon name="i-lucide-git-merge" class="size-3 shrink-0" />
+        in {{ session.baseBranch }}
+      </span>
+      <!--
+        Two sessions changing the same file. Deliberately not amber: two
+        sessions on one file is ordinary and often intended; it is worth a
+        glance, not a warning, and nothing is blocked by it.
+      -->
+      <span
+        v-if="session.overlaps?.length"
+        class="ink-3 flex items-center gap-1"
+        :title="describeOverlap(session.overlaps)"
+      >
+        <UIcon name="i-lucide-git-compare-arrows" class="size-3 shrink-0" />
+        {{ session.overlaps.length }}
+      </span>
       <!--
         Where the work is going, when it is going anywhere. Text rather than a
-        link because the whole card is already one, and a second target inside it
+        link because the whole row is already one, and a second target inside it
         is both invalid markup and a click nobody can aim.
       -->
-      <template v-if="pull">
-        <span class="shrink-0">·</span>
-        <span class="shrink-0 flex items-center gap-1" :title="`#${pull.number} ${pull.title}`">
-          <UIcon name="i-lucide-git-pull-request" class="size-2.5 shrink-0" />
-          #{{ pull.number }}
-          <span v-if="pullState" :style="{ color: pullState.color }">{{ pullState.text }}</span>
-        </span>
-      </template>
-      <template v-if="drifted">
-        <span class="shrink-0">·</span>
-        <span
-          class="shrink-0 flex items-center gap-1"
-          style="color: var(--warning);"
-          :title="driftNote(session.branch, drifted)"
-        >
-          <UIcon name="i-lucide-git-compare-arrows" class="size-2.5 shrink-0" />
-          on {{ drifted }}
-        </span>
-      </template>
-      <template v-if="repoName">
-        <span class="shrink-0">·</span>
-        <UIcon name="i-lucide-folder-git-2" class="size-2.5 shrink-0" />
-        <span class="shrink-0">{{ repoName }}</span>
-      </template>
-    </div>
+      <span v-if="pull" class="flex items-center gap-1" :title="`#${pull.number} ${pull.title}`">
+        <UIcon name="i-lucide-git-pull-request" class="size-3 shrink-0" />
+        #{{ pull.number }}
+        <span v-if="pullState" :style="{ color: pullState.color }">{{ pullState.text }}</span>
+      </span>
+      <span
+        v-if="drifted"
+        class="ink-warn flex items-center gap-1"
+        :title="driftNote(session.branch, drifted)"
+      >
+        <UIcon name="i-lucide-git-compare-arrows" class="size-3 shrink-0" />
+        on {{ drifted }}
+      </span>
+      <span v-if="repoName" class="flex items-center gap-1">
+        <UIcon name="i-lucide-folder-git-2" class="size-3 shrink-0" />
+        {{ repoName }}
+      </span>
+    </span>
+
+    <!-- Where it is. Useful, but not what you scan for. -->
+    <span class="work-row__branch" :title="`${session.branch} from ${session.baseBranch}`">
+      <UIcon name="i-lucide-git-branch" class="size-2.5 shrink-0" />
+      <span class="work-row__branch-name">{{ session.branch }}</span>
+    </span>
+
+    <span class="work-row__when">{{ relative(session.updatedAt) }}</span>
   </NuxtLink>
 </template>

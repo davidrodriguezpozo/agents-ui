@@ -2,8 +2,16 @@
 @import "@nuxt/ui";
 
 @theme static {
-  --font-display: "Geist Sans", "Geist", system-ui, sans-serif;
-  --font-sans: "Geist Sans", "Geist", system-ui, sans-serif;
+  /**
+   * Inter, because the app is a list of dense rows read at a desk all day.
+   * Geist is a display face doing a UI face's job: its wider counters and
+   * looser default tracking cost about a character per column at 13px, which
+   * is a column of branch name. Inter was drawn for this and ships an optical
+   * size axis, so the 11px counts and the 14px toolbar title are not the same
+   * letterform scaled twice.
+   */
+  --font-display: "Inter", "Inter var", system-ui, -apple-system, sans-serif;
+  --font-sans: "Inter", "Inter var", system-ui, -apple-system, sans-serif;
   --font-mono: "Geist Mono", "SF Mono", ui-monospace, monospace;
 
   /**
@@ -58,12 +66,12 @@
 /* Nuxt UI reads --ui-* for its own components; keep them on our accent so a
    UButton and a hand-rolled button are never different colours. */
 :root {
-  --ui-primary: #5b5bd6;
+  --ui-primary: #5e6ad2;
   --ui-radius: 6px;
 }
 
 .dark {
-  --ui-primary: #7b7bea;
+  --ui-primary: #7c88e8;
 }
 
 /* ============================================
@@ -74,29 +82,29 @@
   /* ---- Light mode (default) ---- */
 
   /* Surfaces — near-white, separated by hairlines rather than fills */
-  --surface-base: #fafafa;
-  --surface-raised: #ffffff;
+  --surface-base: #ffffff;
+  --surface-raised: #fbfbfb;
   --surface-overlay: #ffffff;
   --surface-hover: #f4f4f5;
-  --surface-inset: #f4f4f5;
+  --surface-inset: #f7f7f8;
 
   /* Borders — crisp and visible; the primary way structure is expressed */
-  --border-subtle: #ececec;
-  --border-default: #e0e0e0;
-  --border-emphasis: #c9c9c9;
+  --border-subtle: #eeeef0;
+  --border-default: #e1e1e4;
+  --border-emphasis: #cdcdd2;
 
   /* Text — high contrast at the top of the scale, quiet below it */
-  --text-primary: #0a0a0a;
-  --text-secondary: #525252;
-  --text-tertiary: #737373;
-  --text-disabled: #a3a3a3;
+  --text-primary: #17171a;
+  --text-secondary: #61616b;
+  --text-tertiary: #8a8a94;
+  --text-disabled: #a8a8b0;
 
   /* Accent — used for selection and state, never decoration */
-  --accent: #5b5bd6;
-  --accent-hover: #6e6ee0;
-  --accent-glow: rgba(91, 91, 214, 0.10);
-  --accent-muted: rgba(91, 91, 214, 0.07);
-  --accent-gradient: linear-gradient(135deg, #5b5bd6 0%, #4a4ac4 100%);
+  --accent: #5e6ad2;
+  --accent-hover: #6b76d9;
+  --accent-glow: rgba(94, 106, 210, 0.10);
+  --accent-muted: rgba(94, 106, 210, 0.07);
+  --accent-gradient: linear-gradient(135deg, #5e6ad2 0%, #4c58c0 100%);
 
   /* Secondary accent */
   --accent-secondary: #0a0a0a;
@@ -110,23 +118,23 @@
 
   /* Spacing rhythm — one scale, used for card padding, row padding and the
      gaps between page sections. */
-  --space-row-y: 10px;
-  --space-row-x: 14px;
-  --space-card: 16px;
-  --space-section: 28px;
+  --space-row-y: 8px;
+  --space-row-x: 12px;
+  --space-card: 14px;
+  --space-section: 24px;
 
   /* Radius — tight. Large radii read as consumer software. */
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
 
   /* The page frame. One width for every view — see .page-container. */
   --page-max: 1320px;
-  --page-gutter: 32px;
+  --page-gutter: 24px;
   --measure-max: 1080px;
 
   /* Every page header is this tall, including the ones over a canvas. */
-  --header-h: 64px;
+  --header-h: 48px;
 
   /**
    * The type scale. Six steps — see the Type Scale block for what each means.
@@ -141,12 +149,12 @@
    * Every font size in the app resolves through these, including form fields,
    * badges and graph labels — so this block is the only place to tune it.
    */
-  --fs-title: 26px;
-  --fs-lg:    16px;
-  --fs-base:  14px;
-  --fs-sm:    12.5px;
+  --fs-title: 20px;
+  --fs-lg:    15px;
+  --fs-base:  13px;
+  --fs-sm:    12px;
   --fs-mono:  11.5px;
-  --fs-micro: 10.5px;
+  --fs-micro: 11px;
 
   /* Model tiers */
   --model-opus: #7c5cd6;
@@ -154,9 +162,9 @@
   --model-haiku: #0e8a6a;
 
   /* Semantic */
-  --success: #16a34a;
-  --warning: #b45309;
-  --error: #e5484d;
+  --success: #3f9c6d;
+  --warning: #c9781f;
+  --error: #d64545;
 
   /**
    * Tints, derived rather than declared. Components used to hard-code
@@ -201,7 +209,7 @@
   --skeleton-to: #ececec;
   --graph-node-bg: #ffffff;
   --graph-tooltip-bg: #ffffff;
-  --sidebar-bg: #fafafa;
+  --sidebar-bg: #fbfbfb;
 
   /* Editor (recessed, dark even in light mode) */
   --editor-bg: #1e1e2e;
@@ -218,29 +226,29 @@
   /* ---- Dark mode ---- */
 
   /* Surfaces — deeper with warm tinting */
-  --surface-base: #0a0a0a;
-  --surface-raised: #111111;
-  --surface-overlay: #1a1a1f;
-  --surface-hover: #1a1a1a;
-  --surface-inset: #0a0a0a;
+  --surface-base: #0e0e10;
+  --surface-raised: #141417;
+  --surface-overlay: #1b1b1f;
+  --surface-hover: #1b1b1f;
+  --surface-inset: #0a0a0c;
 
   /* Borders */
-  --border-subtle: #232323;
-  --border-default: #2e2e2e;
-  --border-emphasis: #3d3d3d;
+  --border-subtle: #1e1e22;
+  --border-default: #2a2a31;
+  --border-emphasis: #3a3a43;
 
   /* Text */
-  --text-primary: #ededed;
-  --text-secondary: #a1a1a1;
-  --text-tertiary: #737373;
-  --text-disabled: #525252;
+  --text-primary: #f2f2f4;
+  --text-secondary: #9b9ba4;
+  --text-tertiary: #6e6e78;
+  --text-disabled: #55555e;
 
   /* Accent */
-  --accent: #7b7bea;
-  --accent-hover: #8f8ff0;
-  --accent-glow: rgba(123, 123, 234, 0.12);
-  --accent-muted: rgba(123, 123, 234, 0.10);
-  --accent-gradient: linear-gradient(135deg, #7b7bea 0%, #6a6ad8 100%);
+  --accent: #7c88e8;
+  --accent-hover: #8e99f0;
+  --accent-glow: rgba(124, 136, 232, 0.14);
+  --accent-muted: rgba(124, 136, 232, 0.11);
+  --accent-gradient: linear-gradient(135deg, #7c88e8 0%, #5e6ad2 100%);
 
   /* Secondary accent */
   --accent-secondary: #ededed;
@@ -252,9 +260,9 @@
   --model-haiku: #34d399;
 
   /* Semantic */
-  --success: #3fb950;
-  --warning: #d29922;
-  --error: #f85149;
+  --success: #4cb782;
+  --warning: #f2994a;
+  --error: #eb5757;
 
   /* Provenance. The tints derive from these, so they follow automatically. */
   --info: #58a6ff;
@@ -274,7 +282,7 @@
   --skeleton-to: #1f1f1f;
   --graph-node-bg: #111111;
   --graph-tooltip-bg: #0a0a0a;
-  --sidebar-bg: #0a0a0a;
+  --sidebar-bg: #0a0a0c;
 
   /* Editor */
   --editor-bg: #0c0c10;
@@ -291,10 +299,18 @@
 body {
   background: var(--surface-base);
   color: var(--text-primary);
+  /**
+   * Inter's alternates, the ones that matter for reading identifiers in a
+   * list: cv05 puts a tail on lowercase l so it stops being a 1, cv11 gives
+   * the single-storey a used at small sizes, ss03 fixes the cramped
+   * curly-quote spacing. Without these, `l` vs `1` in a branch name is a
+   * guess.
+   */
+  font-feature-settings: "cv05" 1, "cv11" 1, "ss03" 1;
 }
 
 ::selection {
-  background: rgba(229, 169, 62, 0.2);
+  background: var(--accent-glow);
   color: inherit;
 }
 
@@ -314,12 +330,21 @@ body {
    Typography Scale — Precision Hierarchy
    ============================================ */
 
+/**
+ * The view's name, at toolbar scale.
+ *
+ * This was 26px/670 — a magazine headline over a list of rows, spending the
+ * top 64px of every page saying a word already highlighted in the sidebar.
+ * Linear's answer is that the title is a label on a control strip, not a
+ * headline, and the rows are the page. 14px/600 is that, and it buys back
+ * 16px of vertical on every screen in the app.
+ */
 .text-page-title {
   font-family: var(--font-display);
-  font-size: var(--fs-title);
-  font-weight: 670;
-  letter-spacing: -0.032em;
-  line-height: 1.12;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.011em;
+  line-height: 1.2;
   color: var(--text-primary);
 }
 
@@ -1183,6 +1208,246 @@ body {
 .session-divider--active {
   background: var(--accent);
   outline: none;
+}
+
+/* ============================================
+   Status Glyphs — state without a pill
+   ============================================
+
+   A pill costs 70-110px of row and puts the state at a different x on every
+   row, so forty of them read as confetti rather than as a column you can scan.
+   These are 14px, drawn in `currentColor`, and sit in a fixed leading column
+   so every state in the list lands on one vertical axis.
+
+   The shapes are a progression — empty ring, part-filled, filled — with
+   `failed` and `blocked` deliberately outside it. See `BadgeShape`.
+*/
+
+.status-glyph {
+  width: 14px;
+  height: 14px;
+  position: relative;
+  flex: none;
+  display: block;
+}
+
+.status-glyph::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  opacity: 0.9;
+}
+
+/* nothing came of it — an outline nobody filled */
+.status-glyph--empty::before {
+  border-style: dashed;
+  opacity: 0.65;
+}
+
+/* work exists, nobody has judged it: a ring with a small centre */
+.status-glyph--pending::after {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* was good, no longer certain — the arc says how far through it got */
+.status-glyph--partial::after {
+  content: "";
+  position: absolute;
+  inset: 2.5px;
+  border-radius: 50%;
+  background: conic-gradient(currentColor 0 62%, transparent 0);
+}
+
+/* good and ready */
+.status-glyph--done::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* it does not work. A bar, not an arc — this one has to break the pattern. */
+.status-glyph--failed::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 3px;
+  bottom: 3px;
+  width: 1.5px;
+  margin-left: -0.75px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+/* asking you something */
+.status-glyph--blocked::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: glyph-pulse 1.6s var(--ease-out) infinite;
+}
+
+/* something is running right now */
+.status-glyph--progress::before {
+  border-color: currentColor;
+  opacity: 0.25;
+}
+
+.status-glyph--progress::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: currentColor;
+  animation: glyph-spin 0.7s linear infinite;
+}
+
+@keyframes glyph-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes glyph-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-glyph--progress::after,
+  .status-glyph--blocked::after {
+    animation: none;
+  }
+}
+
+/* ============================================
+   The Work Row — one line, six columns
+   ============================================
+
+   This was a 110px card: title and badge on one line, summary on the second,
+   six counters on the third, the branch on a fourth behind a rule. Four
+   sessions filled a screen, which is the wrong shape for a tool whose whole
+   proposition is that a lot of work happens at once while you are not looking.
+
+   So it is a row. The columns are fixed in the order you scan them — is it
+   fine, what is it, what did it do, where is it, when — and the summary is the
+   only one allowed to consume slack, because it is the only one that can be
+   truncated without losing a fact.
+*/
+
+.work-list {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.work-row {
+  display: grid;
+  grid-template-columns:
+    14px                    /* status glyph, on its own axis  */
+    minmax(0, auto)         /* title, never truncated first   */
+    minmax(0, 1fr)          /* summary, gives up space first  */
+    auto                    /* counters                       */
+    auto                    /* branch + provenance            */
+    auto;                   /* when                           */
+  align-items: center;
+  column-gap: 10px;
+  min-height: 36px;
+  padding: 0 var(--space-row-x);
+  border-bottom: 1px solid var(--border-subtle);
+  transition: background var(--duration-fast) var(--ease-out);
+}
+
+.work-row:hover {
+  background: var(--surface-hover);
+}
+
+/**
+ * The two states worth interrupting a scan for — waiting on you, and produced
+ * something broken. This was a full border round the card; at row density a
+ * ring round a 36px strip is noise, so it is a bar in the gutter instead.
+ */
+.work-row {
+  box-shadow: inset 2px 0 0 0 var(--row-marker, transparent);
+}
+
+.work-row__title {
+  font-size: var(--fs-base);
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 42ch;
+}
+
+.work-row__summary {
+  font-size: var(--fs-sm);
+  line-height: 1.3;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.work-row__meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+/**
+ * Truncated from the left, because the end of a branch name is the part that
+ * distinguishes it — every one of these starts `agents-ui/`.
+ */
+.work-row__branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 190px;
+  min-width: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-inset);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.work-row__branch > .work-row__branch-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl;
+  text-align: left;
+}
+
+.work-row__when {
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  white-space: nowrap;
+  text-align: right;
+  min-width: 52px;
+}
+
+/* Narrow windows drop the least decisive columns rather than wrapping. */
+@media (max-width: 1180px) {
+  .work-row__branch { display: none; }
+}
+
+@media (max-width: 940px) {
+  .work-row__summary { display: none; }
 }
 
 /* ============================================

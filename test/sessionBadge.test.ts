@@ -8,7 +8,11 @@ import { sessionBadge, type BadgeInput } from '../app/utils/sessionBadge'
  * somewhere a test can reach it.
  */
 
-const GREEN = 'rgb(34, 197, 94)'
+// The token, not the literal it used to be. What these tests pin is *which*
+// states are green, not which green — and the literal was Tailwind's green-500,
+// matching neither --success in light mode nor in dark, so it survived a
+// re-theme that moved every other green in the app.
+const GREEN = 'var(--success)'
 const AMBER = 'var(--warning)'
 
 function badge(over: Partial<BadgeInput> = {}) {

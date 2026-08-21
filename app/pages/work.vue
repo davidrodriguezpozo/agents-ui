@@ -1305,7 +1305,12 @@ async function switchTo(path: string) {
           </div>
         </div>
 
-        <div v-if="work.length" class="space-y-2">
+        <!--
+          No gaps. The rows carry their own hairline and butt up against each
+          other, which is what makes forty of them read as one list rather than
+          forty objects. The top border closes the run above the first row.
+        -->
+        <div v-if="work.length" class="work-list">
           <template v-for="item in work" :key="item.key">
             <SessionCard
               v-if="sessionFor(item)"

@@ -36,8 +36,10 @@ export default defineNuxtConfig({
         { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://api.fontshare.com/v2/css?f[]=clash-display@400;500;600;700&display=swap' },
-        { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.min.css' },
+        // Inter carries the whole UI. The optical-size axis is the reason it is
+        // this and not the static cut: 11px counts and the 14px toolbar title
+        // are different letterforms, not one scaled twice.
+        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&display=swap' },
         { rel: 'stylesheet', href: 'https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.min.css' },
       ],
     },

@@ -16,12 +16,36 @@ import type { SessionActivity, SessionCheck } from '~/composables/useSessions'
  * Anything that makes the claim untrue — or merely unverified — is not green.
  */
 
+/**
+ * The glyph a dense row draws instead of the pill.
+ *
+ * A list of forty sessions cannot spend 90px of every row on the words
+ * "Passed, then changed" — and it does not need to, because the reader is
+ * scanning for the one row that is not fine. So the row draws a 14px mark in a
+ * fixed leading column, every mark on the same vertical axis, and keeps the
+ * words in the title attribute for the one row that earns a closer look.
+ *
+ * The shapes are a progression, not a set: an empty ring is nothing yet, a
+ * part-filled ring is partly there, a full one is done. `failed` and `blocked`
+ * break the progression on purpose — they are the two the eye must catch.
+ */
+export type BadgeShape =
+  | 'empty'     // ring, dashed — nothing came of it
+  | 'pending'   // ring, solid — work exists, nobody has judged it
+  | 'progress'  // rotating arc — something is running right now
+  | 'partial'   // part-filled ring — was good, no longer certain
+  | 'done'      // filled ring — good and ready
+  | 'failed'    // ring with a bar — it does not work
+  | 'blocked'   // filled ring, pulsing — it is asking you something
+
 export interface Badge {
   label: string
   icon: string
   /** A CSS variable or literal colour. */
   color: string
   background: string
+  /** What a glyph-only row draws. See `BadgeShape`. */
+  shape: BadgeShape
   spin?: boolean
   pulse?: boolean
 }
@@ -58,21 +82,27 @@ export interface BadgeInput {
 }
 
 const ACCENT = { color: 'var(--accent)', background: 'var(--accent-muted)' }
-const WARNING = { color: 'var(--warning)', background: 'rgba(212, 153, 34, 0.12)' }
-const ERROR = { color: 'var(--error)', background: 'rgba(248, 113, 113, 0.12)' }
-const SUCCESS = { color: 'rgb(34, 197, 94)', background: 'rgba(34, 197, 94, 0.12)' }
+/**
+ * Derived from the tokens rather than restated. These were literals — a green
+ * that was Tailwind's green-500 and matched neither `--success` in light mode
+ * nor in dark — so a re-theme changed every other green in the app and left
+ * the one on the session rows behind.
+ */
+const WARNING = { color: 'var(--warning)', background: 'var(--warning-tint)' }
+const ERROR = { color: 'var(--error)', background: 'var(--error-tint)' }
+const SUCCESS = { color: 'var(--success)', background: 'var(--success-tint)' }
 const QUIET = { color: 'var(--text-disabled)', background: 'var(--badge-subtle-bg)' }
 
 export function sessionBadge(input: BadgeInput): Badge {
   switch (input.activity) {
     case 'awaiting-permission':
-      return { label: 'Needs you', icon: 'i-lucide-hand', ...ACCENT, pulse: true }
+      return { label: 'Needs you', icon: 'i-lucide-hand', ...ACCENT, shape: 'blocked', pulse: true }
     case 'working':
-      return { label: 'Working', icon: 'i-lucide-loader-2', ...ACCENT, spin: true }
+      return { label: 'Working', icon: 'i-lucide-loader-2', ...ACCENT, shape: 'progress', spin: true }
     case 'failed':
-      return { label: 'Failed', icon: 'i-lucide-circle-alert', ...ERROR }
+      return { label: 'Failed', icon: 'i-lucide-circle-alert', ...ERROR, shape: 'failed' }
     case 'missing':
-      return { label: 'Workspace gone', icon: 'i-lucide-unlink', ...ERROR }
+      return { label: 'Workspace gone', icon: 'i-lucide-unlink', ...ERROR, shape: 'failed' }
   }
 
   // Only meaningful once nothing is running. Mid-turn, a verdict describes a
@@ -80,7 +110,7 @@ export function sessionBadge(input: BadgeInput): Badge {
   const check = input.check ?? null
 
   if (check?.status === 'running') {
-    return { label: 'Checking', icon: 'i-lucide-loader-2', ...ACCENT, spin: true }
+    return { label: 'Checking', icon: 'i-lucide-loader-2', ...ACCENT, shape: 'progress', spin: true }
   }
 
   /**
@@ -89,7 +119,7 @@ export function sessionBadge(input: BadgeInput): Badge {
    * putting on the row is that it is in.
    */
   if (input.landed) {
-    return { label: 'Landed', icon: 'i-lucide-git-merge', ...SUCCESS }
+    return { label: 'Landed', icon: 'i-lucide-git-merge', ...SUCCESS, shape: 'done' }
   }
 
   if (check?.status === 'failing') {
@@ -97,13 +127,14 @@ export function sessionBadge(input: BadgeInput): Badge {
       label: input.checkStale ? 'Failed, then changed' : 'Checks failed',
       icon: 'i-lucide-circle-x',
       ...ERROR,
+      shape: 'failed',
     }
   }
 
   // Deliberately not green: a check that could not run is not a pass, and
   // colouring it like one is the exact lie this exists to stop.
   if (check?.status === 'errored') {
-    return { label: 'Checks did not run', icon: 'i-lucide-circle-help', ...WARNING }
+    return { label: 'Checks did not run', icon: 'i-lucide-circle-help', ...WARNING, shape: 'partial' }
   }
 
   const hasWork = Boolean(input.changedFiles) || check?.status === 'passing'
@@ -119,29 +150,29 @@ export function sessionBadge(input: BadgeInput): Badge {
    * was earned against a base that no longer exists.
    */
   if (input.behind && hasWork) {
-    return { label: 'Base moved on', icon: 'i-lucide-git-pull-request-arrow', ...WARNING }
+    return { label: 'Base moved on', icon: 'i-lucide-git-pull-request-arrow', ...WARNING, shape: 'partial' }
   }
 
   if (check?.status === 'passing') {
     if (input.checkStale) {
-      return { label: 'Passed, then changed', icon: 'i-lucide-history', ...WARNING }
+      return { label: 'Passed, then changed', icon: 'i-lucide-history', ...WARNING, shape: 'partial' }
     }
 
-    return { label: 'Checks pass', icon: 'i-lucide-check-check', ...SUCCESS }
+    return { label: 'Checks pass', icon: 'i-lucide-check-check', ...SUCCESS, shape: 'done' }
   }
 
   // No checks were ever run here, so nothing is being claimed about whether the
   // work is good — only that there is some, and that it still applies.
   if (input.changedFiles) {
-    return { label: 'Changes ready', icon: 'i-lucide-check', ...SUCCESS }
+    return { label: 'Changes ready', icon: 'i-lucide-check', ...SUCCESS, shape: 'pending' }
   }
 
   // Asserts nothing about the work, because nobody looked. See `changesUnknown`.
   if (input.changesUnknown) {
-    return { label: 'Idle', icon: 'i-lucide-circle-dashed', ...QUIET }
+    return { label: 'Idle', icon: 'i-lucide-circle-dashed', ...QUIET, shape: 'empty' }
   }
 
   // Describes the result, not the session: one that thought about it and wrote
   // nothing is finished business, not something still to get round to.
-  return { label: 'No changes', icon: 'i-lucide-circle-dashed', ...QUIET }
+  return { label: 'No changes', icon: 'i-lucide-circle-dashed', ...QUIET, shape: 'empty' }
 }
