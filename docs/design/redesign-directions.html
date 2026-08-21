@@ -1,0 +1,474 @@
+<!doctype html>
+<html lang="en" data-theme="linear">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Agents Studio — redesign directions</title>
+<style>
+/* ============================================================
+   One markup tree, four skins. The Sessions screen, re-rendered.
+   Switch with the bar at the top. Nothing here is app code —
+   this file exists to be looked at, argued with, and deleted.
+   ============================================================ */
+
+*,*::before,*::after{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--surface-base);color:var(--text-primary);font-family:var(--font-ui);font-size:var(--fs-base);-webkit-font-smoothing:antialiased}
+
+/* ---------- CURRENT: what ships today ---------- */
+[data-theme="current"]{
+  --font-ui:"Geist Sans",system-ui,-apple-system,sans-serif;
+  --font-mono:"Geist Mono","SF Mono",ui-monospace,monospace;
+  --font-display:var(--font-ui);
+  --surface-base:#fafafa; --surface-raised:#fff; --surface-hover:#f4f4f5; --surface-sunk:#f4f4f5;
+  --border-subtle:#ececec; --border-default:#e0e0e0;
+  --text-primary:#0a0a0a; --text-secondary:#525252; --text-tertiary:#737373;
+  --accent:#5b5bd6; --accent-wash:rgba(91,91,214,.08); --on-accent:#fff;
+  --success:#16a34a; --warning:#b45309; --error:#e5484d;
+  --radius:12px; --radius-sm:6px;
+  --fs-title:26px; --fs-base:14px; --fs-sm:12.5px; --fs-micro:10.5px;
+  --header-h:64px; --page-max:1320px; --row-y:12px; --row-x:16px;
+  --group-tracking:.06em; --title-weight:700; --title-case:none;
+  --row-shell:card;
+}
+
+/* ---------- PRECISION INSTRUMENT ---------- */
+[data-theme="precision"]{
+  --font-ui:"Inter",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --font-mono:"SF Mono",ui-monospace,"JetBrains Mono",monospace;
+  --font-display:var(--font-ui);
+  --surface-base:#f7f7f6; --surface-raised:#fff; --surface-hover:#efefed; --surface-sunk:#eeeeec;
+  --border-subtle:#e4e4e1; --border-default:#d2d2ce;
+  --text-primary:#141413; --text-secondary:#57564f; --text-tertiary:#82817a;
+  --accent:#b4511a; --accent-wash:rgba(180,81,26,.07); --on-accent:#fff;
+  --success:#1f7a4d; --warning:#a35a06; --error:#b4241f;
+  --radius:4px; --radius-sm:3px;
+  --fs-title:15px; --fs-base:13px; --fs-sm:11.5px; --fs-micro:10px;
+  --header-h:44px; --page-max:none; --row-y:8px; --row-x:14px;
+  --group-tracking:.09em; --title-weight:600; --title-case:none;
+  --row-shell:rule;
+}
+
+/* ---------- TERMINAL-NATIVE ---------- */
+[data-theme="terminal"]{
+  --font-ui:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,monospace;
+  --font-mono:var(--font-ui);
+  --font-display:var(--font-ui);
+  --surface-base:#0c0c0e; --surface-raised:#121215; --surface-hover:#191920; --surface-sunk:#0a0a0c;
+  --border-subtle:#232329; --border-default:#31313a;
+  --text-primary:#e4e4e7; --text-secondary:#9b9ba4; --text-tertiary:#6b6b75;
+  --accent:#f0a44a; --accent-wash:rgba(240,164,74,.10); --on-accent:#0c0c0e;
+  --success:#5fce89; --warning:#f0a44a; --error:#f2635f;
+  --radius:0px; --radius-sm:0px;
+  --fs-title:13px; --fs-base:12.5px; --fs-sm:11.5px; --fs-micro:10.5px;
+  --header-h:40px; --page-max:none; --row-y:6px; --row-x:12px;
+  --group-tracking:.14em; --title-weight:500; --title-case:uppercase;
+  --row-shell:bare;
+}
+
+/* ---------- EDITORIAL / WARM ---------- */
+[data-theme="editorial"]{
+  --font-ui:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,serif;
+  --font-mono:"SF Mono",ui-monospace,monospace;
+  --font-display:"Iowan Old Style",Palatino,Georgia,serif;
+  --surface-base:#faf7f1; --surface-raised:#fffdf9; --surface-hover:#f3efe6; --surface-sunk:#f1ece2;
+  --border-subtle:#e6dfd2; --border-default:#d5cbb9;
+  --text-primary:#1f1b16; --text-secondary:#5d554a; --text-tertiary:#8a8073;
+  --accent:#7a2e1e; --accent-wash:rgba(122,46,30,.07); --on-accent:#fffdf9;
+  --success:#2f6b43; --warning:#8a5a10; --error:#93231d;
+  --radius:2px; --radius-sm:2px;
+  --fs-title:30px; --fs-base:15px; --fs-sm:13px; --fs-micro:11px;
+  --header-h:76px; --page-max:1180px; --row-y:16px; --row-x:4px;
+  --group-tracking:.10em; --title-weight:600; --title-case:none;
+  --row-shell:rule;
+}
+
+
+/* ---------- LINEAR (dark) ---------- */
+[data-theme="linear"]{
+  --font-ui:"Inter","Inter var",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --font-mono:"Berkeley Mono","SF Mono",ui-monospace,"JetBrains Mono",monospace;
+  --font-display:var(--font-ui);
+  --surface-base:#0e0e10; --surface-raised:#141417; --surface-hover:#1b1b1f; --surface-sunk:#0a0a0c;
+  --border-subtle:#1e1e22; --border-default:#2a2a31;
+  --text-primary:#f2f2f4; --text-secondary:#9b9ba4; --text-tertiary:#6e6e78;
+  --accent:#5e6ad2; --accent-wash:rgba(94,106,210,.14); --on-accent:#fff;
+  --success:#4cb782; --warning:#f2994a; --error:#eb5757;
+  --radius:6px; --radius-sm:5px;
+  --fs-title:13px; --fs-base:13px; --fs-sm:12px; --fs-micro:11px;
+  --header-h:48px; --page-max:none; --row-y:0px; --row-x:16px;
+  --group-tracking:0em; --title-weight:600; --title-case:none;
+  --row-shell:linear;
+}
+
+/* ---------- LINEAR (light) ---------- */
+[data-theme="linear-light"]{
+  --font-ui:"Inter","Inter var",system-ui,-apple-system,"Helvetica Neue",sans-serif;
+  --font-mono:"Berkeley Mono","SF Mono",ui-monospace,"JetBrains Mono",monospace;
+  --font-display:var(--font-ui);
+  --surface-base:#ffffff; --surface-raised:#fbfbfb; --surface-hover:#f4f4f5; --surface-sunk:#f7f7f8;
+  --border-subtle:#eeeef0; --border-default:#e1e1e4;
+  --text-primary:#17171a; --text-secondary:#61616b; --text-tertiary:#8a8a94;
+  --accent:#5e6ad2; --accent-wash:rgba(94,106,210,.10); --on-accent:#fff;
+  --success:#3f9c6d; --warning:#c9781f; --error:#d64545;
+  --radius:6px; --radius-sm:5px;
+  --fs-title:13px; --fs-base:13px; --fs-sm:12px; --fs-micro:11px;
+  --header-h:48px; --page-max:none; --row-y:0px; --row-x:16px;
+  --group-tracking:0em; --title-weight:600; --title-case:none;
+  --row-shell:linear;
+}
+
+/* ============ switcher ============ */
+.switch{position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:2px;
+  padding:10px 16px;background:var(--surface-raised);border-bottom:1px solid var(--border-default);
+  font-family:var(--font-ui);font-size:var(--fs-sm)}
+.switch b{font-family:var(--font-ui);font-weight:600;margin-right:14px;color:var(--text-primary);letter-spacing:.02em}
+.switch button{font:inherit;cursor:pointer;padding:5px 12px;border-radius:var(--radius-sm);
+  border:1px solid transparent;background:none;color:var(--text-secondary)}
+.switch button:hover{background:var(--surface-hover);color:var(--text-primary)}
+.switch button[aria-pressed="true"]{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.switch .note{margin-left:auto;color:var(--text-tertiary);font-size:var(--fs-micro)}
+
+/* ============ shell ============ */
+.app{display:grid;grid-template-columns:212px 1fr;min-height:calc(100vh - 44px)}
+[data-theme="terminal"] .app,[data-theme="precision"] .app{grid-template-columns:196px 1fr}
+
+.side{border-right:1px solid var(--border-subtle);background:var(--surface-raised);padding:0 0 16px}
+[data-theme="terminal"] .side{background:var(--surface-sunk)}
+.brand{display:flex;align-items:center;gap:9px;padding:14px var(--row-x) 16px}
+.mark{width:26px;height:26px;border-radius:var(--radius-sm);background:var(--accent);color:var(--on-accent);
+  display:grid;place-items:center;font-size:12px;font-weight:700;flex:none}
+[data-theme="terminal"] .mark{background:none;color:var(--accent);border:1px solid var(--accent)}
+[data-theme="editorial"] .mark{border-radius:50%}
+.brand h1{margin:0;font-family:var(--font-display);font-size:var(--fs-base);font-weight:var(--title-weight);letter-spacing:-.01em}
+.brand span{display:block;font-size:8.5px;letter-spacing:.14em;color:var(--text-tertiary);text-transform:uppercase;font-family:var(--font-ui);font-weight:500}
+
+.nav{display:flex;flex-direction:column;gap:1px;padding:0 8px}
+[data-theme="editorial"] .nav{padding:0 12px}
+.nav a{display:flex;align-items:center;gap:9px;padding:6px 8px;border-radius:var(--radius-sm);
+  color:var(--text-secondary);text-decoration:none;font-size:var(--fs-base)}
+.nav a:hover{background:var(--surface-hover);color:var(--text-primary)}
+.nav a.on{background:var(--accent-wash);color:var(--accent);font-weight:500}
+[data-theme="terminal"] .nav a.on{background:none;color:var(--accent)}
+[data-theme="terminal"] .nav a.on::before{content:"▸ ";margin-left:-10px}
+[data-theme="precision"] .nav a.on{background:var(--text-primary);color:var(--surface-raised)}
+.nav .ico{width:14px;text-align:center;opacity:.75;font-size:12px;flex:none}
+.nav .n{margin-left:auto;font-size:var(--fs-micro);color:var(--text-tertiary);font-family:var(--font-mono)}
+.nav a.on .n{color:inherit;opacity:.8}
+.nav hr{border:0;border-top:1px solid var(--border-subtle);margin:12px 8px}
+
+/* ============ main ============ */
+.main{min-width:0;display:flex;flex-direction:column}
+.head{height:var(--header-h);display:flex;align-items:center;gap:12px;
+  padding:0 24px;border-bottom:1px solid var(--border-subtle);position:sticky;top:44px;background:var(--surface-base);z-index:10}
+.head h2{margin:0;font-family:var(--font-display);font-size:var(--fs-title);font-weight:var(--title-weight);
+  letter-spacing:-.02em;text-transform:var(--title-case)}
+[data-theme="terminal"] .head h2{letter-spacing:.14em}
+.head .count{font-size:var(--fs-micro);color:var(--text-tertiary);font-family:var(--font-mono);align-self:flex-start;margin-top:2px}
+[data-theme="precision"] .head .count,[data-theme="terminal"] .head .count{align-self:center;margin:0}
+.head .spacer{flex:1}
+
+.body{padding:20px 24px 60px;max-width:var(--page-max);width:100%}
+[data-theme="editorial"] .body{padding:36px 24px 80px;margin:0 auto}
+[data-theme="current"] .body{margin:0 auto}
+
+/* ---- composer ---- */
+.composer{background:var(--surface-raised);border:1px solid var(--border-default);border-radius:var(--radius);
+  padding:12px;margin-bottom:8px;display:flex;gap:10px}
+[data-theme="precision"] .composer,[data-theme="terminal"] .composer{background:var(--surface-sunk);border-color:var(--border-subtle)}
+[data-theme="editorial"] .composer{background:none;border:0;border-bottom:1px solid var(--border-default);border-radius:0;padding:0 0 16px}
+.composer .field{flex:1;color:var(--text-tertiary);padding:6px 2px;font-size:var(--fs-base)}
+[data-theme="terminal"] .composer .field::before{content:"❯ ";color:var(--accent)}
+.btn{font:inherit;font-size:var(--fs-sm);cursor:pointer;padding:6px 13px;border-radius:var(--radius-sm);
+  border:1px solid var(--accent);background:var(--accent);color:var(--on-accent);white-space:nowrap;align-self:flex-start}
+[data-theme="terminal"] .btn{background:none;color:var(--accent)}
+[data-theme="terminal"] .btn::before{content:"[ "}
+[data-theme="terminal"] .btn::after{content:" ]"}
+[data-theme="precision"] .btn{background:var(--text-primary);border-color:var(--text-primary);color:var(--surface-raised)}
+.hint{font-size:var(--fs-sm);color:var(--text-tertiary);margin:0 0 22px;padding-left:2px}
+.hint code{font-family:var(--font-mono);font-size:.92em}
+
+/* ---- group headers ---- */
+.group{display:flex;align-items:baseline;gap:9px;margin:26px 0 8px}
+.group h3{margin:0;font-size:var(--fs-micro);letter-spacing:var(--group-tracking);text-transform:uppercase;
+  font-weight:600;color:var(--text-secondary);font-family:var(--font-ui)}
+[data-theme="editorial"] .group h3{font-family:var(--font-display);font-size:var(--fs-sm);letter-spacing:.08em;font-variant:small-caps;text-transform:none}
+.group .k{font-size:var(--fs-micro);color:var(--text-tertiary);font-family:var(--font-mono)}
+.group .why{font-size:var(--fs-sm);color:var(--text-tertiary)}
+.group .act{margin-left:auto;font-size:var(--fs-sm);color:var(--text-secondary);cursor:pointer}
+.group .act:hover{color:var(--accent)}
+/* terminal draws a rule to the right edge, like a TUI section */
+[data-theme="terminal"] .group{gap:8px}
+[data-theme="terminal"] .group h3::before{content:"── "}
+[data-theme="terminal"] .group .act::after{content:" ──────────";color:var(--border-default)}
+[data-theme="precision"] .group{border-bottom:1px solid var(--border-default);padding-bottom:5px;margin-bottom:0}
+
+/* ---- rows ---- */
+.rows{display:flex;flex-direction:column}
+[data-theme="current"] .rows{gap:10px}
+.row{padding:var(--row-y) var(--row-x);background:var(--surface-raised);
+  border:1px solid var(--border-subtle);border-radius:var(--radius);
+  display:grid;grid-template-columns:1fr auto;column-gap:16px;row-gap:5px;align-items:baseline;cursor:default}
+.row:hover{background:var(--surface-hover)}
+/* rule shell: no card, hairline between rows */
+[data-theme="precision"] .row,[data-theme="editorial"] .row{background:none;border:0;border-bottom:1px solid var(--border-subtle);border-radius:0}
+[data-theme="terminal"] .row{background:none;border:0;border-radius:0}
+[data-theme="terminal"] .row:hover{background:var(--surface-hover)}
+.row.alert{border-color:var(--error);box-shadow:0 0 0 1px var(--error) inset}
+[data-theme="precision"] .row.alert,[data-theme="editorial"] .row.alert{box-shadow:none;border-left:2px solid var(--error);padding-left:12px}
+[data-theme="terminal"] .row.alert{box-shadow:none;border-left:2px solid var(--error);padding-left:10px}
+
+.row .title{font-size:var(--fs-base);font-weight:600;color:var(--text-primary);grid-column:1;letter-spacing:-.005em}
+[data-theme="editorial"] .row .title{font-size:calc(var(--fs-base) + 2px);font-weight:600}
+[data-theme="terminal"] .row .title{font-weight:500}
+[data-theme="terminal"] .row .title::before{content:"▸ ";color:var(--text-tertiary)}
+.row .desc{grid-column:1;font-size:var(--fs-sm);color:var(--text-secondary);line-height:1.45}
+.row .meta{grid-column:1;display:flex;gap:14px;font-size:var(--fs-micro);color:var(--text-tertiary);font-family:var(--font-mono);padding-top:2px}
+.row .branch{grid-column:1;font-family:var(--font-mono);font-size:var(--fs-micro);color:var(--text-tertiary);
+  padding-top:6px;margin-top:4px;border-top:1px dashed var(--border-subtle)}
+[data-theme="terminal"] .row .branch{border-top:0;padding-top:2px;margin-top:0}
+[data-theme="editorial"] .row .branch{border-top:0;font-style:normal;opacity:.8}
+
+/* ---- the status column: pills vs aligned text ---- */
+.stat{grid-column:2;grid-row:1;justify-self:end;display:flex;align-items:center;gap:7px;white-space:nowrap}
+.when{grid-column:2;grid-row:2;justify-self:end;font-size:var(--fs-micro);color:var(--text-tertiary);font-family:var(--font-mono)}
+.tag{font-size:var(--fs-micro);padding:2.5px 8px;border-radius:99px;font-weight:600;letter-spacing:.01em;
+  display:inline-flex;align-items:center;gap:5px}
+.tag.fail{background:rgba(229,72,77,.10);color:var(--error)}
+.tag.pass{background:rgba(22,163,74,.10);color:var(--success)}
+.tag.warn{background:rgba(180,83,9,.12);color:var(--warning)}
+.tag.none{background:var(--surface-sunk);color:var(--text-tertiary)}
+/* precision + editorial: kill the pill, keep an aligned dot + word */
+[data-theme="precision"] .tag,[data-theme="editorial"] .tag{background:none;padding:0;border-radius:0;font-weight:500;
+  font-size:var(--fs-sm);min-width:112px;justify-content:flex-start}
+[data-theme="precision"] .tag::before,[data-theme="editorial"] .tag::before{
+  content:"";width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+[data-theme="editorial"] .tag{font-variant:small-caps;letter-spacing:.05em}
+/* terminal: bracketed status, monospace-aligned */
+[data-theme="terminal"] .tag{background:none;padding:0;border-radius:0;font-weight:400;min-width:15ch;justify-content:flex-start}
+[data-theme="terminal"] .tag::before{content:"["}
+[data-theme="terminal"] .tag::after{content:"]"}
+[data-theme="terminal"] .stat{gap:0}
+
+.foot{margin-top:34px;padding-top:14px;border-top:1px solid var(--border-subtle);
+  font-size:var(--fs-sm);color:var(--text-tertiary);display:flex;gap:8px;flex-wrap:wrap}
+.foot b{color:var(--text-secondary);font-weight:600}
+
+/* ==========================================================
+   LINEAR — structural, not just palette.
+   Rows collapse to one dense line, the page title becomes a
+   toolbar, pills become a status glyph in a fixed leading
+   column, and the accent all but disappears.
+   ========================================================== */
+[data-theme^="linear"]{ letter-spacing:-.006em }
+[data-theme^="linear"] body{ font-feature-settings:"cv05" 1,"ss03" 1 }
+
+/* sidebar: no hard border, 28px items, quiet counts */
+[data-theme^="linear"] .app{ grid-template-columns:220px 1fr }
+[data-theme^="linear"] .side{ background:var(--surface-sunk); border-right:1px solid var(--border-subtle) }
+[data-theme^="linear"] .brand{ padding:12px 14px 14px }
+[data-theme^="linear"] .mark{ width:22px;height:22px;border-radius:6px;font-size:11px }
+[data-theme^="linear"] .brand h1{ font-size:13px;font-weight:600 }
+[data-theme^="linear"] .brand span{ display:none }
+[data-theme^="linear"] .nav{ padding:0 8px;gap:1px }
+[data-theme^="linear"] .nav a{ height:28px;padding:0 8px;border-radius:5px;font-size:13px;font-weight:450;color:var(--text-secondary) }
+[data-theme^="linear"] .nav a:hover{ background:var(--surface-hover) }
+[data-theme^="linear"] .nav a.on{ background:var(--surface-hover);color:var(--text-primary);font-weight:500 }
+[data-theme^="linear"] .nav .ico{ font-size:13px;opacity:.6 }
+[data-theme^="linear"] .nav .n{ font-family:var(--font-ui);font-size:11px;color:var(--text-tertiary) }
+[data-theme^="linear"] .nav hr{ margin:10px 8px }
+
+/* header: a toolbar, not a title */
+[data-theme^="linear"] .head{ padding:0 16px;gap:8px;border-bottom:1px solid var(--border-subtle);background:var(--surface-base) }
+[data-theme^="linear"] .head h2{ font-size:13px;font-weight:600;letter-spacing:-.006em }
+[data-theme^="linear"] .head .count{ font-family:var(--font-ui);font-size:12px;color:var(--text-tertiary);
+  background:var(--surface-hover);padding:1px 6px;border-radius:4px;align-self:center;margin:0 }
+[data-theme^="linear"] .head::after{ content:"Filter    Display";white-space:pre;font-size:12px;color:var(--text-secondary) }
+
+/* body goes full-bleed; rows are the page */
+[data-theme^="linear"] .body{ padding:0;max-width:none }
+[data-theme^="linear"] .composer{ margin:14px 16px 4px;background:var(--surface-raised);
+  border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px }
+[data-theme^="linear"] .composer .field{ font-size:13px }
+[data-theme^="linear"] .btn{ font-size:12px;font-weight:500;padding:5px 11px;border-radius:5px }
+[data-theme^="linear"] .hint{ margin:0 16px 6px;font-size:12px }
+
+/* group headers: sticky bands, the Linear tell */
+[data-theme^="linear"] .group{ position:sticky;top:calc(44px + var(--header-h));z-index:5;
+  margin:0;height:36px;padding:0 16px;background:var(--surface-raised);
+  border-top:1px solid var(--border-subtle);border-bottom:1px solid var(--border-subtle);
+  display:flex;align-items:center;gap:8px }
+[data-theme^="linear"] .group h3{ font-size:12px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--text-primary) }
+[data-theme^="linear"] .group .k{ font-family:var(--font-ui);font-size:11px;color:var(--text-tertiary) }
+[data-theme^="linear"] .group .why{ display:none }
+[data-theme^="linear"] .group .act{ font-size:12px;color:var(--text-tertiary) }
+
+/* THE ROW — 36px, one line, six columns */
+[data-theme^="linear"] .row{
+  display:grid;
+  grid-template-columns:16px minmax(0,auto) minmax(0,1fr) auto auto 44px;
+  align-items:center; column-gap:10px; row-gap:0;
+  height:36px; padding:0 16px; background:none;
+  border:0; border-bottom:1px solid var(--border-subtle); border-radius:0 }
+[data-theme^="linear"] .row:hover{ background:var(--surface-hover) }
+[data-theme^="linear"] .row.alert{ box-shadow:none;border-left:0;padding-left:16px }
+
+[data-theme^="linear"] .row .stat{ grid-column:1;grid-row:1;justify-self:center }
+[data-theme^="linear"] .row .title{ grid-column:2;grid-row:1;font-size:13px;font-weight:450;
+  white-space:nowrap;letter-spacing:-.006em }
+[data-theme^="linear"] .row .desc{ grid-column:3;grid-row:1;font-size:12.5px;color:var(--text-tertiary);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1 }
+[data-theme^="linear"] .row .meta{ grid-column:4;grid-row:1;padding:0;gap:9px;font-family:var(--font-ui);
+  font-size:11px;color:var(--text-tertiary) }
+[data-theme^="linear"] .row .meta span:nth-child(n+3){ display:none }
+[data-theme^="linear"] .row .branch{ grid-column:5;grid-row:1;border:0;padding:1px 6px;margin:0;
+  max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  background:var(--surface-hover);border-radius:4px;font-size:10.5px;color:var(--text-tertiary);direction:rtl;text-align:left }
+[data-theme^="linear"] .row .when{ grid-column:6;grid-row:1;justify-self:end;
+  font-family:var(--font-ui);font-size:11px;color:var(--text-tertiary) }
+
+/* status: a glyph, never a pill */
+[data-theme^="linear"] .tag{ font-size:0;width:14px;height:14px;padding:0;border-radius:50%;
+  background:none;position:relative;display:block;min-width:0 }
+[data-theme^="linear"] .tag::before{ content:"";position:absolute;inset:0;border-radius:50%;
+  border:1.5px solid currentColor;opacity:.9 }
+[data-theme^="linear"] .tag.pass::after{ content:"";position:absolute;inset:3px;border-radius:50%;background:currentColor }
+[data-theme^="linear"] .tag.warn::after{ content:"";position:absolute;inset:2.5px;border-radius:50%;
+  background:conic-gradient(currentColor 0 62%,transparent 0) }
+[data-theme^="linear"] .tag.fail::after{ content:"";position:absolute;left:50%;top:3px;bottom:3px;width:1.5px;
+  margin-left:-.75px;background:currentColor;border-radius:1px }
+[data-theme^="linear"] .tag.none::before{ border-style:dashed;opacity:.7 }
+
+[data-theme^="linear"] .foot{ margin:22px 16px 0;padding:14px 0 40px;font-size:12px }
+
+</style>
+</head>
+<body>
+
+<div class="switch">
+  <b>Sessions, six ways</b>
+  <button data-set="linear"       aria-pressed="true">Linear (dark)</button>
+  <button data-set="linear-light" aria-pressed="false">Linear (light)</button>
+  <button data-set="current"      aria-pressed="false">Current</button>
+  <button data-set="precision" aria-pressed="false">Precision instrument</button>
+  <button data-set="terminal"  aria-pressed="false">Terminal-native</button>
+  <button data-set="editorial" aria-pressed="false">Editorial / warm</button>
+  <span class="note">same markup, same content — only the skin changes · press 1–6</span>
+</div>
+
+<div class="app">
+  <aside class="side">
+    <div class="brand">
+      <div class="mark">A</div>
+      <div><h1>Agents Studio</h1><span>Claude Code</span></div>
+    </div>
+    <nav class="nav">
+      <a href="#"><i class="ico">◇</i>Dashboard</a>
+      <a href="#" class="on"><i class="ico">◈</i>Sessions</a>
+      <a href="#"><i class="ico">◷</i>Daily<span class="n">1</span></a>
+      <a href="#"><i class="ico">∿</i>Activity</a>
+      <a href="#"><i class="ico">✦</i>Agents<span class="n">6</span></a>
+      <a href="#"><i class="ico">⇄</i>Workflows<span class="n">3</span></a>
+      <a href="#"><i class="ico">›_</i>Commands<span class="n">11</span></a>
+      <a href="#"><i class="ico">✧</i>Skills<span class="n">6</span></a>
+      <a href="#"><i class="ico">⊞</i>Plugins<span class="n">2</span></a>
+      <a href="#"><i class="ico">⌁</i>MCP</a>
+      <hr>
+      <a href="#"><i class="ico">⌕</i>Explore</a>
+      <a href="#"><i class="ico">⬡</i>Graph</a>
+      <a href="#"><i class="ico">⚙</i>Settings</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <header class="head">
+      <h2>Sessions</h2><span class="count">4</span>
+      <div class="spacer"></div>
+    </header>
+
+    <div class="body">
+      <div class="composer">
+        <div class="field">What should this session do? Enter to start, Shift+Enter for a new line.</div>
+        <button class="btn">Start session</button>
+      </div>
+      <p class="hint">Branches from <code>…/workspaces/storefront-demo</code> — its own workspace, its own branch — and starts work straight away.</p>
+
+      <div class="group">
+        <h3>Needs you</h3><span class="k">1</span>
+        <span class="why">Blocked, broken, or asking for a decision.</span>
+      </div>
+      <div class="rows">
+        <div class="row alert">
+          <div class="title">Fix rounding errors in checkout totals</div>
+          <div class="stat"><span class="tag fail">Checks failed</span></div>
+          <div class="when">Aug 11</div>
+          <div class="desc">Tax is rounded to whole cents. One existing test still expects the old float and now fails.</div>
+          <div class="meta"><span>2 files</span><span>1 commit</span><span>uncommitted</span><span>1 note</span></div>
+          <div class="branch">agents-ui/fix-rounding-errors-in-checkout-totals-demo1ubeas2 ← main</div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Done, waiting for you</h3><span class="k">2</span>
+        <span class="why">Changes sit in their own workspace until you merge them.</span>
+        <span class="act">Land what passes</span>
+      </div>
+      <div class="rows">
+        <div class="row">
+          <div class="title">Draft the v2.1 release notes</div>
+          <div class="stat"><span class="tag warn">Passed, then changed</span></div>
+          <div class="when">Aug 11</div>
+          <div class="desc">Release notes drafted from eleven commits, grouped into Added, Fixed and Internal.</div>
+          <div class="meta"><span>1 file</span><span>uncommitted</span><span>1 note</span></div>
+          <div class="branch">agents-ui/draft-the-v2-1-release-notes-demo2ae2xqy ← main</div>
+        </div>
+        <div class="row">
+          <div class="title">Add faceted search to the product list</div>
+          <div class="stat"><span class="tag pass">Checks pass</span></div>
+          <div class="when">Aug 11</div>
+          <div class="desc">Search now filters by tag and maximum price, with tests for all three facet combinations.</div>
+          <div class="meta"><span>2 files</span><span>2 commits</span><span>2 notes</span></div>
+          <div class="branch">agents-ui/add-faceted-search-to-the-product-list-demo05sdp59 ← main</div>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Nothing came of it</h3><span class="k">1</span>
+        <span class="why">These ran and left no changes behind.</span>
+        <span class="act">Close these</span>
+      </div>
+      <div class="rows">
+        <div class="row">
+          <div class="title">Investigate slow cart API responses</div>
+          <div class="stat"><span class="tag none">No changes</span></div>
+          <div class="when">Aug 11</div>
+          <div class="desc">Traced the latency to the upstream pricing service. Nothing to change here.</div>
+          <div class="meta"><span>1 note</span></div>
+          <div class="branch">agents-ui/investigate-slow-cart-api-responses-demo357q9r8 ← main</div>
+        </div>
+      </div>
+
+      <div class="foot">
+        <b>What changes between skins:</b>
+        <span>accent · type · radius · density · card-vs-rule · pill-vs-aligned-status.</span>
+        <span>Content, copy and information architecture are identical in all four.</span>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  const order = ['linear','linear-light','current','precision','terminal','editorial']
+  const btns = [...document.querySelectorAll('.switch button')]
+  function set(name){
+    document.documentElement.dataset.theme = name
+    btns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.set === name)))
+  }
+  btns.forEach(b => b.addEventListener('click', () => set(b.dataset.set)))
+  addEventListener('keydown', e => {
+    const i = Number(e.key) - 1
+    if (order[i]) set(order[i])
+  })
+</script>
+</body>
+</html>
