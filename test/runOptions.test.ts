@@ -95,6 +95,32 @@ describe('toQueryOptions', () => {
   })
 
   /**
+   * Claude Code only registers the Artifact tool for a human at a terminal, and
+   * the SDK stamps `CLAUDE_CODE_ENTRYPOINT=sdk-ts` on everything it spawns — so
+   * a session asked to update an artifact was told the tool did not exist, and
+   * the `enableArtifact` setting could not help because it is read after that
+   * check. The env var is the only lever.
+   */
+  it('turns the Artifact tool back on for a run the SDK spawned', () => {
+    const opts = toQueryOptions({ ...base, allowRules: [] }) as any
+    expect(opts.env.CLAUDE_CODE_ARTIFACT).toBe('1')
+  })
+
+  /**
+   * The SDK uses this *instead of* `process.env`, so a bare `{ CLAUDE_CODE_… }`
+   * would hand every run an empty environment — no PATH, no credentials.
+   */
+  it('carries the rest of the environment with it', () => {
+    process.env.AGENTS_UI_ENV_PROBE = 'kept'
+    try {
+      const opts = toQueryOptions({ ...base, allowRules: [] }) as any
+      expect(opts.env.AGENTS_UI_ENV_PROBE).toBe('kept')
+    } finally {
+      delete process.env.AGENTS_UI_ENV_PROBE
+    }
+  })
+
+  /**
    * The manager prompt describes a settings screen. A session reviewing a pull
    * request is not in one, and used to be told it was — so a run with nothing
    * to add now adds nothing, rather than appending an empty string.

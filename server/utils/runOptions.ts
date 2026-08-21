@@ -262,6 +262,20 @@ export function toQueryOptions(
     // Resolved rather than left to the SDK, which looks for a native binary
     // this build does not carry — see `claudeExecutable`.
     pathToClaudeCodeExecutable: claudeExecutable(),
+    // Spread rather than added to: the SDK uses this *instead of*
+    // `process.env`, so anything left out is simply gone from the run.
+    //
+    // `CLAUDE_CODE_ARTIFACT` turns the Artifact tool back on. Claude Code
+    // registers it only when the entrypoint is a human at a terminal, and the
+    // SDK stamps `CLAUDE_CODE_ENTRYPOINT=sdk-ts` on every process it spawns —
+    // so every session, ritual and workflow step here asked for an artifact
+    // and got `No such tool available: Artifact`. The env var is the only
+    // lever: the `enableArtifact` setting is read *after* that entrypoint
+    // check, so turning it on in `/config` changed nothing. Past this point
+    // it is still the account's call — artifacts want a claude.ai login on a
+    // paid plan — but that is an answer from the other end, not a door this
+    // process was holding shut.
+    env: { ...process.env, CLAUDE_CODE_ARTIFACT: '1' },
     ...(maxBudgetUsd && maxBudgetUsd > 0 ? { maxBudgetUsd } : {}),
     ...(options.allowedTools ? { allowedTools: options.allowedTools } : {}),
     ...(options.disallowedTools ? { disallowedTools: options.disallowedTools } : {}),
