@@ -661,9 +661,21 @@ async function onOpenPr() {
     })
     toast.add({
       title: prDraft.value ? 'Draft pull request opened' : 'Pull request opened',
-      description: result.url,
+      // The comment is a second thing that happened to somebody else's issue, so
+      // it is said here rather than left to be discovered on GitHub. A refusal —
+      // the setting being off, a Notion ticket, an issue already told — is not
+      // worth a toast: nothing happened and nothing was expected to.
+      description: result.issue?.posted
+        ? `${result.url} · #${result.issue.issue} was told`
+        : result.url,
       color: 'success',
     })
+
+    // A failure is worth saying, because it is the half that did not happen and
+    // opening the request again is the only way to try once more.
+    if (result.issue && !result.issue.posted && result.issue.reason === 'failed') {
+      toast.add({ title: 'The issue was not told', description: result.issue.because, color: 'warning' })
+    }
     showPr.value = false
     await load()
   } catch (e) {
@@ -2250,6 +2262,20 @@ const totalChanges = computed(() => {
                 <span class="font-mono type-detail">{{ prPreview.baseBranch }}</span> —
                 {{ prPreview.commits.length }} commit{{ prPreview.commits.length === 1 ? '' : 's' }}.
                 This is the point at which other people can see it.
+              </p>
+
+              <!--
+                The other write. Said before the button rather than after it,
+                because a comment on somebody else's issue is the part of this
+                that cannot be taken back quietly.
+              -->
+              <p v-if="prPreview.tellsIssue" class="type-detail">
+                It also comments once on
+                <a :href="prPreview.tellsIssue.url" target="_blank" rel="noopener" class="font-mono ink-accent">
+                  #{{ prPreview.tellsIssue.number }}
+                </a>
+                — what this session did, this pull request, and that nobody has reviewed it. Mention
+                the issue in the description yourself and it says nothing, because GitHub will have.
               </p>
 
               <div class="space-y-1.5">

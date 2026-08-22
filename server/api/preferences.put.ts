@@ -32,6 +32,7 @@ export default defineEventHandler(async (event) => {
     effort?: RunEffort
     issueLabel?: string
     notionIntake?: Partial<NotionIntakeConfig>
+    issueWriteback?: boolean
     editor?: EditorChoice
   }>(event)
 
@@ -48,6 +49,7 @@ export default defineEventHandler(async (event) => {
     effort?: RunEffort
     issueLabel?: string
     notionIntake?: Partial<NotionIntakeConfig>
+    issueWriteback?: boolean
     editor?: EditorChoice
   } = {}
   for (const key of KEYS) {
@@ -85,6 +87,11 @@ export default defineEventHandler(async (event) => {
   // An empty string is how the label half of the issue band is turned off, so
   // absent is the only skip — a falsy check here would make it unturnoffable.
   if (typeof body?.issueLabel === 'string') patch.issueLabel = body.issueLabel
+
+  // A boolean or nothing. This is the switch on the one write other people can
+  // see, and a truthy string arriving from a hand-rolled request must not be
+  // able to turn it on.
+  if (typeof body?.issueWriteback === 'boolean') patch.issueWriteback = body.issueWriteback
 
   // Only one of the four this app knows a URL scheme for. Anything else is left
   // alone rather than stored and then found to open nothing.

@@ -1,5 +1,6 @@
 import { findSession, patchSession } from '../../../utils/sessions'
 import { commitsBetween, defaultRemote, ghReady, openPullRequest } from '../../../utils/pullRequest'
+import { replyToIssue } from '../../../utils/issueReply'
 import { diffBase } from '../../../utils/worktrees'
 
 /**
@@ -8,6 +9,11 @@ import { diffBase } from '../../../utils/worktrees'
  * The one thing this app does that other people can see, so it refuses on
  * anything unclear rather than guessing: no remote, no sign-in, or nothing
  * committed all stop here instead of producing half a pull request.
+ *
+ * It is also the one moment a session started from an issue tells that issue
+ * anything — `replyToIssue`, once, and only when somebody has turned it on. This
+ * is the only caller, which is what makes "never on a later push, never twice"
+ * true of the whole app rather than of a flag it checks.
  */
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
@@ -68,8 +74,28 @@ export default defineEventHandler(async (event) => {
       draft: body.draft,
     })
 
-    await patchSession(id, { prUrl: result.url })
-    return result
+    const updated = await patchSession(id, { prUrl: result.url }) ?? session
+
+    /*
+     * Then, and only then, tell the issue.
+     *
+     * After the record rather than before, and outside nothing: the pull request
+     * exists by this point, and `replyToIssue` never throws for that reason — a
+     * comment that could not be posted must not report an open pull request as a
+     * failure. What it says comes back beside the URL so the page can say the
+     * issue was told, or say why it was not.
+     *
+     * The title and body are handed over so the same text a reviewer will read
+     * decides whether a comment is needed at all: one saying `Closes #42` has
+     * already told the issue, and GitHub said it better.
+     */
+    const issue = await replyToIssue(updated, {
+      url: result.url,
+      title: body.title.trim(),
+      body: body.body ?? '',
+    })
+
+    return { ...result, issue }
   } catch (e) {
     // `gh` and `git push` say useful things when they fail — a rejected push,
     // a protected branch, a missing upstream — and swallowing that would leave

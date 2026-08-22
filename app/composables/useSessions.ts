@@ -328,6 +328,12 @@ export interface PullRequestPreview {
   existingUrl?: string
   suggestedTitle: string
   suggestedBody: string
+  /**
+   * The issue opening this would comment on, from `issueToTell` on the server.
+   * Absent means nothing will be said — which is every session until somebody
+   * turns the setting on.
+   */
+  tellsIssue?: { number: number; url: string }
 }
 
 /**
@@ -623,14 +629,27 @@ export function useSessions() {
     return $fetch<PullRequestPreview>(`/api/sessions/${encodeURIComponent(id)}/pr`)
   }
 
-  /** Pushes the branch and opens the request — visible to everyone else. */
+  /**
+   * Pushes the branch and opens the request — visible to everyone else.
+   *
+   * `issue` is the second write: a session started from a GitHub issue comments
+   * on it once, here and nowhere else, and only when the setting is on. It is
+   * always answered — `posted: false` with the reason — so the page can say what
+   * happened rather than inferring it from a missing field.
+   */
   async function openPullRequest(id: string, opts: {
     title: string
     body: string
     commitFirst?: boolean
     draft?: boolean
   }) {
-    const result = await $fetch<{ url: string; committed: boolean }>(
+    const result = await $fetch<{
+      url: string
+      committed: boolean
+      issue?:
+        | { posted: true; issue: number; url: string }
+        | { posted: false; reason: string; because: string }
+    }>(
       `/api/sessions/${encodeURIComponent(id)}/pr`,
       { method: 'POST', body: opts },
     )
