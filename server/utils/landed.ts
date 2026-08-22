@@ -1,4 +1,5 @@
 import { patchSession } from './sessions'
+import { personName, type Identity } from './identity'
 
 /**
  * What shipped.
@@ -63,6 +64,24 @@ export interface SessionLanded {
    * this machine at all — see `revertWatch.ts` for what that costs.
    */
   sha?: string
+  /**
+   * Who put it in, as git names them. See `identity.ts`.
+   *
+   * Written for the two routes this machine takes — the merge here, and the pull
+   * request this app merged once CI came good — because in both of them the
+   * commit git wrote carries this same identity, so the record and the history
+   * agree about one person.
+   *
+   * Deliberately never written for `elsewhere`. That merge happened on
+   * github.com and nothing here did any of it; stamping it with the identity of
+   * whoever's machine noticed would be this app claiming a colleague's merge,
+   * which is the exact failure this field exists to prevent. GitHub knows who
+   * did it and is the place to ask.
+   *
+   * Absent on every landing recorded before this existed, which reads as
+   * unattributed.
+   */
+  by?: Identity
 }
 
 /**
@@ -104,19 +123,31 @@ export function landedSince<T extends { landed?: SessionLanded }>(sessions: T[],
  * destination is only half a fact on a machine with several long-lived branches
  * — and it is exactly the half that matters when something lands in the wrong
  * one.
+ *
+ * The person is named the same way and for the same reason: on a machine one
+ * person uses it adds nothing, and on a machine two people share it is the first
+ * thing either of them wants to know. Nothing is said when the record carries
+ * nobody, which is every landing from before identity was recorded — the
+ * sentence simply reads as it always did rather than guessing.
  */
 export function describeLanded(landed: SessionLanded): string {
+  // Read off the record rather than resolved now: `by` was written at the moment
+  // of the merge, and a config changed since must not rewrite who did it.
+  const who = personName(landed.by)
+  const by = who ? ` by ${who}` : ''
+
   if (landed.how === 'elsewhere') {
+    // Never named, because this app was not there — see `SessionLanded.by`.
     return landed.pr
       ? `#${landed.pr} was merged on GitHub — not by this machine`
       : 'merged somewhere else, not by this machine'
   }
 
   if (landed.how === 'pull-request') {
-    return `#${landed.pr} passed CI and was merged`
+    return `#${landed.pr} passed CI and was merged${by}`
   }
 
   const into = landed.into ? ` into ${landed.into}` : ''
   const over = landed.overrodeChecks ? ', over a failing check' : ''
-  return `merged${into}${over}`
+  return `merged${into}${over}${by}`
 }

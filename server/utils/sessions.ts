@@ -9,6 +9,7 @@ import type { SessionRepair } from './sessionRepair'
 import type { SessionPrWatch } from './prWatch'
 import type { QueuedMessage } from './sessionQueue'
 import type { TrustLevel } from './trust'
+import type { Identity } from './identity'
 
 /**
  * A session is a conversation with its own isolated copy of a repository.
@@ -82,6 +83,17 @@ export interface Session {
   /** Continuity across turns. Set from the first run's init message. */
   sdkSessionId?: string
   agentSlug?: string
+  /**
+   * Who cut this workspace, as git names them at the moment it was cut. See
+   * `identity.ts`.
+   *
+   * Not the same fact as who sent any given turn — a session started by one
+   * person and picked up by another is an ordinary Tuesday, and each turn
+   * carries its own. This one answers "whose branch is that", which is the
+   * question a list of twenty worktrees raises. Absent on every session recorded
+   * before this existed, which reads as unattributed.
+   */
+  startedBy?: Identity
   runIds: string[]
   createdAt: number
   updatedAt: number

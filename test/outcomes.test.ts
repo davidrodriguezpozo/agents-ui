@@ -429,7 +429,7 @@ describe('what the checks said', () => {
   })
 })
 
-describe('grouped five ways', () => {
+describe('grouped six ways', () => {
   const sessions = [
     session({ id: 'one', repoDir: '/repo/one', landed: { at: NOW - DAY, how: 'merged', into: 'main' } }),
     session({ id: 'two', repoDir: '/repo/two' }),
@@ -492,6 +492,115 @@ describe('grouped five ways', () => {
     expect(landings).toContainEqual(['sonnet', 1])
     expect(landings).toContainEqual(['opus', 0])
     expect(twoModels.landings.total).toBe(1)
+  })
+})
+
+/**
+ * Who did this.
+ *
+ * The failure to guard here is one specific one, and it is worse than a wrong
+ * number: a turn nobody signed reading as the person looking at the page. Every
+ * ritual is unsigned, and so is every record written before identity existed, so
+ * this is not an edge case — it is most of the run log on the day the field
+ * ships.
+ */
+describe('by person', () => {
+  const ada = 'ada@example.com'
+  const grace = 'grace@example.com'
+
+  it('leaves an unsigned turn out of the person column rather than in a row', () => {
+    // Not pooled into "unattributed" either: a row at the top of a table of
+    // colleagues reads as one of them, with a strange name and a large bill.
+    const open = session({ id: 'open' })
+    const report = joinOutcomes({
+      turns: [
+        turn({ sessionId: 'open', costUsd: 2, person: ada }),
+        turn({ sessionId: 'open', costUsd: 3 }),
+      ],
+      sessions: [open],
+      since: SINCE,
+    })
+
+    expect(report.byPerson.map(g => g.key)).toEqual([ada])
+    expect(report.byPerson[0]!.costUsd).toBeCloseTo(2)
+    // The gap is real and is the honest shape of the records.
+    expect(report.costUsd).toBeCloseTo(5)
+  })
+
+  it('has nobody at all when nothing in the window was signed', () => {
+    const nightly = joinOutcomes({
+      turns: [turn({ source: 'ritual', scheduleId: 'morning', costUsd: 4 })],
+      sessions: [],
+      since: SINCE,
+    })
+
+    expect(nightly.byPerson).toEqual([])
+    expect(nightly.byRitual).toHaveLength(1)
+  })
+
+  it('splits a session two people worked on, and counts its merge once', () => {
+    /*
+     * The case the column exists for. Ada starts it, Grace finishes it, and the
+     * merge belongs to whoever had it last — the same rule every other dimension
+     * uses, which is what keeps a group's spend and a group's merges describing
+     * the same work.
+     */
+    const shared = session({
+      id: 'shared',
+      landed: { at: NOW - DAY, how: 'merged', into: 'main' },
+    })
+
+    const report = joinOutcomes({
+      turns: [
+        turn({ sessionId: 'shared', costUsd: 3, person: ada, createdAt: NOW - 3 * DAY }),
+        turn({ sessionId: 'shared', costUsd: 1, person: grace, createdAt: NOW - DAY }),
+      ],
+      sessions: [shared],
+      since: SINCE,
+    })
+
+    expect(report.byPerson.map(g => g.key)).toEqual([ada, grace])
+    expect(report.byPerson.find(g => g.key === ada)!.costUsd).toBeCloseTo(3)
+    expect(report.byPerson.find(g => g.key === ada)!.landings.total).toBe(0)
+    expect(report.byPerson.find(g => g.key === grace)!.landings.total).toBe(1)
+    expect(report.landings.total).toBe(1)
+  })
+
+  it('never stands the session in for a turn that named nobody', () => {
+    // Unlike the agent, which falls back to the session's. A session started by
+    // one person and continued by another is exactly this dimension's subject,
+    // and falling back would file the second person's turns under the first.
+    const shared = session({ id: 'shared', agentSlug: 'reviewer' })
+    const report = joinOutcomes({
+      turns: [turn({ sessionId: 'shared', costUsd: 1 })],
+      sessions: [shared],
+      since: SINCE,
+    })
+
+    expect(report.byPerson).toEqual([])
+    expect(report.byAgent.map(g => g.key)).toEqual(['reviewer'])
+  })
+
+  it('takes the key off the run record, one person per spelling of their email', () => {
+    const one = outcomeTurnOf({
+      id: 'r1', title: 't', kind: 'chat', status: 'completed', createdAt: NOW - DAY,
+      by: { name: 'Ada Lovelace', email: 'Ada@Example.com' },
+    })
+    const two = outcomeTurnOf({
+      id: 'r2', title: 't', kind: 'chat', status: 'completed', createdAt: NOW - DAY,
+      by: { name: 'A. Lovelace', email: 'ada@example.com' },
+    })
+
+    expect(one.person).toBe(ada)
+    expect(two.person).toBe(ada)
+  })
+
+  it('has no person for a run record written before identity existed', () => {
+    const older = outcomeTurnOf({
+      id: 'r0', title: 't', kind: 'chat', status: 'completed', createdAt: NOW - DAY,
+    })
+
+    expect(older.person).toBeUndefined()
   })
 })
 

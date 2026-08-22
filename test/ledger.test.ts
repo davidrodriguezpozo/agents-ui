@@ -192,7 +192,7 @@ describe('naming a row', () => {
     expect(ledger.tables.find(t => t.dimension === 'ritual')!.rows[0]!.label).toBeUndefined()
   })
 
-  it('never labels the other three, whose keys are already names', () => {
+  it('never labels the three whose keys are already names', () => {
     const named = buildLedger({
       days: 7,
       now: NOW,
@@ -201,13 +201,48 @@ describe('naming a row', () => {
       ritualTitles: { reviewer: 'Not this', 'claude-opus-5': 'Nor this' },
     })
 
-    for (const table of named.tables.filter(t => t.dimension !== 'ritual')) {
+    // Person is the other one with a label, for the same reason as a ritual: its
+    // key is an email and a column of addresses names nobody usefully.
+    const keyed = named.tables.filter(t => t.dimension !== 'ritual' && t.dimension !== 'person')
+    for (const table of keyed) {
       for (const row of table.rows) expect(row.label).toBeUndefined()
     }
   })
+
+  it('calls a person by the name on their own turns', () => {
+    // Read back off the run log rather than out of a store of people, because
+    // there is no store of people — whoever sent the turn wrote their name on it.
+    const ledger = buildLedger({
+      days: 7,
+      now: NOW,
+      sessions: [session({ id: 'one' })],
+      runs: [record({
+        sessionId: 'one',
+        stats: { costUsd: 1 },
+        by: { name: 'Ada Lovelace', email: 'Ada@Example.com' },
+      })],
+    })
+
+    expect(ledger.tables.find(t => t.dimension === 'person')!.rows[0])
+      .toMatchObject({ key: 'ada@example.com', label: 'Ada Lovelace' })
+  })
+
+  it('leaves a person unlabelled when the name is all there is', () => {
+    // A repository with only `user.name` keys on the name, and a row labelled
+    // with its own key is noise.
+    const ledger = buildLedger({
+      days: 7,
+      now: NOW,
+      sessions: [session({ id: 'one' })],
+      runs: [record({ sessionId: 'one', stats: { costUsd: 1 }, by: { name: 'Ada Lovelace' } })],
+    })
+
+    expect(ledger.tables.find(t => t.dimension === 'person')!.rows[0])
+      .toMatchObject({ key: 'Ada Lovelace', label: undefined })
+  })
 })
 
-describe('the four breakdowns', () => {
+describe('the five breakdowns', () => {
   const landed = session({
     id: 'one',
     repoDir: '/repo/one',
@@ -230,8 +265,15 @@ describe('the four breakdowns', () => {
     ],
   })
 
-  it('is by ritual, agent, model and repository, in that order', () => {
-    expect(ledger.tables.map(t => t.dimension)).toEqual(['ritual', 'agent', 'model', 'repository'])
+  it('is by ritual, agent, model, repository and person, in that order', () => {
+    expect(ledger.tables.map(t => t.dimension))
+      .toEqual(['ritual', 'agent', 'model', 'repository', 'person'])
+  })
+
+  it('has an empty person table when nothing in the window was signed', () => {
+    // Which is every machine on the day this ships, and every machine whose git
+    // names nobody. Empty rather than a row for the unattributed remainder.
+    expect(ledger.tables.find(t => t.dimension === 'person')!.rows).toEqual([])
   })
 
   it('groups by model, which only a run record carries', () => {

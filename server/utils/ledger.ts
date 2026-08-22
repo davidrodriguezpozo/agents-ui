@@ -2,6 +2,7 @@ import {
   joinOutcomes, outcomeTurnOf,
   type OutcomeReport, type OutcomeRunRecord, type OutcomeSession, type OutcomeTotals,
 } from './outcomes'
+import { personKey } from './identity'
 import type { SideCost } from './spend'
 
 /**
@@ -39,6 +40,12 @@ import type { SideCost } from './spend'
  *     current one has, and the two counts are not a fair comparison with each
  *     other. They are not paired into a change figure for that reason — only
  *     cost per merge is. The page says the count is as of today.
+ *   - **The person column adds up to less than the total, always.** Rituals name
+ *     nobody, and neither does anything recorded before identity existed. Both
+ *     are left out rather than pooled into a row, because a row called
+ *     "unattributed" sitting at the top of a table of colleagues reads like a
+ *     person with a strange name and a large bill. The page says where the gap
+ *     comes from instead.
  *
  * Every dollar figure here is as indicative as the ones it is built from: on a
  * subscription nothing is billed per turn, and a session's cost includes the
@@ -85,11 +92,12 @@ export function ledgerWindow(days: number, now: number): LedgerWindow {
 }
 
 export interface LedgerRow {
-  /** The ritual id, agent slug, model name or repository path. */
+  /** The ritual id, agent slug, model name, repository path or person. */
   key: string
   /**
-   * What to call it, when the key is not the name. Only rituals have one: their
-   * key is a generated id, and a table row reading `k3f9x-a1` names nothing.
+   * What to call it, when the key is not the name. Rituals have one — their key
+   * is a generated id, and a table row reading `k3f9x-a1` names nothing — and so
+   * do people, whose key is an email and whose name is what a colleague reads.
    * Absent means the key is the name.
    */
   label?: string
@@ -113,7 +121,7 @@ export interface LedgerRow {
   openCostUsd: number
 }
 
-export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'repository'
+export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'repository' | 'person'
 
 export interface LedgerTable {
   dimension: LedgerDimension
@@ -171,7 +179,34 @@ function rowsOf(groups: OutcomeReport['byRitual'], labels?: Record<string, strin
   }))
 }
 
-/** The window a page asked for, the one before it, and the four breakdowns. */
+/**
+ * Names to put on the person rows, from the run log itself.
+ *
+ * A person's key is their email — see `personKey`, and the reason is that people
+ * rewrite `user.name` — so a table keyed on it alone is a column of addresses.
+ * The name is read back off the same records the grouping came from, which means
+ * no store of people has to exist for the column to be readable: whoever sent a
+ * turn wrote their name onto it at the time.
+ *
+ * Last spelling wins, and the runs arrive newest first, so a person who has
+ * since corrected their name reads as they spell it now. Only set when it says
+ * something the key does not — a repository with only a `user.name` keys on the
+ * name, and a row labelled with its own key is noise.
+ */
+function personNames(runs: OutcomeRunRecord[]): Record<string, string> {
+  const names: Record<string, string> = {}
+
+  for (const run of runs) {
+    const key = personKey(run.by)
+    const name = run.by?.name?.trim()
+    if (!key || !name || name === key) continue
+    if (!(key in names)) names[key] = name
+  }
+
+  return names
+}
+
+/** The window a page asked for, the one before it, and the five breakdowns. */
 export function buildLedger(input: LedgerInput): Ledger {
   const window = ledgerWindow(input.days, input.now)
   const turns = input.runs.map(outcomeTurnOf)
@@ -199,6 +234,7 @@ export function buildLedger(input: LedgerInput): Ledger {
       { dimension: 'agent', rows: rowsOf(current.byAgent) },
       { dimension: 'model', rows: rowsOf(current.byModel) },
       { dimension: 'repository', rows: rowsOf(current.byRepository) },
+      { dimension: 'person', rows: rowsOf(current.byPerson, personNames(input.runs)) },
     ],
   }
 }

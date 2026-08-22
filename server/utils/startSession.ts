@@ -1,4 +1,5 @@
 import { basename } from 'node:path'
+import { gitIdentity } from './identity'
 import { addProject } from './projects'
 import {
   newSessionId, saveSession,
@@ -100,6 +101,12 @@ export async function startSession(options: {
 
   const now = Date.now()
 
+  // Asked of the repository, not the worktree, which is seconds old and has
+  // whatever config it inherited. Every route into a session comes through here
+  // — typed in, adopted from the terminal, started off an issue or a ticket — so
+  // the stamp lands on all of them without any of them having to remember.
+  const startedBy = await gitIdentity(repoDir)
+
   return saveSession({
     id,
     title,
@@ -110,6 +117,8 @@ export async function startSession(options: {
     baseSha,
     status: 'idle',
     agentSlug: options.agentSlug,
+    // Absent when this repository names nobody, which reads as unattributed.
+    startedBy,
     // Absent means the default, which is what every session had before this
     // could be chosen up front.
     trust: options.trust,
