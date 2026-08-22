@@ -1906,7 +1906,7 @@ const totalChanges = computed(() => {
           class="shrink-0"
           style="border-top: 1px solid var(--border-subtle); background: var(--surface-base);"
         >
-          <div class="py-3 space-y-2" :class="pane ? 'px-8' : 'page-container'">
+          <div class="py-2 space-y-1.5" :class="pane ? 'px-8' : 'page-container'">
             <!-- How much it may do on its own, next to the box that sets it going -->
             <div class="flex items-center justify-between gap-3 flex-wrap">
               <div class="pill-picker">
@@ -1981,7 +1981,12 @@ const totalChanges = computed(() => {
             </div>
 
             <!-- Composer -->
-            <div class="flex gap-2 relative">
+            <!--
+              `items-end`, because the default stretch made every button as tall
+              as the box: one purple slab beside two lines of placeholder, and
+              three slabs once a running turn adds Steer now and Stop.
+            -->
+            <div class="flex items-end gap-2 relative">
               <!-- Sits above the box, where what you are typing still shows -->
               <div v-if="paletteOpen" class="absolute bottom-full left-0 right-0 mb-2 z-10">
                 <CommandPalette
@@ -2001,14 +2006,20 @@ const totalChanges = computed(() => {
               -->
               <textarea
                 v-model="input"
-                rows="2"
-                class="field-textarea flex-1"
+                rows="1"
+                class="field-textarea field-textarea--compact flex-1"
                 :placeholder="isBusy
                   ? 'Working — type anyway: queue it for after, or steer this turn now'
                   : 'What should it do next? Type / for commands'"
                 :disabled="!session.worktree.exists"
                 @keydown="onComposerKey"
               />
+              <!--
+                The actions in one group that does not shrink: a running turn puts
+                three of them beside the box, and a squashed "Queue for after" is
+                worse than a narrower box.
+              -->
+              <div class="flex items-end gap-2 shrink-0">
               <!-- Queueing is the same key and the same button, saying what it does -->
               <UButton
                 :label="isBusy ? 'Queue for after' : 'Send'"
@@ -2057,10 +2068,11 @@ const totalChanges = computed(() => {
                 aria-label="Show commands"
                 @click="() => { paletteOpen = !paletteOpen }"
               />
+              </div>
             </div>
 
             <!-- Said out loud, because the shortcut changed and muscle memory has not -->
-            <p class="type-meta pt-1.5">
+            <p class="type-meta pt-0.5">
               {{ isBusy ? '↵ Queue for the next turn' : '↵ Send' }} · ⇧↵ New line
               <template v-if="isBusy"> · Steer now has no key, on purpose</template>
             </p>

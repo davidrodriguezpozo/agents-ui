@@ -696,6 +696,17 @@ body {
   line-height: 1.6;
 }
 
+/*
+ * The session composer, which is a different shape of thing: it sits under a
+ * conversation and is read as a strip rather than as a form field, so two blank
+ * lines of it push the last thing the agent said off the screen. Drag it taller
+ * when a long instruction wants the room.
+ */
+.field-textarea--compact {
+  min-height: 38px;
+  padding: 7px 12px;
+}
+
 /* Search input with embedded icon */
 .field-search {
   width: 100%;
