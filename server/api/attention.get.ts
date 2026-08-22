@@ -1,20 +1,6 @@
-import { readSessions } from '../utils/sessions'
-import { listPending } from '../utils/permissionBroker'
-import { getActive, listRunsBySchedule, readRun, type RunSummary } from '../utils/runStore'
-import { summarizeRitualRuns } from '../utils/ritualHistory'
-import { readSchedules } from '../utils/schedules'
+import { collectAttention } from '../utils/attention'
 
-export type AttentionKind = 'blocked-session' | 'failing-ritual'
-
-export interface AttentionItem {
-  kind: AttentionKind
-  /** Session id or schedule id, depending on kind. */
-  id: string
-  title: string
-  /** Why it wants you, in one sentence. */
-  because: string
-  at?: number
-}
+export type { Attention, AttentionItem, AttentionKind } from '../utils/attention'
 
 /**
  * What, if anything, wants you.
@@ -29,72 +15,8 @@ export interface AttentionItem {
  * and missing from the queue, and the sidebar said "3" over a screen that said
  * "nothing is waiting on you". A badge that contradicts the view it points at is
  * worse than no badge. Both now read one payload and cannot disagree.
+ *
+ * The derivation is in `utils/attention.ts` because the MCP server's `blocked`
+ * tool has to give the same answer this does.
  */
-export default defineEventHandler(async () => {
-  const [sessions, schedules, ritualRuns] = await Promise.all([
-    readSessions().catch(() => []),
-    readSchedules().catch(() => []),
-    listRunsBySchedule(10).catch(() => ({} as Record<string, RunSummary[]>)),
-  ])
-
-  const items: AttentionItem[] = []
-  let blocked = 0
-  let working = 0
-
-  for (const session of sessions) {
-    if (session.status === 'archived') continue
-
-    const lastRunId = session.runIds.at(-1)
-    if (!lastRunId) continue
-
-    if (listPending(lastRunId).length) {
-      blocked++
-      items.push({
-        kind: 'blocked-session',
-        id: session.id,
-        title: session.title,
-        because: 'It stopped to ask permission for something and is waiting.',
-        at: session.updatedAt,
-      })
-      continue
-    }
-
-    const run = getActive(lastRunId)?.run ?? await readRun(lastRunId)
-    if (run?.status === 'running' || run?.status === 'queued') working++
-  }
-
-  // A ritual that has come to nothing several times running is asking for
-  // attention just as much as a prompt is — it is simply less loud about it.
-  for (const schedule of schedules) {
-    if (!schedule.enabled) continue
-
-    const { failingStreak } = summarizeRitualRuns(ritualRuns[schedule.id] ?? [])
-    if (failingStreak < 2) continue
-
-    items.push({
-      kind: 'failing-ritual',
-      id: schedule.id,
-      title: schedule.title,
-      because: `Its last ${failingStreak} runs came to nothing.`,
-      at: schedule.lastRunAt,
-    })
-  }
-
-  const failingRituals = items.filter(item => item.kind === 'failing-ritual').length
-
-  return {
-    /** Sessions stopped on a permission prompt. */
-    blocked,
-    /** Sessions with a turn in flight. */
-    working,
-    failingRituals,
-    /** Everything that will not move until you do something. */
-    needsYou: blocked + failingRituals,
-    /**
-     * The same things, named. `needsYou` is `items.length` by construction —
-     * kept as its own field because the sidebar and the tab title only ever
-     * wanted the number.
-     */
-    items,
-  }
-})
+export default defineEventHandler(() => collectAttention())
