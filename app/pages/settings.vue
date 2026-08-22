@@ -300,6 +300,21 @@ const issueLabel = ref('')
 const savedIssueLabel = ref('')
 
 /**
+ * The other half of the same band: which Notion database holds the tickets, and
+ * which status value means an agent may take one.
+ *
+ * Three fields rather than one because none of them can be guessed — a workspace
+ * has any number of databases, the property is called whatever somebody called
+ * it, and the value that means "take it" is a convention a team invents. Both the
+ * data source and the value are needed before anything is read; the band says
+ * nothing about Notion until they are.
+ */
+type NotionIntakeKey = 'dataSource' | 'statusProperty' | 'statusValue'
+const NOTION_INTAKE_DEFAULT = { dataSource: '', statusProperty: 'Status', statusValue: '' }
+const notionIntake = ref<Record<NotionIntakeKey, string>>({ ...NOTION_INTAKE_DEFAULT })
+const savedNotionIntake = ref<Record<NotionIntakeKey, string>>({ ...NOTION_INTAKE_DEFAULT })
+
+/**
  * What is left of the subscription. Never fetched on its own — it is collected
  * from the SDK during runs that were happening anyway — so "nothing heard yet"
  * is a normal state on a fresh install rather than a failure.
@@ -392,6 +407,7 @@ onMounted(async () => {
       pullActions?: Record<PullActionKey, string>
       effort?: typeof effort.value
       issueLabel?: string
+      notionIntake?: Record<NotionIntakeKey, string>
     }>('/api/preferences')
     notifications.value = prefs.notifications
     notificationChannel.value = prefs.notifications.channel ?? 'browser'
@@ -407,6 +423,13 @@ onMounted(async () => {
     // issue band is off, and must not be read back as "unset, use studio".
     issueLabel.value = prefs.issueLabel ?? 'studio'
     savedIssueLabel.value = issueLabel.value
+    if (prefs.notionIntake) {
+      for (const key of ['dataSource', 'statusProperty', 'statusValue'] as NotionIntakeKey[]) {
+        const value = prefs.notionIntake[key] ?? NOTION_INTAKE_DEFAULT[key]
+        notionIntake.value[key] = value
+        savedNotionIntake.value[key] = value
+      }
+    }
     if (prefs.pullActions) {
       for (const { key } of PULL_ACTIONS) {
         const value = prefs.pullActions[key] ?? ''
@@ -495,6 +518,39 @@ async function saveIssueLabel() {
   } catch (e) {
     savedIssueLabel.value = previous
     issueLabel.value = previous
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
+  }
+}
+
+/**
+ * Save one of the three Notion fields. On blur, and only when it changed, like
+ * the label above and the review commands above that — these are typed, not
+ * toggled, and tabbing through three of them should not write three times.
+ *
+ * The toast only claims something is going to happen once both required halves
+ * are set. Saying "Land now lists your Notion tickets" after the data source is
+ * typed and before the status value is would be a promise the band does not keep.
+ */
+async function saveNotionIntake(key: NotionIntakeKey) {
+  const value = notionIntake.value[key].trim()
+  notionIntake.value[key] = value
+  if (value === savedNotionIntake.value[key]) return
+
+  const previous = savedNotionIntake.value[key]
+  savedNotionIntake.value[key] = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { notionIntake: { [key]: value } } })
+    const ready = notionIntake.value.dataSource && notionIntake.value.statusValue
+    toast.add({
+      title: 'Saved',
+      description: ready
+        ? `Land can now read tickets marked ${notionIntake.value.statusValue}. Press Read Notion there to fetch them.`
+        : 'Both the data source and the status value are needed before anything is read.',
+      color: 'success',
+    })
+  } catch (e) {
+    savedNotionIntake.value[key] = previous
+    notionIntake.value[key] = previous
     toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
   }
 }
@@ -1028,6 +1084,87 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             no label.
           </p>
         </div>
+      </div>
+
+      <!--
+        The other half of the same band.
+
+        Directly under the label because it is the same decision asked of a
+        second tracker: which tickets an agent may pick up. Three fields, none
+        of which can be guessed about somebody's workspace.
+      -->
+      <div id="settings-notion-intake" class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Tickets in Notion</h3>
+        <p class="fs-sm text-meta">
+          <NuxtLink to="/land" class="ink-accent hover:underline">Land</NuxtLink> reads Notion as
+          well, into the same band, with each row saying which tracker it came from. It goes through
+          the Notion MCP server this app already has — no API key and no separate sign-in — and it
+          reads only: nothing is ever written back to Notion, ever.
+        </p>
+
+        <div class="field-group">
+          <label class="field-label" for="notion-data-source">Data source</label>
+          <input
+            id="notion-data-source"
+            v-model="notionIntake.dataSource"
+            class="field-input font-mono fs-mono"
+            placeholder="https://www.notion.so/… or a database id"
+            spellcheck="false"
+            autocapitalize="off"
+            autocomplete="off"
+            @blur="saveNotionIntake('dataSource')"
+            @keydown.enter="saveNotionIntake('dataSource')"
+          />
+          <p class="field-hint">
+            The database the tickets live in. A URL, an id, or a
+            <span class="font-mono fs-mono">collection://</span> reference — whichever you have.
+            Leave it blank and the band says nothing about Notion at all.
+          </p>
+        </div>
+
+        <div class="grid sm:grid-cols-2 gap-4">
+          <div class="field-group">
+            <label class="field-label" for="notion-status-property">Status property</label>
+            <input
+              id="notion-status-property"
+              v-model="notionIntake.statusProperty"
+              class="field-input font-mono fs-mono"
+              placeholder="Status"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              @blur="saveNotionIntake('statusProperty')"
+              @keydown.enter="saveNotionIntake('statusProperty')"
+            />
+            <p class="field-hint">Whatever your database calls the column.</p>
+          </div>
+
+          <div class="field-group">
+            <label class="field-label" for="notion-status-value">Value that means "take it"</label>
+            <input
+              id="notion-status-value"
+              v-model="notionIntake.statusValue"
+              class="field-input font-mono fs-mono"
+              placeholder="Ready for agent"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              @blur="saveNotionIntake('statusValue')"
+              @keydown.enter="saveNotionIntake('statusValue')"
+            />
+            <p class="field-hint">
+              The one agreed word, like the label above. Only tickets carrying exactly this reach
+              the band.
+            </p>
+          </div>
+        </div>
+
+        <p class="fs-sm text-meta">
+          Reading Notion is a run, not a request: it takes about a minute and costs a few cents, so
+          it never happens on a timer — the band has a <span class="type-strong">Read Notion</span>
+          button and shows the age and the cost of what it last found. A ticket's text reaches a
+          session quoted, as data, the same way an issue's does.
+        </p>
       </div>
 
       <!-- How hard runs think -->

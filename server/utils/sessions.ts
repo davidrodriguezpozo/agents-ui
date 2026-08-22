@@ -37,6 +37,22 @@ export interface SessionIssueOf {
   title?: string
 }
 
+/**
+ * Which Notion ticket a session was started from.
+ *
+ * Beside `issueOf` rather than folded into it, because the two identify their
+ * work with different things and there is nothing to gain from a field that is a
+ * number here and a page id there. `id` is the page id — the only stable thing
+ * about a Notion page, since the title gets edited and the status is the part
+ * that moves.
+ */
+export interface SessionTicketOf {
+  id: string
+  url: string
+  /** What the ticket was called when the session began. Only for reading. */
+  title?: string
+}
+
 export interface Session {
   id: string
   title: string
@@ -109,6 +125,19 @@ export interface Session {
    * which is what a row needs to stop offering to start it again.
    */
   issueOf?: SessionIssueOf
+  /**
+   * The Notion ticket this session was started from.
+   *
+   * The same job `issueOf` does for the GitHub half of the band: without it a
+   * ticket's row cannot say **Has a session already**, and pressing it twice cuts
+   * two worktrees on one piece of work. Unlike an issue there is no fallback — a
+   * page id is not something anybody puts in a branch name — so a session started
+   * before this field existed reads as unstarted, which is at least honest.
+   *
+   * Nothing here is ever written back to Notion. It says where the work came
+   * from, which is what a row needs to stop offering to start it again.
+   */
+  ticketOf?: SessionTicketOf
   /**
    * Whether this session is still following the pull request it opened —
    * reading the checks GitHub ran, fixing them when they go red, and landing it

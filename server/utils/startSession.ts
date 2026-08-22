@@ -1,6 +1,9 @@
 import { basename } from 'node:path'
 import { addProject } from './projects'
-import { newSessionId, saveSession, type Session, type SessionIssueOf } from './sessions'
+import {
+  newSessionId, saveSession,
+  type Session, type SessionIssueOf, type SessionTicketOf,
+} from './sessions'
 import type { TrustLevel } from './trust'
 import {
   branchNameFor,
@@ -48,6 +51,8 @@ export async function startSession(options: {
   branch?: string
   /** The issue this came from, recorded so its row can say a session has it. */
   issueOf?: SessionIssueOf
+  /** The Notion ticket this came from, for the same reason. */
+  ticketOf?: SessionTicketOf
 }): Promise<Session> {
   const { repoDir } = options
 
@@ -109,6 +114,7 @@ export async function startSession(options: {
     // could be chosen up front.
     trust: options.trust,
     issueOf: options.issueOf,
+    ticketOf: options.ticketOf,
     sdkSessionId: options.sdkSessionId,
     runIds: [],
     createdAt: now,

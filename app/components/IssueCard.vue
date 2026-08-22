@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { relativeTime } from '~/utils/time'
-import type { Issue, IssueIntent, IssueState } from '~/composables/useGithubIssues'
+import type { Issue, IssueIntent, IssueSource, IssueState } from '~/composables/useGithubIssues'
 
 /**
- * One issue, and what it wants.
+ * One row on the band, and what it wants.
  *
  * Built to the same claim `PullCard` is: the interesting thing about a row is
  * never its title. What you came to find out is whether this one is your problem
@@ -17,6 +17,13 @@ import type { Issue, IssueIntent, IssueState } from '~/composables/useGithubIssu
  * issue is whether it should be done at all. So the choice is yours and it is
  * the honest one: find out, or do it. Writing anything back to GitHub is brief
  * 09; nothing here comments, labels or closes.
+ *
+ * **Two sources, one row shape.** A GitHub issue and a Notion ticket are drawn by
+ * the same component with a badge saying which, rather than by two components in
+ * two bands. What differs between them is what each tracker actually knows: an
+ * issue has a number, an author and a comment count, a ticket has a status and
+ * none of those. The row shows what is there and says nothing where there is
+ * nothing, which is the only way a mixed list stays readable.
  */
 const props = defineProps<{
   issue: Issue
@@ -51,8 +58,22 @@ const ACTIONS: { intent: IssueIntent; label: string; icon: string; title: string
  * is the authority.
  */
 const sessionNote = computed(() => props.issue.session
-  ? `A session already has this issue — "${props.issue.session.title}". The instruction goes there rather than to a second one.`
+  ? `A session already has this — "${props.issue.session.title}". The instruction goes there rather than to a second one.`
   : null)
+
+/**
+ * Where the row came from, said on the row.
+ *
+ * Not inferred from the URL in the template: the server decides which tracker a
+ * row is from, and a second implementation of that in the page is how a badge
+ * ends up disagreeing with the endpoint it will be pressed against.
+ */
+const SOURCES: Record<IssueSource, { label: string; icon: string; where: string }> = {
+  github: { label: 'GitHub', icon: 'i-lucide-github', where: 'Open on GitHub' },
+  notion: { label: 'Notion', icon: 'i-lucide-file-text', where: 'Open in Notion' },
+}
+
+const from = computed(() => SOURCES[props.issue.source])
 
 /**
  * A colour per state.
@@ -94,6 +115,21 @@ const tone = computed(() => TONES[props.issue.verdict.state])
         </span>
 
         <!--
+          Which tracker. On every row rather than only on the Notion ones: a
+          badge that appears on half a list reads as an exception rather than as
+          a fact, and "where is this" is the first thing you need in order to know
+          who else can see what you do about it.
+        -->
+        <span
+          class="inline-flex items-center gap-1 fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
+          style="background: var(--badge-subtle-bg); color: var(--text-tertiary);"
+          :title="`This came from ${from.label}`"
+        >
+          <UIcon :name="from.icon" class="size-2.5" />
+          {{ from.label }}
+        </span>
+
+        <!--
           The session, as a link rather than a word, for the reason PullCard
           gives: "has a session already" is only useful if it is also the way to
           go and look at it.
@@ -117,18 +153,24 @@ const tone = computed(() => TONES[props.issue.verdict.state])
           rel="noopener"
           class="type-strong text-body hover:underline inline-flex items-baseline gap-1.5 min-w-0 focus-ring rounded"
         >
-          <span class="font-mono fs-mono shrink-0 ink-4">#{{ issue.number }}</span>
+          <!-- A number only where there is one. A Notion page id is thirty-two
+               hex characters and putting eight of them here would be noise. -->
+          <span v-if="issue.number" class="font-mono fs-mono shrink-0 ink-4">#{{ issue.number }}</span>
           <span class="truncate">{{ issue.title }}</span>
         </a>
 
         <div class="flex items-center gap-2 flex-wrap mt-1 type-mono-meta">
-          <span>{{ issue.author }}</span>
+          <!-- Notion tickets carry no author the intake asks for, and an empty
+               span reads as a missing word rather than as an absent fact. -->
+          <span v-if="issue.author">{{ issue.author }}</span>
+          <span v-if="issue.status">{{ issue.status }}</span>
           <span v-if="issue.comments">
             {{ issue.comments }} {{ issue.comments === 1 ? 'comment' : 'comments' }}
           </span>
           <!-- Age, not last activity: the one that has not moved in a month is
-               the one going stale, and sorting by activity would hide it. -->
-          <span :title="new Date(issue.createdAt).toLocaleString()">
+               the one going stale, and sorting by activity would hide it. A
+               ticket whose page did not say has no date to show. -->
+          <span v-if="issue.createdAt" :title="new Date(issue.createdAt).toLocaleString()">
             opened {{ relativeTime(issue.createdAt) }}
           </span>
         </div>
@@ -182,7 +224,7 @@ const tone = computed(() => TONES[props.issue.verdict.state])
         rel="noopener"
         class="p-1.5 rounded-md hover-bg focus-ring"
         style="color: var(--text-disabled);"
-        title="Open on GitHub"
+        :title="from.where"
       >
         <UIcon name="i-lucide-external-link" class="size-3.5" />
       </a>

@@ -1,4 +1,5 @@
 import { EDITOR_CHOICES, type EditorChoice } from '../utils/editors'
+import type { NotionIntakeConfig } from '../utils/notionIntake'
 import {
   savePreferences,
   sanitisePullActions,
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event) => {
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
     issueLabel?: string
+    notionIntake?: Partial<NotionIntakeConfig>
     editor?: EditorChoice
   }>(event)
 
@@ -45,6 +47,7 @@ export default defineEventHandler(async (event) => {
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
     issueLabel?: string
+    notionIntake?: Partial<NotionIntakeConfig>
     editor?: EditorChoice
   } = {}
   for (const key of KEYS) {
@@ -86,6 +89,19 @@ export default defineEventHandler(async (event) => {
   // Only one of the four this app knows a URL scheme for. Anything else is left
   // alone rather than stored and then found to open nothing.
   if (EDITOR_CHOICES.includes(body?.editor as EditorChoice)) patch.editor = body.editor
+
+  // A partial, like `pullActions`, and for the same reason: the settings page
+  // saves one field on blur. Only the keys actually sent are forwarded, each as a
+  // string, so a number in `statusValue` cannot reach the prompt a run is asked.
+  // Empty strings pass through — that is how a half of this is turned off.
+  if (body?.notionIntake && typeof body.notionIntake === 'object') {
+    const sent = body.notionIntake as Record<string, unknown>
+    const only: Partial<NotionIntakeConfig> = {}
+    for (const key of ['dataSource', 'statusProperty', 'statusValue'] as const) {
+      if (typeof sent[key] === 'string') only[key] = sent[key] as string
+    }
+    if (Object.keys(only).length) patch.notionIntake = only
+  }
 
   // A partial is expected — the settings page sends only the action it changed,
   // and `savePreferences` merges it over the three it did not. Sanitised here so
