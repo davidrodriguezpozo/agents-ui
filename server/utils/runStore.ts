@@ -364,7 +364,19 @@ export interface RunSummary {
   source: RunSource
 }
 
-function summarize(run: Run): RunSummary {
+/**
+ * A run record as the list views want it.
+ *
+ * Exported for callers that have already paid for the records: anything asking
+ * both "what did this cost" and "how did each firing end" would otherwise read
+ * every run file twice, once through `runRecordsSince` and once through
+ * `runsSince`, to arrive at two views of the same runs.
+ *
+ * Not called `summarize`, which is what it was while it was private: server
+ * utils are auto-imported into one namespace, and `history.ts` already has a
+ * `summarize` of its own for conversations.
+ */
+export function summarizeRun(run: Run): RunSummary {
   const skipped = parseSkipped(run.output)
   // Previewed without them, because they are shown as themselves now. A row
   // whose 160 characters go on a connector caveat is a row that does not say
@@ -435,7 +447,7 @@ async function collectRuns(): Promise<Run[]> {
  * month cost has to see the month, not the most recent fifty.
  */
 export async function runsSince(sinceMs: number): Promise<RunSummary[]> {
-  return (await collectRuns()).filter(run => run.createdAt >= sinceMs).map(summarize)
+  return (await collectRuns()).filter(run => run.createdAt >= sinceMs).map(summarizeRun)
 }
 
 /**
@@ -444,7 +456,7 @@ export async function runsSince(sinceMs: number): Promise<RunSummary[]> {
  * `RunSummary` is what a list view needs, and it carries neither the model nor
  * the repository nor the events — so nothing loaded through `runsSince` can be
  * grouped by model or by repository, or asked whether the turn changed a file.
- * The ledger needs all three. Adding them to `summarize` would have been two
+ * The ledger needs all three. Adding them to `summarizeRun` would have been two
  * lines and a change to a type six surfaces already read, so the record is
  * handed over whole instead and `outcomeTurnOf` takes what it wants.
  *
@@ -468,7 +480,7 @@ export async function listRuns(
     .filter(run => (since === undefined ? true : (run.startedAt ?? run.createdAt) >= since))
     .filter(run => matchesFilter(run, filter))
     .slice(0, limit)
-    .map(summarize)
+    .map(summarizeRun)
 }
 
 /**
@@ -512,7 +524,7 @@ export async function listRunsBySchedule(perSchedule = 10): Promise<Record<strin
       seen.add(run.chainId ?? `run:${run.id}`)
     }
 
-    bucket.push(summarize(run))
+    bucket.push(summarizeRun(run))
   }
 
   return grouped

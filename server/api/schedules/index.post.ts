@@ -7,13 +7,19 @@ import {
 import { getProjectDir } from '../../utils/scope'
 import type { EventTrigger } from '../../utils/eventTriggers'
 import type { ChainStep } from '../../utils/ritualChain'
+import type { RitualExpectation } from '../../utils/ritualValue'
 
 export default defineEventHandler(async (event) => {
-  // `projectDir`, `trigger` and `steps` are all nullable on the way in: null
-  // clears, absent keeps. See projectDirForSave.
+  // `projectDir`, `trigger`, `steps` and `expects` are all nullable on the way
+  // in: null clears, absent keeps. See projectDirForSave.
   const body = await readBody<
-    Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps'>>
-    & { projectDir?: string | null; trigger?: EventTrigger | null; steps?: ChainStep[] | null }
+    Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps' | 'expects'>>
+    & {
+      projectDir?: string | null
+      trigger?: EventTrigger | null
+      steps?: ChainStep[] | null
+      expects?: RitualExpectation | null
+    }
   >(event)
 
   if (!body?.input?.trim()) {

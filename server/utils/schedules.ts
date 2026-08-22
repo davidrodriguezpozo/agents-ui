@@ -5,6 +5,7 @@ import { mergeRules } from './permissionRules'
 import { permissionModeFor, type TrustLevel } from './trust'
 import { describeTrigger, type EventTrigger } from './eventTriggers'
 import { normalizeSteps, type ChainStep } from './ritualChain'
+import type { RitualExpectation } from './ritualValue'
 
 /**
  * Deliberately not cron. "Every weekday at 08:00" is the shape a daily ritual
@@ -79,6 +80,17 @@ export interface Schedule {
    */
   catchUp?: boolean
   permission: SchedulePermission
+  /**
+   * What this ritual is for, and therefore what it is fair to judge it on.
+   *
+   * Absent means nobody has said, and the row reads it off whether the ritual
+   * has landed anything. That default has to exist — every ritual written
+   * before this field did without it — but it is only a default: a ritual that
+   * is meant to land code and has not landed any for a month looks exactly like
+   * a briefing until somebody says which it is, and those two deserve opposite
+   * sentences on the row.
+   */
+  expects?: RitualExpectation
   /**
    * Rules this ritual has been granted permanently, e.g. `Bash(gh:*)`.
    * Narrower and safer than raising `permission` to 'full'.
@@ -253,13 +265,14 @@ export function projectDirForSave(
 }
 
 export async function upsertSchedule(
-  input: Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps'>>
+  input: Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps' | 'expects'>>
     & {
       input: string
       title: string
       projectDir?: string | null
       trigger?: EventTrigger | null
       steps?: ChainStep[] | null
+      expects?: RitualExpectation | null
     },
 ): Promise<Schedule> {
   const recurrence = normalizeRecurrence(input.recurrence)
@@ -280,6 +293,9 @@ export async function upsertSchedule(
       recurrence,
       catchUp: input.catchUp ?? existing?.catchUp ?? false,
       permission: input.permission ?? existing?.permission ?? 'edits',
+      // `null` puts the judgement back to being read off the records, which
+      // absent cannot say — absent keeps whatever was chosen before.
+      expects: input.expects === null ? undefined : input.expects ?? existing?.expects,
       allowRules: mergeRules(input.allowRules ?? existing?.allowRules ?? []),
       enabled: input.enabled ?? existing?.enabled ?? true,
       origin: input.origin ?? existing?.origin ?? 'user',

@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
 import { formatCost, formatDuration, relativeTime } from '~/utils/time'
-import type { RitualOutcome, Schedule, SuggestedRitual } from '~/composables/useSchedules'
+import type { RitualOutcome, RitualValue, Schedule, SuggestedRitual } from '~/composables/useSchedules'
 
 const {
-  schedules, suggested, loading, loadError, historyFor,
+  schedules, suggested, loading, loadError, historyFor, valueFor,
   fetchAll, remove, setEnabled, adopt, revokeRule,
 } = useSchedules()
 const { describeRule } = usePermissionRuleLabels()
@@ -127,6 +127,41 @@ function strip(id: string) {
 
 function toggleHistory(id: string) {
   expanded.value = expanded.value === id ? null : id
+}
+
+/**
+ * How loudly the row carries its verdict.
+ *
+ * Only the one that wants a decision is coloured. A page where every ritual is
+ * green or amber is a page nobody reads the colours of, and "this briefing is
+ * doing what briefings do" is not news.
+ */
+const VALUE_TONES: Record<RitualValue['tone'], { color: string; icon: string }> = {
+  good: { color: 'var(--text-secondary)', icon: 'i-lucide-check-circle-2' },
+  plain: { color: 'var(--text-tertiary)', icon: 'i-lucide-receipt' },
+  warn: { color: 'var(--warning)', icon: 'i-lucide-coins' },
+}
+
+function money(usd: number | null): string {
+  return usd === null ? '—' : `$${usd.toFixed(2)}`
+}
+
+/**
+ * The figures behind the verdict, for the panel it expands into.
+ *
+ * Every one of them is defined in the paragraph underneath, which is the whole
+ * reason they live in the expansion rather than on the row: a number on a row
+ * with nowhere to find out what it counts is how a page starts being argued
+ * with.
+ */
+function valueStats(value: RitualValue): { label: string; value: string }[] {
+  return [
+    { label: 'Spent', value: money(value.costUsd) },
+    { label: 'Runs', value: String(value.runs) },
+    { label: 'Came to nothing', value: String(value.emptyRuns) },
+    { label: 'Landed', value: String(value.landings) },
+    { label: 'Per landing', value: money(value.costPerLandingUsd) },
+  ]
 }
 
 /** Why a run came to nothing, preferring the part that is actionable. */
@@ -341,6 +376,27 @@ function nextLabel(schedule: Schedule) {
                 </span>
               </div>
 
+              <!--
+                What it has cost and what came of it, in one line. Opens the
+                same panel the run strip does, because every number in the
+                sentence is defined in there and a figure with nowhere to check
+                it is a figure people argue with.
+              -->
+              <button
+                v-if="valueFor(schedule.id)"
+                class="flex items-start gap-1.5 mt-1 type-detail text-left rounded focus-ring"
+                :style="{ color: VALUE_TONES[valueFor(schedule.id)!.tone].color }"
+                :aria-expanded="expanded === schedule.id"
+                title="What these numbers count"
+                @click="toggleHistory(schedule.id)"
+              >
+                <UIcon
+                  :name="VALUE_TONES[valueFor(schedule.id)!.tone].icon"
+                  class="size-3 shrink-0 mt-0.5"
+                />
+                <span>{{ valueFor(schedule.id)!.verdict }}</span>
+              </button>
+
               <!-- What this ritual has been allowed to do without asking -->
               <div v-if="schedule.allowRules?.length" class="flex items-center gap-1.5 flex-wrap mt-1.5">
                 <!--
@@ -440,6 +496,54 @@ function nextLabel(schedule: Schedule) {
             class="px-3 pb-2 pt-2 mx-1 space-y-px"
             style="border-top: 1px solid var(--border-subtle);"
           >
+            <!-- The figures behind the line on the row, and what each counts -->
+            <template v-if="valueFor(schedule.id)">
+              <dl class="flex flex-wrap gap-x-6 gap-y-1.5 px-2 pt-1 pb-2 m-0">
+                <div v-for="stat in valueStats(valueFor(schedule.id)!)" :key="stat.label">
+                  <dt class="fs-micro uppercase tracking-wider text-meta">{{ stat.label }}</dt>
+                  <dd class="type-detail m-0 text-body" style="font-variant-numeric: tabular-nums;">
+                    {{ stat.value }}
+                  </dd>
+                </div>
+              </dl>
+
+              <p class="px-2 pb-2 type-meta leading-relaxed">
+                Over the last {{ valueFor(schedule.id)!.days }}
+                day{{ valueFor(schedule.id)!.days === 1 ? '' : 's' }}.
+                <b>Spent</b> is every turn of every firing — indicative, since on a Claude
+                subscription nothing is billed per turn.
+                <b>Runs</b> counts firings, so a chain of steps counts once.
+                <b>Came to nothing</b> is a firing that failed or was refused a tool it needed;
+                one the machine lost mid-run is left out, because that says nothing about the
+                ritual.
+                <b>Landed</b> is a merge credited to this ritual, and <b>per landing</b> is what
+                it spent on those sessions divided by them.
+              </p>
+
+              <!--
+                The one judgement here nobody made on purpose, so it says so and
+                says where to change it. A ritual meant to land code that has not
+                landed any lately is indistinguishable from a briefing otherwise.
+              -->
+              <p v-if="valueFor(schedule.id)!.assumed" class="px-2 pb-2 type-meta leading-relaxed">
+                <template v-if="valueFor(schedule.id)!.expects === 'report'">
+                  Nothing says what this ritual is for, and it has landed nothing, so it is read
+                  as one that reports.
+                </template>
+                <template v-else>
+                  Nothing says what this ritual is for, and it has landed something, so it is read
+                  as one that lands code.
+                </template>
+                <button class="underline hover:opacity-80" @click.stop="edit(schedule)">
+                  Say which it is
+                </button>
+              </p>
+            </template>
+
+            <p v-if="!historyFor(schedule.id).runs.length" class="px-2 pb-1 type-meta">
+              No runs recorded for this ritual yet.
+            </p>
+
             <NuxtLink
               v-for="run in historyFor(schedule.id).runs"
               :key="run.id"
