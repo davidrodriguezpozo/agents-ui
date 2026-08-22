@@ -1,4 +1,6 @@
 import type { Overlap } from '~/utils/overlap'
+import type { DiffNote } from '~/utils/patch'
+
 export interface WorktreeState {
   path: string
   exists: boolean
@@ -505,6 +507,40 @@ export function useSessions() {
     return $fetch<{ files: DiffFile[]; patch: string }>(`/api/sessions/${encodeURIComponent(id)}/diff`)
   }
 
+  /**
+   * Notes written on the session's diff and not yet sent.
+   *
+   * All three resolve with the whole list, so the page never holds a copy it
+   * patched itself — the notes outlive the tab, and two tabs on one session
+   * appending to their own arrays is how one of them loses a note.
+   */
+  async function fetchNotes(id: string): Promise<DiffNote[]> {
+    const result = await $fetch<{ notes: DiffNote[] }>(
+      `/api/sessions/${encodeURIComponent(id)}/notes`,
+    )
+    return result.notes
+  }
+
+  async function addNote(
+    id: string,
+    note: { file: string; line: number; snippet: string; body: string },
+  ): Promise<DiffNote[]> {
+    const result = await $fetch<{ notes: DiffNote[] }>(
+      `/api/sessions/${encodeURIComponent(id)}/notes`,
+      { method: 'POST', body: note },
+    )
+    return result.notes
+  }
+
+  /** Drop one note, or all of them when given no id. */
+  async function dropNotes(id: string, noteId?: string): Promise<DiffNote[]> {
+    const result = await $fetch<{ notes: DiffNote[] }>(
+      `/api/sessions/${encodeURIComponent(id)}/notes`,
+      { method: 'DELETE', body: { noteId } },
+    )
+    return result.notes
+  }
+
   async function previewPullRequest(id: string) {
     return $fetch<PullRequestPreview>(`/api/sessions/${encodeURIComponent(id)}/pr`)
   }
@@ -606,6 +642,9 @@ export function useSessions() {
     openPullRequest,
     watchPullRequest,
     fetchDiff,
+    fetchNotes,
+    addNote,
+    dropNotes,
     previewMerge,
     merge,
     runCheck,

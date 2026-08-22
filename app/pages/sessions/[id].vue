@@ -4,7 +4,7 @@ import { driftNote } from '~/utils/checkout'
 import { isSendKey } from '~/utils/keys'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
-import { formatReview, parsePatch, type PatchLine, type ReviewComment } from '~/utils/patch'
+import { composeNotes, parsePatch, type DiffNote, type PatchLine } from '~/utils/patch'
 import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
 import type {
   BranchPullRequest, DiffFile, MergePreview, PullRequestPreview, QueuedMessage, Session,
@@ -23,6 +23,7 @@ const id = route.params.id as string
 
 const {
   fetchOne, send, sendQueued, dropQueued, fetchTranscript, setTrust, fetchDiff,
+  fetchNotes, addNote, dropNotes,
   previewPullRequest, openPullRequest, watchPullRequest, previewMerge, merge, runCheck, repair,
   updateFromBase, close, setAside,
 } = useSessions()
@@ -286,6 +287,10 @@ onMounted(async () => {
   await load()
   await refreshDiff()
   await loadProjectRules()
+
+  // Notes written before the tab was closed. Failing to read them is not worth
+  // an error on the way in — the diff is still there to write new ones on.
+  notes.value = await fetchNotes(id).catch(() => [])
 
   if (session.value?.adoptedAt && !session.value.turns.length && !input.value) {
     input.value = suggestedOpener()
@@ -945,14 +950,19 @@ function toggleSteps(id: string) {
 /**
  * Reviewing.
  *
- * Comments are gathered rather than sent one at a time: each turn is a whole
- * agent run, and three remarks about one change are a single piece of
- * feedback. Sending them separately invites three uncoordinated rewrites.
+ * Notes are gathered rather than sent one at a time: each turn is a whole agent
+ * run, and three remarks about one change are a single piece of feedback.
+ * Sending them separately invites three uncoordinated rewrites.
+ *
+ * They live on the server rather than here, because reading a long diff is
+ * exactly the activity that gets interrupted — see `server/utils/diffNotes.ts`.
+ * So every add and every removal is a request, and what comes back is the list.
  */
 const patchLines = computed<PatchLine[]>(() => parsePatch(diff.value?.patch ?? ''))
-const comments = ref<ReviewComment[]>([])
+const notes = ref<DiffNote[]>([])
 const commentingOn = ref<number | null>(null)
 const commentDraft = ref('')
+const notesBusy = ref(false)
 
 function lineColour(line: PatchLine) {
   if (line.kind === 'add') return 'var(--success)'
@@ -971,38 +981,101 @@ function cancelComment() {
   commentDraft.value = ''
 }
 
-function addComment(line: PatchLine) {
+async function addComment(line: PatchLine) {
   const body = commentDraft.value.trim()
-  if (!body || !line.file) return
+  if (!body || !line.file || notesBusy.value) return
 
-  comments.value = [...comments.value, {
-    file: line.file,
-    line: line.line ?? 0,
-    // The line travels with the note, so it survives the file moving under it.
-    snippet: line.text,
-    body,
-  }]
-  cancelComment()
+  notesBusy.value = true
+  try {
+    notes.value = await addNote(id, {
+      file: line.file,
+      line: line.line ?? 0,
+      // The line travels with the note, so the pending list can show what it
+      // was written against without going back to the patch.
+      snippet: line.text,
+      body,
+    })
+    cancelComment()
+  } catch (e) {
+    toast.add({ title: 'Could not keep that note', description: errorMessage(e), color: 'error' })
+  } finally {
+    notesBusy.value = false
+  }
 }
 
-function dropComment(index: number) {
-  comments.value = comments.value.filter((_, i) => i !== index)
+async function dropComment(note: DiffNote) {
+  if (notesBusy.value) return
+
+  notesBusy.value = true
+  try {
+    notes.value = await dropNotes(id, note.id)
+  } catch (e) {
+    toast.add({ title: 'Could not remove that note', description: errorMessage(e), color: 'error' })
+  } finally {
+    notesBusy.value = false
+  }
 }
 
-/** Hand the whole review over as one turn. */
+async function discardNotes() {
+  if (notesBusy.value) return
+
+  notesBusy.value = true
+  try {
+    notes.value = await dropNotes(id)
+  } catch (e) {
+    toast.add({ title: 'Could not discard them', description: errorMessage(e), color: 'error' })
+  } finally {
+    notesBusy.value = false
+  }
+}
+
+/**
+ * Hand every note over as one turn.
+ *
+ * Never refused for a session that is busy: `sendOrQueue` keeps the message and
+ * releases it when the turn ends, and which of the two happened is its answer
+ * rather than a guess made here — same as the composer below.
+ *
+ * The notes are checked against the diff on screen first, and one pointing at a
+ * line that is no longer there is dropped and named. It is still cleared either
+ * way: what it was about is gone, and leaving it in the list to be sent against
+ * the next diff would point the agent at whatever now sits at that number.
+ */
 async function sendReview() {
-  if (!comments.value.length || isBusy.value) return
+  if (!notes.value.length || sending.value) return
 
-  const message = formatReview(comments.value)
+  const composed = composeNotes(notes.value, patchLines.value)
+  const count = composed.sent.length
+
+  if (!composed.instruction) {
+    toast.add({
+      title: 'Nothing left to send',
+      description: composed.droppedNote ?? 'Those lines are no longer in this diff.',
+      color: 'warning',
+    })
+    await discardNotes()
+    return
+  }
+
   sending.value = true
   try {
-    const result = await send(id, message)
-    comments.value = []
+    const result = await send(id, composed.instruction)
+    notes.value = await dropNotes(id)
     showPatch.value = false
     await load()
     if (result.runId) watchRun(result.runId)
+
+    toast.add({
+      title: result.runId ? 'Sent' : 'Queued',
+      description: [
+        result.runId
+          ? `${count} note${count === 1 ? '' : 's'} went as this turn.`
+          : `${count} note${count === 1 ? '' : 's'} will go when this turn ends.`,
+        composed.droppedNote,
+      ].filter(Boolean).join(' '),
+    })
   } catch (e) {
-    toast.add({ title: 'Could not send the review', description: errorMessage(e), color: 'error' })
+    toast.add({ title: 'Could not send the notes', description: errorMessage(e), color: 'error' })
   } finally {
     sending.value = false
   }
@@ -1627,15 +1700,19 @@ const totalChanges = computed(() => {
               description="Tell Claude what to do in this workspace. It can change files freely — they're isolated from your project until you decide to keep them."
             />
 
-            <!-- What you have written so far, and the one action that uses it -->
+            <!--
+              What you have written so far, and the one action that uses it. The
+              button says which of send and queue will happen, because a session
+              mid-turn keeps the notes rather than refusing them.
+            -->
             <div
-              v-if="comments.length"
+              v-if="notes.length"
               class="rounded-md px-4 py-3 space-y-2"
               style="background: var(--surface-raised); border: 1px solid var(--accent-glow);"
             >
               <div class="flex items-center justify-between gap-3">
                 <span class="type-strong text-body">
-                  {{ comments.length }} comment{{ comments.length === 1 ? '' : 's' }} to send
+                  {{ notes.length }} note{{ notes.length === 1 ? '' : 's' }} to send
                 </span>
                 <div class="flex items-center gap-2">
                   <UButton
@@ -1643,32 +1720,33 @@ const totalChanges = computed(() => {
                     size="xs"
                     variant="ghost"
                     color="neutral"
-                    @click="() => { comments = [] }"
+                    :disabled="notesBusy || sending"
+                    @click="discardNotes"
                   />
                   <UButton
-                    label="Send as the next turn"
-                    icon="i-lucide-message-square-reply"
+                    :label="isBusy ? 'Queue for the next turn' : 'Send as the next turn'"
+                    :icon="isBusy ? 'i-lucide-list-plus' : 'i-lucide-message-square-reply'"
                     size="xs"
                     :loading="sending"
-                    :disabled="isBusy"
                     @click="sendReview"
                   />
                 </div>
               </div>
               <div
-                v-for="(comment, index) in comments"
-                :key="index"
+                v-for="note in notes"
+                :key="note.id"
                 class="flex items-start gap-2 group/comment"
               >
                 <span class="type-mono-meta shrink-0 ink-accent">
-                  {{ comment.file }}:{{ comment.line }}
+                  {{ note.file }}:{{ note.line }}
                 </span>
-                <span class="type-detail flex-1 min-w-0">{{ comment.body }}</span>
+                <span class="type-detail flex-1 min-w-0">{{ note.body }}</span>
                 <button
                   class="opacity-0 group-hover/comment:opacity-100 transition-opacity focus-ring rounded shrink-0"
                   style="color: var(--text-disabled);"
-                  aria-label="Remove this comment"
-                  @click="dropComment(index)"
+                  aria-label="Remove this note"
+                  :disabled="notesBusy"
+                  @click="dropComment(note)"
                 >
                   <UIcon name="i-lucide-x" class="size-3" />
                 </button>
@@ -1969,7 +2047,13 @@ const totalChanges = computed(() => {
                       @keydown.esc="cancelComment"
                     />
                     <div class="flex items-center gap-2">
-                      <UButton label="Add comment" size="xs" :disabled="!commentDraft.trim()" @click="addComment(line)" />
+                      <UButton
+                        label="Add note"
+                        size="xs"
+                        :loading="notesBusy"
+                        :disabled="!commentDraft.trim()"
+                        @click="addComment(line)"
+                      />
                       <UButton label="Cancel" size="xs" variant="ghost" color="neutral" @click="cancelComment" />
                       <span class="type-meta">↵ to add · ⇧↵ for a new line</span>
                     </div>
