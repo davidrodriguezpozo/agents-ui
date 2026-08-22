@@ -1,5 +1,5 @@
 import { getProjectDir } from '../../utils/scope'
-import { candidatesIn } from '../../utils/lander'
+import { candidatesIn, namesIn } from '../../utils/lander'
 import { planLanding } from '../../utils/landing'
 import { baseCheckoutState } from '../../utils/merge'
 import { readSessions } from '../../utils/sessions'
@@ -22,7 +22,15 @@ export default defineEventHandler(async (event) => {
   if (!repoDir) return { repoDir: null, queue: [], skipped: [], base: null }
 
   const candidates = await candidatesIn(repoDir)
-  const plan = planLanding(candidates)
+
+  /*
+   * What each session defines and uses, so the queue can be ordered by which of
+   * them settles a name another one is calling — and so the page can say why.
+   * Read here as well as in `startLanding`, from the same function, because the
+   * order drawn and the order attempted have to be the same order.
+   */
+  const names = await namesIn(repoDir, candidates.map(candidate => candidate.id))
+  const plan = planLanding(candidates, names)
 
   /**
    * The branch these sessions expect to merge into, taken from the sessions

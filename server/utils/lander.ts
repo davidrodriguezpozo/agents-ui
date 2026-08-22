@@ -5,6 +5,7 @@ import {
   previewMerge,
 } from './merge'
 import { verifySession } from './sessionChecks'
+import { symbolMap } from './symbols'
 import { notify } from './notify'
 import {
   describeLanding, planLanding, shouldStopRun,
@@ -99,6 +100,49 @@ export async function candidatesIn(repoDir: string): Promise<LandingInput[]> {
       inBase: !drifted && hasLanded(session.branch, worktree.ahead, merged),
     })
   }))
+}
+
+/**
+ * What each session defines and what it uses, for ordering the queue.
+ *
+ * Read once per plan, and only when there is more than one thing to order —
+ * this is `symbolMap` per session, which is a couple of `git` invocations each,
+ * and a queue of one has no order to get right.
+ *
+ * Never throws, and that is deliberate rather than defensive: this decorates an
+ * order that is already correct on cost alone. A worktree that has gone missing
+ * under a `git` call must leave the plan looking exactly as it did before any of
+ * this existed, rather than taking the merge button down with it.
+ */
+export async function namesIn(
+  repoDir: string,
+  ids: string[],
+): Promise<Map<string, { provides: string[]; uses: string[] }>> {
+  const names = new Map<string, { provides: string[]; uses: string[] }>()
+  if (ids.length < 2) return names
+
+  const wanted = new Set(ids)
+  const sessions = (await readSessions().catch(() => []))
+    .filter(session => session.repoDir === repoDir && wanted.has(session.id) && session.worktreePath)
+
+  await Promise.all(sessions.map(async (session) => {
+    try {
+      const map = await symbolMap(session.worktreePath, session.baseBranch)
+
+      names.set(session.id, {
+        // Defined, not removed: a name this session takes away is somebody
+        // else's breakage rather than somebody else's dependency, and that
+        // question is answered in `collisions.ts`.
+        provides: [...new Set(map.files.flatMap(file => file.defined))],
+        uses: [...new Set(map.files.flatMap(file => file.used))],
+      })
+    } catch {
+      // One unreadable worktree is one session with no edges, which is the same
+      // as a session nothing depends on.
+    }
+  }))
+
+  return names
 }
 
 /**
@@ -232,7 +276,14 @@ export async function startLanding(repoDir: string, baseBranch: string): Promise
     })
   }
 
-  const plan = planLanding(await candidatesIn(repoDir))
+  const candidates = await candidatesIn(repoDir)
+  const plan = planLanding(
+    candidates,
+    // The same names the plan endpoint reads, so the order drawn on the page is
+    // the order this run attempts. Re-deriving it anywhere else is how the
+    // picture and the button come to different conclusions.
+    await namesIn(repoDir, candidates.map(candidate => candidate.id)),
+  )
 
   if (!plan.queue.length) {
     throw createError({

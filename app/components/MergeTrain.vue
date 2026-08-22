@@ -290,6 +290,22 @@ function titleOf(car: TrainCar): string {
         />
       </div>
 
+      <!--
+        Why this order and not another.
+
+        An unexplained reordering of somebody's work reads as a bug, and this one
+        is worth explaining twice over: it is not alphabetical, not the order the
+        sessions were started in, and on a good day it is not even cheapest-first.
+        Said once, above the rows, rather than as a badge on each of them.
+      -->
+      <p v-if="plan?.why && summary.landable > 1" class="order-why">
+        <UIcon
+          :name="plan.cycle ? 'i-lucide-refresh-ccw-dot' : 'i-lucide-arrow-down-narrow-wide'"
+          class="size-3.5 shrink-0"
+        />
+        <span>{{ plan.why }}</span>
+      </p>
+
       <!-- The base branch. Everything below diverges from it and returns to it. -->
       <div class="spine-row">
         <span class="spine-label">{{ baseBranch }}</span>
@@ -435,6 +451,18 @@ function titleOf(car: TrainCar): string {
 .train { padding: 12px 16px 14px; }
 
 /* ── The spine ────────────────────────────────── */
+
+/* The sentence above the rows: quieter than a row, louder than a hint. */
+.order-why {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 10px;
+  font-size: var(--fs-micro);
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+.order-why :deep(svg) { margin-top: 1px; }
 
 .spine-row { display: flex; align-items: center; gap: 10px; }
 

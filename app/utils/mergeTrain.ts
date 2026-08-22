@@ -50,6 +50,16 @@ export interface LandingPlan {
   repoDir: string | null
   /** In the order landing will attempt them. */
   queue: PlanCandidate[]
+  /**
+   * Why that order, in one line, from `orderTrain` on the server.
+   *
+   * Rendered as given rather than rebuilt here — the reason is a fact about the
+   * dependencies the server read, and a page that composed its own sentence
+   * would be describing an order it did not decide. Empty for a queue of one.
+   */
+  why?: string
+  /** Two of them use each other, so the order avoided nothing. */
+  cycle?: boolean
   /** Finished — their work is in the base. Opposite news to `skipped`. */
   landed: PlanCandidate[]
   skipped: PlanCandidate[]
