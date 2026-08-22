@@ -15,6 +15,7 @@ leaving: edit the files, run a shell, see the app, and land it.
 <a href="#finishing-it-without-leaving">Workspace</a> ·
 <a href="#whether-it-works">Verification</a> ·
 <a href="#land">Land</a> ·
+<a href="#a-tool-server-not-only-a-client">MCP tools</a> ·
 <a href="#what-a-run-may-touch">Sandboxing</a> ·
 <a href="#activity">Activity</a> ·
 <a href="#alongside-claude-code-desktop">vs. Desktop</a> ·
@@ -682,6 +683,69 @@ One line it does not carry: the titles of what is waiting in Slack or Notion. Th
 written by anyone with access to a channel you are in, and this text goes into the system
 prompt of a run that can edit files and execute commands. Counts cross that line; prose from
 outside does not.
+
+---
+
+## A tool server, not only a client
+
+The **MCP** page tells you which servers this machine has and which of them work. The other
+direction was missing: this app as a tool *an agent uses*. Without it, everything here is
+something a person reads on a screen and retypes into a prompt — so a session cannot ask
+what is blocked, and a ritual cannot start the session that would fix it.
+
+Point Claude Code at `http://127.0.0.1:3000/api/mcp/rpc` and it gets five tools:
+
+| Tool | What it answers |
+| --- | --- |
+| `brief` | The exact text a run here is handed before it starts — the standing brief above, verbatim |
+| `blocked` | Everything that will not move until a person acts. The same answer the sidebar shows |
+| `sessions` | Every open session: id, repository, branch, how its checks last went, one sentence on what it did |
+| `spend_today` | What today has cost, with the daily limit and what is left of it |
+| `start_session` | Cut a branch and a worktree in a repository here and start work on an instruction |
+
+Four reads and one write, and the asymmetry is the design. Reading is free and reversible.
+`start_session` spends money running Claude Code against your repositories, so there is
+exactly one of it and it goes down the same path the composer does — nothing is committed to
+your base branch, nothing is pushed, and no pull request is opened. Nothing else here writes:
+no closing a session, no merging, no editing a ritual.
+
+### Getting in
+
+Two things stand in front of it, and neither is the check that guards the rest of the app.
+
+**A token**, in `~/.claude/agents-ui/mcp-token`, mode 0600, created the first time anything
+asks for it. The app's usual defence — *did this request come from this app rather than from a
+web page you have open* — deliberately lets other programs on your machine through, because
+they already run as you. That is right for the rest of the API and wrong for one route that
+starts sessions: anything able to open a socket could otherwise post a line of JSON and spend
+your money. Presenting the token means already being able to read the directory that holds
+your sessions, so it grants nothing new — it is simply a wall a blind POST cannot climb.
+
+**Loopback only**, read off the socket rather than out of a header, because a header is the
+caller's claim and the peer address is the kernel's. This is the one thing here that refuses
+your phone on the LAN even when `HOST=0.0.0.0` invited it.
+
+```bash
+curl -s localhost:3000/api/mcp/token        # the token, and a ready-made .mcp.json
+```
+
+Then, in the repository you want a session to be able to drive:
+
+```json
+{
+  "mcpServers": {
+    "agents-studio": {
+      "type": "http",
+      "url": "http://127.0.0.1:3000/api/mcp/rpc",
+      "headers": { "Authorization": "Bearer ${AGENTS_STUDIO_MCP_TOKEN}" }
+    }
+  }
+}
+```
+
+`${AGENTS_STUDIO_MCP_TOKEN}` is expanded by Claude Code from your environment, so a
+`.mcp.json` that goes into a commit carries no secret. Export it from the file, or from the
+`curl` above, in the shell you start Claude Code from.
 
 ---
 
