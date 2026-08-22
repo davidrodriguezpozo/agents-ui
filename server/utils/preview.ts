@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
 import { detectPackageManager, makefileHasTarget } from './checks'
+import { startPreviewProxy, type PreviewProxy } from './previewProxy'
 
 /**
  * Running the thing and looking at it.
@@ -131,6 +132,13 @@ export interface Preview {
   output: string
   startedAt: number
   child: ChildProcess
+  /**
+   * The port the iframe should actually load — the dev server with the element
+   * picker added to it. Null when the proxy would not start, in which case the
+   * preview still works and the picker says why it does not.
+   */
+  pickerPort: number | null
+  proxy: PreviewProxy | null
 }
 
 const previews = new Map<string, Preview>()
@@ -212,6 +220,14 @@ export async function startPreview(
     detached: true,
   })
 
+  /*
+   * Started with the server rather than when Point mode is switched on, so that
+   * switching it on does not change the iframe's URL — which would reload the
+   * page and lose whatever state somebody had navigated to in order to point at
+   * something. The script it adds does nothing until asked.
+   */
+  const proxy = await startPreviewProxy(port).catch(() => null)
+
   const preview: Preview = {
     sessionId,
     command,
@@ -220,6 +236,8 @@ export async function startPreview(
     output: '',
     startedAt: Date.now(),
     child,
+    pickerPort: proxy?.port ?? null,
+    proxy,
   }
 
   const collect = (chunk: Buffer) => {
@@ -278,6 +296,10 @@ export async function startPreview(
 export function stopPreview(sessionId: string, opts: { keepRecord?: boolean } = {}): void {
   const preview = previews.get(sessionId)
   if (!preview) return
+
+  preview.proxy?.close()
+  preview.proxy = null
+  preview.pickerPort = null
 
   try {
     if (preview.child.pid) process.kill(-preview.child.pid, 'SIGTERM')

@@ -31,5 +31,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const preview = await startPreview(id, session.worktreePath, dev.command)
-  return { state: preview.state, port: preview.port, command: preview.command }
+  return {
+    state: preview.state,
+    port: preview.port,
+    command: preview.command,
+    pickerPort: preview.pickerPort,
+  }
 })

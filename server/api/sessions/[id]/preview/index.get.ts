@@ -18,7 +18,15 @@ export default defineEventHandler(async (event) => {
     source: dev?.source ?? null,
     from: dev?.from ?? null,
     preview: running
-      ? { state: running.state, port: running.port, command: running.command, output: running.output }
+      ? {
+          state: running.state,
+          port: running.port,
+          command: running.command,
+          output: running.output,
+          // The port the iframe loads: the dev server with the element picker
+          // added to it. Null means the picker is unavailable, not the preview.
+          pickerPort: running.pickerPort,
+        }
       : null,
   }
 })
