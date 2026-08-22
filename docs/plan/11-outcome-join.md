@@ -33,3 +33,34 @@ Nobody else in the field can build this because nobody else records the merge.
 ## Out of scope
 
 Any page. Any new store. Reverts — brief 14.
+
+## Findings
+
+- **`RunSummary` cannot carry this join.** It is what a list view needs and has
+  neither `model` nor `projectDir`, so nothing loaded through `runsSince` or
+  `listRuns` can be grouped by model or by repository. `joinOutcomes` therefore
+  takes a structural `OutcomeTurn`, and `outcomeTurnOf` maps the **run record** —
+  which has both, plus `stats.costUsd` and the events. Whoever builds the
+  endpoint either reads run records or adds those two fields to `summarize`; two
+  lines, but a change to a type six surfaces already read, so it was left alone
+  here.
+- **Nothing records whether a turn changed a file.** Recovered from the event log
+  in `turnChangedFiles`, which means the honest denominator is "turns we could
+  measure", reported as `changedFiles.measured` rather than folded into a share
+  that quietly counts unloaded turns as turns that changed nothing. Two known
+  gaps: a turn that only ever edited through `Bash` undercounts, and reading a
+  month of events means opening every run file. If that becomes the cost of the
+  page, the flag wants writing onto the run at the end of the turn.
+- **Decisions taken, since nobody was there to ask.** Spend is attributed per
+  turn from the fate of its session, so within any group the four buckets
+  (landed, abandoned, open, unattributed) add back up to the group's cost.
+  Landings are attributed per session to the group of its last costed turn in
+  the window, so a session run under two models counts its landing under one of
+  them and group totals never exceed the overall. Landings are counted by when
+  they landed while spend is counted by when it was spent — the two windows
+  genuinely differ, and reconciling them would mean lying about one. A turn with
+  no value for a dimension is left out of it rather than put in an "unknown"
+  bucket, so a dimension's groups can sum to less than the total.
+- **`landedSince` narrows the record but is typed on the session**, so callers
+  re-check `landed` after the filter. Worth a `T & { landed: SessionLanded }[]`
+  return type one day; not this brief's file.
