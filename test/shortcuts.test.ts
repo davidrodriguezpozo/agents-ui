@@ -325,6 +325,11 @@ describe('the rows the list keys walk', () => {
  * canvas, and on both `⌃d`/`⌃u` fall through to scrolling the page, which is
  * what `halfPage` does when it finds no rows. Detail pages are absent for the
  * same reason.
+ *
+ * `pages/mcp.vue` was on this list until the servers became a facet of the
+ * Library. It is a redirect now, with no rows of its own and nothing for a
+ * keyboard to walk — the list it used to show is walked on `pages/library.vue`,
+ * which is here.
  */
 const LIST_PAGES = [
   'pages/index.vue',
@@ -333,7 +338,6 @@ const LIST_PAGES = [
   'pages/library.vue',
   'pages/schedules.vue',
   'pages/plugins/index.vue',
-  'pages/mcp.vue',
   'pages/explore.vue',
   'pages/wall.vue',
   'pages/workflows/index.vue',
