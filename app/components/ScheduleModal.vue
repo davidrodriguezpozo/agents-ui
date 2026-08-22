@@ -169,6 +169,18 @@ const permission = ref<SchedulePermission>(props.schedule?.permission ?? 'edits'
  * and skipping it means the work never gets done at all.
  */
 const catchUp = ref(props.schedule?.catchUp ?? false)
+
+/**
+ * What this ritual is for, which is what the row is allowed to judge it on.
+ *
+ * The empty string is "nobody has said", and it is the default rather than a
+ * guess dressed up as an answer: the row then reads it off whether the ritual
+ * has landed anything, and says that it did. Worth setting for the one case the
+ * records cannot tell apart — a ritual meant to land code that has not landed
+ * any lately looks exactly like a briefing, and those two deserve opposite
+ * sentences.
+ */
+const expects = ref<'' | 'code' | 'report'>(props.schedule?.expects ?? '')
 const saving = ref(false)
 
 /**
@@ -272,6 +284,9 @@ async function onSave() {
           }
         : null,
       permission: permission.value,
+      // `null` hands the judgement back to the records, which absent cannot
+      // say — absent would keep whatever was chosen before.
+      expects: expects.value || null,
       // Only meaningful on the clock: an event ritual fires when the thing
       // happens, so it can never be late for anything.
       catchUp: firesOn.value === 'clock' ? catchUp.value : false,
@@ -585,6 +600,24 @@ async function onSave() {
       <span class="field-hint">
         Nobody is around when this runs, so it can't stop to ask. Anything beyond this
         is refused and the run is flagged for you.
+      </span>
+    </div>
+
+    <!--
+      What the row is allowed to hold against it. A briefing that never merges
+      anything is doing its job; a fix-it ritual that never merges anything is
+      costing money for nothing, and the records alone cannot tell them apart.
+    -->
+    <div class="field-group">
+      <label class="field-label">What should come out of it?</label>
+      <select v-model="expects" class="field-select w-full">
+        <option value="">Work it out from what it has landed</option>
+        <option value="code">Code that gets merged</option>
+        <option value="report">A report — nothing is meant to merge</option>
+      </select>
+      <span class="field-hint">
+        Decides what its row says about the money. Left as it is, a ritual that has never
+        landed anything is taken to be reporting, so it is never told it landed nothing.
       </span>
     </div>
 

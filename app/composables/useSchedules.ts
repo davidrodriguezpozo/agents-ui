@@ -60,6 +60,12 @@ export interface Schedule {
    */
   catchUp?: boolean
   permission: SchedulePermission
+  /**
+   * What this ritual is for, and so what it is fair to judge it on. Absent
+   * means nobody has said, and the row reads it off whether it has landed
+   * anything.
+   */
+  expects?: RitualExpectation
   /** Permanent permission rules, e.g. `Bash(gh:*)`. */
   allowRules?: string[]
   /**
@@ -108,6 +114,31 @@ export interface RitualHistory {
   lastOkAt?: number
 }
 
+/** Whether a ritual is meant to land code or to tell you something. */
+export type RitualExpectation = 'code' | 'report'
+
+/**
+ * What a ritual has cost and what came of it, over a window of whole days.
+ * Mirrors `server/utils/ritualValue.ts`, which decides every number and the
+ * sentence — the page renders what it is handed.
+ */
+export interface RitualValue {
+  expects: RitualExpectation
+  /** Nobody said what it is for, so this was read off the records. */
+  assumed: boolean
+  days: number
+  /** Firings, so a chain counts once however many steps it ran. */
+  runs: number
+  /** Firings that finished and produced nothing: refused a tool, or failed. */
+  emptyRuns: number
+  costUsd: number
+  landings: number
+  /** What it spent on the sessions that landed, over those landings. */
+  costPerLandingUsd: number | null
+  verdict: string
+  tone: 'good' | 'plain' | 'warn'
+}
+
 export interface SuggestedRitual {
   command: string
   title: string
@@ -131,20 +162,31 @@ export function useSchedules() {
   const loadError = useState<string | null>('schedulesError', () => null)
   /** What each ritual has been doing, keyed by ritual id. */
   const histories = useState<Record<string, RitualHistory>>('ritual-histories', () => ({}))
+  /** What each ritual has cost and produced, keyed by ritual id. */
+  const values = useState<Record<string, RitualValue>>('ritual-values', () => ({}))
+  /** The days those figures cover, so the page can say which window it means. */
+  const valueDays = useState<number | null>('ritual-value-days', () => null)
 
   async function fetchAll() {
     loading.value = true
     try {
-      const [mine, theirs, history] = await Promise.all([
+      const [mine, theirs, history, value] = await Promise.all([
         $fetch<Schedule[]>('/api/schedules'),
         $fetch<SuggestedRitual[]>('/api/schedules/suggested').catch(() => []),
         // History is context, not the rituals themselves — losing it must not
         // take the page down with it.
         $fetch<Record<string, RitualHistory>>('/api/schedules/history').catch(() => ({})),
+        // The same, and it reads every run file in the window — the slowest of
+        // the four, and the one the page can most afford to be without.
+        $fetch<{ window: { days: number }; rituals: Record<string, RitualValue> }>(
+          '/api/schedules/value',
+        ).catch(() => null),
       ])
       schedules.value = mine
       suggested.value = theirs
       histories.value = history
+      values.value = value?.rituals ?? {}
+      valueDays.value = value?.window.days ?? null
       loadError.value = null
     } catch (e) {
       console.error('[useSchedules] fetchAll:', e)
@@ -160,11 +202,16 @@ export function useSchedules() {
    * pinned to a repository but never unpinned.
    */
   async function save(
-    // `projectDir` and `trigger` are both nullable on the way out: null clears
-    // what is stored, absent leaves it alone. Neither can be expressed by
-    // simply omitting the field.
-    schedule: Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps'>>
-      & { projectDir?: string | null; trigger?: EventTrigger | null; steps?: ChainStep[] | null },
+    // `projectDir`, `trigger`, `steps` and `expects` are all nullable on the
+    // way out: null clears what is stored, absent leaves it alone. None of them
+    // can be expressed by simply omitting the field.
+    schedule: Partial<Omit<Schedule, 'projectDir' | 'trigger' | 'steps' | 'expects'>>
+      & {
+        projectDir?: string | null
+        trigger?: EventTrigger | null
+        steps?: ChainStep[] | null
+        expects?: RitualExpectation | null
+      },
   ): Promise<Schedule> {
     const saved = await $fetch<Schedule>('/api/schedules', { method: 'POST', body: schedule })
     const idx = schedules.value.findIndex(s => s.id === saved.id)
@@ -224,6 +271,15 @@ export function useSchedules() {
     return histories.value[id] ?? { runs: [], failingStreak: 0 }
   }
 
+  /**
+   * Null rather than an empty tally when the figures could not be loaded: a row
+   * showing "$0.00, nothing landed" for a ritual nobody has costed would be the
+   * page inventing the worst possible reading of a failed request.
+   */
+  function valueFor(id: string): RitualValue | null {
+    return values.value[id] ?? null
+  }
+
   return {
     schedules,
     suggested,
@@ -231,6 +287,9 @@ export function useSchedules() {
     loadError,
     histories,
     historyFor,
+    values,
+    valueFor,
+    valueDays,
     fetchAll,
     save,
     remove,
