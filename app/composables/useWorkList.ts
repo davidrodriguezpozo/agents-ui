@@ -10,8 +10,18 @@ import { buildWorkList, railCount, railGroups, tabCounts as countByTab } from '~
  * is already its own row, so filtering client-side spent the whole cap on rows
  * that were then discarded — and a ritual run from yesterday was invisible
  * behind fifty turns of one session.
+ *
+ * Multi-line on purpose. As a one-liner, unimport reads `export const X: T = { a, b }`
+ * as a destructuring export and registers `limit` and `hidden` as auto-importable
+ * names from this file — so any component that later used a bare `limit` or `hidden`
+ * got an import injected for an export that does not exist, and the page 500s with
+ * "does not provide an export named 'hidden'".
  */
-export const RUNS_QUERY: RunQuery = { exclude: ['session'], limit: 50, hidden: 'exclude' }
+export const RUNS_QUERY: RunQuery = {
+  exclude: ['session'],
+  limit: 50,
+  hidden: 'exclude',
+}
 
 /**
  * The work list, shared by the rail and the page beside it.
