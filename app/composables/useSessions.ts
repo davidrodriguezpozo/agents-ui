@@ -330,6 +330,18 @@ export interface PullRequestPreview {
   suggestedBody: string
 }
 
+/**
+ * A check this project has seen pass and fail on identical code. Mirrors
+ * `server/utils/checkFlakes.ts`, which is where the judgement is made.
+ */
+export interface Flake {
+  name: string
+  runs: number
+  failures: number
+  rate: number
+  note: string
+}
+
 export interface MergePreview {
   canMerge: boolean
   blockedReason?: string
@@ -343,6 +355,9 @@ export interface MergePreview {
   checkStale?: boolean
   /** Git has no objection; only the checks do. This one can be overruled. */
   blockedByChecks?: boolean
+  /** Known flakes among this failure's own failures. Never changes the gate. */
+  flakes?: Flake[]
+  flakeNote?: string
 }
 
 /**

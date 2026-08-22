@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { isStale, worktreeFingerprint, type SessionCheck } from './checks'
+import { describeFlakes, flakesFor, type Flake } from './checkFlakes'
 import { recordLanded } from './landed'
 import type { Session } from './sessions'
 import { checkoutDrifted, driftNote, reviewOnlyNote } from '~/utils/checkout'
@@ -51,6 +52,15 @@ export interface MergePreview {
   check?: SessionCheck | null
   /** The recorded verdict describes code that has since changed. */
   checkStale?: boolean
+  /**
+   * Failures this project has seen go both ways on identical code. Shown beside
+   * the failure and nothing more — the gate is unmoved, the person is better
+   * informed. Empty whenever there is nothing established to say. See
+   * `checkFlakes.ts`.
+   */
+  flakes?: Flake[]
+  /** The one line above them, when there are any. See `describeFlakes`. */
+  flakeNote?: string
   /**
    * The only thing in the way is the checks. Everything git cares about is
    * fine, so this is a judgement rather than an impossibility — and a
@@ -259,6 +269,7 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
 
   const check = session.check ?? null
   const checkStale = isStale(session.check, await worktreeFingerprint(worktreePath))
+  const flakes = await flakesFor(repoDir, check)
 
   const preview: MergePreview = {
     canMerge: false,
@@ -270,6 +281,8 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
     conflicts,
     check,
     checkStale,
+    flakes,
+    ...(flakes.length ? { flakeNote: describeFlakes(flakes) } : {}),
   }
 
   if (refusal) {

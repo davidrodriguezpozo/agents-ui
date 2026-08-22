@@ -2,6 +2,7 @@ import {
   checkCommandFor, runCheck, worktreeFingerprint,
   type SessionCheck,
 } from './checks'
+import { recordCheckRun } from './checkFlakes'
 import { findSession, patchSession } from './sessions'
 import { prepareWorkspace } from './projectSetup'
 
@@ -108,6 +109,18 @@ export async function verifySession(sessionId: string): Promise<SessionCheck | n
 
       const check: SessionCheck = { ...outcome, command: resolved.command, fingerprint, at: Date.now() }
       await patchSession(sessionId, { check })
+
+      /*
+       * Filed here rather than by the callers, and for the reason `recordLanded`
+       * is: there are five ways to reach this function and a sixth is coming, so
+       * a history written at the call site would be a history with holes in it —
+       * and a hole in this one is not a missing row, it is a check quietly
+       * looking more reliable than it is.
+       *
+       * Every verdict, not only the failures. A flake is only recognisable
+       * against the runs where it behaved.
+       */
+      await recordCheckRun(session.repoDir, check)
       return check
     })
   })()
