@@ -28,6 +28,14 @@ export interface SessionReviewOf {
   url?: string
 }
 
+/** Which issue a session was started from. */
+export interface SessionIssueOf {
+  number: number
+  url: string
+  /** What the issue was called when the session began. Only for reading. */
+  title?: string
+}
+
 export interface Session {
   id: string
   title: string
@@ -87,6 +95,19 @@ export interface Session {
    * and posting it would attach real comments to the wrong code.
    */
   reviewOf?: SessionReviewOf
+  /**
+   * The issue this session was started from.
+   *
+   * The band on Land has to be able to say **Has a session already**, and until
+   * this existed the only evidence was the branch name — `42-drop-the-cache`
+   * looks like work on #42 and so does `fix-login-42abc`, and neither is proof.
+   * A recorded number is. The branch is still read as a fallback, for the
+   * sessions that started before this and for a branch cut by hand.
+   *
+   * Nothing here is written back to GitHub. It says where the work came from,
+   * which is what a row needs to stop offering to start it again.
+   */
+  issueOf?: SessionIssueOf
   /**
    * Whether this session is still following the pull request it opened —
    * reading the checks GitHub ran, fixing them when they go red, and landing it

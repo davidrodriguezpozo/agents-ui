@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { relativeTime } from '~/utils/time'
-import type { Issue, IssueState } from '~/composables/useGithubIssues'
+import type { Issue, IssueIntent, IssueState } from '~/composables/useGithubIssues'
 
 /**
  * One issue, and what it wants.
@@ -11,11 +11,48 @@ import type { Issue, IssueState } from '~/composables/useGithubIssues'
  * assignees, the conversation and the sessions on this machine at once — so it
  * takes the position the eye lands on and the title sits under it.
  *
- * Quieter than a pull request card on purpose. There is no button: starting a
- * session from a row is brief 07 and writing anything back to GitHub is brief
- * 09, so for now the row's job is to be seen and to open.
+ * Two buttons, where a pull request has one. The pull request band can pick the
+ * action from the state — a red build wants a fix and a waiting reviewer wants
+ * an answer — and an issue cannot, because the thing not yet known about an
+ * issue is whether it should be done at all. So the choice is yours and it is
+ * the honest one: find out, or do it. Writing anything back to GitHub is brief
+ * 09; nothing here comments, labels or closes.
  */
-const props = defineProps<{ issue: Issue }>()
+const props = defineProps<{
+  issue: Issue
+  /** A press on this row is in flight. */
+  busy?: boolean
+}>()
+
+const emit = defineEmits<{ work: [IssueIntent] }>()
+
+/** Mirrors `ISSUE_INTENT_LABELS` on the server, which builds the prompt. */
+const ACTIONS: { intent: IssueIntent; label: string; icon: string; title: string }[] = [
+  {
+    intent: 'investigate',
+    label: 'Investigate it',
+    icon: 'i-lucide-scan-search',
+    title: 'Start a session that reads the code and reports back. It commits nothing.',
+  },
+  {
+    intent: 'implement',
+    label: 'Do it',
+    icon: 'i-lucide-hammer',
+    title: 'Start a session that investigates, makes the change and commits on its own branch.',
+  },
+]
+
+/**
+ * What the buttons will really do when a session already has this issue.
+ *
+ * Worth having on the hover rather than in a toast afterwards: the instruction
+ * lands in that session rather than cutting a second workspace, and a session
+ * mid-turn gets opened instead. This mirrors `issues/work.post.ts`; the server
+ * is the authority.
+ */
+const sessionNote = computed(() => props.issue.session
+  ? `A session already has this issue — "${props.issue.session.title}". The instruction goes there rather than to a second one.`
+  : null)
 
 /**
  * A colour per state.
@@ -115,6 +152,30 @@ const tone = computed(() => TONES[props.issue.verdict.state])
     </div>
 
     <div class="flex items-center gap-1.5 pr-3 shrink-0">
+      <!--
+        The whole reason this band is not a list of links. Two, because the
+        useful first move on an issue is usually to find out whether the ask
+        survives reading the code — and that is not the same press as doing it.
+      -->
+      <button
+        v-for="action in ACTIONS"
+        :key="action.intent"
+        class="inline-flex items-center gap-1.5 fs-mono px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer transition-colors"
+        :style="action.intent === 'implement'
+          ? { background: 'var(--accent-muted)', color: 'var(--accent)' }
+          : { background: 'var(--badge-subtle-bg)', color: 'var(--text-secondary)' }"
+        :disabled="busy"
+        :title="sessionNote ?? action.title"
+        @click="emit('work', action.intent)"
+      >
+        <UIcon
+          :name="busy ? 'i-lucide-loader-2' : action.icon"
+          class="size-3.5"
+          :class="{ 'animate-spin': busy }"
+        />
+        {{ action.label }}
+      </button>
+
       <a
         :href="issue.url"
         target="_blank"

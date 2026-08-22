@@ -1,6 +1,6 @@
 import { basename } from 'node:path'
 import { addProject } from './projects'
-import { newSessionId, saveSession, type Session } from './sessions'
+import { newSessionId, saveSession, type Session, type SessionIssueOf } from './sessions'
 import type { TrustLevel } from './trust'
 import {
   branchNameFor,
@@ -35,6 +35,19 @@ export async function startSession(options: {
    * one somebody most wants to leave running — ignored the intent entirely.
    */
   trust?: TrustLevel
+  /**
+   * The branch to cut, when the caller has a better name than the title gives.
+   *
+   * The default appends the session id, which guarantees a free name and reads
+   * as machinery. Work that starts from something already numbered — an issue —
+   * has a name people already use for it, and `42-drop-the-cache` is worth more
+   * on `git branch` than `42-drop-the-cache-mfx2ab1c` is. The caller owns the
+   * collision: git refuses a name that exists, so anyone passing this has to
+   * have checked, or be content to fall back to the default by passing nothing.
+   */
+  branch?: string
+  /** The issue this came from, recorded so its row can say a session has it. */
+  issueOf?: SessionIssueOf
 }): Promise<Session> {
   const { repoDir } = options
 
@@ -65,7 +78,7 @@ export async function startSession(options: {
   const id = newSessionId()
   const title = options.title.trim() || 'Untitled session'
   const baseBranch = options.baseRef?.trim() || await currentBranch(repoDir)
-  const branch = branchNameFor(title, id)
+  const branch = options.branch?.trim() || branchNameFor(title, id)
 
   const { path, baseSha } = await createWorktree({
     repoDir,
@@ -95,6 +108,7 @@ export async function startSession(options: {
     // Absent means the default, which is what every session had before this
     // could be chosen up front.
     trust: options.trust,
+    issueOf: options.issueOf,
     sdkSessionId: options.sdkSessionId,
     runIds: [],
     createdAt: now,
