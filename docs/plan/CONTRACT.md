@@ -49,6 +49,20 @@ Green checks and a one-sentence account of what changed is the whole of "done".
 - **No new runtime dependencies.** `package.json` has none by design. A new devDependency
   needs a line of justification under `## Findings` in your brief.
 
+## Acceptance you cannot perform
+
+Some briefs end with a by-hand step: open the page, press the thing, watch an editor
+launch. An unattended session cannot do those, and four waves have now proved it. So:
+
+- **Mechanise it instead**, as far as the boundary you own — a test that drives the real
+  function against a scratch fixture, an assertion that two surfaces reconcile. Then say in
+  one line what remains unproven and who has to press it.
+- **Never point a server at the real `~/.claude`.** If you start one at all, `CLAUDE_DIR` is a
+  temporary directory and the port is one you chose and checked, never the default. A run
+  that dies on a busy port having briefly pointed at live state is a near miss, not a pass.
+- **Do not simulate the missing half.** A fake that makes the acceptance line green is worse
+  than an honest gap, because the gap is the thing the next person needs to know about.
+
 ## Scope discipline
 
 Do the brief. If it needs something the brief did not name, do the in-scope part, ship it
