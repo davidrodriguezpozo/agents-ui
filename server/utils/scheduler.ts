@@ -15,6 +15,7 @@ import { describeIncomplete } from './digest'
 import { tickInbox } from './inboxTick'
 import { tickDigestDelivery } from './digestSend'
 import { tickDigestCommands } from './digestCommands'
+import { tickTeamDigest } from './teamDelivery'
 import { refreshBrief } from './brief'
 import { withRunSlot } from './runQueue'
 import { pollPullRequests } from './prWatchRunner'
@@ -114,6 +115,9 @@ export function startScheduler(): void {
     void tickInbox()
     void tickDigestDelivery()
     void tickDigestCommands()
+    // The team's message, on the same tick and by the same rule: nothing until
+    // somebody turned it on and a send has worked by hand. See `teamDelivery`.
+    void tickTeamDigest()
     void refreshBrief()
     void pollReverts()
   }, 15_000)
@@ -134,6 +138,10 @@ export function startScheduler(): void {
     // somebody has switched it on and pointed it at a direct message, so on
     // almost every machine this costs one `readDelivery` every two minutes.
     void tickDigestCommands()
+    // The team's message, same rule and same cost: one file read until the
+    // minute it is due. It has no return leg at all — a channel can receive and
+    // can never command, which is `teamCommandsRefusal`.
+    void tickTeamDigest()
     // Not a schedule and not a run: the brief is assembled from files this
     // machine already has, so it is rebuilt on the poll rather than at the
     // moment a run needs it. A run that had to wait for it would be paying for
