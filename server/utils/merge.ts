@@ -2,8 +2,9 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { isStale, worktreeFingerprint, type SessionCheck } from './checks'
 import { describeFlakes, flakesFor, type Flake } from './checkFlakes'
+import { collisionsFor, describeCollisions, type Collision } from './collisions'
 import { recordLanded } from './landed'
-import type { Session } from './sessions'
+import { readSessions, type Session } from './sessions'
 import { checkoutDrifted, driftNote, reviewOnlyNote } from '~/utils/checkout'
 
 const exec = promisify(execFile)
@@ -61,6 +62,16 @@ export interface MergePreview {
   flakes?: Flake[]
   /** The one line above them, when there are any. See `describeFlakes`. */
   flakeNote?: string
+  /**
+   * Names this merge takes away that other sessions still in flight are calling.
+   * Shown beside the checks verdict and nothing more: git has no objection to
+   * any of it, which is exactly why it is worth saying, and also why it blocks
+   * nothing. Empty whenever there is nothing established to say. See
+   * `collisions.ts`.
+   */
+  collisions?: Collision[]
+  /** The one line above them, when there are any. See `describeCollisions`. */
+  collisionNote?: string
   /**
    * The only thing in the way is the checks. Everything git cares about is
    * fine, so this is a judgement rather than an impossibility — and a
@@ -271,6 +282,11 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
   const checkStale = isStale(session.check, await worktreeFingerprint(worktreePath))
   const flakes = await flakesFor(repoDir, check)
 
+  // Beside the flakes because it is the same kind of thing: a fact about this
+  // merge that the gate does not know and the person deciding wants. See
+  // `collisions.ts` for why it costs nothing on the merges that remove nothing.
+  const collisions = await collisionsFor(session, await readSessions())
+
   const preview: MergePreview = {
     canMerge: false,
     targetBranch: baseBranch,
@@ -283,6 +299,8 @@ export async function previewMerge(session: Session): Promise<MergePreview> {
     checkStale,
     flakes,
     ...(flakes.length ? { flakeNote: describeFlakes(flakes) } : {}),
+    collisions,
+    ...(collisions.length ? { collisionNote: describeCollisions(collisions) } : {}),
   }
 
   if (refusal) {

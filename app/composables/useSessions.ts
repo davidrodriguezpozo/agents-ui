@@ -342,6 +342,18 @@ export interface Flake {
   note: string
 }
 
+/**
+ * A name this merge takes away that another session in flight still calls.
+ * Mirrors `server/utils/collisions.ts`, which is where the judgement is made.
+ */
+export interface Collision {
+  name: string
+  path: string
+  sessions: { id: string; title: string }[]
+  total: number
+  note: string
+}
+
 export interface MergePreview {
   canMerge: boolean
   blockedReason?: string
@@ -358,6 +370,9 @@ export interface MergePreview {
   /** Known flakes among this failure's own failures. Never changes the gate. */
   flakes?: Flake[]
   flakeNote?: string
+  /** Names other live sessions call that this merge removes. Blocks nothing. */
+  collisions?: Collision[]
+  collisionNote?: string
 }
 
 /**
