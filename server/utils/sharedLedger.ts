@@ -101,6 +101,18 @@ export interface LedgerEntry {
   verdict?: LedgerVerdict
   /** That the landing went in over a failing check. */
   override?: true
+  /**
+   * The repository, by the name the team already shares — never the path.
+   *
+   * A path names a directory on somebody's disk and is the one thing here that
+   * would say something about a machine rather than about work; the last segment
+   * of it is what everybody involved already calls the repository, and it is
+   * what makes "what did we ship" answerable per repository.
+   *
+   * Optional, and deliberately not a format bump: a reader that has never heard
+   * of it still adds every line up correctly. See `LEDGER_FORMAT`.
+   */
+  repo?: string
 }
 
 export interface LedgerTotals {
@@ -166,6 +178,7 @@ export function ledgerLine(entry: LedgerEntry): string {
   if (entry.landing) line.landing = entry.landing
   if (entry.verdict) line.verdict = entry.verdict
   if (entry.override) line.override = true
+  if (entry.repo) line.repo = entry.repo
 
   return JSON.stringify(line)
 }
@@ -224,6 +237,7 @@ export function parseLedgerLine(text: string): { entry: LedgerEntry } | { skip: 
   }
   if (line.verdict === 'passing' || line.verdict === 'failing') entry.verdict = line.verdict
   if (line.override === true) entry.override = true
+  if (typeof line.repo === 'string' && line.repo) entry.repo = line.repo
 
   return { entry }
 }
@@ -327,6 +341,7 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
       ...(turn.person ? { person: turn.person } : {}),
       ...(turn.sessionId ? { sessionId: turn.sessionId } : {}),
       ...(turn.scheduleId ? { scheduleId: turn.scheduleId } : {}),
+      ...(repoName(turn.projectDir) ? { repo: repoName(turn.projectDir)! } : {}),
     })
   }
 
@@ -342,6 +357,7 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
         ...(personOf(landed.by) ? { person: personOf(landed.by)! } : {}),
         sessionId: session.id,
         ...(landed.overrodeChecks ? { override: true as const } : {}),
+        ...(repoName(session.repoDir) ? { repo: repoName(session.repoDir)! } : {}),
       })
     }
 
@@ -354,6 +370,7 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
         // When the work went back out, not when this machine noticed.
         at: reverted.committedAt || reverted.at,
         sessionId: session.id,
+        ...(repoName(session.repoDir) ? { repo: repoName(session.repoDir)! } : {}),
       })
     }
 
@@ -368,11 +385,25 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
         at: check.at,
         verdict: check.status,
         sessionId: session.id,
+        ...(repoName(session.repoDir) ? { repo: repoName(session.repoDir)! } : {}),
       })
     }
   }
 
   return entries
+}
+
+/**
+ * The repository as everybody involved refers to it: the last segment of the
+ * path, and never the path. Slugged, because it ends up in a page and a message.
+ */
+function repoName(dir?: string): string | undefined {
+  if (!dir) return undefined
+
+  const last = dir.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
+  if (!last) return undefined
+
+  return last.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 48) || undefined
 }
 
 /** The key, never the name: `describePerson` is prose and prose does not travel. */
@@ -465,6 +496,21 @@ export function teamLedger(files: LedgerFile[], since = 0): LedgerTeamReport {
     .sort((a, b) => b.totals.costUsd - a.totals.costUsd || a.person.localeCompare(b.person))
 
   return { totals, machines, people: ranked, unattributedCostUsd }
+}
+
+/**
+ * Every entry in every file, inside a window, newest last.
+ *
+ * `teamLedger` answers with totals, which is what a page of numbers wants. A
+ * message that says *what* shipped and *who* shipped it needs the lines
+ * themselves, and reading them twice is cheaper than making the totals carry
+ * every grouping anybody might want.
+ */
+export function ledgerEntriesIn(files: LedgerFile[], since = 0): LedgerEntry[] {
+  return files
+    .flatMap(file => readLedgerText(file.text).entries.map(entry => ({ ...entry, machine: file.machine })))
+    .filter(entry => entry.at >= since)
+    .sort((a, b) => a.at - b.at)
 }
 
 // --- The files themselves ---------------------------------------------------

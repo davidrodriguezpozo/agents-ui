@@ -2026,6 +2026,14 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       -->
       <DigestDelivery />
 
+      <!--
+        The other direction of the same idea: that one catches you anywhere else,
+        this one tells the room. Under it rather than beside it, because the rule
+        that makes both safe — nothing scheduled until a send has worked — reads
+        once and then applies to both.
+      -->
+      <TeamDigestDelivery />
+
       <!-- Plugins -->
       <div
         id="settings-marketplaces"
