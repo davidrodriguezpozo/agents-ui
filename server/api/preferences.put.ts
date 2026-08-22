@@ -28,6 +28,7 @@ export default defineEventHandler(async (event) => {
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
+    issueLabel?: string
   }>(event)
 
   // Only the switches, and only as booleans — nothing else belongs in here.
@@ -41,6 +42,7 @@ export default defineEventHandler(async (event) => {
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
+    issueLabel?: string
   } = {}
   for (const key of KEYS) {
     const value = body?.notifications?.[key]
@@ -73,6 +75,10 @@ export default defineEventHandler(async (event) => {
   // Only a level the SDK actually has. Anything else is left alone rather than
   // saved and silently rejected on the next run.
   if (RUN_EFFORTS.includes(body?.effort as RunEffort)) patch.effort = body.effort
+
+  // An empty string is how the label half of the issue band is turned off, so
+  // absent is the only skip — a falsy check here would make it unturnoffable.
+  if (typeof body?.issueLabel === 'string') patch.issueLabel = body.issueLabel
 
   // A partial is expected — the settings page sends only the action it changed,
   // and `savePreferences` merges it over the three it did not. Sanitised here so

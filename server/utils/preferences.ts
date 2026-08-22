@@ -119,6 +119,27 @@ export function sanitiseEffort(value: unknown): RunEffort {
   return RUN_EFFORTS.includes(value as RunEffort) ? value as RunEffort : DEFAULT_EFFORT
 }
 
+/**
+ * The label that puts an issue on the Land page.
+ *
+ * `studio`, because that is the word an `issue_labelled` ritual is most likely
+ * already watching for — the two features are the same convention seen from
+ * either end, and picking a second word would mean labelling everything twice.
+ */
+export const DEFAULT_ISSUE_LABEL = 'studio'
+
+/**
+ * A stored or hand-edited label, made safe to hand to `gh issue list --label`.
+ *
+ * Trimmed, and capped at GitHub's own limit. Empty is meaningful and kept: it
+ * means "do not ask about a label at all", so the band is your assigned issues
+ * and nothing else. That is why this cannot fall back to the default the way
+ * `sanitiseEffort` does — an empty string is a choice, not an absence.
+ */
+export function sanitiseIssueLabel(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, 50) : DEFAULT_ISSUE_LABEL
+}
+
 export interface Preferences {
   notifications: NotificationPreferences
   /**
@@ -198,6 +219,13 @@ export interface Preferences {
    * actually running work ever turned.
    */
   effort: RunEffort
+  /**
+   * Which label puts an issue on Land, on top of the ones assigned to you.
+   *
+   * Empty means no label is asked about, leaving the band to your assigned
+   * issues alone.
+   */
+  issueLabel: string
 }
 
 /**
@@ -222,6 +250,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   pauseOnQuotaWarning: false,
   pullActions: { review: '', address: '', fix: '', update: '' },
   effort: DEFAULT_EFFORT,
+  issueLabel: DEFAULT_ISSUE_LABEL,
 }
 
 /**
@@ -299,6 +328,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Absent means the default, which is also what an unrecognised level means
     // — a typo here must not hand the SDK a value it will reject.
     effort: sanitiseEffort(parsed?.preferences?.effort),
+    // Absent means the default. Present and empty means somebody turned the
+    // label half of the issue band off, which is why `??` rather than `||`.
+    issueLabel: sanitiseIssueLabel(parsed?.preferences?.issueLabel ?? DEFAULT_ISSUE_LABEL),
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -324,11 +356,12 @@ export async function savePreferences(
     pauseOnQuotaWarning?: boolean
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
+    issueLabel?: string
   },
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning, pullActions, effort,
+    pauseOnQuotaWarning, pullActions, effort, issueLabel,
     ...notifications
   } = patch
 
@@ -352,6 +385,7 @@ export async function savePreferences(
         ? current.pullActions
         : sanitisePullActions({ ...current.pullActions, ...pullActions }),
       effort: effort === undefined ? current.effort : sanitiseEffort(effort),
+      issueLabel: issueLabel === undefined ? current.issueLabel : sanitiseIssueLabel(issueLabel),
     }
     Object.assign(current, next)
     return next

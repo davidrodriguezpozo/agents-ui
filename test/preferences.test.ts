@@ -4,9 +4,11 @@ import {
   clampTurns,
   clampAttempts,
   sanitisePullActions,
+  sanitiseIssueLabel,
   PULL_ACTION_INTENTS,
   MAX_REPAIR_ATTEMPTS,
   MAX_TURNS_CEILING,
+  DEFAULT_ISSUE_LABEL,
 } from '../server/utils/preferences'
 
 describe('positiveOrZero', () => {
@@ -125,5 +127,27 @@ describe('sanitisePullActions', () => {
     const clean = sanitisePullActions({ review: '/x', bogus: '/y' } as Record<string, unknown>)
     expect(Object.keys(clean).sort()).toEqual([...PULL_ACTION_INTENTS].sort())
     expect('bogus' in clean).toBe(false)
+  })
+})
+
+describe('sanitiseIssueLabel', () => {
+  it('trims what was typed', () => {
+    expect(sanitiseIssueLabel('  studio  ')).toBe('studio')
+  })
+
+  it('keeps an empty label, which is how the label half is turned off', () => {
+    // Not a missing value falling back to the default: somebody chose to watch
+    // no label, and reading it back as `studio` would make that unturnoffable.
+    expect(sanitiseIssueLabel('')).toBe('')
+    expect(sanitiseIssueLabel('   ')).toBe('')
+  })
+
+  it('falls back to the default only when it is not a string at all', () => {
+    expect(sanitiseIssueLabel(undefined)).toBe(DEFAULT_ISSUE_LABEL)
+    expect(sanitiseIssueLabel(42)).toBe(DEFAULT_ISSUE_LABEL)
+  })
+
+  it('caps a hand-edited file at GitHub\'s own label length', () => {
+    expect(sanitiseIssueLabel('x'.repeat(200))).toHaveLength(50)
   })
 })
