@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
+import { readSharedProject, sharedProjectPath } from './sharedProject'
 
 const exec = promisify(execFile)
 
@@ -171,15 +172,22 @@ export const projectChecksStore = defineJsonStore<ProjectChecks>({
 
 export interface ResolvedCheck {
   command: string
-  source: 'configured' | 'detected'
-  /** Only set when detected, explaining where the guess came from. */
+  source: 'configured' | 'repository' | 'detected'
+  /**
+   * Where this came from, when it came from somewhere nameable: the file a
+   * shared command was read out of, or the evidence a guess was made from.
+   */
   from?: string
 }
 
 /**
- * What to run for a repository: what it was told, else what can be inferred.
- * Never throws — being unable to read the config means falling back to a
- * guess, not failing the turn that asked.
+ * What to run for a repository: what this machine was told, else what the
+ * repository itself says, else what can be inferred.
+ *
+ * The middle step is the shared half — see `sharedProject.ts` for why it is a
+ * default rather than an imposition, and `scoped` for the one precedence rule
+ * this follows. Never throws: being unable to read any of it means falling back
+ * to a guess, not failing the turn that asked.
  */
 export async function checkCommandFor(repoDir: string | undefined): Promise<ResolvedCheck | null> {
   if (!repoDir) return null
@@ -191,9 +199,17 @@ export async function checkCommandFor(repoDir: string | undefined): Promise<Reso
     configured = undefined
   }
 
-  // Explicitly emptied: this project has said it has no checks.
+  // Explicitly emptied: this machine has said this project has no checks, and
+  // that beats a shared command rather than falling through to it.
   if (configured === '') return null
   if (configured) return { command: configured, source: 'configured' }
+
+  const shared = (await readSharedProject(repoDir)).config.checks
+  if (shared) {
+    // The same meaning as above, said by the project: no checks here.
+    if (!shared.command) return null
+    return { command: shared.command, source: 'repository', from: sharedProjectPath(repoDir) }
+  }
 
   const detected = detectCheckCommand(repoDir)
   return detected ? { command: detected.command, source: 'detected', from: detected.from } : null

@@ -1,7 +1,20 @@
-import { describeSchedule, readSchedules } from '../../utils/schedules'
+import { describeSchedule, readSchedules, syncSharedRituals } from '../../utils/schedules'
 import { deadRulesFor } from '../../utils/deadRules'
+import { readProjects } from '../../utils/projects'
 
 export default defineEventHandler(async () => {
+  /*
+   * The rituals a repository shares arrive by `git pull`, which means the list
+   * has to look at the working trees rather than only at this machine's store —
+   * otherwise a colleague's ritual is on the disk and nowhere in the app until
+   * something else happens to restart the server.
+   *
+   * Every registered project, because a shared ritual belongs to a repository
+   * and the list spans all of them. It is a handful of small file reads, and
+   * `syncSharedRituals` leaves a project that shares nothing entirely alone.
+   */
+  for (const project of await readProjects().catch(() => [])) await syncSharedRituals(project.path)
+
   const schedules = await readSchedules()
 
   /*

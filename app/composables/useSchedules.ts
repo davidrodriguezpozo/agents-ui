@@ -76,8 +76,15 @@ export interface Schedule {
    */
   deadRules?: { rule: string; reason: string }[]
   enabled: boolean
-  origin: 'user' | 'team'
+  /**
+   * `repository` is the live one: the definition belongs to the project's
+   * `.claude/agents-studio.json`, arrives by pull and is refreshed from it, so
+   * editing it here writes a commit rather than a local record.
+   */
+  origin: 'user' | 'team' | 'repository'
   pluginName?: string
+  /** The name the repository knows a shared ritual by. Present when it is one. */
+  sharedKey?: string
   createdAt: number
   lastRunAt?: number
   lastRunId?: string
@@ -246,6 +253,21 @@ export function useSchedules() {
     return saved
   }
 
+  /**
+   * Hand a ritual's definition to the repository, or take it back.
+   *
+   * The list is reloaded rather than patched: sharing changes what the row *is*
+   * — its origin, its key, and from then on where its definition comes from —
+   * and a locally patched row would be this machine's guess at that.
+   */
+  async function share(id: string, stop = false) {
+    await $fetch(`/api/schedules/${encodeURIComponent(id)}/share`, {
+      method: 'POST',
+      body: { stop },
+    })
+    await fetchAll()
+  }
+
   /** Grant a ritual the rules a run turned out to need. */
   async function allowRules(id: string, add: string[]) {
     const saved = await $fetch<Schedule>(`/api/schedules/${encodeURIComponent(id)}/allow`, {
@@ -295,6 +317,7 @@ export function useSchedules() {
     remove,
     setEnabled,
     adopt,
+    share,
     allowRules,
     revokeRule,
   }
