@@ -242,6 +242,11 @@ This registers a launchd agent on macOS or a systemd user unit on Linux, and cap
 `PATH` of the shell you install from — a service otherwise gets a bare one with no `claude`
 in it, and every run would fail at 08:00 with nobody watching.
 
+For a machine that is always awake — a Mac mini, a small Linux box — and the things that
+only matter there, follow [The always-on runner](docs/always-on.md): where state lives,
+what binding beyond loopback actually means, how it authenticates to GitHub, capping what
+it can spend, and the four ways it stops working.
+
 Two things it cannot do for you: it will not wake a sleeping machine (an overdue ritual
 still fires if you open the lid within a couple of hours, and is skipped after that rather
 than arriving at teatime), and it keeps serving the build it was installed against — so
