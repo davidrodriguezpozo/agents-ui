@@ -2380,6 +2380,31 @@ const totalChanges = computed(() => {
               <p v-if="mergePreview.checkStale" class="type-meta">
                 This was the answer before the workspace changed. Run it again to know where it stands.
               </p>
+
+              <!--
+                Beside the failure, never instead of it. The gate is unchanged —
+                this failure still blocks the merge — and the only thing that has
+                changed is that the person deciding can see the check has gone
+                both ways on this exact code before.
+              -->
+              <div
+                v-if="mergePreview.flakeNote && mergePreview.flakes?.length"
+                class="rounded px-2.5 py-2 space-y-1.5"
+                style="background: var(--warning-wash); border: 1px solid var(--warning-edge);"
+              >
+                <div class="flex items-center gap-2">
+                  <UIcon name="i-lucide-dices" class="size-3.5 shrink-0" style="color: var(--warning);" />
+                  <span class="type-detail">{{ mergePreview.flakeNote }}</span>
+                </div>
+                <p v-for="flake in mergePreview.flakes" :key="flake.name" class="type-meta">
+                  <span class="font-mono">{{ flake.name }}</span> — {{ flake.note }}
+                </p>
+                <p class="type-meta">
+                  Nothing about the merge changes. The check still has to pass, or you still have
+                  to say so yourself.
+                </p>
+              </div>
+
               <pre
                 v-if="mergePreview.check.status === 'failing' && mergePreview.check.output"
                 class="font-mono fs-micro leading-relaxed overflow-x-auto max-h-40 p-2 rounded"
