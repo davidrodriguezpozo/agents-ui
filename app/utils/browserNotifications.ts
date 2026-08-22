@@ -11,6 +11,8 @@ export interface StudioNotification {
   /** A path within this app, resolved against the tab's own origin. */
   link: string
   at: number
+  /** A test asked for from Settings. Shown whatever page you are on. */
+  test?: true
 }
 
 /** What a tab knows about itself at the moment one arrives. */
@@ -38,9 +40,16 @@ export interface TabState {
  * Everything else shows, including a visible tab on some other page — "visible"
  * covers a window sitting untouched on a second monitor, which is exactly the
  * case a notification is for.
+ *
+ * A test is the exception to the first rule, and has to be: the button is in
+ * Settings, the banner it sends points back at Settings, and a test suppressed
+ * for being about the page you are on is indistinguishable from a broken pipe
+ * — which is the one thing it was pressed to rule out. The replay rule still
+ * applies to it; a test is proof, not something to see twice.
  */
 export function shouldNotify(entry: StudioNotification, tab: TabState, seen: Set<string>): boolean {
   if (seen.has(entry.id)) return false
+  if (entry.test) return true
 
   const looking = tab.visible && tab.focused && samePath(tab.path, entry.link)
   return !looking

@@ -145,6 +145,22 @@ describe('whether a tab draws the banner', () => {
     expect(shouldNotify(entry, tab, new Set())).toBe(false)
   })
 
+  it('draws a test even on the page it points at, which is where it is asked for', () => {
+    // The button is in Settings and the banner points back at Settings, so the
+    // same-page rule would eat every test ever sent — and a suppressed test
+    // looks exactly like the broken pipe it was pressed to rule out.
+    const proof: StudioNotification = { ...entry, link: '/settings#settings-notifications', test: true }
+    const tab = { visible: true, focused: true, path: '/settings' }
+
+    expect(shouldNotify(proof, tab, new Set())).toBe(true)
+  })
+
+  it('still refuses to draw a replayed test twice', () => {
+    const proof: StudioNotification = { ...entry, test: true }
+
+    expect(shouldNotify(proof, { visible: false, focused: false, path: '/' }, new Set([entry.id]))).toBe(false)
+  })
+
   it('never draws the same notification twice', () => {
     // A reconnect replays the last two minutes, so a repeat is expected rather
     // than exceptional.

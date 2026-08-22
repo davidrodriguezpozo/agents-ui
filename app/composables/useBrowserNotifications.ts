@@ -171,18 +171,29 @@ export function useBrowserNotifications() {
       listening = true
     }
 
-    source = new EventSource('/api/notifications/stream')
-    source.onopen = () => { connected.value = true }
+    const stream = new EventSource('/api/notifications/stream')
+    source = stream
+    stream.onopen = () => { connected.value = true }
     // Left to EventSource: it reconnects on its own, with backoff, and sends
     // the last id back so the two minutes it was away are not lost.
-    source.onerror = () => { connected.value = false }
-    source.onmessage = (event) => {
+    stream.onerror = () => { connected.value = false }
+    stream.onmessage = (event) => {
       try {
         show(JSON.parse(event.data) as StudioNotification)
       } catch {
         // A malformed frame is one missed banner, not a dead stream.
       }
     }
+
+    // Resolving only once the connection is up is what makes "grant, then send
+    // a test" work: nothing is stored for a tab that was not listening yet, and
+    // a fresh connection is owed no backlog, so a banner published in the gap
+    // is simply gone. Either outcome resolves — a stream that will not open is
+    // not a reason to hang the caller, and it retries on its own regardless.
+    await new Promise<void>((resolve) => {
+      stream.addEventListener('open', () => resolve(), { once: true })
+      stream.addEventListener('error', () => resolve(), { once: true })
+    })
   }
 
   function stop() {

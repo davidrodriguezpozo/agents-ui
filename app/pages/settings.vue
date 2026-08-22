@@ -247,12 +247,19 @@ const {
 const sendingTestNotification = ref(false)
 
 /**
- * Whether a test would have nowhere at all to go. Only true on `browser`: with
- * `both` the desktop half still arrives, and testing that is worth doing even
- * while the browser half is waiting on a permission.
+ * Whether a test would have nowhere at all to go, which is the only reason to
+ * offer a control that cannot be pressed. Only true on `browser`: with `both`
+ * the desktop half still arrives, and testing that is worth doing while the
+ * browser half waits on a permission.
+ *
+ * A permission nobody has been asked for yet is not that case. Pressing the
+ * button is a click, and a click is the one thing a browser will take a
+ * permission request from — so an unasked browser is asked by the test rather
+ * than left behind a control that does nothing and says nothing.
  */
 const notificationsNeedPermission = computed(() =>
-  notificationChannel.value === 'browser' && notificationPermission.value !== 'granted',
+  notificationChannel.value === 'browser'
+  && (notificationSupport.value !== 'ready' || notificationPermission.value === 'denied'),
 )
 const summariseSessions = ref(true)
 const repairAttempts = ref(0)
@@ -613,9 +620,9 @@ async function setNotificationChannel(value: NotificationChannel) {
   if (value !== 'system' && notificationPermission.value === 'default') await requestNotificationPermission()
 }
 
-async function requestNotificationPermission() {
+async function requestNotificationPermission(): Promise<NotificationPermission> {
   const result = await askForNotifications()
-  if (result === 'granted') return
+  if (result === 'granted') return result
 
   toast.add({
     title: result === 'denied' ? 'Your browser is blocking these' : 'Not granted',
@@ -624,6 +631,8 @@ async function requestNotificationPermission() {
       : 'Nothing was chosen, so nothing changed.',
     color: 'warning',
   })
+
+  return result
 }
 
 /**
@@ -631,6 +640,18 @@ async function requestNotificationPermission() {
  * "does delivery work", which a test silenced by a preference cannot.
  */
 async function sendTestNotification() {
+  // Asked for here rather than assumed: this is the click, and a test sent to a
+  // browser that was never allowed to draw a banner is a test that proves the
+  // opposite of what it says. `askForNotifications` also opens the stream and
+  // waits for it, which the POST below depends on — a banner published before
+  // this tab is listening is not kept for it.
+  if (notificationChannel.value !== 'system' && notificationPermission.value === 'default') {
+    const granted = await requestNotificationPermission() === 'granted'
+    // On `both` the desktop half is still worth proving; on `browser` there is
+    // now nothing left to prove, and the refusal has already been said.
+    if (!granted && notificationChannel.value === 'browser') return
+  }
+
   sendingTestNotification.value = true
   try {
     await $fetch('/api/notifications/test', { method: 'POST' })
@@ -1807,7 +1828,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               v-if="notificationSupport === 'ready' && notificationPermission === 'default'"
               label="Allow"
               size="xs"
-              @click="requestNotificationPermission"
+              @click="void requestNotificationPermission()"
             />
             <UButton
               label="Send a test"

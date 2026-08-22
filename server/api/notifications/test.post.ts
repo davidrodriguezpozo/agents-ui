@@ -23,7 +23,7 @@ export default defineEventHandler(async () => {
   const link = '/settings#settings-notifications'
 
   if (notifications.channel !== 'system') {
-    publishBrowserNotification({ kind: 'finished', title, body, link })
+    publishBrowserNotification({ kind: 'finished', title, body, link, test: true })
   }
 
   if (notifications.channel !== 'browser') {

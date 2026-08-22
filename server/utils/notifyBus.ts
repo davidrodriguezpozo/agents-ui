@@ -32,6 +32,13 @@ export interface BrowserNotification {
   /** A path within this app, resolved against the tab's own origin. */
   link: string
   at: number
+  /**
+   * A test asked for from Settings, and the one notification a tab shows
+   * unconditionally — see `shouldNotify`. Without it the proof is eaten by the
+   * rule it exists to prove: the button is on `/settings`, the banner points at
+   * `/settings`, so the tab that asked for it decides you can already see it.
+   */
+  test?: true
 }
 
 /**
