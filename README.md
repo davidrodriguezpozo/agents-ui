@@ -15,6 +15,7 @@ leaving: edit the files, run a shell, see the app, and land it.
 <a href="#finishing-it-without-leaving">Workspace</a> ·
 <a href="#whether-it-works">Verification</a> ·
 <a href="#land">Land</a> ·
+<a href="#handing-work-to-it">Hand-off</a> ·
 <a href="#what-a-run-may-touch">Sandboxing</a> ·
 <a href="#activity">Activity</a> ·
 <a href="#alongside-claude-code-desktop">vs. Desktop</a> ·
@@ -650,6 +651,56 @@ cannot. Nothing recorded a merge before: the branch went into `main` and the ses
 looking exactly as it had — idle, checks passing, work in flight — so *what shipped last
 night*, the first thing anybody asks, was the one question with no answer anywhere. It is now
 the top line of what came out of a night, in the app and in the message.
+
+---
+
+## Handing work to it
+
+Everything above assumes you are the one doing the handing. The other way work arrives is
+somebody else's issue — a colleague, a designer, whoever found the bug — and this section
+is the whole of what that person needs to know.
+
+**Put the label `studio` on a GitHub issue.** That is the convention. Anyone who can label
+an issue in that repository can use it: no account here, nothing installed, no need to know
+this app exists. The word itself is a setting, so a team that already means something by
+`studio` picks another one.
+
+Then, on the machine where this is running:
+
+- **The issue turns up in [Land's issue band](#land)**, beside the pull requests, with one
+  verdict — whether anybody has picked it up, whether it is waiting on a reply. That band
+  asks GitHub the same way the pull-request band does, so a label added now shows up within
+  a minute. And if a [ritual](#daily-rituals) is set to fire when an issue is labelled, it
+  starts on its own within a couple of minutes, with nobody pressing anything.
+- **One press turns the row into a session** — its own branch, its own checkout of the
+  repository, and a first turn that has read the issue's title, body and comments. Two
+  presses, in fact: *investigate and report*, which commits nothing, and *do it*.
+- **Nothing is pushed and nothing is merged.** The work sits in a checkout on that one
+  machine. Someone reads the diff, the [checks](#whether-it-works) have to pass, and that
+  person merges it — the same route as [any other session](#sessions). Starting from an
+  issue buys no exception.
+
+An issue's text is written by whoever can reach the repository, so it is handed to the
+session as the thing to read: quoted, in the prompt, and never into [the standing
+brief](#what-a-run-knows-before-it-starts) or a system prompt. It is the same line the
+standing brief draws — counts from outside cross it, prose does not.
+
+So the expectation to give the person who filed it is *this gets looked at today, and a
+person decides what happens to it*. Not that it is being handled.
+
+### What it will not do to your issue
+
+The issue belongs to whoever filed it, and a tool that quietly rewrites other people's
+tickets is a tool that gets taken away. So there is exactly one write it can perform: **one
+comment, once**, when a session started from that issue opens a pull request — what was
+done in a sentence, the link, and that nobody has reviewed it yet. It is off until you turn
+it on in Settings, and it is composed here and sent verbatim, by a run holding that one
+tool and denied every other way of writing anywhere.
+
+Everything else is not switched off, it is absent. It does not close your issue, reassign
+it, edit the title or the body, add or remove a label, react to it, or answer a comment. If
+the answer to your issue is *we are not going to do this*, that is still a sentence a
+person has to write.
 
 ---
 
