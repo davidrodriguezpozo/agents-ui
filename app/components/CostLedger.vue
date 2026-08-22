@@ -23,6 +23,12 @@ import { LEDGER_DAYS, type LedgerDimension, type LedgerRow, type LedgerTable } f
  *     per turn, so these are list-price equivalents. Repeating the caveat on
  *     every figure would be noise; saying it nowhere would imply precision the
  *     records do not have.
+ *   - **"Since reverted" is a count, not a verdict.** It is the merges in the
+ *     window whose work has been taken back out of the base branch since. Shown
+ *     without colour and without comparison to the window before: a revert is
+ *     regularly the right thing to have happened, and the earlier window has had
+ *     longer for its merges to be reverted, so the two counts are not comparable.
+ *     Nothing is drawn at all when it is zero, which is the usual case.
  */
 
 const { data, loading, error, days, load } = useLedger()
@@ -220,6 +226,14 @@ function windowLabel(from: number, to: number): string {
           <dt>Turns</dt>
           <dd>{{ current.turns }}</dd>
         </div>
+        <!--
+          Only when there is one. A permanent "Since reverted: 0" invites reading
+          the column as a scoreboard, and on most machines it would never move.
+        -->
+        <div v-if="current.revertedLandings">
+          <dt>Since reverted</dt>
+          <dd>{{ current.revertedLandings }}</dd>
+        </div>
       </dl>
 
       <p class="caveat">
@@ -235,6 +249,14 @@ function windowLabel(from: number, to: number): string {
           {{ current.side.calls }} session summar{{ current.side.calls === 1 ? 'y' : 'ies' }},
           which are not turns and are not in the figures above.
         </template>
+      </p>
+
+      <p v-if="current.revertedLandings" class="caveat">
+        "Since reverted" counts merges from this window whose work has since been taken back out
+        of the base branch — as of today, not as of the end of the window, so an older window has
+        had longer to accumulate them. It is a floor: only a revert whose commit message says
+        what it reverts is seen. It is not a verdict on the work, and the spend above still counts
+        it as a merge, because it was one.
       </p>
 
       <!-- ── The four breakdowns ── -->
@@ -258,7 +280,19 @@ function windowLabel(from: number, to: number): string {
               <tr v-for="row in table.rows" :key="row.key">
                 <td class="what" :title="rowTitle(table, row)">{{ rowName(table, row) }}</td>
                 <td class="num">{{ money(row.costUsd) }}</td>
-                <td class="num">{{ row.landings }}</td>
+                <!--
+                  The reverted count rides inside the merges cell rather than
+                  taking a column of its own. A fifth column that is empty on
+                  every row of every table on most machines is a worse table.
+                -->
+                <td class="num">
+                  {{ row.landings }}
+                  <span
+                    v-if="row.revertedLandings"
+                    class="ink-3"
+                    :title="`${row.revertedLandings} of them have since been reverted`"
+                  >(−{{ row.revertedLandings }})</span>
+                </td>
                 <td class="num">{{ money(row.costPerLandingUsd) }}</td>
                 <td class="num">{{ money(row.unmergedCostUsd) }}</td>
               </tr>

@@ -65,6 +65,25 @@ export interface SessionPrWatch {
   lastPolledAt?: number
 }
 
+/**
+ * That a session's landed work was taken back out of the base branch.
+ *
+ * Mirrors `SessionReverted` in `server/utils/revertWatch.ts`, which is the
+ * authority and holds the reasoning. Worth knowing here: it is only ever set from
+ * a commit that *says* it reverts the merge, so its absence is not a claim that
+ * nothing was reverted — and it is cleared again if the revert is itself reverted.
+ */
+export interface SessionReverted {
+  at: number
+  sha: string
+  committedAt: number
+  /** Absent when git records no name, which a bot's commit often does not. */
+  by?: string
+  subject: string
+  landedSha: string
+  branch: string
+}
+
 /** Something you typed while it was working, waiting for the turn to end. */
 export interface QueuedMessage {
   id: string
@@ -162,6 +181,15 @@ export interface Session {
   driftedTo?: string | null
   /** Its work is in the base branch already — see the sessions index endpoint. */
   landed?: boolean
+  /**
+   * Set when the work that landed has since been taken back out.
+   *
+   * Comes through from the session record untouched, unlike `landed`, which the
+   * endpoint replaces with what git says right now. Both can be true at once and
+   * usually are: the branch is still contained in the base — that is what a
+   * revert leaves behind — while the base no longer has the change.
+   */
+  reverted?: SessionReverted
   /**
    * When you said you were done with this session.
    *

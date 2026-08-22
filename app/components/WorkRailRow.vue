@@ -91,6 +91,7 @@ const pullNote = computed(() => {
         :check-stale="session.checkStale"
         :behind="session.worktree.behind"
         :landed="session.landed"
+        :reverted="Boolean(session.reverted)"
       />
       <UIcon
         v-else

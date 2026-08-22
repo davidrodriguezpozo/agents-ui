@@ -60,6 +60,15 @@ export interface PrStatus {
   state: PrLifecycle
   /** The commit the checks describe. A new push makes a new one. */
   headSha: string
+  /**
+   * The commit the merge produced on the base branch, once there is one.
+   *
+   * Not the head commit, and the difference is what makes it worth reading: the
+   * head is what CI ran, this is what the base branch now contains. Absent until
+   * the pull request is merged, which is most of the time. It is here so a landing
+   * can be recorded against a commit — see `SessionLanded.sha` and `revertWatch.ts`.
+   */
+  mergeSha?: string
   /** GitHub's own word: MERGEABLE, CONFLICTING, or UNKNOWN while it computes. */
   mergeable: string
   checks: PrChecksVerdict
@@ -205,7 +214,7 @@ export async function readPrStatus(cwd: string, ref: string): Promise<PrStatus |
   try {
     const { stdout } = await exec('gh', [
       'pr', 'view', ref,
-      '--json', 'number,url,state,mergeable,headRefOid,statusCheckRollup',
+      '--json', 'number,url,state,mergeable,headRefOid,mergeCommit,statusCheckRollup',
     ], { cwd, timeout: 30_000, maxBuffer: 4 * 1024 * 1024 })
 
     const parsed = JSON.parse(stdout) as {
@@ -214,6 +223,7 @@ export async function readPrStatus(cwd: string, ref: string): Promise<PrStatus |
       state?: string
       mergeable?: string
       headRefOid?: string
+      mergeCommit?: { oid?: string } | null
       statusCheckRollup?: RollupRow[] | null
     }
 
@@ -226,6 +236,7 @@ export async function readPrStatus(cwd: string, ref: string): Promise<PrStatus |
       url: parsed.url,
       state: (parsed.state ?? 'OPEN').toUpperCase() as PrLifecycle,
       headSha: parsed.headRefOid ?? '',
+      mergeSha: parsed.mergeCommit?.oid || undefined,
       mergeable: (parsed.mergeable ?? 'UNKNOWN').toUpperCase(),
       checks: verdict,
       failing,

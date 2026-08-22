@@ -36,6 +36,8 @@ const props = defineProps<{
   behind?: number
   /** Its work is in the base branch already. */
   landed?: boolean
+  /** That work has since been taken back out of the base branch. */
+  reverted?: boolean
 }>()
 
 const state = computed(() => sessionBadge({
@@ -45,6 +47,7 @@ const state = computed(() => sessionBadge({
   checkStale: props.checkStale,
   behind: props.behind,
   landed: props.landed,
+  reverted: props.reverted,
 }))
 </script>
 

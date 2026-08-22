@@ -403,11 +403,23 @@ export async function mergeSession(
    * `recordLanded` cannot throw. A merge that has already gone through must not
    * come back as a failure because the bookkeeping afterwards did.
    */
+  /*
+   * The merge commit, read straight back off the base branch.
+   *
+   * `--no-ff` above guarantees there is one, and it is the only handle anything
+   * later has on this landing: `revertWatch` watches the base branch for a commit
+   * that undoes it, and "undoes what" has to name a commit. `tryGit` rather than
+   * `git`, for the same reason `recordLanded` cannot throw — the merge is in, and
+   * failing to read its sha is a landing recorded without one, not a failed merge.
+   */
+  const sha = await tryGit(session.repoDir, ['rev-parse', 'HEAD'])
+
   await recordLanded(session.id, {
     at: Date.now(),
     how: 'merged',
     into: session.baseBranch,
     commits: preview.commits,
+    ...(sha ? { sha } : {}),
     ...(overruled ? { overrodeChecks: true } : {}),
   })
 

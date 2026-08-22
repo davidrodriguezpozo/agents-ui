@@ -4,6 +4,7 @@ import { defineJsonStore } from './jsonStore'
 import type { SessionCheck } from './checks'
 import type { SessionSummary } from './sessionSummary'
 import type { SessionLanded } from './landed'
+import type { SessionReverted } from './revertWatch'
 import type { SessionRepair } from './sessionRepair'
 import type { SessionPrWatch } from './prWatch'
 import type { QueuedMessage } from './sessionQueue'
@@ -109,6 +110,15 @@ export interface Session {
    * landed session looked like too. See `landed.ts` for the three routes in.
    */
   landed?: SessionLanded
+  /**
+   * That its work was taken back out of the base branch again.
+   *
+   * Set beside `landed` rather than replacing it, because both are true: the work
+   * did land, and it did not hold. Absent is the ordinary case, and is also what
+   * a landing that cannot be followed looks like — see `revertWatch.ts` for which
+   * ones those are. Cleared again if the revert is itself reverted.
+   */
+  reverted?: SessionReverted
   /**
    * Whether this session is trying to fix its own failing checks, and how far
    * it has got. Absent means it is not, and never has been on this instruction.

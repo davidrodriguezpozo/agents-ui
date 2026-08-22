@@ -61,13 +61,28 @@ async function conclude(
    * we were watching. Only one of those is work this machine did.
    */
   how?: 'pull-request' | 'elsewhere',
+  /**
+   * The commit the merge left on the base branch, when GitHub has told us one.
+   *
+   * Passed in rather than read here because the two landing routes learn it at
+   * different moments: `elsewhere` already had it in the status that said MERGED,
+   * while a pull request this app merges has to be asked again afterwards. Empty
+   * is the ordinary answer on a machine that could not ask, and a landing with no
+   * commit named is simply one `revertWatch` cannot follow.
+   */
+  sha?: string,
 ): Promise<void> {
   await patchSession(session.id, {
     prWatch: { ...watch, state, reason, updatedAt: Date.now() },
   })
 
   if (state === 'landed' && how) {
-    await recordLanded(session.id, { at: Date.now(), how, pr: watch.number })
+    await recordLanded(session.id, {
+      at: Date.now(),
+      how,
+      pr: watch.number,
+      ...(sha ? { sha } : {}),
+    })
   }
 
   await notify(kind, `${session.title} — #${watch.number}`, reason, `/sessions/${session.id}`)
@@ -145,6 +160,7 @@ async function advance(session: Session): Promise<void> {
       // means a person did it on github.com — worth telling apart from the
       // branch below, which is this app doing the merging.
       landed ? 'elsewhere' : undefined,
+      landed ? status.mergeSha : undefined,
     )
     return
   }
@@ -162,6 +178,17 @@ async function advance(session: Session): Promise<void> {
       return
     }
 
+    /*
+     * Asked again, purely for the commit the merge produced.
+     *
+     * The status read at the top of this pass was of an open pull request, so it
+     * had no merge commit to report — it did not exist yet. One extra `gh` call,
+     * on the single poll where a pull request lands, buys the record a commit that
+     * `revertWatch` can follow. Null is fine: the landing is recorded either way,
+     * and only the following-up is lost.
+     */
+    const merged = await readPrStatus(cwd, String(watch.number))
+
     await conclude(
       session,
       watch,
@@ -169,6 +196,7 @@ async function advance(session: Session): Promise<void> {
       `#${watch.number} passed CI and has been merged.`,
       'finished',
       'pull-request',
+      merged?.mergeSha,
     )
     return
   }

@@ -143,6 +143,76 @@ describe('a landing somebody else merged on github.com', () => {
   })
 })
 
+describe('a landing that did not hold', () => {
+  const reverted = {
+    at: NOW - 60_000,
+    sha: 'f'.repeat(40),
+    committedAt: NOW - 120_000,
+    subject: 'Revert "Merge session: retry the upload"',
+    landedSha: 'a'.repeat(40),
+    branch: 'main',
+  }
+
+  const took = session({
+    id: 'took',
+    landed: { at: NOW - 3 * DAY, how: 'merged', into: 'main', sha: 'a'.repeat(40) },
+    reverted,
+  })
+  const held = session({ id: 'held', landed: { at: NOW - 2 * DAY, how: 'merged', into: 'main' } })
+
+  const report = joinOutcomes({
+    turns: [
+      turn({ sessionId: 'took', costUsd: 5, model: 'sonnet' }),
+      turn({ sessionId: 'held', costUsd: 1, model: 'sonnet' }),
+    ],
+    sessions: [took, held],
+    since: SINCE,
+  })
+
+  it('is still a merge, because it was one', () => {
+    // The cost was spent and the work was accepted. Retracting the merge from the
+    // count would make "spend per merge" flatter for the wrong reason.
+    expect(report.landings).toEqual({ total: 2, merged: 2, pullRequest: 0, elsewhere: 0 })
+    expect(report.landedCostUsd).toBeCloseTo(6)
+  })
+
+  it('is counted beside the merges rather than inside them', () => {
+    expect(report.revertedLandings).toBe(1)
+  })
+
+  it('rides along into the group the merge was counted in', () => {
+    expect(report.byModel.find(g => g.key === 'sonnet')?.revertedLandings).toBe(1)
+  })
+
+  it('is nothing at all when nothing was reverted', () => {
+    const clean = joinOutcomes({
+      turns: [turn({ sessionId: 'held' })],
+      sessions: [held],
+      since: SINCE,
+    })
+
+    expect(clean.revertedLandings).toBe(0)
+  })
+
+  it('counts against the window the merge is in, not the one the revert is in', () => {
+    /*
+     * The merge is three days back and the revert is a minute ago. A window
+     * ending before the revert still has to report that this merge did not hold:
+     * it is a fact about the landing, and the alternative is reporting a merge as
+     * having held when it is known not to have.
+     */
+    const earlier = joinOutcomes({
+      turns: [turn({ sessionId: 'took', createdAt: NOW - 3 * DAY, costUsd: 5 })],
+      sessions: [took],
+      since: NOW - 4 * DAY,
+      until: NOW - 2 * DAY,
+    })
+
+    expect(earlier.landings.total).toBe(1)
+    expect(earlier.revertedLandings).toBe(1)
+  })
+})
+
 describe('a session set aside', () => {
   it('is spend that produced nothing, and is not hidden among the open work', () => {
     const filed = session({ id: 'filed', filedAt: NOW - 2 * DAY })

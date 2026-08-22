@@ -18,6 +18,7 @@ import { tickDigestCommands } from './digestCommands'
 import { refreshBrief } from './brief'
 import { withRunSlot } from './runQueue'
 import { pollPullRequests } from './prWatchRunner'
+import { pollReverts } from './revertWatch'
 
 const TICK_MS = 30_000
 
@@ -114,6 +115,7 @@ export function startScheduler(): void {
     void tickDigestDelivery()
     void tickDigestCommands()
     void refreshBrief()
+    void pollReverts()
   }, 15_000)
 
   pollTimer = setInterval(() => {
@@ -137,6 +139,12 @@ export function startScheduler(): void {
     // moment a run needs it. A run that had to wait for it would be paying for
     // the assembly in latency, every time.
     void refreshBrief()
+    // The one thing on this timer that never leaves the machine: one `git log`
+    // per repository with a recent landing in it, asking whether the base branch
+    // has taken that work back out. Here rather than on the 30-second clock tick
+    // because a revert is not news to the second, and un-awaited alongside the
+    // rest because it guards itself per repository — see `pollReverts`.
+    void pollReverts()
   }, POLL_MS)
 
   console.log('[scheduler] started')
