@@ -4,8 +4,8 @@ Thirty units, each one Claude Code session's worth of work, each with a gate it 
 passes or does not. Written to be executed without supervision: read
 [`CONTRACT.md`](CONTRACT.md) once, then hand out briefs.
 
-The sequence comes from [the roadmap](https://claude.ai/code/artifact/074f1d7b-b6bd-44fb-b59d-dda9a5eabbe8),
-which came from a competitive scan on 22 August 2026. Seven phases, no fan-out — it was cut
+The sequence comes from [the roadmap](../roadmap.md), which came from a competitive scan on
+22 August 2026 ([published version](https://claude.ai/code/artifact/074f1d7b-b6bd-44fb-b59d-dda9a5eabbe8)). Seven phases, no fan-out — it was cut
 on running cost.
 
 ## How to run one
