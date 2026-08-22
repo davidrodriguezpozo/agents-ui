@@ -1,4 +1,5 @@
 import type { Session } from './sessions'
+import { orderTrain } from './trainOrder'
 
 /**
  * Landing finished work, several sessions at a time.
@@ -39,6 +40,19 @@ export interface LandingCandidate {
 export interface LandingShape {
   /** Sessions this run will attempt, in the order it will attempt them. */
   queue: LandingCandidate[]
+  /**
+   * Why that order, in one line, when there is anything to say.
+   *
+   * Empty for a queue of one, where there is no order to explain. An
+   * unexplained reordering of somebody's work reads as a bug, which is the
+   * whole reason this is carried out of here rather than composed on the page.
+   */
+  why?: string
+  /**
+   * The dependencies contradict each other, so the order is the cheapest-first
+   * one and nothing was avoided. See `orderTrain`.
+   */
+  cycle?: boolean
   /**
    * Finished: everything in them is in the base already.
    *
@@ -148,14 +162,39 @@ function needOf(session: LandingInput): LandingCandidate {
  * green means their merges happen before anybody has paid for an update, and
  * the sessions that were going to need updating get one update covering all of
  * it rather than one per merge ahead of them.
+ *
+ * `names` is the other half of the question, and optional because the cheap
+ * answer has to keep working without it: given what each session defines and
+ * uses, a session whose changed names another one calls goes first, whatever
+ * either of them costs. See `trainOrder.ts` — including what happens when two
+ * sessions use each other, which is nothing, said out loud.
  */
-export function planLanding(sessions: LandingInput[]): LandingShape {
+export function planLanding(
+  sessions: LandingInput[],
+  names?: Map<string, { provides: string[]; uses: string[] }>,
+): LandingShape {
   const order: Record<LandingNeed, number> = { ready: 0, check: 1, update: 2, landed: 3, blocked: 4 }
 
   const decided = sessions.map(needOf).sort((a, b) => order[a.need] - order[b.need])
+  const queue = decided.filter(c => c.need !== 'blocked' && c.need !== 'landed')
+
+  const byId = new Map(sessions.map(session => [session.id, session]))
+  const ordered = orderTrain(queue.map(candidate => ({
+    id: candidate.id,
+    title: candidate.title,
+    need: candidate.need,
+    green: byId.get(candidate.id)?.check?.status === 'passing',
+    changedFiles: byId.get(candidate.id)?.worktree.changedFiles ?? 0,
+    provides: names?.get(candidate.id)?.provides,
+    uses: names?.get(candidate.id)?.uses,
+  })))
+
+  const position = new Map(ordered.order.map((id, at) => [id, at]))
 
   return {
-    queue: decided.filter(c => c.need !== 'blocked' && c.need !== 'landed'),
+    queue: [...queue].sort((a, b) => (position.get(a.id) ?? 0) - (position.get(b.id) ?? 0)),
+    why: ordered.why,
+    ...(ordered.cycle ? { cycle: true } : {}),
     landed: decided.filter(c => c.need === 'landed'),
     skipped: decided.filter(c => c.need === 'blocked'),
   }
