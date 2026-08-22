@@ -480,6 +480,14 @@ const issuesEmptyLine = computed(() => {
       />
 
       <!--
+        After something lands, everything else in that repository is behind it.
+        Offered here rather than on five session pages, and only ever offered —
+        see `BaseSweepOffer`. Under the landing report, because it is what to do
+        about what the report just said.
+      -->
+      <BaseSweepOffer v-if="workingDir && showTrain" />
+
+      <!--
         Ready here — branches this machine can land without asking GitHub.
 
         Folded, because nine rows of order is a thing you open when you are about
