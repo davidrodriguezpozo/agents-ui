@@ -3,20 +3,48 @@
 Sixth pass, 19 August 2026, written at 0.9.0 with a clean tree. Against Claude Code
 2.1.235 and the CLI's own background-agent view, which arrived since the last pass.
 Earlier passes are in git history; where one of them was wrong it is named here rather
-than quietly dropped.
+than quietly dropped. **Amended 22 August 2026**, three days later, after a competitive
+scan: the audience section was reopened, and the sequence this document used to imply now
+lives in [`docs/plan/README.md`](plan/README.md).
 
-## The audience is still one person
+## The audience is one engineer first, and now the team as well
 
-Settled in the fourth pass and not reopened. The tool exists to make one engineer, tech
-lead and manager materially faster at those three jobs. Public and MIT; if anyone else
-finds it useful that is a bonus, not a plan.
+**Amended 22 August 2026.** The fourth pass settled the audience at one person and no pass
+since reopened it. The convention here is to name an earlier answer rather than drop it, so
+it stays as it was written: *the tool exists to make one engineer, tech lead and manager
+materially faster at those three jobs; public and MIT; if anyone else finds it useful that
+is a bonus, not a plan.*
 
-What has changed is the method. The fifth pass's rule was **the app's own alarms are a
-better backlog than this document**, and it paid: both alarms it named turned out to be
-real defects. This pass went one layer down and read *the files on disk* instead of the
-screens, and the reason to keep doing that is in the first section below — this morning
-the app's own badge said **nothing needs you** while its queue held four rows, its
-sessions held 20 GB of dead checkouts, and six of them were measuring the wrong branch.
+The first half of that survives. The primary user is still one person, and every finding
+below is still about his machine. The bonus clause does not. A competitive scan on 22 August
+re-read the table under "The competitive picture" and took the conclusion it had stopped
+short of: background agents, a fleet in the terminal and cloud-hosted review of a pull
+request are the solo argument, and they are native now. The case nothing else covers is the
+one with a second engineer in it. So the decision taken that day was to build the team
+plane, and the haddock team is a target the work is aimed at rather than a happy accident.
+
+The difference is three things and deliberately no more. **Identity**: a run and a merge
+record which person took them, read from git's own `user.name`, with no accounts and no
+store of people. **Shared configuration**: rituals, checks and sandbox rules that belong to
+the repository and arrive by pulling, with the machine's own still winning. **A shared
+ledger**: append-only outcomes, one file per machine, carried on a branch, so team totals
+are a read rather than a server. Nothing in that list needs a port open, a login, or
+anything hosted — which is why "Still not planned" below barely moves.
+
+**And the sequence lives elsewhere now.** It is [`docs/plan/README.md`](plan/README.md) —
+thirty units in waves, each one session's work with a gate it passes or does not. The "Now"
+list below is still this pass's findings in the order it costs to be wrong about them, which
+is evidence and not a schedule. The premise and what the disk says are this document's job;
+what gets built, and in what order, is the plan's. Where the two disagree, the plan is the
+newer of them.
+
+The method changed in this pass too, separately from any of that. The fifth pass's rule was
+**the app's own alarms are a better backlog than this document**, and it paid: both alarms
+it named turned out to be real defects. This pass went one layer down and read *the files on
+disk* instead of the screens, and the reason to keep doing that is in the first section
+below — this morning the app's own badge said **nothing needs you** while its queue held
+four rows, its sessions held 20 GB of dead checkouts, and six of them were measuring the
+wrong branch.
 
 New rule, and this pass earned it the hard way: **a feature that is off is not shipped.**
 
@@ -250,6 +278,12 @@ landed in an order that accounts for each other, a per-project sandbox, spend an
 rate-limit governors, and every repository at once on one screen. Those are the rows to be
 judged on — and, per the census, three of them have never been switched on.
 
+**This table is what reopened the audience on 22 August.** Every row above is a thing the
+CLI now does for one person. Every row in the paragraph after it is a thing that gets
+harder, not easier, once a second engineer is doing the same work in the same repository.
+That asymmetry is the argument for the team plane, and it is why the audience section at the
+top of this document no longer reads the way the fourth pass left it.
+
 The README's comparison table still holds. Its **navigation** table does not: it names
 Daily, Sessions, Activity, Workflows as the sections, and the app is Now, Work, Land,
 Daily, Library, Fleet. Four releases of reorganisation went past it.
@@ -284,14 +318,19 @@ is the whole cost of leaving the door open.
 | --- | --- |
 | **A stale inbox is a degrading ritual** — skips and staleness counted across firings, said on the Daily page | Nearly there. The inbox was last read on **14 August**: its Slack rows are five days old, the oldest unanswered question in them is from the 12th, Notion still carries the query-limit error it hit on that read, and there is exactly **one** schedule on this machine. The next time a week-old row is acted on as though it were this morning's, this is due |
 | **Inbox sources beyond Notion and Slack** | Demoted by the evidence. The problem is freshness of the two that exist, not breadth. Promote on the first morning you check something by hand *after* reading the queue — and only if the queue was current |
-| **Configuration that travels through git** — rituals and checks committed to the repo | You want the same ritual in a second repository and copy it by hand. Still a file format, not a server |
+| **Configuration that travels through git** — rituals and checks committed to the repo | **Promoted 22 August 2026**, as the shared-configuration leg of the team plane. Still a file format, not a server |
 | **Which rituals earn their cost** | One ritual, $1.95 a morning, attributable. Not urgent until there are several |
 | **Landing without colliding** — teammates' branches, not only our own | The first landing that conflicts with something a colleague pushed. Pointed at a work monorepo with 23 worktrees on disk, this is closer than it was |
 | **A session record that follows its checkout** rather than being corrected | If item 1 is fixed by refusing rather than following, and the refusal fires on ordinary work more than once |
 
+A bet this table says "promote when" about, and the plan already schedules, is settled: the
+plan is the answer to *when*, and this table records only why the bet was made.
+
 One debt still demoted: **storage that survives concurrency.** Flat JSON remains right for
 one person on one machine — and it is what made this pass possible, since every finding
-above came from reading it with `cat`. It comes back if the run queue corrupts it.
+above came from reading it with `cat`. The team plane does not change that: each machine
+keeps its own store, and the shared ledger is append-only, one file per machine, for exactly
+this reason. It comes back if the run queue corrupts it.
 
 ---
 
@@ -334,10 +373,14 @@ configuration advice nobody opened the page for.
 
 ## Still not planned
 
-- **Mobile, remote access, authentication, hosted mode.** One person, one machine.
-  `HOST=0.0.0.0` with its documented threat model is the whole answer.
+- **Mobile, remote access, authentication, hosted mode.** Unchanged by the team plane, and
+  the reason is the point of it: several people, each on their own machine, with a git
+  remote as the only thing between them. `HOST=0.0.0.0` with its documented threat model is
+  still the whole answer.
 - **Webhooks.** A port open to the internet is a different product. Polling asks the same
   question from inside.
 - **Non-Claude model backends.** This runs what its author pays for.
-- **Telemetry.** Refused on principle, and pointless: there is one user, and this pass
-  learned more from `cat`-ing his JSON than any event stream would have said.
+- **Telemetry.** Refused on principle, and pointless: this pass learned more from `cat`-ing
+  one machine's JSON than any event stream would have said. The shared ledger is not a
+  softening of this — it is a team's own outcomes, on the team's own branch, readable the
+  same way, and it leaves the machine only when somebody pushes it.
