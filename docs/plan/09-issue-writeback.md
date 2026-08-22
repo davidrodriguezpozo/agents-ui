@@ -28,4 +28,4 @@ moment, composed here.
 
 ## Out of scope
 
-Replying to comments. Reacting. Closing. Any write to Linear.
+Replying to comments. Reacting. Closing. Any write to Notion.

@@ -60,7 +60,7 @@ four separate units — that file is the reason this plan has waves at all rathe
 | 05 | Be an MCP server, not just a client | 1 | — |
 | 06 | An issue band on Land | 2 | — |
 | 07 | The issue row becomes a session | 3 | 06 |
-| 08 | Linear as a second source | 4 | 06, 07 |
+| 08 | Notion as a second source | 4 | 06, 07 |
 | 09 | One comment back, and nothing else | 5 | 07 |
 | 10 | The hand-off convention, documented | 1 | — |
 | 11 | The outcome join | 1 | — |
@@ -92,6 +92,6 @@ the time a session reaches them the code will have moved — expect to re-read t
 the tree and sharpen it before handing it out.
 
 **Three units can come back blocked and that is correct.** 03 depends on what the Agent SDK
-version in `package.json` actually allows mid-query; 08 needs a Linear credential; 20 is a
+version in `package.json` actually allows mid-query; 08 needs the Notion MCP server connected; 20 is a
 document that can only be finished by following it on a second machine. Each says so, and
 each is told to stop rather than invent.
