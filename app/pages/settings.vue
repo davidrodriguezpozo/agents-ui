@@ -290,6 +290,16 @@ const pullActions = ref<Record<PullActionKey, string>>({ review: '', address: ''
 const savedPullActions = ref<Record<PullActionKey, string>>({ review: '', address: '', fix: '', update: '' })
 
 /**
+ * Which label puts an issue on Land, on top of the ones assigned to you.
+ *
+ * Blank is a real setting rather than a missing one — it means no label is
+ * watched at all — so this saves an empty string rather than falling back to
+ * the default the way most fields here would.
+ */
+const issueLabel = ref('')
+const savedIssueLabel = ref('')
+
+/**
  * What is left of the subscription. Never fetched on its own — it is collected
  * from the SDK during runs that were happening anyway — so "nothing heard yet"
  * is a normal state on a fresh install rather than a failure.
@@ -381,6 +391,7 @@ onMounted(async () => {
       runCapUsd: number
       pullActions?: Record<PullActionKey, string>
       effort?: typeof effort.value
+      issueLabel?: string
     }>('/api/preferences')
     notifications.value = prefs.notifications
     notificationChannel.value = prefs.notifications.channel ?? 'browser'
@@ -392,6 +403,10 @@ onMounted(async () => {
     pauseOnQuotaWarning.value = prefs.pauseOnQuotaWarning === true
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
+    // `??` rather than `||`: a stored empty string means the label half of the
+    // issue band is off, and must not be read back as "unset, use studio".
+    issueLabel.value = prefs.issueLabel ?? 'studio'
+    savedIssueLabel.value = issueLabel.value
     if (prefs.pullActions) {
       for (const { key } of PULL_ACTIONS) {
         const value = prefs.pullActions[key] ?? ''
@@ -454,6 +469,33 @@ async function savePullAction(key: PullActionKey) {
     savedPullActions.value[key] = previous
     pullActions.value[key] = previous
     toast.add({ title: 'Could not save that', color: 'error' })
+  }
+}
+
+/**
+ * Save the issue label. On blur rather than per keystroke — it is typed, not
+ * toggled — and only when it changed, so tabbing past it writes nothing.
+ */
+async function saveIssueLabel() {
+  const value = issueLabel.value.trim()
+  issueLabel.value = value
+  if (value === savedIssueLabel.value) return
+
+  const previous = savedIssueLabel.value
+  savedIssueLabel.value = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { issueLabel: value } })
+    toast.add({
+      title: 'Saved',
+      description: value
+        ? `Land lists issues labelled ${value}, and the ones assigned to you.`
+        : 'Land lists the issues assigned to you. No label is watched.',
+      color: 'success',
+    })
+  } catch (e) {
+    savedIssueLabel.value = previous
+    issueLabel.value = previous
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
   }
 }
 
@@ -947,6 +989,45 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           post anything to GitHub — so a command that posts a review will post it. The session still
           starts in a fresh worktree with the branch checked out, the same as before.
         </p>
+      </div>
+
+      <!--
+        Which issues reach Land.
+
+        Sits under the review actions because it is the other end of the same
+        thread: that box decides what a pull request row runs, this one decides
+        which tickets are visible before there is a branch at all.
+      -->
+      <div id="settings-issue-label" class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Issues on Land</h3>
+        <p class="fs-sm text-meta">
+          <NuxtLink to="/land" class="ink-accent hover:underline">Land</NuxtLink> lists every open
+          issue assigned to you, plus any carrying this label — so a colleague can put something in
+          front of you by labelling it, without knowing this app exists. It is the same label a
+          ritual watches when it fires on an issue being labelled.
+        </p>
+
+        <div class="field-group">
+          <label class="field-label" for="issue-label">Label</label>
+          <div class="w-56">
+            <input
+              id="issue-label"
+              v-model="issueLabel"
+              class="field-input font-mono fs-mono"
+              placeholder="studio"
+              spellcheck="false"
+              autocapitalize="off"
+              autocomplete="off"
+              @blur="saveIssueLabel"
+              @keydown.enter="saveIssueLabel"
+            />
+          </div>
+          <p class="field-hint">
+            Leave it blank to watch no label, which leaves Land showing only the issues assigned to
+            you. Nothing is ever written back to GitHub from that band — no comment, no assignment,
+            no label.
+          </p>
+        </div>
       </div>
 
       <!-- How hard runs think -->

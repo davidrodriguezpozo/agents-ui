@@ -15,10 +15,13 @@ import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
  * "what is finished and what do I do about it" is one question whether the
  * answer is a merge command or a GitHub button.
  *
- * So the page is that question, in two bands. **Ready here** is work this
+ * So the page is that question, in three bands. **Ready here** is work this
  * machine can land itself. **On GitHub** is work that needs somebody, or is
- * waiting on somebody. Starting is not on this page at all — that is /work —
- * and neither is anything merely in flight.
+ * waiting on somebody. **Asked of you** is the other end of the same thread —
+ * the issues, which are where a piece of work starts rather than where it
+ * finishes, and which the app could previously only ever act on unattended.
+ * Starting is not on this page at all — that is /work — and neither is anything
+ * merely in flight.
  *
  * What it is emphatically not is a GitHub client. Pull requests you are only
  * subscribed to, the repository's feed, another team's queue: deliberately
@@ -29,6 +32,9 @@ import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
 const {
   reading, summary, loading, loaded, busy, refresh, watchContinuously, stopWatching, work, merge,
 } = useGithubPulls()
+const {
+  reading: issues, loading: issuesLoading, loaded: issuesLoaded, refresh: refreshIssues,
+} = useGithubIssues()
 const { sessions, fetchAll: fetchSessions } = useSessions()
 const { workingDir } = useWorkingDir()
 const { projects } = useProjects()
@@ -40,10 +46,28 @@ const confirming = ref<number | null>(null)
 onMounted(() => watchContinuously())
 onUnmounted(stopWatching)
 
+// Asked here as well as through the watch below, because the pull request
+// reading is shared app-wide: the sidebar may already have taken one, in which
+// case `readAt` does not move when this page opens and the band would sit empty
+// until the next poll.
+onMounted(refreshIssues)
+
 // Another project is another repository and another set of pull requests — and
 // another answer to `inCurrentProject`, which is what decides whose sessions
 // may be shown against those pull requests.
 watch(workingDir, () => { void refresh(); void fetchSessions() })
+
+/**
+ * The issue band, refreshed on the back of the pull request one.
+ *
+ * `readAt` moves on every reading `useGithubPulls` takes — the one at mount, the
+ * two-minute poll, the header's refresh button, a project switch — and on the
+ * failed ones too. Riding it means both bands are the same age and there is
+ * still exactly one timer on this page. A second `setInterval` against
+ * github.com, for a band nobody is watching in a tab left open all day, is the
+ * thing worth not adding.
+ */
+watch(() => reading.value.readAt, () => { void refreshIssues() })
 
 const nothingOnGithub = computed(() =>
   reading.value.ok && !reading.value.reviewing.length && !reading.value.mine.length
@@ -269,9 +293,32 @@ async function onLand() {
   }
 }
 
-/** Nothing here and nothing there — the only case that gets one empty state. */
+/**
+ * Nothing here and nothing there — the only case that gets one empty state.
+ *
+ * `issues.ok` is part of it for the same reason `nothingOnGithub` tests the pull
+ * requests': an issue band that could not be read is unknown, not empty, and
+ * folding it into "nothing is waiting to land" would hide the one sentence that
+ * says why.
+ */
 const nothingAnywhere = computed(() =>
-  nothingOnGithub.value && !showTrain.value && !landingRun.value)
+  nothingOnGithub.value && !showTrain.value && !landingRun.value
+  && issues.value.ok && !issues.value.issues.length)
+
+/**
+ * What the issue band says when it has nothing.
+ *
+ * It names the label, which is the point: an empty band is either "there is
+ * nothing to do" or "you have not labelled anything yet", and those want
+ * completely different things from you. The sentence says which word to reach
+ * for, and Settings is where it is changed.
+ */
+const issuesEmptyLine = computed(() => {
+  const where = issues.value.repo ? ` in ${issues.value.repo}` : ''
+  return issues.value.label
+    ? `No open issue${where} is assigned to you or labelled ${issues.value.label}.`
+    : `No open issue${where} is assigned to you. No label is being watched.`
+})
 </script>
 
 <template>
@@ -496,11 +543,62 @@ const nothingAnywhere = computed(() =>
         </template>
       </section>
 
+      <!--
+        Asked of you — the issues, which are where a piece of work starts.
+
+        Under the pull requests on purpose: what is half-finished outranks what
+        has not begun. A ritual could already fire on one of these being
+        labelled; until now nobody could look at them.
+      -->
+      <section class="space-y-4">
+        <div class="flex items-baseline gap-2.5">
+          <h2 class="text-section-label">Asked of you</h2>
+          <span v-if="issues.onYou" class="type-mono-meta font-mono ink-accent">
+            {{ issues.onYou }} on you
+          </span>
+        </div>
+
+        <!-- A reason, never an empty list. Same rule the band above it keeps. -->
+        <div
+          v-if="!issues.ok"
+          class="flex items-start gap-3 p-3.5 rounded-lg"
+          style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+        >
+          <UIcon name="i-lucide-plug-zap" class="size-4 shrink-0 mt-0.5 ink-warn" />
+          <div class="min-w-0 space-y-1">
+            <p class="type-strong text-body">Issues could not be read</p>
+            <p class="type-detail">{{ issues.reason }}</p>
+          </div>
+        </div>
+
+        <div v-else-if="issuesLoading && !issuesLoaded" class="space-y-2">
+          <SkeletonRow v-for="i in 2" :key="i" />
+        </div>
+
+        <template v-else>
+          <div v-if="issues.issues.length" class="space-y-2">
+            <IssueCard
+              v-for="issue in issues.issues"
+              :key="issue.number"
+              :issue="issue"
+              class="stagger-item"
+            />
+          </div>
+
+          <p v-else-if="!nothingAnywhere" class="type-detail">
+            {{ issuesEmptyLine }}
+            <NuxtLink to="/settings#settings-issue-label" class="ink-accent hover:underline">
+              Change the label
+            </NuxtLink>
+          </p>
+        </template>
+      </section>
+
       <EmptyState
         v-if="nothingAnywhere"
         icon="i-lucide-git-merge"
         title="Nothing is waiting to land"
-        description="No session here is finished, and no open pull request is yours or waiting on your review. When one is, it turns up here — and one press starts a session on it."
+        :description="`No session here is finished, and no open pull request is yours or waiting on your review. ${issuesEmptyLine} When one of them turns up it is here — and on a pull request, one press starts a session on it.`"
         action-label="Start something"
         action-to="/work"
       />
