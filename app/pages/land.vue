@@ -35,7 +35,7 @@ const {
 } = useGithubPulls()
 const {
   reading: issues, loading: issuesLoading, loaded: issuesLoaded, busy: issueBusy,
-  refresh: refreshIssues, work: workIssue,
+  readingNotion, refresh: refreshIssues, work: workIssue, readNotion,
 } = useGithubIssues()
 const { sessions, fetchAll: fetchSessions } = useSessions()
 const { workingDir } = useWorkingDir()
@@ -214,24 +214,41 @@ async function startWork(pull: Pull, intent?: WorkIntent) {
 }
 
 /**
+ * What to call a row in a sentence.
+ *
+ * `#42` for a GitHub issue, because that is what everybody says. A Notion ticket
+ * has no such handle, so it is called by its title — cut, because a ticket title
+ * can be a paragraph and a toast is not.
+ */
+function nameOf(issue: Issue): string {
+  if (issue.source === 'github') return `#${issue.number}`
+  return issue.title.length > 40 ? `${issue.title.slice(0, 40)}…` : issue.title
+}
+
+/**
  * The same press, from the other end of the workflow.
  *
  * Deliberately a second function rather than a branch inside `startWork`: the
- * two share a shape and nothing else. An issue has no branch to collide over, so
- * there is no "adopted" arrival and no takeover to explain — the only thing
- * worth saying is when the instruction went to a session that already had the
- * issue rather than to a new workspace.
+ * two share a shape and nothing else. An issue or a ticket has no branch to
+ * collide over, so there is no "adopted" arrival and no takeover to explain — the
+ * only thing worth saying is when the instruction went to a session that already
+ * had it rather than to a new workspace.
+ *
+ * Keyed on `issue.key` rather than a number, because the band has two sources and
+ * a number cannot name a Notion page. The server settles which tracker it is.
  */
 async function startIssueWork(issue: Issue, intent: IssueIntent) {
+  const name = nameOf(issue)
+
   try {
-    const session = await workIssue(issue.number, intent)
+    const session = await workIssue(issue.key, intent)
 
     if (session.startError) {
       toast.add({ title: 'Session started, but not working', description: session.startError, color: 'warning' })
     } else if (session.how === 'continued') {
       toast.add({
-        title: `Continued the session on #${issue.number}`,
-        description: 'A session was already on this issue, so the instruction went there rather than to a second one.',
+        title: `Continued the session on ${name}`,
+        description: 'A session was already on this, so the instruction went there rather than to a second one.',
         color: 'info',
       })
     }
@@ -240,12 +257,42 @@ async function startIssueWork(issue: Issue, intent: IssueIntent) {
   } catch (e: any) {
     const held = errorSessionId(e)
     if (held) {
-      toast.add({ title: `Already working on #${issue.number}`, description: errorMessage(e), color: 'warning' })
+      toast.add({ title: `Already working on ${name}`, description: errorMessage(e), color: 'warning' })
       await navigateTo(`/sessions/${held}`)
       return
     }
 
-    toast.add({ title: `Could not start on #${issue.number}`, description: errorMessage(e), color: 'error' })
+    toast.add({ title: `Could not start on ${name}`, description: errorMessage(e), color: 'error' })
+  }
+}
+
+/**
+ * Go and read Notion, which is a job rather than a request.
+ *
+ * Said out loud in the toast, cost included, because that is what it is: a model
+ * run of tens of seconds against the MCP server. The band never does this on its
+ * own — see `useGithubIssues` — so this button is the only thing that spends
+ * anything on this page besides starting work.
+ */
+async function onReadNotion() {
+  try {
+    const result = await readNotion()
+    const spent = result.costUsd ? ` · $${result.costUsd.toFixed(2)}` : ''
+
+    if (result.error) {
+      toast.add({ title: 'Notion was read, with a problem', description: result.error, color: 'warning' })
+      return
+    }
+
+    toast.add({
+      title: result.count
+        ? `${result.count} ${result.count === 1 ? 'ticket' : 'tickets'} from Notion`
+        : 'No ticket in Notion carries that status',
+      description: `Read just now${spent}.`,
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Notion was not read', description: errorMessage(e), color: 'error' })
   }
 }
 
@@ -332,19 +379,53 @@ async function onLand() {
 }
 
 /**
+ * The Notion half's state, drawn from the reading rather than worked out here.
+ *
+ * Absent — a machine whose tickets are not in Notion — means the band says
+ * nothing about Notion at all. Nobody needs a permanent note about a tracker they
+ * do not use, which is the same rule `not-github` follows for a folder.
+ */
+const notion = computed(() => issues.value.notion ?? null)
+const showNotion = computed(() => Boolean(notion.value?.configured))
+
+/**
+ * What the Notion half says about itself, in one sentence.
+ *
+ * Four states and they want different things from you: nothing has ever looked,
+ * the last look was refused, the last look worked, or the look found nothing. The
+ * refusal is verbatim from the run — it is where "Notion is not connected" comes
+ * from, and it already names what to do about it.
+ */
+const notionLine = computed(() => {
+  const half = notion.value
+  if (!half) return ''
+  if (!half.ok) return half.reason ?? 'Notion could not be read.'
+  if (!half.checkedAt) return `Notion has not been read yet. Nothing here carries ${half.statusValue}.`
+
+  const spent = half.costUsd ? ` · $${half.costUsd.toFixed(2)}` : ''
+  const found = half.count
+    ? `${half.count} ${half.count === 1 ? 'ticket' : 'tickets'} marked ${half.statusValue}`
+    : `no ticket marked ${half.statusValue}`
+
+  return `Notion: ${found}, read ${relativeTime(half.checkedAt)}${spent}.`
+})
+
+/**
  * Nothing here and nothing there — the only case that gets one empty state.
  *
  * `issues.ok` is part of it for the same reason `nothingOnGithub` tests the pull
  * requests': an issue band that could not be read is unknown, not empty, and
  * folding it into "nothing is waiting to land" would hide the one sentence that
- * says why.
+ * says why. The Notion half has to be quiet too — a half that was refused is a
+ * band with something to say, whatever it is showing.
  */
 const nothingAnywhere = computed(() =>
   nothingOnGithub.value && !showTrain.value && !landingRun.value
-  && issues.value.ok && !issues.value.issues.length)
+  && issues.value.ok && !issues.value.issues.length
+  && !showNotion.value)
 
 /**
- * What the issue band says when it has nothing.
+ * What the band says when it has nothing.
  *
  * It names the label, which is the point: an empty band is either "there is
  * nothing to do" or "you have not labelled anything yet", and those want
@@ -597,7 +678,12 @@ const issuesEmptyLine = computed(() => {
           </span>
         </div>
 
-        <!-- A reason, never an empty list. Same rule the band above it keeps. -->
+        <!--
+          A reason, never an empty list. Same rule the band above it keeps — and
+          it no longer hides the rows: `gh` being missing is a fact about one of
+          two trackers, and taking the Notion tickets off the screen with it
+          would make one broken half into a blank band.
+        -->
         <div
           v-if="!issues.ok"
           class="flex items-start gap-3 p-3.5 rounded-lg"
@@ -610,23 +696,63 @@ const issuesEmptyLine = computed(() => {
           </div>
         </div>
 
-        <div v-else-if="issuesLoading && !issuesLoaded" class="space-y-2">
+        <!--
+          The Notion half, and the one control on this page that spends money.
+
+          Shown only once somebody has configured it, so a machine whose tickets
+          are not in Notion never hears about Notion. When the MCP server is not
+          connected this is where it says so — the sentence comes from the run's
+          own pre-flight, which already names the fix.
+        -->
+        <div
+          v-if="showNotion"
+          class="flex items-center gap-3 px-3 py-2.5 rounded-lg"
+          style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+        >
+          <UIcon
+            :name="notion?.ok ? 'i-lucide-file-text' : 'i-lucide-plug-zap'"
+            class="size-4 shrink-0"
+            :class="notion?.ok ? '' : 'ink-warn'"
+          />
+          <p class="type-detail flex-1 min-w-0">{{ notionLine }}</p>
+          <button
+            class="inline-flex items-center gap-1.5 fs-mono px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer shrink-0"
+            style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+            :disabled="readingNotion"
+            title="Ask Notion for the tickets carrying that status. This is a run: it takes about a minute and costs a few cents."
+            @click="onReadNotion()"
+          >
+            <UIcon
+              :name="readingNotion ? 'i-lucide-loader-2' : 'i-lucide-refresh-cw'"
+              class="size-3.5"
+              :class="{ 'animate-spin': readingNotion }"
+            />
+            {{ readingNotion ? 'Reading Notion…' : 'Read Notion' }}
+          </button>
+        </div>
+
+        <div v-if="issuesLoading && !issuesLoaded" class="space-y-2">
           <SkeletonRow v-for="i in 2" :key="i" />
         </div>
 
         <template v-else>
+          <!--
+            One list, both sources, in the order the server sorted them. Two
+            lists under one heading would be two bands, and the reader would be
+            doing the merge.
+          -->
           <div v-if="issues.issues.length" class="space-y-2">
             <IssueCard
               v-for="issue in issues.issues"
-              :key="issue.number"
+              :key="issue.key"
               :issue="issue"
-              :busy="issueBusy === issue.number"
+              :busy="issueBusy === issue.key"
               class="stagger-item"
               @work="intent => startIssueWork(issue, intent)"
             />
           </div>
 
-          <p v-else-if="!nothingAnywhere" class="type-detail">
+          <p v-else-if="!nothingAnywhere && issues.ok" class="type-detail">
             {{ issuesEmptyLine }}
             <NuxtLink to="/settings#settings-issue-label" class="ink-accent hover:underline">
               Change the label

@@ -2,6 +2,9 @@ import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { DEFAULT_EDITOR, sanitiseEditor, type EditorChoice } from './editors'
 import { defineJsonStore } from './jsonStore'
+import {
+  DEFAULT_NOTION_INTAKE, sanitiseNotionIntake, type NotionIntakeConfig,
+} from './notionIntake'
 
 /**
  * How this machine wants to be interrupted.
@@ -228,6 +231,17 @@ export interface Preferences {
    */
   issueLabel: string
   /**
+   * Which Notion database the band's other half reads, and which status value
+   * means an agent may take a ticket.
+   *
+   * The analogue of `issueLabel` for the source the tickets actually arrive in.
+   * Empty throughout means Notion is not part of the band at all, which is the
+   * default and the right one: nothing here can be guessed about somebody's
+   * workspace, and a band that went looking anyway would spend money to find out
+   * it had guessed wrong.
+   */
+  notionIntake: NotionIntakeConfig
+  /**
    * Which editor the "Open in" button opens a worktree in.
    *
    * One per machine rather than one per session: it is a fact about how this
@@ -261,6 +275,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   pullActions: { review: '', address: '', fix: '', update: '' },
   effort: DEFAULT_EFFORT,
   issueLabel: DEFAULT_ISSUE_LABEL,
+  notionIntake: DEFAULT_NOTION_INTAKE,
   editor: DEFAULT_EDITOR,
 }
 
@@ -342,6 +357,10 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Absent means the default. Present and empty means somebody turned the
     // label half of the issue band off, which is why `??` rather than `||`.
     issueLabel: sanitiseIssueLabel(parsed?.preferences?.issueLabel ?? DEFAULT_ISSUE_LABEL),
+    // Absent means Notion is not part of the band. Sanitised on the way in as
+    // well as the way out, because these three strings go into the question a
+    // run is asked and a hand-edited file must not be able to change it.
+    notionIntake: sanitiseNotionIntake(parsed?.preferences?.notionIntake),
     // Absent means VS Code, which is also what a name no scheme exists for
     // means — a typo here must not leave the button launching nothing.
     editor: sanitiseEditor(parsed?.preferences?.editor),
@@ -371,12 +390,13 @@ export async function savePreferences(
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
     issueLabel?: string
+    notionIntake?: Partial<NotionIntakeConfig>
     editor?: EditorChoice
   },
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning, pullActions, effort, issueLabel, editor,
+    pauseOnQuotaWarning, pullActions, effort, issueLabel, notionIntake, editor,
     ...notifications
   } = patch
 
@@ -401,6 +421,12 @@ export async function savePreferences(
         : sanitisePullActions({ ...current.pullActions, ...pullActions }),
       effort: effort === undefined ? current.effort : sanitiseEffort(effort),
       issueLabel: issueLabel === undefined ? current.issueLabel : sanitiseIssueLabel(issueLabel),
+      // Merged over what is stored, like `pullActions`: the settings page saves
+      // one field at a time, and saving the status value must not blank the data
+      // source that was typed a moment before it.
+      notionIntake: notionIntake === undefined
+        ? current.notionIntake
+        : sanitiseNotionIntake({ ...current.notionIntake, ...notionIntake }),
       editor: editor === undefined ? current.editor : sanitiseEditor(editor),
     }
     Object.assign(current, next)
