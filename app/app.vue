@@ -172,11 +172,12 @@ const navLinks = computed(() => isSimple.value
       { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
       { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
-      // Agents, commands and skills were three nav items for one question.
+      // Agents, commands and skills were three nav items for one question, and
+      // MCP was a fourth: "what can Claude reach". The servers are a facet of
+      // the Library now, reachable at /library?type=mcp.
       { label: 'Library', icon: 'i-lucide-library', to: '/library' },
       { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },
       { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
-      { label: 'MCP', icon: 'i-lucide-plug', to: '/mcp' },
     ]
 )
 

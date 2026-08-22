@@ -11,10 +11,14 @@ import type { HasOrigin } from '~/utils/entityGroups'
  * ninety-nine skills are one searchable list with a facet, not three
  * destinations to guess between.
  *
- * Plugins and MCP deliberately stay where they are. A plugin is a *source* of
- * these — it is already how the list is grouped — and MCP is a health view of
- * external servers. Folding either in here would be putting three different
- * kinds of thing in one list for the sake of a shorter sidebar.
+ * MCP servers now share the Library *page* but not this list. They were their
+ * own nav item for a slice of the same question, so the page took them on as a
+ * facet after a divider — but a server is a live connection with a health state
+ * and a sign-in button, not a file you wrote and can open, so it is not a fourth
+ * `CapabilityType`. See `McpServerList`.
+ *
+ * Plugins deliberately stay where they are: a plugin is a *source* of these, and
+ * is already how this list is grouped.
  */
 
 export type CapabilityType = 'agent' | 'command' | 'skill'
