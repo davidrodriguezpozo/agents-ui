@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { findSession, patchSession, readSessions, type Session } from './sessions'
 import { recordLanded } from './landed'
+import { gitIdentity } from './identity'
 import {
   decideWatch, fixPrompt, landPullRequest, pushFix, readPrStatus,
   type SessionPrWatch,
@@ -77,11 +78,22 @@ async function conclude(
   })
 
   if (state === 'landed' && how) {
+    /*
+     * Named only when this app did the merging. `pull-request` is `gh pr merge`
+     * run from here, authenticated and signed as this repository's identity, so
+     * the person on the record is the person on the merge. `elsewhere` is the
+     * opposite fact — somebody merged it on github.com and nothing here took
+     * part — and naming the local identity there would file a colleague's merge
+     * under whoever's machine happened to notice. See `SessionLanded.by`.
+     */
+    const by = how === 'pull-request' ? await gitIdentity(session.repoDir) : undefined
+
     await recordLanded(session.id, {
       at: Date.now(),
       how,
       pr: watch.number,
       ...(sha ? { sha } : {}),
+      ...(by ? { by } : {}),
     })
   }
 

@@ -1,6 +1,7 @@
 import type { RunEvent } from './runStore'
 import { sourceOf, type RunSource } from './runFilter'
 import { landedSince, type LandedHow, type SessionLanded } from './landed'
+import { personKey, type Identity } from './identity'
 import type { SessionReverted } from './revertWatch'
 import type { CheckStatus, SessionCheck } from './checks'
 import type { SideCost } from './spend'
@@ -51,6 +52,17 @@ import type { SideCost } from './spend'
  * run under two models therefore counts its landing under one of them rather
  * than both: group landing counts sum to the total and never exceed it, which is
  * the property worth having when somebody adds up a column.
+ *
+ * **And by person, which is the same rule and worth stating twice.** A person's
+ * merges here are the merges of the sessions they last worked on in the window,
+ * not the merges they pressed the button for — those two differ whenever one
+ * person finishes another's session, and only the first keeps a group's spend
+ * and a group's landings describing the same work. Who actually took a merge is
+ * on the landing record as `by`, and in the merge commit; this column answers
+ * "what did each person's work cost per merge", which is the question a ledger
+ * is for. A turn nobody is named on — every ritual, and everything recorded
+ * before identity was — is left out of the person column entirely rather than
+ * credited to whoever is reading. See `identity.ts`.
  */
 
 /** Tool calls that mean a file on disk is different afterwards. */
@@ -127,6 +139,15 @@ export interface OutcomeTurn {
   /** The repository, for a turn that is not a session's. */
   projectDir?: string
   /**
+   * Who sent it, as `personKey` names them — an email, usually.
+   *
+   * Absent means nobody is named, which is a ritual, or a turn recorded before
+   * identity was. Both are left out of the person grouping rather than pooled
+   * into an "unknown" person, for the reason `joinOutcomes` gives about every
+   * other dimension.
+   */
+  person?: string
+  /**
    * Whether this turn changed a file. Absent means nobody worked it out, which
    * is reported as unmeasured rather than counted as a turn that changed
    * nothing — see `turnChangedFiles`.
@@ -163,6 +184,8 @@ export interface OutcomeRunRecord {
   scheduleId?: string
   sessionId?: string
   stats?: { costUsd?: number; model?: string }
+  /** Who asked for it. Absent on a ritual and on everything older. */
+  by?: Identity
   events?: RunEvent[]
 }
 
@@ -187,6 +210,9 @@ export function outcomeTurnOf(run: OutcomeRunRecord): OutcomeTurn {
     input: run.input,
     model: run.stats?.model,
     projectDir: run.projectDir,
+    // The key, not the identity — the name beside it is a label a caller looks
+    // up, and two spellings of one person must not become two rows.
+    person: personKey(run.by),
     // Only claimed when there is an event log to claim it from. A run whose
     // events were never loaded is unmeasured, not unchanged.
     changedFiles: run.events ? turnChangedFiles(run.events) : undefined,
@@ -271,7 +297,7 @@ export interface OutcomeTotals {
 }
 
 export interface OutcomeGroup extends OutcomeTotals {
-  /** The ritual id, agent slug, model, skill or repository path. */
+  /** The ritual id, agent slug, model, skill, repository path or person. */
   key: string
 }
 
@@ -289,6 +315,12 @@ export interface OutcomeReport extends OutcomeTotals {
   byModel: OutcomeGroup[]
   bySkill: OutcomeGroup[]
   byRepository: OutcomeGroup[]
+  /**
+   * Keyed by `personKey` — an email, mostly. Empty on a machine whose git names
+   * nobody, and short by every ritual and every record older than identity, all
+   * of which are unattributed rather than anybody's. See the note at the top.
+   */
+  byPerson: OutcomeGroup[]
 }
 
 // --- The join ---------------------------------------------------------------
@@ -408,7 +440,7 @@ function turnAt(turn: OutcomeTurn): number {
 
 /**
  * What was spent, what landed, and what the checks said — for one window,
- * grouped five ways.
+ * grouped six ways.
  *
  * Grouping leaves a turn out of a dimension it has no value for rather than
  * inventing a bucket for it: a group called "unknown" reads like a real ritual
@@ -429,6 +461,7 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
     byModel: new Map<string, Tally>(),
     bySkill: new Map<string, Tally>(),
     byRepository: new Map<string, Tally>(),
+    byPerson: new Map<string, Tally>(),
   }
 
   type Dimension = keyof typeof dimensions
@@ -444,6 +477,14 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
       // A session's repository is on the session; a ritual or a command carries
       // its own.
       byRepository: session?.repoDir ?? turn.projectDir,
+      /*
+       * The turn's own person, and nothing stands in for it — unlike the agent
+       * above, which falls back to the session's. A session started by one
+       * person and continued by another is the case this whole dimension exists
+       * for, and falling back to whoever cut the worktree would file the second
+       * person's turns under the first.
+       */
+      byPerson: turn.person,
     }
   }
 
@@ -554,5 +595,6 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
     byModel: groups(dimensions.byModel),
     bySkill: groups(dimensions.bySkill),
     byRepository: groups(dimensions.byRepository),
+    byPerson: groups(dimensions.byPerson),
   }
 }

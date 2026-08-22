@@ -2,8 +2,8 @@
  * What the work that shipped cost.
  *
  * Mirrors what `server/utils/ledger.ts` returns — deliberately, and only as far
- * as this page reads it. `joinOutcomes` produces five dimensions and a check
- * tally; the ledger page uses four of the dimensions and the totals, so the rest
+ * as this page reads it. `joinOutcomes` produces six dimensions and a check
+ * tally; the ledger page uses five of the dimensions and the totals, so the rest
  * is left out rather than copied out of politeness. The server is the authority
  * on all of it.
  */
@@ -37,7 +37,10 @@ export interface LedgerTotals {
 
 export interface LedgerRow {
   key: string
-  /** Only rituals have one — their key is an id. Absent means the key is the name. */
+  /**
+   * Rituals have one — their key is an id — and so do people, whose key is an
+   * email. Absent means the key is the name.
+   */
   label?: string
   turns: number
   costUsd: number
@@ -49,7 +52,7 @@ export interface LedgerRow {
   openCostUsd: number
 }
 
-export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'repository'
+export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'repository' | 'person'
 
 export interface LedgerTable {
   dimension: LedgerDimension

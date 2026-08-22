@@ -2,6 +2,7 @@ import { resolveRunOptions, type RunRequest } from '../../utils/runOptions'
 import { createRun } from '../../utils/runStore'
 import { executeRun } from '../../utils/runner'
 import { checkBudget } from '../../utils/budget'
+import { gitIdentity } from '../../utils/identity'
 import type { RunKind } from '../../utils/runStore'
 
 interface StartRunBody extends RunRequest {
@@ -40,6 +41,11 @@ export default defineEventHandler(async (event) => {
     invocation: body.invocation,
     agentSlug: body.agentSlug,
     projectDir: options.cwd,
+    // Somebody pressed something to get here — the page, the palette, or the
+    // terminal client, all of which post to this route. A ritual does not: the
+    // scheduler builds its own run and leaves it unattributed, which is the
+    // truth about three in the morning. See `identity.ts`.
+    by: await gitIdentity(options.cwd),
   })
 
   // Deliberately not awaited: the response returns while the run continues.

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { matchesFilter, sourceOf, type RunFilter, type RunSource } from './runFilter'
 import { parseSkipped, withoutSkipped, type SkippedSource } from './selfReported'
+import type { Identity } from './identity'
 import type { RunStats } from '~/types'
 
 export type RunKind = 'command' | 'chat' | 'agent'
@@ -89,6 +90,16 @@ export interface Run {
   stepIndex?: number
   /** Set when the run is a turn in a session, which owns a worktree. */
   sessionId?: string
+  /**
+   * Who asked for this, as git names them. See `identity.ts`.
+   *
+   * Absent on everything nobody sent — a ritual firing at three in the morning
+   * is the machine's work, and stamping it with whoever last configured git
+   * would put a person's name on every unattended night. Absent, too, on every
+   * run written before this field existed, which reads as unattributed and must
+   * never be read as the person asking now.
+   */
+  by?: Identity
   events: RunEvent[]
 }
 

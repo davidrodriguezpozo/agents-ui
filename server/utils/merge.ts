@@ -4,6 +4,7 @@ import { isStale, worktreeFingerprint, type SessionCheck } from './checks'
 import { describeFlakes, flakesFor, type Flake } from './checkFlakes'
 import { collisionsFor, describeCollisions, type Collision } from './collisions'
 import { recordLanded } from './landed'
+import { gitIdentity, overrideNote } from './identity'
 import { readSessions, type Session } from './sessions'
 import { checkoutDrifted, driftNote, reviewOnlyNote } from '~/utils/checkout'
 
@@ -398,11 +399,25 @@ export async function mergeSession(
 
   const base = opts.message?.trim() || `Merge session: ${session.title}`
 
+  /*
+   * Who is doing this, resolved once and used twice — in the commit git is about
+   * to write and on the record filed after it — so the history and the ledger
+   * cannot disagree about one merge. Asked of the repository rather than the
+   * worktree because that is where the merge happens and whose `user.email` git
+   * will sign the commit with.
+   *
+   * Resolved before the merge rather than after, so a landing recorded over a
+   * repository whose config has since been edited still names who took it.
+   */
+  const by = await gitIdentity(session.repoDir)
+
   // A decision to merge over a failing suite is worth keeping. Six months on,
   // the question "was this known to be broken when it landed" has an answer in
-  // the history rather than only in whoever remembers clicking the button.
+  // the history rather than only in whoever remembers clicking the button — and
+  // the second half of that question is *who*, which is why the note names them.
+  // See `overrideNote` for what an unconfigured repository leaves instead.
   const message = overruled && preview.check
-    ? `${base}\n\nMerged with \`${preview.check.command}\` failing.`
+    ? `${base}\n\nMerged with \`${preview.check.command}\` failing. ${overrideNote(by)}`
     : base
 
   try {
@@ -451,6 +466,7 @@ export async function mergeSession(
     into: session.baseBranch,
     commits: preview.commits,
     ...(sha ? { sha } : {}),
+    ...(by ? { by } : {}),
     ...(overruled ? { overrodeChecks: true } : {}),
   })
 

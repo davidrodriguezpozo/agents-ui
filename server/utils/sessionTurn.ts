@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { gitIdentity } from './identity'
 import { findSession, patchSession, type Session } from './sessions'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, getActive, readRun, type Run } from './runStore'
@@ -350,6 +351,21 @@ export async function startTurn(
     additionalDirectories: await contextDirsFor(session.repoDir),
   })
 
+  /*
+   * Who this turn is on behalf of, resolved now and written onto the run.
+   *
+   * Every turn started through here is stamped, repair turns included. A repair
+   * turn is this app finishing the job somebody asked for, in their session, on
+   * their machine — splitting a session's cost between a person and nobody
+   * depending on which turns the app decided to take answers "who did this"
+   * worse, not better. What is genuinely nobody's is a ritual, and a ritual does
+   * not come through here: it creates its run directly and stays unattributed.
+   *
+   * The repository rather than the worktree, so a session and its turns agree
+   * about one person.
+   */
+  const by = await gitIdentity(session.repoDir)
+
   const run = createRun({
     kind: 'chat',
     title: input.trim().slice(0, 70),
@@ -357,6 +373,7 @@ export async function startTurn(
     agentSlug: session.agentSlug,
     projectDir: session.worktreePath,
     sessionId: session.id,
+    by,
   })
 
   await patchSession(session.id, {

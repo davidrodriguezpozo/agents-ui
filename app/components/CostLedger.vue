@@ -29,6 +29,11 @@ import { LEDGER_DAYS, type LedgerDimension, type LedgerRow, type LedgerTable } f
  *     regularly the right thing to have happened, and the earlier window has had
  *     longer for its merges to be reverted, so the two counts are not comparable.
  *     Nothing is drawn at all when it is zero, which is the usual case.
+ *   - **"By person" is git, and nothing else.** No account, no sign-in, no list
+ *     of colleagues: the name is whatever the repository resolved when the turn
+ *     was sent. So the table runs short of the total by every ritual and by
+ *     everything recorded before the app kept a name, and the line under it says
+ *     so — an unattributed row folded in among real people would be read as one.
  */
 
 const { data, loading, error, days, load } = useLedger()
@@ -64,6 +69,12 @@ const DIMENSIONS: Record<LedgerDimension, { heading: string; column: string; emp
     heading: 'By repository',
     column: 'Repository',
     empty: 'No turn in this window could be placed in a repository.',
+  },
+  person: {
+    heading: 'By person',
+    column: 'Person',
+    empty: 'No turn in this window was sent by a named person. Set git\'s user.name and '
+      + 'user.email in a repository and its turns start carrying it.',
   },
 }
 
@@ -305,7 +316,10 @@ function windowLabel(from: number, to: number): string {
         A turn with no value for a column is left out of that table rather than put in an
         "unknown" row, so a table can add up to less than {{ money(current.costUsd) }}. A merge is
         counted once, under the last hand on it, so a session run under two models does not appear
-        as two merges.
+        as two merges. <b>By person</b> is git's <span class="font-mono">user.name</span> and
+        <span class="font-mono">user.email</span> as the repository resolved them when the turn was
+        sent — there is nothing to sign in to, and a ritual or a turn recorded before this app kept
+        a name is left out as unattributed rather than counted as yours.
       </p>
     </div>
   </section>
