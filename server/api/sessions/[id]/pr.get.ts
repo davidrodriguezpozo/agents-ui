@@ -1,4 +1,6 @@
 import { findSession } from '../../../utils/sessions'
+import { readPreferences } from '../../../utils/preferences'
+import { issueToTell } from '../../../utils/issueReply'
 import { diffBase, worktreeDiff } from '../../../utils/worktrees'
 import {
   commitsBetween,
@@ -37,6 +39,17 @@ export default defineEventHandler(async (event): Promise<PullRequestPreview> => 
   const uncommittedFiles = diff.files.filter(f => !f.staged).map(f => f.path)
   const files = [...new Set(diff.files.map(f => f.path))]
 
+  const suggestedTitle = suggestTitle(session.title, commits)
+  const suggestedBody = suggestBody(commits, files)
+
+  // Whether opening this would also comment on an issue, asked of the same
+  // function the post asks and about the same text it would send. A dialog that
+  // works this out for itself is a dialog that can promise the wrong thing.
+  const prefs = await readPreferences()
+  const tell = issueToTell(session, `${suggestedTitle}\n${suggestedBody}`, {
+    enabled: prefs.issueWriteback,
+  })
+
   const blockedReason = session.detached
     // A review workspace: the commit is checked out and no branch is, so there
     // is nothing here to push. Said plainly rather than left to `git push` to
@@ -60,7 +73,8 @@ export default defineEventHandler(async (event): Promise<PullRequestPreview> => 
     files,
     remote,
     existingUrl: (await existingPullRequest(cwd, session.branch)) ?? undefined,
-    suggestedTitle: suggestTitle(session.title, commits),
-    suggestedBody: suggestBody(commits, files),
+    suggestedTitle,
+    suggestedBody,
+    tellsIssue: tell.tell ? { number: tell.number, url: tell.url } : undefined,
   }
 })

@@ -242,6 +242,19 @@ export interface Preferences {
    */
   notionIntake: NotionIntakeConfig
   /**
+   * Whether a session started from a GitHub issue comments on that issue when it
+   * opens a pull request.
+   *
+   * Off by default, and the only preference here that gates a write somebody
+   * else can see. A wrong comment on a colleague's issue is not a wasted cent
+   * like a wrong summary is — it is the kind of mistake that gets a tool banned
+   * from a repository, so it is nobody's default and has to be chosen.
+   *
+   * One comment, at one moment, and never on Notion. See `issueReply.ts` for the
+   * whole of what turning this on permits.
+   */
+  issueWriteback: boolean
+  /**
    * Which editor the "Open in" button opens a worktree in.
    *
    * One per machine rather than one per session: it is a fact about how this
@@ -276,6 +289,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   effort: DEFAULT_EFFORT,
   issueLabel: DEFAULT_ISSUE_LABEL,
   notionIntake: DEFAULT_NOTION_INTAKE,
+  issueWriteback: false,
   editor: DEFAULT_EDITOR,
 }
 
@@ -361,6 +375,10 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // well as the way out, because these three strings go into the question a
     // run is asked and a hand-edited file must not be able to change it.
     notionIntake: sanitiseNotionIntake(parsed?.preferences?.notionIntake),
+    // `=== true` rather than `??`: this one opens a write other people can see,
+    // so anything that is not an explicit yes — absent, missing, a string a
+    // hand-edit left behind — is no.
+    issueWriteback: parsed?.preferences?.issueWriteback === true,
     // Absent means VS Code, which is also what a name no scheme exists for
     // means — a typo here must not leave the button launching nothing.
     editor: sanitiseEditor(parsed?.preferences?.editor),
@@ -391,12 +409,13 @@ export async function savePreferences(
     effort?: RunEffort
     issueLabel?: string
     notionIntake?: Partial<NotionIntakeConfig>
+    issueWriteback?: boolean
     editor?: EditorChoice
   },
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning, pullActions, effort, issueLabel, notionIntake, editor,
+    pauseOnQuotaWarning, pullActions, effort, issueLabel, notionIntake, issueWriteback, editor,
     ...notifications
   } = patch
 
@@ -427,6 +446,11 @@ export async function savePreferences(
       notionIntake: notionIntake === undefined
         ? current.notionIntake
         : sanitiseNotionIntake({ ...current.notionIntake, ...notionIntake }),
+      // `=== true` for the same reason the decode does it: the only way to turn
+      // on a write other people can see is to say so.
+      issueWriteback: issueWriteback === undefined
+        ? current.issueWriteback
+        : issueWriteback === true,
       editor: editor === undefined ? current.editor : sanitiseEditor(editor),
     }
     Object.assign(current, next)

@@ -300,6 +300,16 @@ const issueLabel = ref('')
 const savedIssueLabel = ref('')
 
 /**
+ * Whether a session started from an issue comments back on it.
+ *
+ * The only switch on this page that permits a write other people can see, which
+ * is why it is off until somebody turns it on and why the copy beside it names
+ * every part of what it allows. Everything else here spends money or changes
+ * what this machine shows.
+ */
+const issueWriteback = ref(false)
+
+/**
  * The other half of the same band: which Notion database holds the tickets, and
  * which status value means an agent may take one.
  *
@@ -408,6 +418,7 @@ onMounted(async () => {
       effort?: typeof effort.value
       issueLabel?: string
       notionIntake?: Record<NotionIntakeKey, string>
+      issueWriteback?: boolean
     }>('/api/preferences')
     notifications.value = prefs.notifications
     notificationChannel.value = prefs.notifications.channel ?? 'browser'
@@ -423,6 +434,9 @@ onMounted(async () => {
     // issue band is off, and must not be read back as "unset, use studio".
     issueLabel.value = prefs.issueLabel ?? 'studio'
     savedIssueLabel.value = issueLabel.value
+    // Anything but an explicit yes reads as off, the same way the server decodes
+    // it: this is the switch on a write somebody else can see.
+    issueWriteback.value = prefs.issueWriteback === true
     if (prefs.notionIntake) {
       for (const key of ['dataSource', 'statusProperty', 'statusValue'] as NotionIntakeKey[]) {
         const value = prefs.notionIntake[key] ?? NOTION_INTAKE_DEFAULT[key]
@@ -518,6 +532,31 @@ async function saveIssueLabel() {
   } catch (e) {
     savedIssueLabel.value = previous
     issueLabel.value = previous
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
+  }
+}
+
+/**
+ * Turn commenting back on issues on or off.
+ *
+ * The toast says what the app will now do rather than "Saved", because this is
+ * the one setting here whose consequence lands on somebody else's screen — and
+ * turning it *off* is worth confirming for the same reason.
+ */
+async function setIssueWriteback(value: boolean) {
+  const previous = issueWriteback.value
+  issueWriteback.value = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { issueWriteback: value } })
+    toast.add({
+      title: value ? 'Issues will be told' : 'Issues will not be told',
+      description: value
+        ? 'A session started from a GitHub issue comments on it once, when it opens a pull request.'
+        : 'Nothing is written to any tracker.',
+      color: 'success',
+    })
+  } catch (e) {
+    issueWriteback.value = previous
     toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
   }
 }
@@ -1080,8 +1119,8 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           </div>
           <p class="field-hint">
             Leave it blank to watch no label, which leaves Land showing only the issues assigned to
-            you. Nothing is ever written back to GitHub from that band — no comment, no assignment,
-            no label.
+            you. Reading is all the band does: nothing is assigned, nothing is labelled and nothing
+            is closed. The only thing that is ever written back is the one comment below.
           </p>
         </div>
       </div>
@@ -1164,6 +1203,53 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           it never happens on a timer — the band has a <span class="type-strong">Read Notion</span>
           button and shows the age and the cost of what it last found. A ticket's text reaches a
           session quoted, as data, the same way an issue's does.
+        </p>
+      </div>
+
+      <!--
+        The only write-back in the app.
+
+        Last of the three band settings because it is the one that leaves this
+        machine. The copy names every part of what turning it on permits, and
+        says out loud what it will not do — which is the useful half, since the
+        fear about a feature like this is what else it might decide to say.
+      -->
+      <div id="settings-issue-writeback" class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title">Commenting back on the issue</h3>
+        <p class="fs-sm text-meta">
+          The person who filed an issue has no way of knowing a session read it. With this on, a
+          session started from a <span class="type-strong">GitHub</span> issue posts one comment on
+          it at the moment it opens a pull request: what it did in a sentence, the pull request, and
+          that no person has reviewed it yet.
+        </p>
+
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="type-strong">Comment on the issue when a pull request opens</div>
+            <div class="fs-sm mt-0.5 text-label">
+              Off by default. A wrong comment on a colleague's issue is not a wasted cent — it is
+              the kind of mistake that gets a tool banned from a repository.
+            </div>
+          </div>
+          <label class="field-toggle">
+            <input
+              type="checkbox"
+              :checked="issueWriteback"
+              @change="setIssueWriteback(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="field-toggle__track">
+              <span class="field-toggle__thumb" />
+            </span>
+          </label>
+        </div>
+
+        <p class="fs-sm text-meta">
+          One comment per session, and nothing else: no reply to a reply, no reaction, no label, and
+          no issue is ever closed. It says nothing at all when the pull request mentions the issue
+          itself — GitHub has already put that on the timeline — and nothing ever reaches Notion,
+          whose tickets get no comment and no attempt. No agent can trigger it: the text is composed
+          by this app and posted by <span class="font-mono fs-mono">gh</span> from the button that
+          opens the pull request, which also says beforehand which issue will be told.
         </p>
       </div>
 

@@ -7,6 +7,7 @@ import type { SessionLanded } from './landed'
 import type { SessionReverted } from './revertWatch'
 import type { SessionRepair } from './sessionRepair'
 import type { SessionPrWatch } from './prWatch'
+import type { SessionIssueReply } from './issueReply'
 import type { QueuedMessage } from './sessionQueue'
 import type { TrustLevel } from './trust'
 
@@ -121,10 +122,23 @@ export interface Session {
    * A recorded number is. The branch is still read as a fallback, for the
    * sessions that started before this and for a branch cut by hand.
    *
-   * Nothing here is written back to GitHub. It says where the work came from,
-   * which is what a row needs to stop offering to start it again.
+   * Nothing here is written back to GitHub by recording it. It says where the
+   * work came from, which is what a row needs to stop offering to start it
+   * again. The one thing that *is* written back is `issueReply`, and it is a
+   * separate field for exactly that reason.
    */
   issueOf?: SessionIssueOf
+  /**
+   * That the issue has been told, once, and what was said.
+   *
+   * The only thing in this app that writes to a tracker, so it is on the record
+   * rather than inferred: without it, a session opening a second pull request
+   * would comment a second time, and "one comment per session per issue" would
+   * be a claim nothing enforced. Absent means nothing has been posted — which is
+   * the ordinary case, since `issueWriteback` is off by default. See
+   * `issueReply.ts`, which is the only writer.
+   */
+  issueReply?: SessionIssueReply
   /**
    * The Notion ticket this session was started from.
    *

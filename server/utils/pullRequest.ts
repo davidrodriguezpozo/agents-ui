@@ -36,6 +36,18 @@ export interface PullRequestPreview {
   existingUrl?: string
   suggestedTitle: string
   suggestedBody: string
+  /**
+   * The issue that will be commented on when this is opened, if any.
+   *
+   * Answered by `issueToTell` — the same function the posting path asks — so the
+   * dialog cannot promise a comment that will not be posted, or stay quiet about
+   * one that will. Absent whenever nothing is going to be said, which is every
+   * session on a machine where `issueWriteback` has been left off.
+   *
+   * It is a statement about the suggested description. Typing `Closes #42` into
+   * the box before pressing the button is enough to change the answer, and does.
+   */
+  tellsIssue?: { number: number; url: string }
 }
 
 /**

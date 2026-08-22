@@ -9,6 +9,7 @@ import {
   MAX_REPAIR_ATTEMPTS,
   MAX_TURNS_CEILING,
   DEFAULT_ISSUE_LABEL,
+  DEFAULT_PREFERENCES,
 } from '../server/utils/preferences'
 
 describe('positiveOrZero', () => {
@@ -149,5 +150,14 @@ describe('sanitiseIssueLabel', () => {
 
   it('caps a hand-edited file at GitHub\'s own label length', () => {
     expect(sanitiseIssueLabel('x'.repeat(200))).toHaveLength(50)
+  })
+})
+
+describe('what is on by default', () => {
+  it('never comments back on an issue until somebody says so', () => {
+    // The only default here that gates a write other people can see. Pinned
+    // because "off by default" is the whole safety argument for the feature, and
+    // it is one word away from being untrue.
+    expect(DEFAULT_PREFERENCES.issueWriteback).toBe(false)
   })
 })
