@@ -436,6 +436,25 @@ export async function runsSince(sinceMs: number): Promise<RunSummary[]> {
   return (await collectRuns()).filter(run => run.createdAt >= sinceMs).map(summarize)
 }
 
+/**
+ * The same window, unsummarised.
+ *
+ * `RunSummary` is what a list view needs, and it carries neither the model nor
+ * the repository nor the events — so nothing loaded through `runsSince` can be
+ * grouped by model or by repository, or asked whether the turn changed a file.
+ * The ledger needs all three. Adding them to `summarize` would have been two
+ * lines and a change to a type six surfaces already read, so the record is
+ * handed over whole instead and `outcomeTurnOf` takes what it wants.
+ *
+ * No more expensive to read than `runsSince`: `collectRuns` parses every run
+ * file either way. It is more expensive to *hold* — a month of runs with their
+ * event logs is the whole log in memory at once — which is why the ledger caps
+ * its window rather than offering "all time".
+ */
+export async function runRecordsSince(sinceMs: number): Promise<Run[]> {
+  return (await collectRuns()).filter(run => (run.startedAt ?? run.createdAt) >= sinceMs)
+}
+
 export async function listRuns(
   options: RunFilter & { limit?: number; since?: number } = {},
 ): Promise<RunSummary[]> {

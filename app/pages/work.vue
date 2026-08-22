@@ -640,17 +640,20 @@ async function closeEmpty(key: string, ids: string[]) {
     </PageHeader>
 
     <!--
-      Two views, because they are two jobs — and neither of them is the list of
+      Three views, because they are three jobs — and none of them is the list of
       what is in flight any more, because that is the rail.
 
       Start is where work begins: the composer, the other two ways in, and the
       workspaces already cut. History is a thing you read: last night as a
-      picture, and every finished row underneath it.
+      picture, and every finished row underneath it. Ledger is the same history
+      with the money against it — what a merge cost, by ritual, agent, model and
+      repository — and it sits here rather than on a page of its own precisely so
+      its headline can be checked against the rows one tab away.
 
-      This used to be "In flight" and "History", and the first of those was the
-      in-flight rows themselves. Keeping the name once the rows had moved to the
-      rail would have left a tab called "In flight" with nothing in flight on it.
-      What has *not* changed is where the line falls: `TAB_STATUSES` and
+      The first two used to be "In flight" and "History", and the first of those
+      was the in-flight rows themselves. Keeping the name once the rows had moved
+      to the rail would have left a tab called "In flight" with nothing in flight
+      on it. What has *not* changed is where the line falls: `TAB_STATUSES` and
       `isSettled` still decide what counts as finished with, and the rail takes
       everything on the other side of it.
     -->
@@ -661,6 +664,9 @@ async function closeEmpty(key: string, ids: string[]) {
             // Start has nothing to count — it is a composer, not a list.
             { value: 'start' as const, label: 'Start', count: null as number | null },
             { value: 'history' as const, label: 'History', count: tabCounts.history },
+            // Neither does the ledger: a count here would be a second, quieter
+            // answer to the question the tab itself is about.
+            { value: 'ledger' as const, label: 'Ledger', count: null as number | null },
           ]"
           :key="option.value"
           class="px-2.5 py-1 rounded fs-mono font-medium transition-all focus-ring flex items-center gap-1.5"
@@ -1031,6 +1037,14 @@ async function closeEmpty(key: string, ids: string[]) {
         thing that never does. Here it is the heading of the view it describes.
       -->
       <NightShift v-if="pane === 'history'" class="order-5" />
+
+      <!--
+        The same history, priced. Its own tab rather than a band under the rows:
+        it reads a different window from them — its own selector, whole days
+        rather than hours — and two windows arguing on one screen is how a page
+        stops being trusted.
+      -->
+      <CostLedger v-if="pane === 'ledger'" class="order-5" />
 
       <div v-if="pane === 'history'" class="order-5 space-y-3">
         <div class="flex items-center gap-1.5 flex-wrap">
