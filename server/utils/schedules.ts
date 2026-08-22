@@ -1,5 +1,11 @@
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
+import {
+  readSharedProject,
+  updateSharedProject,
+  type SharedProblem,
+  type SharedRitual,
+} from './sharedProject'
 import { defineJsonStore } from './jsonStore'
 import { mergeRules } from './permissionRules'
 import { permissionModeFor, type TrustLevel } from './trust'
@@ -97,10 +103,24 @@ export interface Schedule {
    */
   allowRules?: string[]
   enabled: boolean
-  /** `team` rituals came from an installed plugin; `user` ones were made here. */
-  origin: 'user' | 'team'
+  /**
+   * Where the definition came from. `user` was made here, `team` was adopted
+   * from an installed plugin — a one-time copy, after which it is this
+   * machine's — and `repository` is the live one: its definition is owned by
+   * the project's shared file and is refreshed from it, so editing it here
+   * writes a commit rather than a local record. See `sharedProject.ts`.
+   */
+  origin: 'user' | 'team' | 'repository'
   /** For team rituals — which plugin suggested it. */
   pluginName?: string
+  /**
+   * The shared ritual this row is, named the way the repository names it.
+   *
+   * Present exactly when `origin` is `repository`. The id beside it is this
+   * machine's and means nothing to anybody else, which is why the pairing of
+   * key and `projectDir` is what identifies a shared ritual across checkouts.
+   */
+  sharedKey?: string
   createdAt: number
   lastRunAt?: number
   lastRunId?: string
@@ -462,4 +482,217 @@ export async function markRan(id: string, runId: string): Promise<void> {
     schedule.missedAt = undefined
     schedule.missedNoticedAt = undefined
   })
+}
+
+// --- Rituals the repository owns --------------------------------------------
+
+/**
+ * Bring this machine's list in line with what the repository shares.
+ *
+ * A shared ritual is two things kept deliberately apart. Its *definition* — the
+ * title, the instruction, the time — belongs to the project and is refreshed
+ * from `.claude/agents-studio.json` every time this runs, so a colleague's
+ * commit changes it here without anybody re-entering it. Its *state* — when it
+ * last ran, what that run was, whether this machine has it turned on — is local
+ * and is never touched by a sync. Sharing a ritual shares the intent, not the
+ * history.
+ *
+ * Two decisions in here are safety decisions rather than convenience ones:
+ *
+ *   - **A shared ritual arrives turned off.** A `git pull` that starts running
+ *     something at 08:00 is a side effect of a pull, which is not a thing this
+ *     app is allowed to be. The row appears, says where it came from and says
+ *     it is off; turning it on is a decision made on this machine.
+ *   - **The file cannot carry trust.** `permission` is not a shared field and is
+ *     defaulted to `readonly` here. A definition somebody else committed must
+ *     not arrive holding the right to edit this checkout — raising that is a
+ *     local decision about a local machine, every time.
+ *
+ * Returns what changed, so a caller can say so, plus whatever the file got
+ * wrong. Never throws: a project that shares nothing, or shares something
+ * unreadable, must not stop the ritual list from being read.
+ */
+export async function syncSharedRituals(repoDir: string | undefined): Promise<{
+  added: string[]
+  updated: string[]
+  removed: string[]
+  problems: SharedProblem[]
+}> {
+  const result = { added: [] as string[], updated: [] as string[], removed: [] as string[], problems: [] as SharedProblem[] }
+  if (!repoDir) return result
+
+  let read: Awaited<ReturnType<typeof readSharedProject>>
+  try {
+    read = await readSharedProject(repoDir)
+  } catch {
+    return result
+  }
+
+  result.problems = read.problems
+
+  // Nothing shared and nothing ever shared: leave the store alone entirely,
+  // which is the common case and must not rewrite the file on every read.
+  const shared = read.config.rituals ?? []
+  const store = await scheduleStore.read()
+  const ours = store.filter(s => s.sharedKey && s.projectDir === repoDir)
+  if (!shared.length && !ours.length) return result
+
+  await scheduleStore.update((schedules) => {
+    const byKey = new Map(shared.map(ritual => [ritual.key, ritual]))
+
+    for (let i = schedules.length - 1; i >= 0; i--) {
+      const existing = schedules[i]!
+      if (!existing.sharedKey || existing.projectDir !== repoDir) continue
+
+      const ritual = byKey.get(existing.sharedKey)
+
+      // Gone from the file: the definition it was is no longer anybody's, so
+      // the row goes with it. Only rows this function made are ever removed.
+      if (!ritual) {
+        schedules.splice(i, 1)
+        result.removed.push(existing.sharedKey)
+        continue
+      }
+
+      byKey.delete(existing.sharedKey)
+
+      const next: Schedule = {
+        ...existing,
+        title: ritual.title,
+        input: ritual.input,
+        invocation: ritual.invocation,
+        agentSlug: ritual.agentSlug,
+        recurrence: normalizeRecurrence(ritual.recurrence),
+      }
+
+      // Only worth reporting — and only worth recomputing the next run for —
+      // when the definition actually moved.
+      if (JSON.stringify(next) !== JSON.stringify(existing)) {
+        if (JSON.stringify(next.recurrence) !== JSON.stringify(existing.recurrence)) {
+          next.nextRunAt = next.enabled ? computeNextRun(next.recurrence) : existing.nextRunAt
+        }
+        schedules[i] = next
+        result.updated.push(existing.sharedKey)
+      }
+    }
+
+    for (const ritual of byKey.values()) {
+      schedules.push({
+        id: newScheduleId(),
+        title: ritual.title,
+        input: ritual.input,
+        invocation: ritual.invocation,
+        agentSlug: ritual.agentSlug,
+        projectDir: repoDir,
+        recurrence: normalizeRecurrence(ritual.recurrence),
+        catchUp: false,
+        // Never from the file. See the note above.
+        permission: 'readonly',
+        allowRules: [],
+        // Arrives off, and says why it is off rather than leaving the switch
+        // looking like somebody here had paused it.
+        enabled: false,
+        pausedReason: 'Shared by this repository. Turn it on to run it on this machine.',
+        pausedAt: Date.now(),
+        origin: 'repository',
+        sharedKey: ritual.key,
+        createdAt: Date.now(),
+      })
+      result.added.push(ritual.key)
+    }
+  })
+
+  return result
+}
+
+/**
+ * Share a ritual, or stop sharing it.
+ *
+ * Writing the definition into the repository's file is the whole of "share":
+ * it lands in a diff, somebody reviews it, and it arrives on the other machines
+ * by pull. What is deliberately left behind is everything local — trust, run
+ * history, whether it is on — for the reasons `syncSharedRituals` gives.
+ */
+export async function shareRitual(id: string): Promise<{ key: string; path: string } | null> {
+  const schedules = await scheduleStore.read()
+  const schedule = schedules.find(s => s.id === id)
+  if (!schedule?.projectDir) return null
+
+  const key = sharedRitualKey(schedule.title, schedules)
+
+  const read = await updateSharedProject(schedule.projectDir, (config) => {
+    const rituals = config.rituals ?? []
+    const ritual: SharedRitual = {
+      key,
+      title: schedule.title,
+      input: schedule.input,
+      ...(schedule.invocation ? { invocation: schedule.invocation } : {}),
+      ...(schedule.agentSlug ? { agentSlug: schedule.agentSlug } : {}),
+      recurrence: schedule.recurrence,
+    }
+
+    const at = rituals.findIndex(existing => existing.key === key)
+    if (at >= 0) rituals[at] = ritual
+    else rituals.push(ritual)
+
+    config.rituals = rituals
+  })
+
+  // The local row becomes the shared one rather than a second copy of it: two
+  // rows for one ritual would fire twice.
+  await scheduleStore.update((current) => {
+    const at = current.findIndex(s => s.id === id)
+    if (at >= 0) current[at] = { ...current[at]!, origin: 'repository', sharedKey: key }
+  })
+
+  return { key, path: read.path }
+}
+
+/**
+ * Stop sharing: the definition leaves the repository's file and stays here.
+ *
+ * The row is kept and becomes this machine's own again, because the alternative
+ * — removing it from the file and letting the next sync delete the row — would
+ * make "stop sharing this" read as "delete this", which is not what anybody
+ * pressing it means.
+ */
+export async function unshareRitual(id: string): Promise<boolean> {
+  const schedules = await scheduleStore.read()
+  const schedule = schedules.find(s => s.id === id)
+  if (!schedule?.sharedKey || !schedule.projectDir) return false
+
+  await updateSharedProject(schedule.projectDir, (config) => {
+    const rituals = (config.rituals ?? []).filter(ritual => ritual.key !== schedule.sharedKey)
+    if (rituals.length) config.rituals = rituals
+    else delete config.rituals
+  })
+
+  await scheduleStore.update((current) => {
+    const at = current.findIndex(s => s.id === id)
+    if (at >= 0) current[at] = { ...current[at]!, origin: 'user', sharedKey: undefined }
+  })
+
+  return true
+}
+
+/**
+ * A key from a title: short, stable, and the same in every checkout.
+ *
+ * Derived from the title rather than minted at random so that the file reads as
+ * something a person wrote — `nightly-brief`, not `m4x9qz`. Collisions are
+ * suffixed rather than allowed, because two shared rituals with one key is the
+ * one case the reader refuses outright.
+ */
+export function sharedRitualKey(title: string, existing: Pick<Schedule, 'sharedKey'>[] = []): string {
+  const base = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'ritual'
+  const taken = new Set(existing.map(s => s.sharedKey).filter(Boolean) as string[])
+
+  if (!taken.has(base)) return base
+
+  for (let n = 2; n < 100; n++) {
+    const candidate = `${base}-${n}`
+    if (!taken.has(candidate)) return candidate
+  }
+
+  return base
 }

@@ -771,7 +771,13 @@ export function useSessions() {
 export interface ProjectChecks {
   dir: string | null
   command: string | null
-  source: 'configured' | 'detected' | null
+  /**
+   * `repository` is the shared half — a command committed to the project's
+   * `.claude/agents-studio.json` — which applies when this machine has not
+   * chosen one. See `useSharedProject`.
+   */
+  source: 'configured' | 'repository' | 'detected' | null
+  /** The file a shared command came from, or the evidence a guess came from. */
   from?: string | null
   /** Null when never chosen; empty string when deliberately turned off. */
   configured: string | null
@@ -863,7 +869,10 @@ export interface ProjectSandboxState {
   dir: string | null
   enabled: boolean | null
   allowedDomains: string[]
-  source: 'configured' | 'default' | null
+  /** `repository` is the shared half, which applies when this machine is quiet. */
+  source: 'configured' | 'repository' | 'default' | null
+  /** The file a shared answer came from. */
+  from?: string | null
   /** This project has unattended work that predates the sandbox and has not been told. */
   warn: boolean
 }

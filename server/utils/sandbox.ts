@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
+import { readSharedProject, sharedProjectPath } from './sharedProject'
 
 /**
  * What a run is allowed to touch.
@@ -74,8 +75,13 @@ export function normaliseSandbox(value: unknown): ProjectSandbox {
 }
 
 export interface ResolvedSandbox extends ProjectSandbox {
-  /** Whether somebody chose this, or it is simply what we do by default. */
-  source: 'configured' | 'default'
+  /**
+   * Who chose this: this machine, the repository, or nobody — in which case it
+   * is simply what we do by default.
+   */
+  source: 'configured' | 'repository' | 'default'
+  /** The file a shared answer was read out of, for saying so on the page. */
+  from?: string
 }
 
 /**
@@ -83,6 +89,11 @@ export interface ResolvedSandbox extends ProjectSandbox {
  * config means the safe default, not a failed turn — the opposite of how the
  * permission allowlist degrades, and for the opposite reason. Falling back to
  * "ask" is safe; falling back to "unsandboxed" would not be.
+ *
+ * Three answers in the one order `scoped` states: this machine's choice, then
+ * the repository's shared one, then the default. A shared answer is taken as a
+ * whole record rather than merged field by field — half of somebody else's
+ * sandbox and half of yours is a rule nobody wrote and nobody could predict.
  */
 export async function sandboxForProject(dir: string | undefined): Promise<ResolvedSandbox> {
   if (!dir) return { ...DEFAULT_PROJECT_SANDBOX, source: 'default' }
@@ -92,6 +103,11 @@ export async function sandboxForProject(dir: string | undefined): Promise<Resolv
     if (configured) return { ...normaliseSandbox(configured), source: 'configured' }
   } catch {
     // Deliberately swallowed — see above.
+  }
+
+  const shared = (await readSharedProject(dir)).config.sandbox
+  if (shared) {
+    return { ...normaliseSandbox(shared), source: 'repository', from: sharedProjectPath(dir) }
   }
 
   return { ...DEFAULT_PROJECT_SANDBOX, source: 'default' }
@@ -166,12 +182,17 @@ export interface RitualAtRisk {
  * - **They have not already said they have read it.**
  */
 export function shouldWarn(opts: {
-  source: 'configured' | 'default'
+  /**
+   * `repository` counts as chosen: somebody wrote it into a file another
+   * person reviewed, which is the opposite of the "nobody has ever said"
+   * case this warning exists for.
+   */
+  source: 'configured' | 'repository' | 'default'
   rituals: RitualAtRisk[]
   acknowledged: boolean
   dir: string
 }): boolean {
-  if (opts.source === 'configured' || opts.acknowledged) return false
+  if (opts.source !== 'default' || opts.acknowledged) return false
   return opts.rituals.some(ritual =>
     ritual.enabled && Boolean(ritual.lastRunAt) && ritual.projectDir === opts.dir)
 }

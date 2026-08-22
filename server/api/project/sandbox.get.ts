@@ -30,6 +30,7 @@ export default defineEventHandler(async (event) => {
     enabled: resolved.enabled,
     allowedDomains: resolved.allowedDomains,
     source: resolved.source,
+    from: resolved.from ?? null,
     warn: resolved.enabled && shouldWarn({
       dir,
       source: resolved.source,

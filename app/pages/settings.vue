@@ -45,6 +45,54 @@ const {
   reset: resetSandboxChoice,
 } = useProjectSandbox()
 
+/**
+ * The repository's half of this project's configuration.
+ *
+ * Two sections below read it for the same two sentences: whether the value in
+ * force is this machine's or the team's, and — when it is the team's — which
+ * file said so. See `sharedProject.ts` for why the machine always wins.
+ */
+const {
+  state: shared,
+  saving: sharing,
+  error: sharedError,
+  load: loadShared,
+  share: shareWithRepo,
+  sharesChecks,
+  sharesSandbox,
+} = useSharedProject()
+
+/** Where a shared answer came from, as a repository-relative path. */
+const sharedFile = computed(() => shared.value?.file ?? '.claude/agents-studio.json')
+
+async function shareChecks(stop = false) {
+  const ok = await shareWithRepo('checks', stop)
+  toast.add(ok
+    ? {
+        title: stop ? 'No longer shared' : 'Shared with the repository',
+        description: stop
+          ? `Taken out of ${sharedFile.value}. Commit that to take it off everybody else too.`
+          : `Written into ${sharedFile.value}. Commit it and it becomes the default on every checkout.`,
+        color: 'success',
+      }
+    : { title: 'Could not share that', description: sharedError.value ?? undefined, color: 'error' })
+  await loadChecks()
+}
+
+async function shareSandbox(stop = false) {
+  const ok = await shareWithRepo('sandbox', stop)
+  toast.add(ok
+    ? {
+        title: stop ? 'No longer shared' : 'Shared with the repository',
+        description: stop
+          ? `Taken out of ${sharedFile.value}.`
+          : `Written into ${sharedFile.value}. Commit it and it becomes the default on every checkout.`,
+        color: 'success',
+      }
+    : { title: 'Could not share that', description: sharedError.value ?? undefined, color: 'error' })
+  await loadSandbox()
+}
+
 const rawJson = ref('')
 const saving = ref(false)
 const viewMode = ref<'structured' | 'raw'>('structured')
@@ -405,6 +453,7 @@ onMounted(async () => {
   void loadSetup()
   void loadSandbox()
   void loadDev()
+  void loadShared()
 
   // Never worth failing the page over — it is a reading, not a setting.
   $fetch<typeof quota.value>('/api/quota')
@@ -1461,6 +1510,16 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             <p v-if="checks.source === 'detected' && checks.from" class="field-hint">
               Nothing chosen yet, so this was inferred from {{ checks.from }}. Saving makes it the answer.
             </p>
+            <!--
+              The shared half in force. Said as "this repository's", not "the
+              team's", because the file is the authority and a person can go and
+              read it — and saving here overrides it without touching it.
+            -->
+            <p v-else-if="checks.source === 'repository'" class="field-hint">
+              This repository shares a check command, in
+              <span class="font-mono">{{ sharedFile }}</span>, and nothing has been chosen on this
+              machine — so that is what runs. Saving here overrides it, for you only.
+            </p>
             <p v-else-if="checks.configured === ''" class="field-hint">
               Turned off — this project is treated as having nothing to run, and sessions here
               merge on git's say-so alone.
@@ -1483,14 +1542,44 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             />
             <UButton
               v-if="checks.configured !== null"
-              label="Reset to what's detected"
+              :label="checks.source === 'repository' || sharesChecks ? 'Reset to what this repository shares' : `Reset to what's detected`"
               size="xs"
               variant="ghost"
               color="neutral"
               :loading="checksSaving"
               @click="resetChecks"
             />
+            <!--
+              Sharing copies what is chosen here into a tracked file, and
+              deliberately does not change what is in force: the machine still
+              wins. So this is only offered once there is a choice to share.
+            -->
+            <UButton
+              v-if="checks.configured !== null && !sharesChecks"
+              label="Share with the repository"
+              icon="i-lucide-users"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="sharing"
+              @click="shareChecks()"
+            />
+            <UButton
+              v-if="sharesChecks"
+              label="Stop sharing it"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="sharing"
+              @click="shareChecks(true)"
+            />
           </div>
+
+          <p v-if="sharesChecks" class="field-hint">
+            Shared: <span class="font-mono">{{ shared?.config.checks?.command || 'no checks' }}</span> is
+            in <span class="font-mono">{{ sharedFile }}</span>. It is a file in this repository —
+            it reaches everybody else when you commit it, and nobody before that.
+          </p>
         </template>
       </div>
 
@@ -1656,9 +1745,13 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
                 {{
                   sandbox.source === 'default'
                     ? 'On, because nothing has been chosen here. This is the default.'
-                    : sandbox.enabled
-                      ? 'On, by your choice.'
-                      : 'Off — runs here reach your network and your disk as you do.'
+                    : sandbox.source === 'repository'
+                      ? sandbox.enabled
+                        ? 'On, because this repository says so. Choosing here overrides it, for you only.'
+                        : 'Off, because this repository says so. Choosing here overrides it, for you only.'
+                      : sandbox.enabled
+                        ? 'On, by your choice.'
+                        : 'Off — runs here reach your network and your disk as you do.'
                 }}
               </span>
             </span>
@@ -1707,15 +1800,57 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
           <!-- Outside the two branches above: turning the sandbox off is exactly
                when you are most likely to want the default back. -->
-          <UButton
-            v-if="sandbox.source === 'configured'"
-            label="Reset to the default"
-            size="xs"
-            variant="ghost"
-            color="neutral"
-            :loading="sandboxSaving"
-            @click="resetSandboxChoice"
-          />
+          <div class="flex items-center gap-2 flex-wrap">
+            <UButton
+              v-if="sandbox.source === 'configured'"
+              :label="sharesSandbox ? 'Reset to what this repository shares' : 'Reset to the default'"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="sandboxSaving"
+              @click="resetSandboxChoice"
+            />
+            <UButton
+              v-if="sandbox.source === 'configured' && !sharesSandbox"
+              label="Share with the repository"
+              icon="i-lucide-users"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="sharing"
+              @click="shareSandbox()"
+            />
+            <UButton
+              v-if="sharesSandbox"
+              label="Stop sharing it"
+              size="xs"
+              variant="ghost"
+              color="neutral"
+              :loading="sharing"
+              @click="shareSandbox(true)"
+            />
+          </div>
+
+          <p v-if="sharesSandbox" class="field-hint">
+            Shared in <span class="font-mono">{{ sharedFile }}</span>:
+            {{ shared?.config.sandbox?.enabled === false ? 'off' : 'on' }}, reaching
+            {{ (shared?.config.sandbox?.allowedDomains ?? []).length || 'no' }}
+            {{ (shared?.config.sandbox?.allowedDomains ?? []).length === 1 ? 'host' : 'hosts' }}.
+            A file in this repository, so it reaches everybody else when you commit it.
+          </p>
+
+          <!--
+            What a colleague committed and this machine cannot use. Nothing else
+            says it: an unusable shared value is simply not in force, and the
+            page would otherwise read as though the file were empty.
+          -->
+          <div v-if="shared?.problems.length" class="field-group">
+            <label class="field-label">Problems in {{ sharedFile }}</label>
+            <p v-for="problem in shared.problems" :key="problem.at" class="field-hint">
+              <span v-if="problem.at" class="font-mono">{{ problem.at }}</span>
+              {{ problem.message }}
+            </p>
+          </div>
         </template>
       </div>
 

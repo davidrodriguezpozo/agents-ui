@@ -822,6 +822,62 @@ against.
 
 ---
 
+## Mine and ours
+
+The check command, the sandbox rules and your rituals are all kept on **this machine**, on
+purpose: the project's own `.claude/settings.json` is tracked, and choosing what your
+laptop runs should not arrive in a colleague's `git pull` as policy.
+
+That leaves nothing for the answers a team genuinely shares — "this is how you tell whether
+it works here" is one fact about the project, not five slightly different facts about five
+laptops. So there is one more file, and only one:
+
+```
+<your repo>/.claude/agents-studio.json
+```
+
+```json
+{
+  "version": 1,
+  "checks": { "command": "make check" },
+  "sandbox": { "enabled": true, "allowedDomains": ["registry.npmjs.org"] },
+  "rituals": [
+    {
+      "key": "nightly-brief",
+      "title": "Nightly brief",
+      "input": "/hd:goodmorning",
+      "recurrence": { "hour": 8, "minute": 0, "days": [1, 2, 3, 4, 5] },
+      "requires": ["scripts/brief.sh"]
+    }
+  ]
+}
+```
+
+It is a tracked file and that is the whole transport: no server, no accounts, no sync. You
+press **Share with the repository** in Settings or on a ritual, the file changes in your
+working tree, and it reaches anybody else when you commit it — reviewed, in a diff, like
+every other decision about the project.
+
+**Precedence is one rule: your machine, then the repository, then the default.** A shared
+value is a default and never an imposition, so pulling `main` cannot change what your
+machine runs or what it is allowed to reach. Every place a shared value is in force says
+so and names the file. Going over to the team's answer is deleting your own — a thing you
+do on purpose.
+
+Two more things follow from that, both of them about rituals:
+
+- **A shared ritual arrives switched off**, and says why. A `git pull` that starts running
+  something at 08:00 would be a side effect of a pull, which this is not allowed to be.
+- **The file cannot hand out trust.** `permission` is not a shared field: a definition
+  somebody else committed starts at *look only* here, and raising it is a local decision
+  about a local machine.
+
+A shared definition that is invalid, or one that names a path this checkout does not have,
+is **listed with what is wrong** rather than quietly missing — including in Settings, under
+the file's name.
+
+---
+
 ## Activity
 
 The **History** tab of Work: every run there has ever been — scheduled work, agent

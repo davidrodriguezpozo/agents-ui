@@ -5,8 +5,23 @@ import type { RitualOutcome, RitualValue, Schedule, SuggestedRitual } from '~/co
 
 const {
   schedules, suggested, loading, loadError, historyFor, valueFor,
-  fetchAll, remove, setEnabled, adopt, revokeRule,
+  fetchAll, remove, setEnabled, adopt, revokeRule, share,
 } = useSchedules()
+const { state: shared, load: loadShared } = useSharedProject()
+
+/**
+ * What is wrong with a shared ritual, on the ritual.
+ *
+ * The brief's case is a ritual that names a path only the machine it was written
+ * on has: valid in the file, unrunnable here. Settings lists every problem in
+ * the file, which is right for the file — but the row is where somebody looks
+ * when they wonder why a ritual has never fired, so it says it here too.
+ */
+function sharedProblem(schedule: Schedule): string | null {
+  if (!schedule.sharedKey) return null
+
+  return shared.value?.problems.find(p => p.at === `rituals.${schedule.sharedKey}`)?.message ?? null
+}
 const { describeRule } = usePermissionRuleLabels()
 const { nameFor, ensureLoaded: ensureProjectsLoaded } = useProjects()
 const { workingDir } = useWorkingDir()
@@ -43,7 +58,7 @@ async function acknowledgeSandbox() {
   await saveSandbox({ acknowledge: true })
 }
 
-onMounted(() => Promise.all([fetchAll(), ensureProjectsLoaded(), loadSandbox()]))
+onMounted(() => Promise.all([fetchAll(), ensureProjectsLoaded(), loadSandbox(), loadShared()]))
 
 function createNew() {
   editing.value = null
@@ -60,6 +75,30 @@ async function onToggle(schedule: Schedule, enabled: boolean) {
     await setEnabled(schedule, enabled)
   } catch {
     toast.add({ title: 'Could not update', color: 'error' })
+  }
+}
+
+/**
+ * Hand a ritual to the repository, or take it back.
+ *
+ * The toast says what has and has not happened, because the gap between them is
+ * the whole of this feature: the file is written here and now, and it reaches
+ * anybody else only when somebody commits it.
+ */
+async function onShare(schedule: Schedule, stop = false) {
+  try {
+    await share(schedule.id, stop)
+    await loadShared()
+    toast.add({
+      title: stop ? `"${schedule.title}" is yours again` : `"${schedule.title}" is shared`,
+      description: stop
+        ? 'Taken out of this repository\u2019s .claude/agents-studio.json. The ritual stays here.'
+        : 'Written into this repository\u2019s .claude/agents-studio.json. Commit it and it reaches '
+          + 'every checkout — switched off there until somebody turns it on.',
+      color: 'success',
+    })
+  } catch (e) {
+    toast.add({ title: 'Could not change that', description: errorMessage(e), color: 'error' })
   }
 }
 
@@ -294,6 +333,19 @@ function nextLabel(schedule: Schedule) {
                 >
                   {{ schedule.pluginName || 'team' }}
                 </span>
+                <!--
+                  Not a decoration: this row's definition is not this machine's,
+                  so editing it writes a commit and a colleague's pull can change
+                  it. Saying which file it comes from is the point.
+                -->
+                <span
+                  v-else-if="schedule.sharedKey"
+                  class="fs-micro font-mono px-1.5 py-px rounded-full shrink-0"
+                  style="background: var(--accent-muted); color: var(--accent);"
+                  title="Shared by this repository, in .claude/agents-studio.json"
+                >
+                  shared
+                </span>
               </div>
               <div class="flex items-center gap-2 mt-0.5 type-mono-meta">
                 <span v-if="schedule.invocation" style="color: var(--accent);">{{ schedule.invocation }}</span>
@@ -357,6 +409,21 @@ function nextLabel(schedule: Schedule) {
                 <UIcon name="i-lucide-triangle-alert" class="size-3 shrink-0" />
                 The last {{ historyFor(schedule.id).failingStreak }} runs came to nothing —
                 {{ brokenSince(schedule.id) }}
+              </div>
+
+              <!--
+                A shared ritual this checkout cannot run. Not a failure and not
+                a paused ritual: the definition is fine and arrived by pull, and
+                what is missing is on this machine — so it is said here, where
+                somebody wondering why it never fires is looking.
+              -->
+              <div
+                v-if="sharedProblem(schedule)"
+                class="flex items-start gap-1.5 mt-1 type-detail"
+                style="color: var(--warning);"
+              >
+                <UIcon name="i-lucide-file-question" class="size-3 shrink-0 mt-0.5" />
+                <span>{{ sharedProblem(schedule) }}</span>
               </div>
 
               <!--
@@ -484,6 +551,18 @@ function nextLabel(schedule: Schedule) {
             -->
             <button data-row-open class="p-1 rounded hover-bg shrink-0 text-meta" title="Edit" @click="edit(schedule)">
               <UIcon name="i-lucide-pencil" class="size-3.5" />
+            </button>
+            <!--
+              Sharing is only offered for a ritual that belongs to a repository:
+              there is nowhere to put one that does not.
+            -->
+            <button
+              v-if="schedule.projectDir"
+              class="p-1 rounded hover-bg shrink-0 text-meta"
+              :title="schedule.sharedKey ? 'Stop sharing it with this repository' : 'Share it with this repository'"
+              @click="onShare(schedule, Boolean(schedule.sharedKey))"
+            >
+              <UIcon :name="schedule.sharedKey ? 'i-lucide-user' : 'i-lucide-users'" class="size-3.5" />
             </button>
             <button class="p-1 rounded hover-bg shrink-0 ink-error" title="Remove" @click="onRemove(schedule)">
               <UIcon name="i-lucide-trash-2" class="size-3.5" />
