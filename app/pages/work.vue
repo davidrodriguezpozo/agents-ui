@@ -1046,6 +1046,14 @@ async function closeEmpty(key: string, ids: string[]) {
       -->
       <CostLedger v-if="pane === 'ledger'" class="order-5" />
 
+      <!--
+        Under it rather than beside it, and never folded into it: this machine's
+        join and the team's appended lines are two populations, and one figure
+        made of both would be a number nobody could reproduce. See the note at
+        the top of `TeamLedger.vue`.
+      -->
+      <TeamLedger v-if="pane === 'ledger'" class="order-5" />
+
       <div v-if="pane === 'history'" class="order-5 space-y-3">
         <div class="flex items-center gap-1.5 flex-wrap">
           <button
