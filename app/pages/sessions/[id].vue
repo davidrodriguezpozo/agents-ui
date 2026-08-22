@@ -2412,6 +2412,30 @@ const totalChanges = computed(() => {
               >{{ mergePreview.check.output }}</pre>
             </div>
 
+            <!--
+              Beside the checks verdict, never in place of it, and outside that
+              panel because a project with no checks still wants to be told this.
+              Nothing here blocks the merge: git will take it without a murmur,
+              which is the whole reason it is worth a sentence.
+            -->
+            <div
+              v-if="mergePreview.collisionNote && mergePreview.collisions?.length"
+              class="rounded-md px-3 py-2.5 space-y-1.5"
+              style="background: var(--warning-wash); border: 1px solid var(--warning-edge);"
+            >
+              <div class="flex items-center gap-2">
+                <UIcon name="i-lucide-triangle-alert" class="size-3.5 shrink-0" style="color: var(--warning);" />
+                <span class="type-detail">{{ mergePreview.collisionNote }}</span>
+              </div>
+              <p v-for="collision in mergePreview.collisions" :key="collision.name" class="type-meta">
+                <span class="font-mono">{{ collision.name }}</span> — {{ collision.note }}
+              </p>
+              <p class="type-meta">
+                Merging is still allowed and nothing about it changes. Git has no objection to
+                any of this — whatever still calls these names finds out when it next builds.
+              </p>
+            </div>
+
             <div class="flex justify-end gap-2 pt-1">
               <UButton label="Cancel" size="sm" variant="ghost" color="neutral" @click="() => { showMerge = false }" />
               <!--
