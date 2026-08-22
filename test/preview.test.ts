@@ -130,6 +130,46 @@ describe('running one', () => {
     expect(p.port).toBeGreaterThan(0)
   }, 20_000)
 
+  /**
+   * As close to the brief's by-hand step as a session without a browser gets:
+   * a real dev server, started the real way, and the page the iframe would load
+   * with the element picker already in it. What is left is the click.
+   */
+  it('serves the same page on the picker port, with the picker added to it', async () => {
+    const script = join(dir, 'serve.js')
+    await writeFile(script, `require('http').createServer((_,res)=>{`
+      + `res.writeHead(200,{'content-type':'text/html'});`
+      + `res.end('<html><head></head><body><button class="btn">Run it</button></body></html>')`
+      + `}).listen(process.env.PORT)`)
+
+    const p = await preview.startPreview('s5', dir, `node ${script}`)
+    for (let i = 0; i < 40 && preview.getPreview('s5')?.state === 'starting'; i++) await wait(150)
+    expect(preview.getPreview('s5')?.state).toBe('ready')
+
+    expect(p.pickerPort).toBeGreaterThan(0)
+    expect(p.pickerPort).not.toBe(p.port)
+
+    const body = await fetch(`http://127.0.0.1:${p.pickerPort}/`).then(r => r.text())
+    expect(body).toContain('<button class="btn">Run it</button>')
+    expect(body).toContain('__agents_ui_element_picker.js')
+  }, 20_000)
+
+  it('lets go of the picker port when the preview stops', async () => {
+    const script = join(dir, 'serve.js')
+    await writeFile(script, `require('http').createServer((_,res)=>res.end('ok')).listen(process.env.PORT)`)
+
+    const p = await preview.startPreview('s6', dir, `node ${script}`)
+    for (let i = 0; i < 40 && preview.getPreview('s6')?.state === 'starting'; i++) await wait(150)
+    // Read before stopping: stopping clears it off the record.
+    const pickerPort = p.pickerPort!
+    expect(pickerPort).toBeGreaterThan(0)
+
+    preview.stopPreview('s6')
+    for (let i = 0; i < 20 && await preview.portAnswers(pickerPort, 200); i++) await wait(150)
+
+    expect(await preview.portAnswers(pickerPort, 400)).toBe(false)
+  }, 25_000)
+
   it('replaces a running one rather than starting a second', async () => {
     const script = join(dir, 'serve.js')
     await writeFile(script, `require('http').createServer((_,res)=>res.end('ok')).listen(process.env.PORT)`)

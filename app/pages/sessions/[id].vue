@@ -1156,6 +1156,18 @@ async function sendReview() {
 }
 
 /**
+ * A turn that came from pointing at the preview.
+ *
+ * `PreviewPane` sends it itself — the notes and the selectors never leave that
+ * component — and says so afterwards, because the turn list above it and the run
+ * being watched are this page's, not its.
+ */
+async function onPointNotesSent(result: { runId: string | null, count: number }) {
+  await load()
+  if (result.runId) watchRun(result.runId)
+}
+
+/**
  * How much this session may do without asking.
  *
  * Choosing Auto applies at once, including to a turn already running — an
@@ -2080,7 +2092,12 @@ const totalChanges = computed(() => {
           </div>
 
           <div v-if="opened.has('preview') && session" v-show="pane === 'preview'">
-            <PreviewPane :session-id="session.id" />
+            <!--
+              Notes written by pointing at the preview become a turn like any
+              other, so the conversation has to catch up and the run has to be
+              followed — the same two things `sendReview` does.
+            -->
+            <PreviewPane :session-id="session.id" :session-busy="isBusy" @sent="onPointNotesSent" />
           </div>
 
           <div v-if="opened.has('review') && session" v-show="pane === 'review'">
