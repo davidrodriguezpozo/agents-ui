@@ -56,7 +56,14 @@ const frameKey = ref(0)
 
 const base = computed(() => `/api/sessions/${encodeURIComponent(props.sessionId)}/preview`)
 const state = computed(() => status.value?.preview?.state ?? null)
-const url = computed(() => (status.value?.preview ? `http://127.0.0.1:${status.value.preview.port}` : ''))
+/*
+ * `localhost` rather than a literal: a dev server asked for `localhost` can
+ * bind `::1` alone while something else on the same port answers IPv4, and the
+ * proxy below resolves that properly. This is only the fallback for when the
+ * proxy would not start, so it leaves the choice to the browser's resolver
+ * instead of guessing the family here.
+ */
+const url = computed(() => (status.value?.preview ? `http://localhost:${status.value.preview.port}` : ''))
 /** Where the iframe actually points: the dev server with the picker in it. */
 const pickerOrigin = computed(() => {
   const port = status.value?.preview?.pickerPort

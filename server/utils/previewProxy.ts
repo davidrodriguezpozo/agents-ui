@@ -32,7 +32,10 @@ import { PICKER_PATH, injectPicker, isHtmlResponse, pickerScript } from './previ
  * the picker is unavailable, which is true.
  *
  * It only ever fronts a port this app started for this session, and binds to
- * 127.0.0.1 like the dev server it fronts.
+ * 127.0.0.1.
+ *
+ * Which address it *speaks to* is asked rather than assumed — see
+ * `resolveUpstreamHost`.
  */
 
 /** Beyond this an HTML document is not a page, and buffering it is not free. */
@@ -41,6 +44,60 @@ const MAX_HTML = 4 * 1024 * 1024
 export interface PreviewProxy {
   port: number
   close: () => void
+}
+
+/** Loopback addresses a dev server might be on, in the order worth trying. */
+const CANDIDATES = ['::1', '127.0.0.1'] as const
+
+/** `host:port` for a URL or a `Host:` header, bracketing IPv6 as it must be. */
+export function authority(host: string, port: number): string {
+  return host.includes(':') ? `[${host}]:${port}` : `${host}:${port}`
+}
+
+/** The status a plain `GET /` comes back with, or null if nothing answered. */
+export function probeHost(host: string, port: number, timeoutMs = 1500): Promise<number | null> {
+  return new Promise((resolve) => {
+    const req = httpRequest({ host, port, path: '/', method: 'GET', timeout: timeoutMs }, (answer) => {
+      answer.resume()
+      resolve(answer.statusCode ?? null)
+    })
+    req.on('error', () => resolve(null))
+    req.on('timeout', () => {
+      req.destroy()
+      resolve(null)
+    })
+    req.end()
+  })
+}
+
+/**
+ * Which loopback address actually serves the app.
+ *
+ * A dev server can end up with two sockets on one port. Nuxt asked for
+ * `localhost`, so Nitro's HTTP server bound `::1` alone, while Vite bound its
+ * HMR WebSocket to the wildcard address — which accepts IPv4 too. Connect over
+ * 127.0.0.1 and you reach the WebSocket server, and it answers every request
+ * that is not an upgrade with `426 Upgrade Required`. That is the page the
+ * preview showed instead of the project, and hard-coding 127.0.0.1 is what
+ * aimed it there.
+ *
+ * So ask. A 426 is the WebSocket server answering and the other family is tried
+ * instead; a family that answers anything else is the app. Resolved once and
+ * remembered, because it cannot change while this dev server is up.
+ */
+export async function resolveUpstreamHost(port: number): Promise<string> {
+  let upgraded: string | null = null
+
+  for (const host of CANDIDATES) {
+    const status = await probeHost(host, port)
+    if (status === null) continue
+    if (status !== 426) return host
+    upgraded ??= host
+  }
+
+  // Everything that answered wanted an upgrade, or nothing answered at all:
+  // no better guess than the one this used to make unconditionally.
+  return upgraded ?? '127.0.0.1'
 }
 
 /**
@@ -68,13 +125,17 @@ export function rewriteLocation(
  * keeps repeated headers repeated; only `host` is replaced, so the dev server
  * sees a request for itself.
  */
-export function upgradeHead(req: IncomingMessage, targetPort: number): string {
+export function upgradeHead(req: IncomingMessage, targetPort: number, targetHost = '127.0.0.1'): string {
   const lines = [`${req.method} ${req.url} HTTP/${req.httpVersion}`]
 
   for (let i = 0; i < req.rawHeaders.length; i += 2) {
     const name = req.rawHeaders[i]!
     const value = req.rawHeaders[i + 1] ?? ''
-    lines.push(name.toLowerCase() === 'host' ? `Host: 127.0.0.1:${targetPort}` : `${name}: ${value}`)
+    lines.push(
+      name.toLowerCase() === 'host'
+        ? `Host: ${authority(targetHost, targetPort)}`
+        : `${name}: ${value}`,
+    )
   }
 
   return lines.join('\r\n') + '\r\n\r\n'
@@ -87,7 +148,24 @@ export function upgradeHead(req: IncomingMessage, targetPort: number): string {
  * the same answer that says the preview is starting.
  */
 export function startPreviewProxy(targetPort: number): Promise<PreviewProxy> {
-  const server: Server = createServer((req, res) => {
+  /*
+   * Resolved on the first request rather than now: the proxy is started
+   * alongside the dev server, before it is listening, so asking now would
+   * always get the answer for a port nothing is on yet.
+   */
+  let host: string | null = null
+  let asking: Promise<string> | null = null
+  const hostFor = (): Promise<string> => {
+    if (host) return Promise.resolve(host)
+    asking ??= resolveUpstreamHost(targetPort).then((found) => {
+      host = found
+      asking = null
+      return found
+    })
+    return asking
+  }
+
+  const server: Server = createServer(async (req, res) => {
     if (req.url === PICKER_PATH) {
       const body = pickerScript()
       res.writeHead(200, {
@@ -101,12 +179,13 @@ export function startPreviewProxy(targetPort: number): Promise<PreviewProxy> {
       return
     }
 
-    const headers = { ...req.headers, host: `127.0.0.1:${targetPort}`, 'accept-encoding': 'identity' }
+    const targetHost = await hostFor()
+    const headers = { ...req.headers, host: authority(targetHost, targetPort), 'accept-encoding': 'identity' }
     delete headers['if-none-match']
     delete headers['if-modified-since']
 
     const upstream = httpRequest(
-      { host: '127.0.0.1', port: targetPort, path: req.url, method: req.method, headers },
+      { host: targetHost, port: targetPort, path: req.url, method: req.method, headers },
       (answer) => {
         const out = { ...answer.headers }
         const moved = rewriteLocation(answer.headers.location, targetPort, proxyPort(server))
@@ -170,9 +249,10 @@ export function startPreviewProxy(targetPort: number): Promise<PreviewProxy> {
     req.pipe(upstream)
   })
 
-  server.on('upgrade', (req, socket, head) => {
-    const tunnel = connect({ port: targetPort, host: '127.0.0.1' }, () => {
-      tunnel.write(upgradeHead(req, targetPort))
+  server.on('upgrade', async (req, socket, head) => {
+    const targetHost = await hostFor()
+    const tunnel = connect({ port: targetPort, host: targetHost }, () => {
+      tunnel.write(upgradeHead(req, targetPort, targetHost))
       if (head?.length) tunnel.write(head)
       tunnel.pipe(socket)
       socket.pipe(tunnel)
