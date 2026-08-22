@@ -13,6 +13,7 @@ import { withRunSlot } from './runQueue'
 import {
   clearQueue, queueMessage, requeueMessage, takeQueuedMessage, type QueuedMessage,
 } from './sessionQueue'
+import { steerRun } from './liveSteer'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
@@ -188,6 +189,39 @@ export async function sendOrQueue(
    */
   const runId = await flushQueue(session.id)
   return runId ? { runId } : { queued }
+}
+
+/**
+ * Say it into the turn that is running, rather than after it.
+ *
+ * The deliberate half of the pair `sendOrQueue` is the default of. Queueing is
+ * right for "and then do this"; this is for "no, not that file", where waiting
+ * out the turn means paying for the rest of a wrong answer before correcting it.
+ *
+ * Falls back rather than refusing, and that matters: the turn can end in the
+ * moment between pressing the button and this running, and a refusal there would
+ * lose a sentence for a race the person could not see. What comes back says
+ * which of the three happened — steered into the running turn, sent as a turn of
+ * its own because nothing was running, or queued because a turn was running and
+ * would not take it.
+ */
+export async function sendSteered(
+  session: Session,
+  input: string,
+): Promise<
+  | { steered: true; runId: string; queued?: undefined }
+  | { runId: string; steered?: undefined; queued?: undefined }
+  | { queued: QueuedMessage; runId?: undefined; steered?: undefined }
+> {
+  const refusal = turnRefusal(session)
+  if (refusal) throw createError({ statusCode: 409, data: refusal })
+
+  // The last run is the only one that can be running — a session takes one turn
+  // at a time, which `startTurn` guarantees.
+  const runId = session.runIds.at(-1)
+  if (runId && steerRun(runId, input)) return { steered: true, runId }
+
+  return sendOrQueue(session, input)
 }
 
 /**

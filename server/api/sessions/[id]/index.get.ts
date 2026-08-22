@@ -1,7 +1,7 @@
 import { findSession } from '../../../utils/sessions'
 import { diffBase, worktreeStatus } from '../../../utils/worktrees'
 import { getActive, readRun, type RunSummary } from '../../../utils/runStore'
-import { toolCallsFromEvents } from '../../../utils/turnActivity'
+import { steersFromEvents, toolCallsFromEvents } from '../../../utils/turnActivity'
 import { checkCommandFor, isStale, worktreeFingerprint } from '../../../utils/checks'
 import { branchPullRequest } from '../../../utils/pullRequest'
 import { driftedCheckout } from '../../../utils/merge'
@@ -48,6 +48,10 @@ export default defineEventHandler(async (event) => {
       // What it did, not just what it said. A turn read back tomorrow has only
       // its event log to recover this from.
       toolCalls: toolCallsFromEvents(run.events),
+      // What was said into the turn while it ran, and after which step. A
+      // steered turn read back without these is a turn that inexplicably
+      // changed its mind.
+      steers: steersFromEvents(run.events),
     })
   }
 

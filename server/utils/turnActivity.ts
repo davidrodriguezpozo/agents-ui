@@ -84,6 +84,47 @@ export function latestStep(events: RunEvent[] = []): StepSummary | null {
   return recentSteps(events, 1)[0] ?? null
 }
 
+/** Something said into a turn while it ran, and where in the turn it landed. */
+export interface TurnSteer {
+  text: string
+  at: number
+  /**
+   * How many steps had already happened when it arrived. This is the whole
+   * reason a steer is not just another turn in the list: read back tomorrow,
+   * "you said this after the fourth file" is the fact that explains why the
+   * fifth one is different.
+   */
+  afterSteps: number
+}
+
+/**
+ * The messages steered into a turn, in the order they landed.
+ *
+ * Counted against `tool_use` events rather than against the clock, so the
+ * position survives being read back — `at` says when, and only the count says
+ * where.
+ */
+export function steersFromEvents(events: RunEvent[] = []): TurnSteer[] {
+  const steers: TurnSteer[] = []
+  let steps = 0
+
+  for (const event of events) {
+    if (event.type === 'tool_use') {
+      steps++
+      continue
+    }
+    if (event.type !== 'steer') continue
+
+    steers.push({
+      text: typeof event.text === 'string' ? event.text : '',
+      at: event.at,
+      afterSteps: steps,
+    })
+  }
+
+  return steers
+}
+
 export function toolCallsFromEvents(events: RunEvent[] = []): TurnToolCall[] {
   const calls: TurnToolCall[] = []
   const byId = new Map<string, TurnToolCall>()

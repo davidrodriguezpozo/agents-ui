@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { compactInput, latestStep, recentSteps, toolCallsFromEvents } from '../server/utils/turnActivity'
+import {
+  compactInput, latestStep, recentSteps, steersFromEvents, toolCallsFromEvents,
+} from '../server/utils/turnActivity'
 import type { RunEvent } from '../server/utils/runStore'
 
 /**
@@ -89,6 +91,39 @@ describe('recovering the steps', () => {
   it('has nothing to say about a turn with no events', () => {
     expect(toolCallsFromEvents([])).toEqual([])
     expect(toolCallsFromEvents()).toEqual([])
+  })
+})
+
+/**
+ * A steered message is not another turn, and the transcript has to be able to
+ * say so. Where it landed is the fact that explains the rest of the turn, and the
+ * event log is the only place it survives.
+ */
+describe('recovering what was said into a turn while it ran', () => {
+  it('counts the steps that had already happened', () => {
+    const steers = steersFromEvents([
+      event({ type: 'tool_use', id: 't0', toolName: 'Read', input: {} }),
+      event({ type: 'tool_use', id: 't1', toolName: 'Read', input: {} }),
+      event({ type: 'steer', text: 'not that file', at: 500 }),
+      event({ type: 'tool_use', id: 't2', toolName: 'Edit', input: {} }),
+      event({ type: 'steer', text: 'the other one', at: 900 }),
+    ])
+
+    expect(steers).toEqual([
+      { text: 'not that file', at: 500, afterSteps: 2 },
+      { text: 'the other one', at: 900, afterSteps: 3 },
+    ])
+  })
+
+  it('places one that arrived before the turn used a tool at all', () => {
+    expect(steersFromEvents([event({ type: 'steer', text: 'wait', at: 10 })]))
+      .toEqual([{ text: 'wait', at: 10, afterSteps: 0 }])
+  })
+
+  it('has nothing to say about a turn nobody steered', () => {
+    expect(steersFromEvents([event({ type: 'tool_use', id: 't', toolName: 'Read', input: {} })]))
+      .toEqual([])
+    expect(steersFromEvents()).toEqual([])
   })
 })
 

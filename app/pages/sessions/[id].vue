@@ -22,7 +22,7 @@ const router = useRouter()
 const id = route.params.id as string
 
 const {
-  fetchOne, send, sendQueued, dropQueued, fetchTranscript, setTrust, fetchDiff,
+  fetchOne, send, steer, sendQueued, dropQueued, fetchTranscript, setTrust, fetchDiff,
   fetchNotes, addNote, dropNotes,
   previewPullRequest, openPullRequest, watchPullRequest, previewMerge, merge, runCheck, repair,
   updateFromBase, close, setAside,
@@ -48,6 +48,7 @@ const showCheckOutput = ref(false)
 const loadError = ref<string | null>(null)
 const input = ref('')
 const sending = ref(false)
+const steering = ref(false)
 const stopping = ref(false)
 const activeRunId = ref<string | null>(null)
 const diff = ref<{ files: DiffFile[]; patch: string } | null>(null)
@@ -333,6 +334,53 @@ async function onSend() {
     toast.add({ title: 'Could not send', description: errorMessage(e), color: 'error' })
   } finally {
     sending.value = false
+  }
+}
+
+/**
+ * Say it into the turn that is running, rather than after it.
+ *
+ * The deliberate one, which is why it is a button of its own and not what Enter
+ * does: queueing is right for the next instruction, and this is for a turn going
+ * the wrong way, where waiting means paying for the rest of a wrong answer.
+ *
+ * Afterwards the page says which of the three things happened, because the turn
+ * can end between the press and the delivery and "steered" would then be a lie.
+ */
+async function onSteer() {
+  const value = input.value.trim()
+  if (!value || steering.value || sending.value) return
+
+  steering.value = true
+  try {
+    const result = await steer(id, value)
+    input.value = ''
+    await load()
+
+    if (result.steered) {
+      toast.add({
+        title: 'Steered',
+        description: 'It goes to the running turn at its next tool call.',
+      })
+    } else if (result.queued) {
+      toast.add({
+        title: 'Queued instead',
+        description: 'The turn would not take it, so it goes when this one ends.',
+      })
+    } else {
+      toast.add({
+        title: 'Sent as a new turn',
+        description: 'Nothing was running by the time it arrived.',
+      })
+    }
+
+    // A steered turn is the one already on screen, and re-attaching to it would
+    // drop the stream and replay it for nothing.
+    if (result.runId && result.runId !== activeRunId.value) watchRun(result.runId)
+  } catch (e) {
+    toast.add({ title: 'Could not steer', description: errorMessage(e), color: 'error' })
+  } finally {
+    steering.value = false
   }
 }
 
@@ -927,6 +975,32 @@ function stepsFor(turn: SessionTurn): ToolCallLike[] {
 
 function describe(step: ToolCallLike) {
   return describeToolCall(step, session.value?.worktreePath)
+}
+
+/**
+ * What was said into a turn while it ran, placed where it landed.
+ *
+ * Live from the stream, from the record afterwards — the same split as the steps
+ * above, and for the same reason. `afterSteps` is what makes this different from
+ * another turn in the list: a correction that arrived after the fourth file is
+ * the explanation for why the fifth one is not what the opening sentence asked
+ * for, and read back tomorrow that position is the whole fact.
+ */
+function steersFor(turn: SessionTurn): { text: string; afterSteps: number }[] {
+  if (turn.id === activeRunId.value && liveRun.value) return liveRun.value.steers ?? []
+  return turn.steers ?? []
+}
+
+/**
+ * Where a steered message landed, in words.
+ *
+ * Said out loud rather than drawn by position, because the steps it counts are
+ * folded away for a finished turn and a row that only makes sense with them open
+ * is a row that usually makes no sense.
+ */
+function steerPlace(afterSteps: number): string {
+  if (!afterSteps) return 'before its first step'
+  return afterSteps === 1 ? 'after its first step' : `after ${afterSteps} steps`
 }
 
 function touched(turn: SessionTurn) {
@@ -1618,6 +1692,32 @@ const totalChanges = computed(() => {
                     {{ turn.input }}
                   </div>
                 </div>
+
+                <!--
+                  What was said into this turn while it was running. Drawn as its
+                  own kind of thing rather than as another instruction bubble: it
+                  did not start a turn, it changed one that had already begun,
+                  and it says where in the turn it arrived — which is the fact
+                  that explains why the rest of the turn is not what the sentence
+                  above asked for.
+                -->
+                <div
+                  v-for="(steered, index) in steersFor(turn)"
+                  :key="`steer-${index}`"
+                  class="flex justify-end"
+                >
+                  <div
+                    class="rounded-md px-3.5 py-2 max-w-[80%] space-y-1"
+                    style="background: var(--surface-raised); border: 1px dashed var(--accent-glow);"
+                  >
+                    <span class="type-meta flex items-center gap-1.5">
+                      <UIcon name="i-lucide-navigation" class="size-3 shrink-0 ink-accent" />
+                      Steered mid-turn, {{ steerPlace(steered.afterSteps) }}
+                    </span>
+                    <div class="type-body whitespace-pre-wrap">{{ steered.text }}</div>
+                  </div>
+                </div>
+
                 <!-- What it is doing, which is most of what there is to watch -->
                 <div v-if="stepsFor(turn).length" class="space-y-1">
                   <button
@@ -1869,20 +1969,37 @@ const totalChanges = computed(() => {
                 rows="2"
                 class="field-textarea flex-1"
                 :placeholder="isBusy
-                  ? 'Working — type anyway, it goes when this turn ends'
+                  ? 'Working — type anyway: queue it for after, or steer this turn now'
                   : 'What should it do next? Type / for commands'"
                 :disabled="!session.worktree.exists"
                 @keydown="onComposerKey"
               />
               <!-- Queueing is the same key and the same button, saying what it does -->
               <UButton
-                :label="isBusy ? 'Queue' : 'Send'"
+                :label="isBusy ? 'Queue for after' : 'Send'"
                 :icon="isBusy ? 'i-lucide-list-plus' : 'i-lucide-arrow-up'"
                 size="sm"
                 :variant="isBusy ? 'soft' : 'solid'"
                 :loading="sending"
-                :disabled="!input.trim() || !session.worktree.exists"
+                :disabled="!input.trim() || !session.worktree.exists || steering"
                 @click="onSend"
+              />
+              <!--
+                The other thing you might mean while it is working, and the
+                deliberate one: this reaches the turn that is running instead of
+                waiting for it. Not what Enter does — a correction is worth a
+                second's thought, and queueing is right far more often.
+              -->
+              <UButton
+                v-if="isBusy"
+                label="Steer now"
+                icon="i-lucide-navigation"
+                size="sm"
+                variant="soft"
+                :loading="steering"
+                :disabled="!input.trim() || !session.worktree.exists || sending"
+                title="Say it to the turn that is running — it lands at the next tool call"
+                @click="onSteer"
               />
               <!-- While it is working, the other useful button is the one that stops it -->
               <UButton
@@ -1910,6 +2027,7 @@ const totalChanges = computed(() => {
             <!-- Said out loud, because the shortcut changed and muscle memory has not -->
             <p class="type-meta pt-1.5">
               {{ isBusy ? '↵ Queue for the next turn' : '↵ Send' }} · ⇧↵ New line
+              <template v-if="isBusy"> · Steer now has no key, on purpose</template>
             </p>
           </div>
         </div>

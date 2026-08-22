@@ -59,12 +59,19 @@ export interface RunToolCall {
   isError?: boolean
 }
 
+/** Something said into the run while it was going, and where it landed. */
+export interface RunSteer {
+  text: string
+  afterSteps: number
+}
+
 export interface LiveRun {
   id: string
   status: RunStatus
   output: string
   thinking: string
   toolCalls: RunToolCall[]
+  steers: RunSteer[]
   stats?: RunStats
   error?: string
   lastSeq: number
@@ -83,7 +90,7 @@ export interface StartRunBody {
 }
 
 function emptyRun(id: string): LiveRun {
-  return { id, status: 'queued', output: '', thinking: '', toolCalls: [], lastSeq: -1 }
+  return { id, status: 'queued', output: '', thinking: '', toolCalls: [], steers: [], lastSeq: -1 }
 }
 
 export function useRuns() {
@@ -214,6 +221,14 @@ export function useRuns() {
         }
         break
       }
+      case 'steer':
+        // Placed against the steps already seen, which is how the transcript
+        // shows a correction where it landed rather than at the top of the turn.
+        run.steers.push({
+          text: String(event.text ?? ''),
+          afterSteps: run.toolCalls.length,
+        })
+        break
       case 'permission_request':
         permissions.add(event.request as PermissionRequest)
         break

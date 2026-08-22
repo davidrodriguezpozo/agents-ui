@@ -9,6 +9,8 @@ import { notify } from './notify'
 import { budgetStoppedMessage } from './budget'
 import { tokenUsageOf } from './usage'
 import { nowTrustedFully } from './liveTrust'
+import { closeSteerChannel, openSteerChannel } from './liveSteer'
+import { queueMessage } from './sessionQueue'
 
 function toolResultText(content: unknown): string {
   return typeof content === 'string'
@@ -107,9 +109,19 @@ export async function executeRun(
    */
   const commandById = new Map<string, string>()
 
+  /**
+   * The prompt, as a stream rather than a string, so a correction typed while
+   * this is running can reach it. See `liveSteer` — the cost of the choice is
+   * that closing the input is now this function's job, on every ending.
+   */
+  const prompt = openSteerChannel(run.id, run.input)
+
+  /** Accepted mid-turn and never handed over, because the turn ended first. */
+  const undelivered: string[] = []
+
   try {
     for await (const message of query({
-      prompt: run.input,
+      prompt,
       options: {
         // Resuming is what makes a session a conversation rather than a series
         // of unrelated runs.
@@ -207,6 +219,14 @@ export async function executeRun(
        * would be a poor limit.
        */
       if (message.type === 'result') {
+        /**
+         * The turn is over, so the input is over: in streaming input mode the
+         * SDK will not close stdin for us, and a CLI whose stdin is open waits
+         * for another instruction forever. Closing here is exactly what the SDK
+         * does itself for a single-turn query, at the same moment.
+         */
+        undelivered.push(...closeSteerChannel(run.id))
+
         const subtype = (message as { subtype?: string }).subtype
         const stats = {
           usage: tokenUsageOf(message),
@@ -267,6 +287,26 @@ export async function executeRun(
   } finally {
     // A prompt outliving its run would block forever with nothing to answer it.
     broker.dispose('The run ended before this tool was approved.')
+
+    /**
+     * Every other ending — stopped, failed, the CLI going away — closes here.
+     * The result path above has already done it, and closing twice reports
+     * nothing the second time.
+     */
+    undelivered.push(...closeSteerChannel(run.id))
+
+    /**
+     * A message taken for this turn that the turn ended before delivering is
+     * still the next thing somebody meant to say, so it becomes what it would
+     * have been had they pressed the other button: the front of the session's
+     * queue, which `startTurn` flushes as soon as this run's status settles.
+     */
+    if (run.sessionId) {
+      for (const text of undelivered) {
+        await queueMessage(run.sessionId, text).catch(() => null)
+      }
+    }
+
     await persist(run.id)
   }
 }

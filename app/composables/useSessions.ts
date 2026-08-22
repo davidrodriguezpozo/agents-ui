@@ -78,6 +78,16 @@ export interface QueuedMessage {
  */
 export type SendResult = { runId: string; queued?: undefined } | { queued: QueuedMessage; runId?: undefined }
 
+/**
+ * What came of steering: it reached the running turn, or the turn ended first
+ * and it went the ordinary way. The page says which, because "steered" and
+ * "queued" are different things to have happened to your sentence.
+ */
+export type SteerResult =
+  | { steered: true; runId: string; queued?: undefined }
+  | { runId: string; steered?: undefined; queued?: undefined }
+  | { queued: QueuedMessage; runId?: undefined; steered?: undefined }
+
 export interface Session {
   id: string
   title: string
@@ -228,6 +238,13 @@ export interface TurnToolCall {
   isError?: boolean
 }
 
+/** Something said into a turn while it ran, and how far in it landed. */
+export interface TurnSteer {
+  text: string
+  at: number
+  afterSteps: number
+}
+
 export interface SessionTurn {
   id: string
   input: string
@@ -239,6 +256,8 @@ export interface SessionTurn {
   error?: string
   /** What the turn did, recovered from its event log. */
   toolCalls?: TurnToolCall[]
+  /** What was said into it mid-turn, from the same log. */
+  steers?: TurnSteer[]
 }
 
 /** What a worktree with no session could be restored into, and what it holds. */
@@ -448,6 +467,22 @@ export function useSessions() {
   }
 
   /**
+   * Say something to the turn that is running, now.
+   *
+   * The deliberate one. `send` queues while a session is busy, which is right
+   * for the next instruction and wrong for a correction — this reaches the
+   * running query, and the CLI takes it at its next tool boundary. Resolves
+   * saying which of steered, sent and queued actually happened: the turn can end
+   * between the press and the delivery, and the server decides, not the page.
+   */
+  async function steer(id: string, input: string): Promise<SteerResult> {
+    return $fetch<SteerResult>(`/api/sessions/${encodeURIComponent(id)}/steer`, {
+      method: 'POST',
+      body: { input },
+    })
+  }
+
+  /**
    * Send what is queued now, rather than waiting for a turn that is not coming.
    *
    * Only needed when a turn ended in a way that holds the queue back — stopped
@@ -633,6 +668,7 @@ export function useSessions() {
     startFrom,
     fetchOne,
     send,
+    steer,
     sendQueued,
     dropQueued,
     fetchTranscript,

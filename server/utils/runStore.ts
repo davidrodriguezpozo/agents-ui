@@ -15,6 +15,8 @@ export interface RunEvent {
   at: number
   type: 'status' | 'text' | 'thinking' | 'tool_use' | 'tool_result' | 'result' | 'error'
     | 'permission_request' | 'permission_resolved'
+    /** Something said into the turn while it was running. See `liveSteer`. */
+    | 'steer'
   [key: string]: unknown
 }
 
