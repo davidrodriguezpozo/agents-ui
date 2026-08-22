@@ -92,7 +92,7 @@ export function useWorkRail() {
 }
 
 /**
- * Which of its two jobs the Work page is doing.
+ * Which job the Work page is doing.
  *
  * Deliberately not `WorkTab`. That type is a fact about the *work* — whether a
  * piece of it is in flight or settled — and it is what `railGroups` and the
@@ -101,10 +101,15 @@ export function useWorkRail() {
  * finished. Fusing the two is what left the page with a tab called "In flight"
  * that had no in-flight rows on it.
  *
+ * `ledger` is the third, and it is a reading of the same history rather than a
+ * different list: History says what happened, the ledger says what it cost per
+ * merge. They are next to each other so the second can be checked against the
+ * first, which is the only way to notice the join has gone wrong.
+ *
  * Shared state so the rail's History button and the page's own strip are the same
  * control, and so coming back from a session lands on the view you left.
  */
 export function useWorkPane() {
-  const pane = useState<'start' | 'history'>('work-pane', () => 'start')
+  const pane = useState<'start' | 'history' | 'ledger'>('work-pane', () => 'start')
   return { pane }
 }
