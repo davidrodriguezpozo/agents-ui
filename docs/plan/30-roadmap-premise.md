@@ -7,7 +7,7 @@ which decision changed and when.
 ## Why
 
 `docs/roadmap.md` (sixth pass, 19 August 2026) states the audience is one person, "settled in
-the fourth pass and not reopened". The plan in this directory assumes a tool the haddock team
+the fourth pass and not reopened". The plan in this directory assumes a tool a whole team
 adopts. Both cannot be the operating premise, and the document's own convention is that where
 an earlier pass was wrong it is *named* rather than quietly dropped.
 

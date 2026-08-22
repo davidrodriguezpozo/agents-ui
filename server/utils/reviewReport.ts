@@ -12,8 +12,8 @@
  * wrong here twice over: it costs money on every review, and it re-writes
  * findings that were already written properly — flattening a mechanism, a
  * scenario with real values and a named regression test into whatever fits in a
- * sentence. The report already has a contract (`haddock-output-format`); a
- * contract you can parse is worth more than a model you have to pay.
+ * sentence. The report already has a documented output contract; a contract you
+ * can parse is worth more than a model you have to pay.
  *
  * What it will not do is guess. A report this cannot read yields `null` rather
  * than a half-populated draft, because the failure mode that matters is not an
@@ -21,7 +21,7 @@
  * review did not say.
  */
 
-/** Severities, as `haddock-output-format` defines them. */
+/** Severities, as the report format defines them. */
 export type ReportSeverity = 'BLOCKING' | 'WARN' | 'OK' | 'SKIP'
 
 /** The report's own overall verdict. */
@@ -92,8 +92,8 @@ export interface ParsedReport {
   /**
    * Where the report broke its own contract.
    *
-   * The one thing a format gets you that a model does not: `haddock-output-format`
-   * says one detailed block per `[BLOCKING]`/`[WARN]` finding, so six table rows
+   * The one thing a format gets you that a model does not: the contract says
+   * one detailed block per `[BLOCKING]`/`[WARN]` finding, so six table rows
    * and three blocks is a report that is missing half of itself. Said out loud
    * rather than papered over by posting a table cell as a review comment.
    */

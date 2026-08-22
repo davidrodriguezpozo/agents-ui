@@ -9,7 +9,7 @@ import { parseStartRef } from '../server/utils/pullRequest'
 
 describe('recognising a pull request', () => {
   it('takes a URL straight from the address bar', () => {
-    expect(parseStartRef('https://github.com/haddock-app/monorepo/pull/5065'))
+    expect(parseStartRef('https://github.com/acme/monorepo/pull/5065'))
       .toEqual({ kind: 'pr', ref: '5065' })
   })
 

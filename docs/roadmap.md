@@ -21,7 +21,7 @@ re-read the table under "The competitive picture" and took the conclusion it had
 short of: background agents, a fleet in the terminal and cloud-hosted review of a pull
 request are the solo argument, and they are native now. The case nothing else covers is the
 one with a second engineer in it. So the decision taken that day was to build the team
-plane, and the haddock team is a target the work is aimed at rather than a happy accident.
+plane, and a real team is the target the work is aimed at rather than a happy accident.
 
 The difference is three things and deliberately no more. **Identity**: a run and a merge
 record which person took them, read from git's own `user.name`, with no accounts and no
@@ -56,11 +56,11 @@ Every store on this machine was read. Split by whether it is actually in use.
 
 **In daily use, with evidence:**
 
-- **Sessions on worktrees.** 46 records, 45 live, five repositories. The haddock ones
-  are a day old and moving; `/hd:review <url>` and "address the comments on…" are what
+- **Sessions on worktrees.** 46 records, 45 live, five repositories. The ones in the main
+  work repository are a day old and moving; `/hd:review <url>` and "address the comments on…" are what
   this app is mostly *for* now.
-- **Batch start.** Nine sessions opened in one press in almaria (a persona each), seven
-  in marketing, five in haddock. The parallel half of the thesis is real and is used.
+- **Batch start.** Nine sessions opened in one press in one repository (a persona each), seven
+  in a second, five in the main work repository. The parallel half of the thesis is real and is used.
 - **Fleet.** Rebuilt three times in four days — poster → rows → ordinary page — because
   it is the screen the app is opened to.
 - **The Morning brief.** Fired 08:47 today, `ok`, $1.95. Skipped Calendar and Gmail with
@@ -210,8 +210,8 @@ went to sleep mid-response"*, which is the same class of loss with a different c
 58 worktrees across the five managed projects, holding **47 GB**. The split matters, and
 it is not the one the fifth pass would have guessed:
 
-- **45 are this app's sessions: 20.6 GB.** Six haddock review sessions are 2.2–2.3 GB
-  *each*, and 32 GB of the haddock total is `node_modules` — the per-worktree install that
+- **45 are this app's sessions: 20.6 GB.** Six review sessions in the main work repository
+  are 2.2–2.3 GB *each*, and 32 GB of that repository's total is `node_modules` — the per-worktree install that
   "make the workspace runnable first" performs. In a monorepo, a session costs two
   gigabytes before it has written a line.
 - **13 were made by something else: 26.4 GB.** `authorization-gaps`, `i18n-broken-keys`,
@@ -226,7 +226,7 @@ it is not the one the fifth pass would have guessed:
 the *History* tab of `/work` and is scoped to the project you are currently in, so debris
 accumulates in the four projects you are not in. The other 15 are `dirty`: a session that
 made one edit and came to nothing is "somebody's work" forever, and holds a whole checkout
-to prove it. The nine-persona batch in almaria is nine of those.
+to prove it. The nine-persona batch in one repository is nine of those.
 
 **The first clean-up happened by hand, with `du`, outside the app, on the afternoon this
 was written.** That is the finding, and it is not the broom being missing — `close-empty`

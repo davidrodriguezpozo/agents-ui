@@ -18,7 +18,7 @@ import { checkoutDrifted, driftChip, driftNote } from '../app/utils/checkout'
  * drift, because both would block ordinary work.
  */
 
-const RECORDED = 'hd-review-https-github-com-haddock-app-m-msy9ux9alyfo'
+const RECORDED = 'hd-review-https-github-com-acme-monorepo-msy9ux9alyfo'
 const ACTUAL = 'feat/langfuse-conciliation-bootstrap'
 
 describe('checkoutDrifted', () => {

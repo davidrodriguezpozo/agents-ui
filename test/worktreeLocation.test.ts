@@ -41,10 +41,10 @@ beforeEach(async () => {
 
 describe('where worktrees are placed', () => {
   it('puts them inside the repository they belong to', () => {
-    expect(worktreeRootFor('/Users/me/workspaces/almaria'))
-      .toBe(`/Users/me/workspaces/almaria/${WORKTREE_DIR}`)
-    expect(worktreePathFor('/Users/me/workspaces/almaria', 'abc123'))
-      .toBe(`/Users/me/workspaces/almaria/${WORKTREE_DIR}/abc123`)
+    expect(worktreeRootFor('/Users/me/workspaces/webapp'))
+      .toBe(`/Users/me/workspaces/webapp/${WORKTREE_DIR}`)
+    expect(worktreePathFor('/Users/me/workspaces/webapp', 'abc123'))
+      .toBe(`/Users/me/workspaces/webapp/${WORKTREE_DIR}/abc123`)
   })
 
   it('uses a dot-prefixed name, which glob-based tools skip by default', () => {

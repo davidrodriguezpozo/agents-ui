@@ -461,7 +461,7 @@ describe('deciding to look without being asked', () => {
     source: 'notion',
     items: [],
     refreshAt: '08:00',
-    projectDir: '/w/haddock',
+    projectDir: '/w/monorepo',
     ...over,
   })
 
@@ -732,7 +732,7 @@ describe('a row that goes nowhere is worse than no row', () => {
     // the title, and they are exactly what a model assembling a URL gets wrong:
     // it knows the id and invents the rest, producing a link that looks valid and
     // 404s. `notion.so/<id>` resolves and redirects to the current slug.
-    expect(inboxItemUrl('https://www.notion.so/haddock/Fix-the-thing-1a2b3c4d5e6f78901234567890abcdef'))
+    expect(inboxItemUrl('https://www.notion.so/acme/Fix-the-thing-1a2b3c4d5e6f78901234567890abcdef'))
       .toBe('https://www.notion.so/1a2b3c4d5e6f78901234567890abcdef')
     expect(inboxItemUrl('https://notion.so/1a2b3c4d5e6f78901234567890abcdef'))
       .toBe('https://www.notion.so/1a2b3c4d5e6f78901234567890abcdef')
@@ -744,7 +744,7 @@ describe('a row that goes nowhere is worse than no row', () => {
 
   it('does not touch a URL from anywhere else', () => {
     // A Slack permalink carries meaning in every segment.
-    const slack = 'https://haddock.slack.com/archives/C012AB3CD/p1234567890123456'
+    const slack = 'https://acme.slack.com/archives/C012AB3CD/p1234567890123456'
     expect(inboxItemUrl(slack)).toBe(slack)
     expect(inboxItemUrl('https://github.com/o/r/pull/12')).toBe('https://github.com/o/r/pull/12')
   })

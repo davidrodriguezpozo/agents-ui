@@ -5,8 +5,8 @@ describe('transcriptDirFor', () => {
   // Matches how Claude Code names its own transcript directories; getting this
   // wrong silently loses the conversation on restore rather than erroring.
   it('replaces slashes and dots with dashes', () => {
-    expect(transcriptDirFor('/Users/me/.claude/agents-ui/worktrees/almaria/abc123'))
-      .toMatch(/projects\/-Users-me--claude-agents-ui-worktrees-almaria-abc123$/)
+    expect(transcriptDirFor('/Users/me/.claude/agents-ui/worktrees/webapp/abc123'))
+      .toMatch(/projects\/-Users-me--claude-agents-ui-worktrees-webapp-abc123$/)
   })
 
   it('handles a plain project path', () => {

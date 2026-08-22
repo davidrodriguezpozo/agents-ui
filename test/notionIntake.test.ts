@@ -234,7 +234,7 @@ describe('what a reading is allowed to put on the band', () => {
     const parsed = parseTicketReply(reply([
       row(),
       // Same page, arriving with the workspace and slug decoration on it.
-      row({ url: 'https://www.notion.so/haddock/Stale-prices-1a2b3c4d5e6f78901234567890abcdef' }),
+      row({ url: 'https://www.notion.so/acme/Stale-prices-1a2b3c4d5e6f78901234567890abcdef' }),
     ]), config())
 
     expect('tickets' in parsed && parsed.tickets).toHaveLength(1)
@@ -302,7 +302,7 @@ describe('an answer that is not one', () => {
 describe('the id that identifies a ticket across readings', () => {
   it('comes out of the page URL', () => {
     expect(notionTicketId(URL_A)).toBe('1a2b3c4d5e6f78901234567890abcdef')
-    expect(notionTicketId('https://www.notion.so/haddock/Stale-1A2B3C4D5E6F78901234567890ABCDEF'))
+    expect(notionTicketId('https://www.notion.so/acme/Stale-1A2B3C4D5E6F78901234567890ABCDEF'))
       .toBe('1a2b3c4d5e6f78901234567890abcdef')
   })
 

@@ -70,7 +70,7 @@ describe('workersOnPull', () => {
     // machine, so comparing numbers alone would put somebody else's work here.
     const found = workersOnPull(PULL, [session({
       branch: 'unrelated',
-      prUrl: 'https://github.com/haddock-app/haddock/pull/482',
+      prUrl: 'https://github.com/acme/other-repo/pull/482',
     })])
     expect(found).toEqual([])
   })
