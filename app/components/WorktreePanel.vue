@@ -207,6 +207,14 @@ function shortPath(path: string): string {
             <div class="type-mono-meta truncate">{{ shortPath(worktree.path) }}</div>
           </div>
 
+          <!--
+            Offered on every row, including the ones with no session behind
+            them: a stray branch with commits only here is exactly the case
+            where you want to look at the files before deciding anything, and
+            until now the path was something to select and paste by hand.
+          -->
+          <OpenInEditor compact :path="worktree.path" :missing="worktree.prunable" />
+
           <NuxtLink
             v-if="worktree.sessionId"
             :to="`/sessions/${worktree.sessionId}`"

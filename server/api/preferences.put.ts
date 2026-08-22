@@ -1,3 +1,4 @@
+import { EDITOR_CHOICES, type EditorChoice } from '../utils/editors'
 import {
   savePreferences,
   sanitisePullActions,
@@ -29,6 +30,7 @@ export default defineEventHandler(async (event) => {
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
     issueLabel?: string
+    editor?: EditorChoice
   }>(event)
 
   // Only the switches, and only as booleans — nothing else belongs in here.
@@ -43,6 +45,7 @@ export default defineEventHandler(async (event) => {
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
     issueLabel?: string
+    editor?: EditorChoice
   } = {}
   for (const key of KEYS) {
     const value = body?.notifications?.[key]
@@ -79,6 +82,10 @@ export default defineEventHandler(async (event) => {
   // An empty string is how the label half of the issue band is turned off, so
   // absent is the only skip — a falsy check here would make it unturnoffable.
   if (typeof body?.issueLabel === 'string') patch.issueLabel = body.issueLabel
+
+  // Only one of the four this app knows a URL scheme for. Anything else is left
+  // alone rather than stored and then found to open nothing.
+  if (EDITOR_CHOICES.includes(body?.editor as EditorChoice)) patch.editor = body.editor
 
   // A partial is expected — the settings page sends only the action it changed,
   // and `savePreferences` merges it over the three it did not. Sanitised here so

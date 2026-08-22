@@ -1384,6 +1384,17 @@ const totalChanges = computed(() => {
           @click="openMerge"
         />
 
+        <!--
+          The way out. These panes are for finishing rather than living in, so
+          the trip to a real editor should be one press and not a hunt for the
+          path — which is the only place it was written down.
+        -->
+        <OpenInEditor
+          v-if="session?.worktreePath"
+          :path="session.worktreePath"
+          :missing="!session.worktree.exists"
+        />
+
         <UDropdownMenu :items="overflowActions" :popper="{ placement: 'bottom-end' }">
           <UButton
             icon="i-lucide-more-horizontal"

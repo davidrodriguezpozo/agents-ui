@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
+import { DEFAULT_EDITOR, sanitiseEditor, type EditorChoice } from './editors'
 import { defineJsonStore } from './jsonStore'
 
 /**
@@ -226,6 +227,15 @@ export interface Preferences {
    * issues alone.
    */
   issueLabel: string
+  /**
+   * Which editor the "Open in" button opens a worktree in.
+   *
+   * One per machine rather than one per session: it is a fact about how this
+   * computer is set up, not about the work. Chosen from the menu on the button
+   * itself, so nobody has to visit Settings to press it once — see
+   * `editors.ts`.
+   */
+  editor: EditorChoice
 }
 
 /**
@@ -251,6 +261,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   pullActions: { review: '', address: '', fix: '', update: '' },
   effort: DEFAULT_EFFORT,
   issueLabel: DEFAULT_ISSUE_LABEL,
+  editor: DEFAULT_EDITOR,
 }
 
 /**
@@ -331,6 +342,9 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Absent means the default. Present and empty means somebody turned the
     // label half of the issue band off, which is why `??` rather than `||`.
     issueLabel: sanitiseIssueLabel(parsed?.preferences?.issueLabel ?? DEFAULT_ISSUE_LABEL),
+    // Absent means VS Code, which is also what a name no scheme exists for
+    // means — a typo here must not leave the button launching nothing.
+    editor: sanitiseEditor(parsed?.preferences?.editor),
   }),
   encode: preferences => ({ version: 1, preferences }),
 })
@@ -357,11 +371,12 @@ export async function savePreferences(
     pullActions?: Partial<PullActionCommands>
     effort?: RunEffort
     issueLabel?: string
+    editor?: EditorChoice
   },
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning, pullActions, effort, issueLabel,
+    pauseOnQuotaWarning, pullActions, effort, issueLabel, editor,
     ...notifications
   } = patch
 
@@ -386,6 +401,7 @@ export async function savePreferences(
         : sanitisePullActions({ ...current.pullActions, ...pullActions }),
       effort: effort === undefined ? current.effort : sanitiseEffort(effort),
       issueLabel: issueLabel === undefined ? current.issueLabel : sanitiseIssueLabel(issueLabel),
+      editor: editor === undefined ? current.editor : sanitiseEditor(editor),
     }
     Object.assign(current, next)
     return next
