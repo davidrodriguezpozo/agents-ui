@@ -11,6 +11,19 @@ cost-control literature keeps asking and no orchestrator ships: cost per accepte
 It is also the number that gets a bad ritual deleted, which is why it belongs on a page and
 not in a report nobody opens.
 
+## Before you start
+
+Unit 11 shipped the join and recorded two gaps in its own brief. Read
+`docs/plan/11-outcome-join.md` under `## Findings` first — both land on this page:
+
+- **`RunSummary` has no `model` and no `projectDir`**, so grouping by model or repository
+  needs full run records (`outcomeTurnOf` takes them) or two new fields on `summarize`, which
+  six surfaces read. Choose one, deliberately, and say which in the comment.
+- **Whether a turn changed a file is recovered from the event log.** It undercounts turns that
+  edited through `Bash`, and a month of it means opening every run file. If the window
+  selector makes that too slow, the fix is a cache or a recorded field — not a shorter window
+  chosen quietly.
+
 ## Build
 
 - Read brief 11's util and use it. If a number is missing, extend the util with tests, not
