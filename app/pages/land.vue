@@ -3,6 +3,7 @@ import { errorMessage, errorSessionId } from '~/utils/errors'
 import { workByPull } from '~/utils/pullWork'
 import { relativeTime } from '~/utils/time'
 import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
+import type { Issue, IssueIntent } from '~/composables/useGithubIssues'
 
 /**
  * Everything with a diff behind it, and the decision to ship it or send it back.
@@ -33,7 +34,8 @@ const {
   reading, summary, loading, loaded, busy, refresh, watchContinuously, stopWatching, work, merge,
 } = useGithubPulls()
 const {
-  reading: issues, loading: issuesLoading, loaded: issuesLoaded, refresh: refreshIssues,
+  reading: issues, loading: issuesLoading, loaded: issuesLoaded, busy: issueBusy,
+  refresh: refreshIssues, work: workIssue,
 } = useGithubIssues()
 const { sessions, fetchAll: fetchSessions } = useSessions()
 const { workingDir } = useWorkingDir()
@@ -208,6 +210,42 @@ async function startWork(pull: Pull, intent?: WorkIntent) {
     }
 
     toast.add({ title: `Could not start on #${pull.number}`, description: errorMessage(e), color: 'error' })
+  }
+}
+
+/**
+ * The same press, from the other end of the workflow.
+ *
+ * Deliberately a second function rather than a branch inside `startWork`: the
+ * two share a shape and nothing else. An issue has no branch to collide over, so
+ * there is no "adopted" arrival and no takeover to explain — the only thing
+ * worth saying is when the instruction went to a session that already had the
+ * issue rather than to a new workspace.
+ */
+async function startIssueWork(issue: Issue, intent: IssueIntent) {
+  try {
+    const session = await workIssue(issue.number, intent)
+
+    if (session.startError) {
+      toast.add({ title: 'Session started, but not working', description: session.startError, color: 'warning' })
+    } else if (session.how === 'continued') {
+      toast.add({
+        title: `Continued the session on #${issue.number}`,
+        description: 'A session was already on this issue, so the instruction went there rather than to a second one.',
+        color: 'info',
+      })
+    }
+
+    await navigateTo(`/sessions/${session.id}`)
+  } catch (e: any) {
+    const held = errorSessionId(e)
+    if (held) {
+      toast.add({ title: `Already working on #${issue.number}`, description: errorMessage(e), color: 'warning' })
+      await navigateTo(`/sessions/${held}`)
+      return
+    }
+
+    toast.add({ title: `Could not start on #${issue.number}`, description: errorMessage(e), color: 'error' })
   }
 }
 
@@ -548,7 +586,8 @@ const issuesEmptyLine = computed(() => {
 
         Under the pull requests on purpose: what is half-finished outranks what
         has not begun. A ritual could already fire on one of these being
-        labelled; until now nobody could look at them.
+        labelled; until now nobody could look at them, and nobody could start
+        one by hand without reading it out to a session themselves.
       -->
       <section class="space-y-4">
         <div class="flex items-baseline gap-2.5">
@@ -581,7 +620,9 @@ const issuesEmptyLine = computed(() => {
               v-for="issue in issues.issues"
               :key="issue.number"
               :issue="issue"
+              :busy="issueBusy === issue.number"
               class="stagger-item"
+              @work="intent => startIssueWork(issue, intent)"
             />
           </div>
 
@@ -598,7 +639,7 @@ const issuesEmptyLine = computed(() => {
         v-if="nothingAnywhere"
         icon="i-lucide-git-merge"
         title="Nothing is waiting to land"
-        :description="`No session here is finished, and no open pull request is yours or waiting on your review. ${issuesEmptyLine} When one of them turns up it is here — and on a pull request, one press starts a session on it.`"
+        :description="`No session here is finished, and no open pull request is yours or waiting on your review. ${issuesEmptyLine} When one of them turns up it is here — and on a pull request or an issue, one press starts a session on it.`"
         action-label="Start something"
         action-to="/work"
       />

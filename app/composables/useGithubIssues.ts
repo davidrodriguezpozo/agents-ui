@@ -2,6 +2,9 @@
 export type IssueState =
   | 'awaiting-reply' | 'has-session' | 'assigned' | 'assigned-elsewhere' | 'unassigned'
 
+/** Mirrors `IssueIntent` on the server. Two actions, not one. */
+export type IssueIntent = 'investigate' | 'implement'
+
 export interface Issue {
   number: number
   title: string
@@ -44,6 +47,20 @@ export interface IssuesReading {
   readAt: number
 }
 
+/** What pressing a row gives back. */
+export interface StartedOnIssue {
+  id: string
+  /** Which of the two actions ran, as the server settled it. */
+  intent: IssueIntent
+  /**
+   * Whether a workspace was cut, or the one already on this issue took the
+   * instruction. Same URL either way; not the same news.
+   */
+  how: 'created' | 'continued'
+  /** The turn was not started, and this is why. The session exists regardless. */
+  startError?: string
+}
+
 const EMPTY: IssuesReading = {
   ok: true, repo: null, viewer: null, label: '', issues: [], onYou: 0, readAt: 0,
 }
@@ -66,6 +83,8 @@ export function useGithubIssues() {
   const loading = useState('githubIssuesLoading', () => false)
   /** Whether it has ever come back, so the page can tell empty from unasked. */
   const loaded = useState('githubIssuesLoaded', () => false)
+  /** The issue a button on it is busy with, so only that row spins. */
+  const busy = useState<number | null>('githubIssuesBusy', () => null)
 
   async function refresh() {
     loading.value = true
@@ -85,5 +104,27 @@ export function useGithubIssues() {
     }
   }
 
-  return { reading, loading, loaded, refresh }
+  /**
+   * Start a session on one, already working.
+   *
+   * The issue is re-read on the server, which is where the body and the comments
+   * come from — this page has never held either, and the prompt is mostly them.
+   * Pressing a row twice does not make two workspaces: a session already on the
+   * issue takes the instruction, and `how` says which happened.
+   */
+  async function work(number: number, intent: IssueIntent) {
+    busy.value = number
+    try {
+      const session = await $fetch<StartedOnIssue>('/api/github/issues/work', {
+        method: 'POST',
+        body: { number, intent },
+      })
+      void refresh()
+      return session
+    } finally {
+      busy.value = null
+    }
+  }
+
+  return { reading, loading, loaded, busy, refresh, work }
 }
