@@ -52,6 +52,17 @@ export interface SessionLanded {
   overrodeChecks?: boolean
   /** The pull request, when that is what landed. */
   pr?: number
+  /**
+   * The commit on the base branch that carries the work.
+   *
+   * The merge commit, for the two routes that produce one here. It is kept
+   * because a landing with no commit named cannot be followed up on: `revertWatch`
+   * asks whether the base branch has since taken the work back out, and the only
+   * thing that question can be asked *of* is a commit. Absent on every record
+   * written before this existed, and on a landing whose merge commit is not on
+   * this machine at all — see `revertWatch.ts` for what that costs.
+   */
+  sha?: string
 }
 
 /**

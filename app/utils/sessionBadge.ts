@@ -79,6 +79,17 @@ export interface BadgeInput {
    * do about a session that is finished.
    */
   landed?: boolean
+  /**
+   * Its landed work has since been taken back out of the base branch.
+   *
+   * Outranks `landed` for the same reason `landed` outranks the verdicts: it is
+   * the later fact about the same thing, and "Landed" over a merge that has been
+   * reverted is this file's characteristic lie — a green claim nobody rechecked.
+   *
+   * Not red and not amber, though. A revert is regularly the right thing to have
+   * happened, and nothing about it is waiting on the person reading the row.
+   */
+  reverted?: boolean
 }
 
 const ACCENT = { color: 'var(--accent)', background: 'var(--accent-muted)' }
@@ -118,6 +129,15 @@ export function sessionBadge(input: BadgeInput): Badge {
    * pass or failure describes code that has already shipped — the fact worth
    * putting on the row is that it is in.
    */
+  /**
+   * Above `landed`, because it is the later news about the same merge. The
+   * session's own branch is still contained in the base afterwards — a revert
+   * adds a commit, it does not remove one — so nothing further down can tell.
+   */
+  if (input.reverted) {
+    return { label: 'Landed, then reverted', icon: 'i-lucide-undo-2', ...QUIET, shape: 'partial' }
+  }
+
   if (input.landed) {
     return { label: 'Landed', icon: 'i-lucide-git-merge', ...SUCCESS, shape: 'done' }
   }

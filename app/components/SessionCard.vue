@@ -71,6 +71,32 @@ const pullState = computed(() => {
  */
 const drifted = computed(() => props.session.driftedTo ?? null)
 
+/**
+ * That the work landed and was then taken back out.
+ *
+ * The row's own words rather than the server's sentence, for the reason
+ * `pullState` gives above: this is a column two words wide, and the whole account
+ * — who, when, what the revert called itself — belongs in the hover.
+ *
+ * Deliberately not amber and not red. Nothing here is broken and nothing is
+ * waiting on you: a revert is very often the right thing to have happened, and a
+ * row that shouted at you about somebody else's decision would be wrong more
+ * often than it was right. It replaces the green "in main" because that claim is
+ * no longer true, and that is the whole of what it does.
+ */
+const reverted = computed(() => {
+  const record = props.session.reverted
+  if (!record) return null
+
+  const when = new Date(record.committedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+  const by = record.by ? ` by ${record.by}` : ''
+
+  return {
+    text: `reverted from ${record.branch}`,
+    title: `${record.subject} — ${when}${by}. Its merge is no longer in ${record.branch}.`,
+  }
+})
+
 function relative(ts: number) {
   const seconds = Math.floor((Date.now() - ts) / 1000)
   if (seconds < 60) return 'just now'
@@ -115,6 +141,7 @@ const marker = computed(() => {
       :check-stale="session.checkStale"
       :behind="session.worktree.behind"
       :landed="session.landed"
+      :reverted="Boolean(session.reverted)"
     />
 
     <span class="work-row__title">{{ session.title }}</span>
@@ -151,8 +178,22 @@ const marker = computed(() => {
         that landed it, so saying so in warning amber asserts there is something
         to do about work that is finished.
       -->
+      <!--
+        Ahead of both of the below, because it contradicts both. A reverted
+        session's branch is still contained in the base — that is what a revert
+        leaves behind — so it would otherwise read "in main" over work that main
+        no longer has.
+      -->
       <span
-        v-if="session.worktree.behind && !session.landed"
+        v-if="reverted"
+        class="ink-3 flex items-center gap-1"
+        :title="reverted.title"
+      >
+        <UIcon name="i-lucide-undo-2" class="size-3 shrink-0" />
+        {{ reverted.text }}
+      </span>
+      <span
+        v-else-if="session.worktree.behind && !session.landed"
         class="ink-warn flex items-center gap-1"
         :title="`${session.baseBranch} has moved on since this was last checked`"
       >

@@ -34,6 +34,11 @@ import type { SideCost } from './spend'
  *     Friday look like a write-off. What it does include is spend no session
  *     owns — a ritual's nightly briefing is real output, but it is not a merge,
  *     and this column exists to be the number that gets a bad ritual deleted.
+ *   - **Merges that did not hold are counted as of now, in both windows.** So the
+ *     earlier window has had longer for its merges to be reverted than the
+ *     current one has, and the two counts are not a fair comparison with each
+ *     other. They are not paired into a change figure for that reason — only
+ *     cost per merge is. The page says the count is as of today.
  *
  * Every dollar figure here is as indicative as the ones it is built from: on a
  * subscription nothing is billed per turn, and a session's cost includes the
@@ -91,6 +96,15 @@ export interface LedgerRow {
   turns: number
   costUsd: number
   landings: number
+  /**
+   * Of those landings, the ones whose work has since been taken back out.
+   *
+   * Never above `landings`, and not a judgement on the group: a revert is
+   * frequently the right thing to have happened. It is here because a table of
+   * cost per merge with no column for merges that did not hold is a table that
+   * cannot be wrong about anything. See `revertWatch.ts` — this is a floor.
+   */
+  revertedLandings: number
   /** Indicative, and null when this group landed nothing in the window. */
   costPerLandingUsd: number | null
   /** Spend that will not be credited to a merge: set aside, or owned by nothing. */
@@ -150,6 +164,7 @@ function rowsOf(groups: OutcomeReport['byRitual'], labels?: Record<string, strin
     turns: group.turns,
     costUsd: group.costUsd,
     landings: group.landings.total,
+    revertedLandings: group.revertedLandings,
     costPerLandingUsd: group.costPerLandingUsd,
     unmergedCostUsd: unmergedCostUsd(group),
     openCostUsd: group.openCostUsd,

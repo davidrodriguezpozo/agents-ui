@@ -173,6 +173,38 @@ describe('a session whose work is in the base', () => {
   })
 })
 
+describe('a session whose landed work was taken back out', () => {
+  it('does not still claim it landed', () => {
+    // The characteristic lie, one step further along: green "Landed" is a claim
+    // nobody rechecked, and a revert is the recheck failing. Both flags are true
+    // at once by design — the merge did happen.
+    const b = badge({ landed: true, reverted: true, check: passing, behind: 1 })
+
+    expect(b.label).toBe('Landed, then reverted')
+    expect(b.color).not.toBe(GREEN)
+  })
+
+  it('is not amber either, because nothing is waiting on you', () => {
+    // A revert is regularly the right thing to have happened, and often somebody
+    // else's decision. Warning colour here would be the app arguing with them.
+    const b = badge({ landed: true, reverted: true })
+
+    expect(b.color).not.toBe(AMBER)
+    expect(b.color).toBe('var(--text-disabled)')
+  })
+
+  it('still yields to work happening right now', () => {
+    for (const activity of ['working', 'awaiting-permission'] as const) {
+      expect(badge({ activity, landed: true, reverted: true }).label)
+        .not.toBe('Landed, then reverted')
+    }
+  })
+
+  it('leaves a landing nobody reverted reading exactly as before', () => {
+    expect(badge({ landed: true }).label).toBe('Landed')
+  })
+})
+
 describe('when nobody counted the files', () => {
   it('says idle rather than asserting there were no changes', () => {
     // The wall builds tiles without spawning git, so it genuinely does not know.

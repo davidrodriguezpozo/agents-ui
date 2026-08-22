@@ -20,6 +20,12 @@ export interface LedgerTotals {
   turns: number
   costUsd: number
   landings: { total: number; merged: number; pullRequest: number; elsewhere: number }
+  /**
+   * Of those, the merges whose work has since been taken back out — as of today,
+   * not as of the end of the window. A floor: only a revert that says what it
+   * reverts is seen. See `server/utils/revertWatch.ts`.
+   */
+  revertedLandings: number
   landedCostUsd: number
   abandonedCostUsd: number
   openCostUsd: number
@@ -36,6 +42,8 @@ export interface LedgerRow {
   turns: number
   costUsd: number
   landings: number
+  /** Of those, the ones since taken back out. Never above `landings`. */
+  revertedLandings: number
   costPerLandingUsd: number | null
   unmergedCostUsd: number
   openCostUsd: number

@@ -1,6 +1,7 @@
 import type { RunEvent } from './runStore'
 import { sourceOf, type RunSource } from './runFilter'
 import { landedSince, type LandedHow, type SessionLanded } from './landed'
+import type { SessionReverted } from './revertWatch'
 import type { CheckStatus, SessionCheck } from './checks'
 import type { SideCost } from './spend'
 
@@ -36,6 +37,12 @@ import type { SideCost } from './spend'
  *   - *A landing by `elsewhere` is somebody else's merge.* It is counted as a
  *     landing, because the work was accepted either way, and kept separately,
  *     because this machine did not do it and should not take the credit.
+ *   - *Reverts are a floor, not a count.* `revertedLandings` counts the merges in
+ *     a window that have since been taken back out, and it can only see the ones
+ *     a commit message says so about — see `revertWatch.ts`. Nothing here reads it
+ *     as a failure: a revert is often the right thing to have happened, and the
+ *     number is here so that "it merged" stops being the last word rather than to
+ *     mark anybody's work.
  *
  * **How a session ends up in one bucket.** Spend is attributed per turn, from
  * the fate of the session that turn belonged to, so within any group the buckets
@@ -134,6 +141,8 @@ export interface OutcomeSession {
   agentSlug?: string
   status?: string
   landed?: SessionLanded
+  /** That the landing was taken back out again. See `revertWatch.ts`. */
+  reverted?: SessionReverted
   check?: SessionCheck
   /** When the person said they were done with it. See `Session.filedAt`. */
   filedAt?: number
@@ -231,6 +240,22 @@ export interface OutcomeTotals {
   turns: number
   costUsd: number
   landings: LandingCounts
+  /**
+   * Landings in this window whose work has since been taken back out.
+   *
+   * A subset of `landings.total` rather than a separate event, and counted where
+   * the landing is counted rather than where the revert happened — the question
+   * it answers is "of what we merged, how much held", which only makes sense
+   * against the merges. Kept outside `landings`, whose four numbers are one
+   * partition of the same total and add up to it; this one cuts across them.
+   *
+   * It is a figure as of now, not as of the end of the window: a window that
+   * closed a fortnight ago has had a fortnight in which its merges could be
+   * reverted, and one that closes tonight has not. The two are not directly
+   * comparable and the page says so. See `revertWatch.ts` for what is detectable
+   * at all — this is a floor, never a total.
+   */
+  revertedLandings: number
   /** Spend on sessions that landed. */
   landedCostUsd: number
   /** Spend that produced nothing: sessions set aside or closed without landing. */
@@ -279,6 +304,7 @@ interface Tally {
   merged: number
   pullRequest: number
   elsewhere: number
+  reverted: number
   landedCostUsd: number
   abandonedCostUsd: number
   openCostUsd: number
@@ -300,6 +326,7 @@ function tally(): Tally {
     merged: 0,
     pullRequest: 0,
     elsewhere: 0,
+    reverted: 0,
     landedCostUsd: 0,
     abandonedCostUsd: 0,
     openCostUsd: 0,
@@ -325,6 +352,7 @@ function totalsOf(t: Tally): OutcomeTotals {
     turns: t.turns,
     costUsd: t.costUsd,
     landings,
+    revertedLandings: t.reverted,
     landedCostUsd: t.landedCostUsd,
     abandonedCostUsd: t.abandonedCostUsd,
     openCostUsd: t.openCostUsd,
@@ -476,13 +504,22 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
    * knows the difference between a session with no landing and one that landed
    * at zero.
    */
-  for (const { id, landed } of landedSince(input.sessions, since)) {
+  for (const session of landedSince(input.sessions, since)) {
+    const { id, landed, reverted } = session
     // `landedSince` filters on the record but is typed on the session, so the
     // narrowing does not survive the call.
     if (!landed || landed.at > until) continue
     into(lastTurn.get(id), (t) => {
       t[LANDED_FIELD[landed.how]] += 1
       if (landed.overrodeChecks) t.landedOverFailing += 1
+      /*
+       * Not gated on `until`, unlike everything else here, and that is a choice
+       * rather than an oversight. The revert is a fact about the *landing*: a
+       * merge from last Tuesday that was reverted this morning did not hold, and
+       * hiding that from last week's window to keep the arithmetic tidy would be
+       * reporting a merge as having held when it is known not to have.
+       */
+      if (reverted) t.reverted += 1
     })
   }
 

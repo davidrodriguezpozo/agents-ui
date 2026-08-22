@@ -256,6 +256,36 @@ describe('the four breakdowns', () => {
   it('measures whether a turn changed a file off the events it was handed', () => {
     expect(ledger.current.changedFiles).toEqual({ turns: 1, measured: 2, share: 0.5 })
   })
+
+  it('carries the merges that did not hold onto the row, never above the merges', () => {
+    // Zero here on a machine where nothing was reverted, which is the usual case
+    // — the column is drawn only when there is something in it.
+    for (const table of ledger.tables) {
+      for (const row of table.rows) {
+        expect(row.revertedLandings).toBe(0)
+        expect(row.revertedLandings).toBeLessThanOrEqual(row.landings)
+      }
+    }
+  })
+
+  it('shows a reverted merge on the row it was counted on', () => {
+    const took = buildLedger({
+      days: 7,
+      now: NOW,
+      sessions: [{
+        ...landed,
+        reverted: {
+          at: NOW, sha: 'f'.repeat(40), committedAt: NOW - 3600_000,
+          subject: 'Revert "Merge pull request #4"', landedSha: 'a'.repeat(40), branch: 'main',
+        },
+      }],
+      runs: [record({ sessionId: 'one', agentSlug: 'reviewer', stats: { costUsd: 2, model: 'claude-opus-5' } })],
+    })
+
+    expect(took.current.revertedLandings).toBe(1)
+    expect(took.tables.find(t => t.dimension === 'agent')!.rows[0])
+      .toMatchObject({ key: 'reviewer', landings: 1, revertedLandings: 1 })
+  })
 })
 
 describe('two hundred landings', () => {
