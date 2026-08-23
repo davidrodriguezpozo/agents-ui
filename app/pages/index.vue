@@ -8,7 +8,6 @@ const { fetchImports } = useGithubImports();
 const { settings, load: loadSettings } = useSettings();
 const { sessions } = useSessions();
 const { digest } = useDigest();
-const { isSimple } = useUiMode();
 const { shortcutsOpen } = useShortcuts();
 
 const dirInput = ref("");
@@ -68,10 +67,7 @@ const otherwise = computed(() => Boolean(running.value || landed.value || money.
 </script>
 
 <template>
-  <!-- Simple mode gets a task-first landing page instead of the config dashboard -->
-  <SimpleHome v-if="isSimple" />
-
-  <div v-else>
+  <div>
     <PageHeader title="Now" />
 
     <div class="page-container py-6 stagger-section space-y-7">

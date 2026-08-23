@@ -10,6 +10,8 @@ import type { Skill } from '~/types'
 const emit = defineEmits<{
   saved: [skill: Skill]
   cancel: []
+  /** Swap this flow for the raw frontmatter form. */
+  raw: []
 }>()
 
 const { create } = useSkills()
@@ -231,6 +233,23 @@ function back() {
         </div>
       </div>
     </div>
+
+    <!--
+      The way out for somebody who knows the frontmatter.
+
+      This flow used to be what simple mode showed and the raw form was what
+      advanced mode showed, so the two fields only the form has — the context
+      trigger, and the agent a skill is bound to — were unreachable to anyone
+      who had not found the mode switch. With no mode, the guided flow is what
+      opens and this is the sentence that gets past it.
+    -->
+    <button
+      v-if="step === 1"
+      class="fs-sm text-meta hover:text-label underline underline-offset-2 focus-ring rounded"
+      @click="emit('raw')"
+    >
+      Fill in the fields myself
+    </button>
 
     <!-- Actions -->
     <div class="flex items-center justify-between pt-1">

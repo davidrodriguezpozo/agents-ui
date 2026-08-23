@@ -101,31 +101,43 @@ function finish() {
             Set up Agents Studio
           </h2>
           <p class="type-body leading-relaxed max-w-sm mx-auto">
-            Agents Studio reads the folder Claude Code already keeps your configuration in. Point it at that one and everything you have shows up.
+            It runs Claude Code against your own repositories — on a schedule, or when you
+            ask. Everything it reads and writes is a real file or a real branch.
           </p>
         </div>
 
+        <!--
+          What the app does, not what lives in which directory.
+
+          This used to be a legend for `agents/`, `commands/` and `skills/` —
+          the three-way split the Library exists to dissolve, on the one screen
+          nobody has the context to care about it yet. Whatever is in that folder
+          shows up on its own; the thing worth saying first is what happens to a
+          repository once you point this at one.
+        -->
         <div
           class="rounded-lg p-4 text-left space-y-3 mx-auto max-w-sm"
           style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
         >
-          <div class="flex items-center gap-3">
-            <UIcon name="i-lucide-folder" class="size-4 shrink-0 text-meta" />
-            <code class="font-mono fs-sm ink-2">{{ claudeDir }}</code>
+          <div class="space-y-2">
+            <div class="flex items-start gap-2.5 type-detail">
+              <UIcon name="i-lucide-git-branch" class="size-3.5 shrink-0 mt-px ink-accent" />
+              <span>Work runs on its own copy of your repository. Nothing touches your files until you merge.</span>
+            </div>
+            <div class="flex items-start gap-2.5 type-detail">
+              <UIcon name="i-lucide-circle-check" class="size-3.5 shrink-0 mt-px ink-accent" />
+              <span>It runs your own checks, fixes what it can, and stops when it cannot.</span>
+            </div>
+            <div class="flex items-start gap-2.5 type-detail">
+              <UIcon name="i-lucide-alarm-clock" class="size-3.5 shrink-0 mt-px ink-accent" />
+              <span>It can fire on a schedule, so you come back to what it did and what it cost.</span>
+            </div>
           </div>
-          <div class="space-y-1.5 pl-7">
-            <div class="flex items-center gap-2 type-detail">
-              <UIcon name="i-lucide-cpu" class="size-3 shrink-0 ink-accent" />
-              <span><code class="font-mono fs-mono">agents/</code> — your AI assistants</span>
-            </div>
-            <div class="flex items-center gap-2 type-detail">
-              <UIcon name="i-lucide-terminal" class="size-3 shrink-0 ink-accent" />
-              <span><code class="font-mono fs-mono">commands/</code> — reusable workflows</span>
-            </div>
-            <div class="flex items-center gap-2 type-detail">
-              <UIcon name="i-lucide-sparkles" class="size-3 shrink-0 ink-accent" />
-              <span><code class="font-mono fs-mono">skills/</code> — specialized capabilities</span>
-            </div>
+
+          <!-- The folder, once, as a fact about this machine rather than a lesson. -->
+          <div class="flex items-center gap-2.5 pt-3" style="border-top: 1px solid var(--border-subtle);">
+            <UIcon name="i-lucide-folder" class="size-3.5 shrink-0 text-meta" />
+            <code class="font-mono fs-mono ink-2 truncate">{{ claudeDir }}</code>
           </div>
         </div>
 
@@ -168,7 +180,7 @@ function finish() {
       <!-- Step 2: Creating -->
       <div v-else-if="step === 'creating'" class="flex flex-col items-center gap-4">
         <UIcon name="i-lucide-loader-2" class="size-8 animate-spin ink-accent" />
-        <p class="type-body">Setting up your workspace...</p>
+        <p class="type-body">Creating the folder…</p>
       </div>
 
       <!-- Step 3: Done -->
@@ -184,14 +196,21 @@ function finish() {
 
         <div class="space-y-2">
           <h2 class="fs-title font-bold" style="font-family: var(--font-display);">
-            You're all set
+            The folder is ready
           </h2>
+          <!--
+            The next move, named. This used to say "create your first agent from
+            a template", which is neither the next thing that has to happen nor
+            something this app can do anything with until it knows which
+            repository you mean.
+          -->
           <p class="type-body leading-relaxed max-w-sm mx-auto">
-            Your workspace is ready. Start by creating your first agent from a template, or describe what you need to the Claude assistant.
+            Pick the repository you want Claude to work in — the folder control is at the
+            bottom of the sidebar. Then start a session from Work.
           </p>
         </div>
 
-        <UButton label="Go to Dashboard" icon="i-lucide-arrow-right" size="md" @click="finish" />
+        <UButton label="Go to Now" icon="i-lucide-arrow-right" size="md" @click="finish" />
       </div>
     </div>
   </div>

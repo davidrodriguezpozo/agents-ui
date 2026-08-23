@@ -22,7 +22,6 @@ const { skills } = useSkills()
 const { sessions } = useSessions()
 const { projects, activate } = useProjects()
 const { workingDir } = useWorkingDir()
-const { isSimple, toggle: toggleMode } = useUiMode()
 const colorMode = useColorMode()
 
 /**
@@ -81,7 +80,6 @@ const groups = computed(() => buildPalette({
   currentProject: workingDir.value,
   recent: recent.value,
   isDark: colorMode.value === 'dark',
-  isSimple: isSimple.value,
 }, query.value))
 
 const flat = computed(() => flattenPalette(groups.value))
@@ -113,10 +111,6 @@ function showShortcuts() {
 async function perform(action: PaletteAction) {
   if (action.type === 'toggle-theme') {
     colorMode.preference = colorMode.value === 'dark' ? 'light' : 'dark'
-    return
-  }
-  if (action.type === 'toggle-mode') {
-    toggleMode()
     return
   }
   if (action.type === 'switch-project') {

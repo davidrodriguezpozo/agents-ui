@@ -18,12 +18,6 @@ export interface NavShortcut {
   key: string
   label: string
   to: string
-  /**
-   * Hidden in simple mode, matching what the sidebar and the palette hide.
-   * A chord to a page the app is deliberately not showing you is the keyboard
-   * quietly overruling the mode switch.
-   */
-  advanced?: boolean
 }
 
 /**
@@ -37,28 +31,30 @@ export const NAV_SHORTCUTS: NavShortcut[] = [
   { key: 'l', label: 'Land', to: '/land' },
   { key: 'd', label: 'Daily', to: '/schedules' },
   { key: 'b', label: 'Library', to: '/library' },
-  { key: 'f', label: 'Workflows', to: '/workflows', advanced: true },
-  { key: 'p', label: 'Plugins', to: '/plugins', advanced: true },
-  { key: 'c', label: 'MCP', to: '/mcp', advanced: true },
-  { key: 'r', label: 'Graph', to: '/graph', advanced: true },
+  { key: 'f', label: 'Workflows', to: '/workflows' },
+  { key: 'p', label: 'Plugins', to: '/plugins' },
+  { key: 'c', label: 'MCP', to: '/mcp' },
+  { key: 'r', label: 'Graph', to: '/graph' },
   { key: 'm', label: 'Fleet', to: '/wall' },
   { key: 'e', label: 'Explore', to: '/explore' },
   { key: 's', label: 'Settings', to: '/settings' },
 ]
 
-/** The chords on offer in this mode, in the order the cheatsheet lists them. */
-export function navShortcuts(isSimple: boolean): NavShortcut[] {
-  return NAV_SHORTCUTS.filter(item => !isSimple || !item.advanced)
-}
-
-/** Where `g` + this key goes, or null if it goes nowhere from here. */
-export function chordTarget(key: string, isSimple: boolean): NavShortcut | null {
-  return navShortcuts(isSimple).find(item => item.key === key.toLowerCase()) ?? null
+/**
+ * Where `g` + this key goes, or null if it goes nowhere.
+ *
+ * Every chord in the table is live. There used to be a second, shorter table
+ * for simple mode, which meant a keypress could be swallowed because a mode
+ * switch had decided the destination did not exist — the keyboard quietly
+ * overruling itself. One table, one answer per key.
+ */
+export function chordTarget(key: string): NavShortcut | null {
+  return NAV_SHORTCUTS.find(item => item.key === key.toLowerCase()) ?? null
 }
 
 /** What to print beside a destination — `g w`, not `gw`, because it is two presses. */
-export function chordHint(to: string, isSimple = false): string | null {
-  const match = navShortcuts(isSimple).find(item => item.to === to)
+export function chordHint(to: string): string | null {
+  const match = NAV_SHORTCUTS.find(item => item.to === to)
   return match ? `g ${match.key}` : null
 }
 

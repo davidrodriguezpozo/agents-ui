@@ -16,7 +16,6 @@ const { isPanelOpen: chatOpen } = useChat()
 const { workingDir } = useWorkingDir()
 const { createScope, canUseProjectScope, projectClaudeExists, refresh: refreshScope, initProject } = useScope()
 const colorMode = useColorMode()
-const { isSimple, toggle: toggleMode } = useUiMode()
 const toast = useToast()
 const initializingProject = ref(false)
 
@@ -151,70 +150,53 @@ onUnmounted(() => {
   stopWatchingPulls()
 })
 
-// Simple mode leads with what someone can do and what they own; the authoring
-// surface (agents, commands, workflows, graph) is advanced-only.
-const navLinks = computed(() => isSimple.value
-  ? [
-      { label: 'Home', icon: 'i-lucide-house', to: '/' },
-      { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
-      { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
-      // In the simple set too, and if anything more so: the reader this page is
-      // for is exactly the reader simple mode is for.
-      { label: 'Shipped', icon: 'i-lucide-package-check', to: '/shipped' },
-      { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
-      // Was "My skills", which stopped being true when the Library merged
-      // agents and commands in beside them. Its Personal group is first and
-      // open, so what you wrote is still the first thing on the screen.
-      { label: 'Library', icon: 'i-lucide-library', to: '/library' },
-    ]
-  : [
-      { label: 'Now', icon: 'i-lucide-target', to: '/' },
-      // Sessions and Activity were two lists over one event stream, split by
-      // what *started* the work — a distinction the system cares about and
-      // nobody else does.
-      { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
-      { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
-      // The one page in here written for somebody who does not run the work.
-      // Kept in the navigation rather than behind a link, because the point of
-      // it is that you can turn the laptop around.
-      { label: 'Shipped', icon: 'i-lucide-package-check', to: '/shipped' },
-      { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
-      // Agents, commands and skills were three nav items for one question, and
-      // MCP was a fourth: "what can Claude reach". The servers are a facet of
-      // the Library now, reachable at /library?type=mcp.
-      { label: 'Library', icon: 'i-lucide-library', to: '/library' },
-      { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },
-      { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
-    ]
-)
+/**
+ * One navigation, for everybody.
+ *
+ * There were two, chosen by a simple/advanced switch that defaulted to simple:
+ * one hid Workflows, Plugins, Graph and MCP and led with a page of runnable
+ * commands. It filtered *this list* and nothing else — Work, Land, Shipped and
+ * Daily were in both sets and neither of them ever got simpler — so the switch
+ * did not lower the difficulty of anything, it only decided which of two wrong
+ * first screens you got. The Library holds the authoring surface behind a
+ * facet, and Explore is where tools get installed; between them that is the
+ * whole of what the shorter list was for.
+ */
+const navLinks = [
+  { label: 'Now', icon: 'i-lucide-target', to: '/' },
+  // Sessions and Activity were two lists over one event stream, split by
+  // what *started* the work — a distinction the system cares about and
+  // nobody else does.
+  { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
+  { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
+  // The one page in here written for somebody who does not run the work.
+  // Kept in the navigation rather than behind a link, because the point of
+  // it is that you can turn the laptop around.
+  { label: 'Shipped', icon: 'i-lucide-package-check', to: '/shipped' },
+  { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
+  // Agents, commands and skills were three nav items for one question, and
+  // MCP was a fourth: "what can Claude reach". The servers are a facet of
+  // the Library now, reachable at /library?type=mcp.
+  { label: 'Library', icon: 'i-lucide-library', to: '/library' },
+  { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },
+  { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
+]
 
-const navSecondary = computed(() => isSimple.value
-  ? [
-      { label: 'Add tools', icon: 'i-lucide-compass', to: '/explore' },
-      /*
-       * In simple mode too, unlike Graph. What simple mode hides is the
-       * authoring concepts — agents, workflows, MCP — and a wall is not one:
-       * it is work happening, in words, which is the audience this mode is for.
-       */
-      { label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall' },
-      { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
-    ]
-  : [
-      { label: 'Explore', icon: 'i-lucide-compass', to: '/explore' },
-      { label: 'Graph', icon: 'i-lucide-workflow', to: '/graph' },
-      // A screen to leave on rather than a page to work in, so it sits down
-      // here with the other things you visit once and not every day.
-      { label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall' },
-      { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
-    ]
-)
+const navSecondary = [
+  { label: 'Explore', icon: 'i-lucide-compass', to: '/explore' },
+  { label: 'Graph', icon: 'i-lucide-workflow', to: '/graph' },
+  // A screen to leave on rather than a page to work in, so it sits down
+  // here with the other things you visit once and not every day.
+  { label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall' },
+  { label: 'Settings', icon: 'i-lucide-settings', to: '/settings' },
+]
 
 /**
  * What a nav item says when you hover it: what it is, why it is shouting, and
  * the two keys that get there without the mouse you are currently holding.
  */
 function navTitle(link: { label: string; to: string }) {
-  const hint = chordHint(link.to, isSimple.value)
+  const hint = chordHint(link.to)
   const base = attentionFor(link.to)?.title ?? link.label
   return hint ? `${base} — ${hint}` : base
 }
@@ -268,17 +250,6 @@ function attentionFor(to: string) {
 }
 
 function badgeFor(to: string) {
-  if (isSimple.value) {
-    // Simple mode counts what this person owns — somebody else's plugin brought
-    // 137 skills, and none of them are an answer to "how much have I made".
-    if (to !== '/library') return null
-    const mine = (item: { source?: string }) => item.source !== 'plugin' && item.source !== 'github'
-    return (
-      agents.value.filter(mine).length
-      + commands.value.filter(mine).length
-      + skills.value.filter(mine).length
-    ) || null
-  }
   // One count for the three things the Library now holds.
   if (to === '/library') {
     return (agents.value.length + commands.value.length + skills.value.length) || null
@@ -469,22 +440,6 @@ function badgeFor(to: string) {
               <span class="fs-sm flex-1 text-left" style="font-family: var(--font-sans);">Claude</span>
               <kbd class="kbd-key">⌘J</kbd>
             </template>
-          </button>
-        </div>
-
-        <!-- Simple / advanced -->
-        <div class="pb-1" :class="narrow ? 'px-2' : 'px-2.5'">
-          <button
-            class="w-full flex items-center gap-2 py-2 rounded-md transition-all duration-150 focus-ring press-scale"
-            :class="narrow ? 'px-0 justify-center' : 'px-3'"
-            style="color: var(--text-tertiary);"
-            :title="isSimple ? 'Show agents, commands, workflows and the graph' : 'Hide the advanced authoring tools'"
-            @click="toggleMode"
-          >
-            <UIcon :name="isSimple ? 'i-lucide-settings-2' : 'i-lucide-minimize-2'" class="size-4 shrink-0" />
-            <span v-if="!narrow" class="fs-sm" style="font-family: var(--font-sans);">
-              {{ isSimple ? 'Advanced tools' : 'Simple view' }}
-            </span>
           </button>
         </div>
 

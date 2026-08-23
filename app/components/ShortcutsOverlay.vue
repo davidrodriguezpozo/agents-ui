@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {
   ACTION_SHORTCUTS, EDITOR_SHORTCUTS, JUMP_SHORTCUTS, LIST_SHORTCUTS,
-  PALETTE_SHORTCUTS, navShortcuts,
+  NAV_SHORTCUTS, PALETTE_SHORTCUTS,
 } from '~/utils/shortcuts'
 
 /**
@@ -15,9 +15,6 @@ import {
  * documented here and missing there.
  */
 const { shortcutsOpen: open } = useShortcuts()
-const { isSimple } = useUiMode()
-
-const goSections = computed(() => navShortcuts(isSimple.value))
 
 const columns = computed(() => [
   { title: 'Do', rows: ACTION_SHORTCUTS },
@@ -48,7 +45,7 @@ const columns = computed(() => [
               Press <kbd class="kbd-key">g</kbd>, then the letter.
             </p>
             <div
-              v-for="item in goSections"
+              v-for="item in NAV_SHORTCUTS"
               :key="item.to"
               class="flex items-center gap-3 py-1"
             >
