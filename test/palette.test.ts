@@ -17,7 +17,6 @@ function source(over: Partial<PaletteSource> = {}): PaletteSource {
     projects: [],
     currentProject: '/work/here',
     isDark: true,
-    isSimple: false,
     ...over,
   }
 }
@@ -125,17 +124,23 @@ describe('actions', () => {
   })
 })
 
-describe('simple mode', () => {
-  it('does not offer destinations the sidebar is deliberately hiding', () => {
-    const advanced = flattenPalette(buildPalette(source({ isSimple: false }), 'graph'))
-    expect(labels(advanced)).toContain('Graph')
-
-    const simple = flattenPalette(buildPalette(source({ isSimple: true }), 'graph'))
-    expect(labels(simple)).not.toContain('Graph')
+describe('navigation', () => {
+  /*
+   * The palette used to take an `isSimple` flag and drop Workflows, Plugins,
+   * MCP and Graph when it was set — so ⌘K could not reach a page that still
+   * existed, and typing its name returned nothing. Every destination is
+   * offered now; this is the assertion that no filter grew back.
+   */
+  it('offers every destination, authoring surfaces included', () => {
+    for (const term of ['graph', 'workflows', 'plugins', 'mcp']) {
+      const items = flattenPalette(buildPalette(source(), term))
+      expect(items.length, `"${term}" should find something`).toBeGreaterThan(0)
+    }
+    expect(labels(flattenPalette(buildPalette(source(), 'graph')))).toContain('Graph')
   })
 
-  it('still reaches everything simple mode does show', () => {
-    const items = flattenPalette(buildPalette(source({ isSimple: true }), ''))
+  it('reaches every page in the sidebar from an empty query', () => {
+    const items = flattenPalette(buildPalette(source(), ''))
     // /sessions and /runs became one destination when Work merged them.
     for (const path of ['/', '/work', '/land', '/schedules', '/library', '/settings']) {
       expect(items.some(i => i.to === path), `should reach ${path}`).toBe(true)

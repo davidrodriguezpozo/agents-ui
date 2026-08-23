@@ -20,7 +20,6 @@ export type PaletteKind = 'recent' | 'action' | 'goto' | 'session' | 'library'
 export type PaletteAction =
   | { type: 'switch-project'; path: string }
   | { type: 'toggle-theme' }
-  | { type: 'toggle-mode' }
 
 export interface PaletteItem {
   key: string
@@ -67,10 +66,9 @@ export interface PaletteSource {
    */
   recent?: string[]
   isDark: boolean
-  isSimple: boolean
 }
 
-function navigation(isSimple: boolean): PaletteItem[] {
+function navigation(): PaletteItem[] {
   const items: PaletteItem[] = [
     { key: 'go:now', kind: 'goto', label: 'Now', icon: 'i-lucide-target', to: '/', keywords: 'home dashboard needs you' },
     { key: 'go:work', kind: 'goto', label: 'Work', icon: 'i-lucide-git-branch', to: '/work', keywords: 'sessions activity runs branches worktrees history log' },
@@ -81,28 +79,21 @@ function navigation(isSimple: boolean): PaletteItem[] {
     { key: 'go:library', kind: 'goto', label: 'Library', icon: 'i-lucide-library', to: '/library', keywords: 'agents commands skills mcp servers' },
     { key: 'go:wall', kind: 'goto', label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall', keywords: 'wall display screen monitor live glance kiosk' },
     { key: 'go:settings', kind: 'goto', label: 'Settings', icon: 'i-lucide-settings', to: '/settings', keywords: 'preferences limits sandbox backups' },
+    { key: 'go:workflows', kind: 'goto', label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows', keywords: 'pipeline chain' },
+    { key: 'go:plugins', kind: 'goto', label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins', keywords: 'marketplace extensions' },
+    // No longer a page of its own — a facet of the Library. Kept as its own
+    // row because "MCP" is what you type when you want it, and the Library
+    // row is not an obvious hit for that word.
+    { key: 'go:mcp', kind: 'goto', label: 'MCP servers', icon: 'i-lucide-plug', to: '/library?type=mcp', keywords: 'servers tools external library' },
+    { key: 'go:graph', kind: 'goto', label: 'Graph', icon: 'i-lucide-workflow', to: '/graph', keywords: 'relationships connections' },
+    // Last, because it is where you go once rather than every day.
+    { key: 'go:explore', kind: 'goto', label: 'Explore', icon: 'i-lucide-compass', to: '/explore', keywords: 'add tools templates install' },
   ]
-
-  // Authoring surfaces are advanced-only, and offering a destination the
-  // sidebar is deliberately hiding would be the palette overruling that.
-  if (!isSimple) {
-    items.push(
-      { key: 'go:workflows', kind: 'goto', label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows', keywords: 'pipeline chain' },
-      { key: 'go:plugins', kind: 'goto', label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins', keywords: 'marketplace extensions' },
-      // No longer a page of its own — a facet of the Library. Kept as its own
-      // row because "MCP" is what you type when you want it, and the Library
-      // row is not an obvious hit for that word.
-      { key: 'go:mcp', kind: 'goto', label: 'MCP servers', icon: 'i-lucide-plug', to: '/library?type=mcp', keywords: 'servers tools external library' },
-      { key: 'go:graph', kind: 'goto', label: 'Graph', icon: 'i-lucide-workflow', to: '/graph', keywords: 'relationships connections' },
-    )
-  }
-
-  items.push({ key: 'go:explore', kind: 'goto', label: 'Explore', icon: 'i-lucide-compass', to: '/explore', keywords: 'add tools templates install' })
 
   // The panel teaches its own way out: a destination with a chord says so, so
   // the second time you look something up you do not have to.
   for (const item of items) {
-    const hint = item.to ? chordHint(item.to, isSimple) : null
+    const hint = item.to ? chordHint(item.to) : null
     if (hint) item.shortcut = hint
   }
 
@@ -150,14 +141,6 @@ function actions(source: PaletteSource): PaletteItem[] {
       icon: source.isDark ? 'i-lucide-sun' : 'i-lucide-moon',
       run: { type: 'toggle-theme' },
       keywords: 'theme appearance dark light',
-    },
-    {
-      key: 'act:mode',
-      kind: 'action',
-      label: source.isSimple ? 'Show advanced tools' : 'Switch to simple view',
-      icon: source.isSimple ? 'i-lucide-settings-2' : 'i-lucide-minimize-2',
-      run: { type: 'toggle-mode' },
-      keywords: 'simple advanced mode',
     },
   )
 
@@ -300,7 +283,7 @@ const PER_KIND: Record<PaletteKind, number> = {
 export function buildPalette(source: PaletteSource, query: string): PaletteGroup[] {
   const all = [
     ...actions(source),
-    ...navigation(source.isSimple),
+    ...navigation(),
     ...fromSessions(source),
     ...fromLibrary(source),
   ]

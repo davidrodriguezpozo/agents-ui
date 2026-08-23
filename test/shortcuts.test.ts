@@ -4,7 +4,7 @@ import { join, relative, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   ACTION_SHORTCUTS, EDITOR_SHORTCUTS, JUMP_SHORTCUTS, LIST_SHORTCUTS, PALETTE_SHORTCUTS,
-  NAV_SHORTCUTS, chordHint, chordTarget, isBareKey, isRailToggle, isTerminalTarget, isTypingTarget, navShortcuts,
+  NAV_SHORTCUTS, chordHint, chordTarget, isBareKey, isRailToggle, isTerminalTarget, isTypingTarget,
 } from '~/utils/shortcuts'
 
 describe('the chord table', () => {
@@ -26,9 +26,9 @@ describe('the chord table', () => {
   })
 
   it('routes a letter to a page', () => {
-    expect(chordTarget('w', false)?.to).toBe('/work')
-    expect(chordTarget('W', false)?.to).toBe('/work')
-    expect(chordTarget('zzz', false)).toBeNull()
+    expect(chordTarget('w')?.to).toBe('/work')
+    expect(chordTarget('W')?.to).toBe('/work')
+    expect(chordTarget('zzz')).toBeNull()
   })
 
   it('reaches everything in the sidebar', () => {
@@ -38,17 +38,22 @@ describe('the chord table', () => {
   })
 })
 
-describe('simple mode', () => {
-  it('does not offer chords to pages the sidebar is hiding', () => {
-    expect(chordTarget('r', false)?.to).toBe('/graph')
-    expect(chordTarget('r', true)).toBeNull()
-    expect(chordTarget('f', true)).toBeNull()
+describe('every chord is live', () => {
+  /*
+   * There used to be a second, shorter table for simple mode, and a chord to a
+   * page that mode hid returned null — a keypress swallowed because a switch
+   * had decided the destination did not exist. The mode is gone; this is the
+   * assertion that no filter grew back in its place.
+   */
+  it('reaches the pages the shorter table used to drop', () => {
+    expect(chordTarget('r')?.to).toBe('/graph')
+    expect(chordTarget('f')?.to).toBe('/workflows')
+    expect(chordTarget('p')?.to).toBe('/plugins')
   })
 
-  it('still reaches everything simple mode shows', () => {
-    const simple = navShortcuts(true).map(item => item.to)
-    for (const to of ['/', '/work', '/land', '/schedules', '/library', '/settings']) {
-      expect(simple, `simple mode should keep ${to}`).toContain(to)
+  it('answers for every row in the table', () => {
+    for (const item of NAV_SHORTCUTS) {
+      expect(chordTarget(item.key)?.to, `no chord reaches ${item.to}`).toBe(item.to)
     }
   })
 })
@@ -62,9 +67,9 @@ describe('hints', () => {
     expect(chordHint('/sessions/abc')).toBeNull()
   })
 
-  it('withholds the hint for a destination this mode hides', () => {
-    expect(chordHint('/graph', false)).toBe('g r')
-    expect(chordHint('/graph', true)).toBeNull()
+  it('hints every destination in the table', () => {
+    expect(chordHint('/graph')).toBe('g r')
+    expect(chordHint('/workflows')).toBe('g f')
   })
 })
 

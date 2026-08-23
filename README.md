@@ -990,7 +990,6 @@ model it will actually run on, so the cost of the whole thing is visible before 
   message, PNG, JPEG, GIF or WebP. The studio's test box takes them too.
 - **Version and updates** — which release you are on, and one click to a newer one
 - **Search** (`⌘K`) — across everything at once
-- **Simple view** — hides the configuration concepts and leads with what you can run today
 - **Dark mode** — from the sidebar, any time
 - **Settings** — status line, extensions, GitHub imports, and the raw JSON when you want it
 

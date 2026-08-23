@@ -120,7 +120,6 @@ export function useShortcutBindings() {
   const router = useRouter()
   const route = useRoute()
   const { isPanelOpen: chatOpen } = useChat()
-  const { isSimple } = useUiMode()
   const { toggle: toggleSidebar } = useSidebar()
   const { toggle: toggleRail } = useWorkRail()
   const colorMode = useColorMode()
@@ -355,7 +354,7 @@ export function useShortcutBindings() {
         return
       }
 
-      const target = chordTarget(event.key, isSimple.value)
+      const target = chordTarget(event.key)
       if (target) {
         event.preventDefault()
         if (route.path !== target.to) router.push(target.to)

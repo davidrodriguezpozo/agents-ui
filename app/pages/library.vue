@@ -27,7 +27,6 @@ const { skills, loading: skillsLoading, error: skillsError } = useSkills()
 const {
   servers: mcpServers, loaded: mcpLoaded, loading: mcpLoading, broken: mcpBroken, load: loadMcp,
 } = useMcp()
-const { isSimple } = useUiMode()
 const router = useRouter()
 const route = useRoute()
 
@@ -52,14 +51,6 @@ const search = ref('')
 
 /** True while the facet in view is one of the file-backed kinds. */
 const showingCapabilities = computed(() => activeType.value !== 'mcp')
-
-/**
- * MCP was an advanced-only nav item, and turning it into a facet should not
- * quietly promote it into simple mode — that mode leads with what you can do,
- * not with the plumbing. A `?type=mcp` link still works, so a bookmark from an
- * older build lands where it used to.
- */
-const showMcpFacet = computed(() => !isSimple.value || activeType.value === 'mcp')
 
 // Reflected in the URL, so a filtered view can be linked to and survives reload.
 watch(activeType, (type) => {
@@ -105,6 +96,14 @@ const showAgentWizard = ref(false)
 const showCommandForm = ref(false)
 const showSkillWizard = ref(false)
 const showImport = ref(false)
+
+/**
+ * Whether the skill modal is showing the raw frontmatter form rather than the
+ * guided flow. Reset on every open, so choosing it once does not silently
+ * become what the New skill button does from then on.
+ */
+const skillRaw = ref(false)
+watch(showSkillWizard, (open) => { if (open) skillRaw.value = false })
 
 const createMenu = computed(() => [[
   { label: 'New agent', icon: CAPABILITY_LOOK.agent.icon, onSelect: () => { showAgentWizard.value = true } },
@@ -216,10 +215,9 @@ const canImport = computed(() => activeType.value === 'agent' || activeType.valu
             it sits outside the group the other facets slice up, and "All" keeps
             meaning all of *those*.
           -->
-          <span v-if="showMcpFacet" class="w-px h-4 mx-1.5 shrink-0" style="background: var(--border-subtle);" />
+          <span class="w-px h-4 mx-1.5 shrink-0" style="background: var(--border-subtle);" />
 
           <button
-            v-if="showMcpFacet"
             class="px-2.5 py-1 rounded-md fs-mono font-medium transition-all focus-ring flex items-center gap-1"
             :style="{
               background: activeType === 'mcp' ? 'var(--accent-muted)' : 'transparent',
@@ -365,17 +363,23 @@ const canImport = computed(() => activeType.value === 'agent' || activeType.valu
 
     <UModal v-model:open="showSkillWizard">
       <template #content>
-        <!-- Guided three-question flow for simple mode, raw form for advanced -->
-        <SkillWizard
-          v-if="isSimple"
-          @saved="(s) => { showSkillWizard = false; router.push(`/skills/${s.slug}`) }"
-          @cancel="showSkillWizard = false"
-        />
+        <!--
+          The guided flow opens; the raw form is one sentence away inside it.
+          Which one you got used to be decided by the simple/advanced switch,
+          which meant the form's two extra fields were invisible to anybody who
+          had never found the switch.
+        -->
         <SkillForm
-          v-else
+          v-if="skillRaw"
           mode="create"
           @saved="(s) => { showSkillWizard = false; router.push(`/skills/${s.slug}`) }"
           @cancel="showSkillWizard = false"
+        />
+        <SkillWizard
+          v-else
+          @saved="(s) => { showSkillWizard = false; router.push(`/skills/${s.slug}`) }"
+          @cancel="showSkillWizard = false"
+          @raw="skillRaw = true"
         />
       </template>
     </UModal>
