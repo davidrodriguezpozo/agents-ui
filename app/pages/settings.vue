@@ -93,6 +93,9 @@ async function shareSandbox(stop = false) {
   await loadSandbox()
 }
 
+/** How much history the audit export covers. A window, and nothing else. */
+const auditDays = ref(7)
+
 const rawJson = ref('')
 const saving = ref(false)
 const viewMode = ref<'structured' | 'raw'>('structured')
@@ -120,6 +123,7 @@ const sectionNav = [
   { id: 'imports', label: 'GitHub imports' },
   { id: 'automations', label: 'Automations' },
   { id: 'backups', label: 'Backups' },
+  { id: 'audit', label: 'Audit export' },
 ] as const
 
 const activeSection = ref<string>('general')
@@ -2209,6 +2213,45 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
       <!-- Last, because it is a thing you touch twice a year -->
       <div id="settings-backups">
         <BackupPanel />
+      </div>
+
+      <!--
+        Beside the backups, because it answers the same shape of question — how
+        do I get what this machine knows out of it — for a different reader. That
+        one is for you after a disk failure; this one is for somebody asking who
+        ran what.
+      -->
+      <div id="settings-audit" class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-label">The audit export</h3>
+        <p class="fs-sm text-meta">
+          One file covering a window: every run, what it cost, who asked for it, which files it
+          wrote, what the sandbox refused — and every merge that went in with the checks red and
+          who took it. JSON Lines, so <span class="font-mono">grep</span> works on it.
+          Transcripts are referenced, not included, and the file's first line says what is
+          deliberately left out and why.
+        </p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <select
+            v-model="auditDays"
+            class="text-xs rounded-md px-2 py-1"
+            style="background: var(--input-bg); color: var(--text-primary);"
+            aria-label="How much history the export covers"
+          >
+            <option :value="7">the last 7 days</option>
+            <option :value="30">the last 30 days</option>
+            <option :value="90">the last 90 days</option>
+          </select>
+          <UButton
+            label="Download it"
+            icon="i-lucide-download"
+            size="xs"
+            variant="soft"
+            :to="`/api/audit?days=${auditDays}`"
+            external
+            download
+          />
+          <span class="type-meta">Nothing leaves this machine — the file is saved where you say.</span>
+        </div>
       </div>
       </div>
     </div>
