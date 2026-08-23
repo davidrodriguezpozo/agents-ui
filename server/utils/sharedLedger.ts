@@ -4,6 +4,7 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import { getClaudeDir, OUR_DIR } from './claudeDir'
 import type { OutcomeSession, OutcomeTurn } from './outcomes'
+import { repositoryRootOf } from './worktrees'
 
 /**
  * What this machine did, in a form another machine can read.
@@ -400,7 +401,8 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
 function repoName(dir?: string): string | undefined {
   if (!dir) return undefined
 
-  const last = dir.replace(/[\\/]+$/, '').split(/[\\/]/).pop()
+  // A session's turn names its worktree, whose last segment is a generated id.
+  const last = repositoryRootOf(dir).replace(/[\\/]+$/, '').split(/[\\/]/).pop()
   if (!last) return undefined
 
   return last.replace(/[^A-Za-z0-9._-]+/g, '-').slice(0, 48) || undefined

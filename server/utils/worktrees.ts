@@ -154,6 +154,25 @@ export async function excludeWorktreeDir(repoDir: string): Promise<void> {
   )
 }
 
+/**
+ * The repository a path belongs to, given that it might be a session's worktree.
+ *
+ * `<repo>/.worktrees/<session id>` is a directory whose last segment is a
+ * generated id, so anything deriving a *name* from a path has to come back
+ * through here first. Two things were getting this wrong in ways nobody would
+ * have noticed for months: a lesson told a model it was about a repository
+ * called `mt2z09ee5lmu`, and the shared ledger was ready to publish the same id
+ * to a colleague's machine as the name of a repository.
+ *
+ * Anything that is not a worktree path comes back unchanged.
+ */
+export function repositoryRootOf(dir: string): string {
+  const marker = `/${WORKTREE_DIR}/`
+  const at = dir.replace(/\\/g, '/').lastIndexOf(marker)
+
+  return at === -1 ? dir : dir.slice(0, at)
+}
+
 export function worktreePathFor(repoDir: string, sessionId: string): string {
   return join(worktreeRootFor(repoDir), sessionId)
 }

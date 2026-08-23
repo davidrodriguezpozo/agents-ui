@@ -114,6 +114,8 @@ const sectionNav = [
   { id: 'statusline', label: 'Status line' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'digest', label: 'Morning message' },
+  { id: 'team-digest', label: 'What we shipped' },
+  { id: 'lessons', label: 'What went wrong twice' },
   { id: 'marketplaces', label: 'Marketplaces' },
   { id: 'imports', label: 'GitHub imports' },
   { id: 'automations', label: 'Automations' },
@@ -2033,6 +2035,13 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         once and then applies to both.
       -->
       <TeamDigestDelivery />
+
+      <!--
+        Beside the two things that tell you what happened, because this is the
+        third: what keeps happening. It proposes and never writes — see
+        `lessonProposals.ts` for why there is no switch here.
+      -->
+      <LessonProposals />
 
       <!-- Plugins -->
       <div
