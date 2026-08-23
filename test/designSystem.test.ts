@@ -187,3 +187,27 @@ describe('dialogs scroll rather than growing past the window', () => {
     expect(offenders, 'these dialog panels can grow past the window').toEqual([])
   })
 })
+
+describe('a column that scrolls is a column that can be narrower than its content', () => {
+  /**
+   * The session view is two columns in a flex row, and the left one holds the
+   * transcript — where one `Ran git grep …` line can be 300 characters wide. A
+   * flex item defaults to `min-width: auto`, which means "never narrower than
+   * your contents want to be", and `truncate` on the line does not change that:
+   * the column claimed the full width of its longest line, grew past the pane,
+   * and everything else in it — the Run check button, the composer's Stop, the
+   * instruction bubble — was laid out in that wider box and clipped off the
+   * right edge by the layout. Nothing scrolled, so nothing announced it.
+   */
+  it('gives both halves of the session split a min-width of zero', () => {
+    const source = readFileSync(join(appDir, 'pages/sessions/[id].vue'), 'utf8')
+    const columns = [...source.matchAll(/<(section|aside)\b([^>]*)>/g)]
+      .map(m => ({ tag: m[1]!, attrs: m[2]! }))
+
+    // Two: the conversation and the workbench pane beside it.
+    expect(columns.length).toBe(2)
+    for (const column of columns) {
+      expect(/\bmin-w-0\b/.test(column.attrs), `<${column.tag}> in the session split is allowed to grow past the pane`).toBe(true)
+    }
+  })
+})

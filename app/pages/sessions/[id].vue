@@ -1432,9 +1432,20 @@ const totalChanges = computed(() => {
     </PageHeader>
 
     <div id="session-split" class="flex-1 flex min-h-0" :class="{ 'select-none': dragging }">
-      <!-- The conversation, with its own scroll so the composer stays put -->
+      <!--
+        The conversation, with its own scroll so the composer stays put.
+
+        `min-w-0` is the reason a step line can be too long to fit. Without it a
+        flex item is never allowed narrower than its contents want to be, and
+        `truncate` on the command does not change that — the line reserves its
+        full width, the column grows past the pane, and every other thing in the
+        transcript is laid out in that wider box and clipped off the right edge:
+        the "Run check" button, the composer's Stop, the instruction bubble. The
+        layout clips rather than scrolls, so nothing announced it; the page just
+        ended early.
+      -->
       <section
-        class="flex flex-col min-h-0"
+        class="flex flex-col min-h-0 min-w-0"
         :class="pane ? 'shrink-0' : 'flex-1'"
         :style="pane ? { width: `${conversationWidth}%` } : undefined"
       >
@@ -1579,7 +1590,12 @@ const totalChanges = computed(() => {
               class="rounded-md px-4 py-3 space-y-2"
               :style="checkPanel.frame"
             >
-              <div class="flex items-center gap-2">
+              <!--
+                `flex-wrap`, because the verdict and up to four buttons do not fit
+                on one line beside an open workbench pane, and the row has no
+                scroll: without it "Run again" is simply cut off at the card edge.
+              -->
+              <div class="flex items-center gap-2 flex-wrap">
                 <UIcon
                   :name="checkPanel.icon"
                   class="size-4 shrink-0"
