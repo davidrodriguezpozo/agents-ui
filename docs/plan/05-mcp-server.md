@@ -70,3 +70,38 @@ Writing anything besides starting a session. Remote access of any kind.
   running the server and asking a real session "what is blocked": starting a background
   process needed an approval nobody was there to give. Worth ten minutes with the app
   running before this is trusted.
+
+## Findings — a later pass
+
+**Connecting it was a `curl`, which meant it was a feature for whoever wrote it.**
+The token endpoint and the ready-made `.mcp.json` both worked exactly as
+designed; the whole of the path was still "run a command, read the JSON it
+prints, paste it into a file". Library → MCP now carries a panel with a button
+that writes the entry into a chosen project's `.mcp.json` server-side —
+`server/utils/mcpConnect.ts`, `POST /api/mcp/connect`.
+
+**The awkward part is not the writing, it is that the entry carries a bearer
+token and `.mcp.json` is usually tracked.** So a tracked file is **refused**
+rather than written-then-warned — by the time a warning is read the token is in
+the index — and an untracked one is written *and* added to `.git/info/exclude`,
+the same per-clone mechanism that hides `.worktrees/`. A `git add .` afterwards
+stages nothing, which is asserted in a test.
+
+**Other servers survive.** A project's `.mcp.json` is usually the team's, listing
+servers with nothing to do with this app; ours is one key and everything else is
+copied through, including keys outside `mcpServers`. An unparseable file is left
+alone rather than replaced.
+
+**And the thing this pass actually uncovered: the documented `curl` never worked
+on a development server.** `/api/mcp/token` proves loopback from the socket, and
+behind Vite's dev proxy `socket.remoteAddress` is `null` — the probe returned
+`{ remoteAddress: null, hasSocket: true, forwarded: "127.0.0.1" }`. So on a dev
+server the endpoint always refused, and the first version of the panel dutifully
+printed that refusal where its controls should have been.
+
+Trusting `x-forwarded-for` would fix it and break the one guarantee the check
+exists for, so it stands. Instead the panel no longer depends on it: the button
+writes the file on the server, where the token already is, and the copy-by-hand
+route says plainly why it is unavailable here and where the file is. Verified
+both ways — refused and explained on a dev server, and the config inline with a
+masked token on a freshly built one.

@@ -781,11 +781,22 @@ your sessions, so it grants nothing new — it is simply a wall a blind POST can
 caller's claim and the peer address is the kernel's. This is the one thing here that refuses
 your phone on the LAN even when `HOST=0.0.0.0` invited it.
 
+**Connecting it is a button.** Library → **MCP** → *Let another Claude Code drive this app* →
+pick a project and press **Add it to this project**. It writes the entry into that
+repository's `.mcp.json`, leaves every other server in the file alone, and adds the file to
+`.git/info/exclude` so the token cannot be committed by accident. If `.mcp.json` is already
+tracked there it refuses and says so, because the entry carries a token.
+
+The same panel shows the token and the config to copy by hand, which is what you want for a
+second machine. Reading the token that way is loopback-only and proved from the socket, so a
+development server behind Vite's proxy cannot serve it — the button still works there, and
+the panel says why the copy is unavailable. From a built server, `curl` works too:
+
 ```bash
 curl -s localhost:3000/api/mcp/token        # the token, and a ready-made .mcp.json
 ```
 
-Then, in the repository you want a session to be able to drive:
+What lands in the repository you want a session to be able to drive:
 
 ```json
 {

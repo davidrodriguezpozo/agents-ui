@@ -260,7 +260,15 @@ const canImport = computed(() => activeType.value === 'agent' || activeType.valu
         Head of the chain below, so the capability list and its empty states are
         skipped wholesale rather than each having to know about the MCP facet.
       -->
-      <McpServerList v-if="activeType === 'mcp'" v-model:adding="showMcpAdd" :search="search" />
+      <template v-if="activeType === 'mcp'">
+        <McpServerList v-model:adding="showMcpAdd" :search="search" />
+        <!--
+          Under the list rather than above it: the list is what this app can
+          reach, and this is the other direction. Somebody looking for it looks
+          under MCP, which is here.
+        -->
+        <McpServerPanel class="mt-4" />
+      </template>
 
       <div v-else-if="loading && !counts.all" class="space-y-1">
         <SkeletonRow v-for="i in 6" :key="i" />
