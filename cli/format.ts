@@ -58,6 +58,10 @@ export function toneForWorkStatus(status: WorkStatus): Tone {
       return 'yellow'
     case 'yours':
       return 'cyan'
+    // Merged and still on disk: the same green as done, because it is done —
+    // what is left is closing the workspace, not deciding anything.
+    case 'landed':
+      return 'green'
     case 'done':
       return 'green'
     case 'failed':

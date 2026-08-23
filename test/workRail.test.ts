@@ -71,6 +71,27 @@ describe('grouping', () => {
     expect(titles(railGroups(items))).toEqual(['Needs you', 'Working', 'Your turn'])
   })
 
+  /**
+   * The group this whole status exists for. A merged session used to leave the
+   * rail the instant it landed, which is right about the commits and wrong about
+   * the worktree, the branch and the checkout still sitting on disk — the one
+   * thing left to do with it is close it, and History is for reading.
+   */
+  it('keeps merged sessions on the rail, under Done, below your turn', () => {
+    const items = buildWorkList({
+      sessions: [
+        session({ id: 'in', title: 'merged', landed: true, worktree: changed, updatedAt: 9_000 }),
+        session({ id: 'y', title: 'yours', worktree: changed, updatedAt: 1_000 }),
+      ],
+      runs: [],
+    })
+
+    const groups = railGroups(items)
+    expect(titles(groups)).toEqual(['Your turn', 'Done'])
+    expect(groups[1]!.items.map(i => i.title)).toEqual(['merged'])
+    expect(railCount(items)).toBe(2)
+  })
+
   it('drops a group with nothing in it rather than printing an empty heading', () => {
     const items = buildWorkList({
       sessions: [session({ activity: 'working' })],

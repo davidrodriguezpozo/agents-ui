@@ -66,6 +66,7 @@ describe('toneForWorkStatus', () => {
     expect(toneForWorkStatus('needs-you')).toBe('yellow')
     expect(toneForWorkStatus('yours')).toBe('cyan')
     expect(toneForWorkStatus('running')).toBe('cyan')
+    expect(toneForWorkStatus('landed')).toBe('green')
     expect(toneForWorkStatus('done')).toBe('green')
     expect(toneForWorkStatus('failed')).toBe('red')
   })

@@ -3,7 +3,7 @@ import { readSessions } from '../../utils/sessions'
 import { mapLimit } from '../../utils/pool'
 import { worktreeStates } from '../../utils/worktreeStates'
 import { mergedBranches } from '../../utils/merge'
-import { hasLanded } from '../../utils/lander'
+import { landedInBase } from '../../utils/lander'
 import { isStale } from '../../utils/checks'
 import { getActive, readRun } from '../../utils/runStore'
 import { listPending } from '../../utils/permissionBroker'
@@ -126,16 +126,17 @@ export default defineEventHandler(async (event) => {
       /**
        * Its work is in the base branch: finished, whatever else the row says.
        *
-       * Refused outright while the checkout has drifted, because the two halves
-       * of the question would come from two different branches: `ahead` is
-       * counted from HEAD, and `merged` is asked about the branch on record —
-       * whose untouched tip *is* the base commit, and so is trivially contained
-       * in it. That combination reported the session running at the time as
-       * landed while its two commits sat on another branch, which is the exact
-       * lie the `ahead > 0` half of `hasLanded` was written to prevent.
+       * Both the filed landing and what git says right now, because neither
+       * alone is enough — see `landedInBase`, which holds the reasoning and the
+       * reason the drift guard applies to only one of them.
        */
-      landed: !driftedTo
-        && hasLanded(session.branch, worktree.ahead, mergedByRepo.get(session.repoDir) ?? new Set()),
+      landed: landedInBase({
+        recorded: session.landed,
+        branch: session.branch,
+        ahead: worktree.ahead,
+        merged: mergedByRepo.get(session.repoDir) ?? new Set(),
+        drifted: Boolean(driftedTo),
+      }),
       pendingPermissions: pending,
       lastRunId,
       turnCount: session.runIds.length,
