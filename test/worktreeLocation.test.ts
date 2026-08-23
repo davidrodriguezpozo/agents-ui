@@ -6,6 +6,7 @@ import { promisify } from 'node:util'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   WORKTREE_DIR,
+  repositoryRootOf,
   excludeWorktreeDir,
   worktreePathFor,
   worktreeRootFor,
@@ -45,6 +46,15 @@ describe('where worktrees are placed', () => {
       .toBe(`/Users/me/workspaces/webapp/${WORKTREE_DIR}`)
     expect(worktreePathFor('/Users/me/workspaces/webapp', 'abc123'))
       .toBe(`/Users/me/workspaces/webapp/${WORKTREE_DIR}/abc123`)
+  })
+
+  it('gets back from a worktree to the repository it belongs to', () => {
+    // Anything deriving a *name* from a path has to come through here: the last
+    // segment of a worktree path is a generated session id, and two features
+    // were ready to publish one as the name of a repository.
+    expect(repositoryRootOf(`/Users/me/workspaces/webapp/${WORKTREE_DIR}/abc123`))
+      .toBe('/Users/me/workspaces/webapp')
+    expect(repositoryRootOf('/Users/me/workspaces/webapp')).toBe('/Users/me/workspaces/webapp')
   })
 
   it('uses a dot-prefixed name, which glob-based tools skip by default', () => {
