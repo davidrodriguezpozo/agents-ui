@@ -72,6 +72,17 @@ describe('a session says where it got to in its own words', () => {
     expect(fromSession(session({ worktree: changed, landed: true })).outcome).toBe('Merged')
   })
 
+  it('says a revert took it back out, rather than only that it merged', () => {
+    // The branch is still contained in the base — that is what a revert leaves
+    // behind — so "Merged" on its own is a row claiming main has the change.
+    const item = fromSession(session({
+      worktree: changed,
+      landed: true,
+      reverted: { at: 1, sha: 'a', committedAt: 1, subject: 'Revert', landedSha: 'b', branch: 'feature-a' },
+    } as Partial<Session>))
+    expect(item.outcome).toBe('Merged, then reverted')
+  })
+
   it('tells a blocked permission apart from a failed turn and a failing check', () => {
     expect(fromSession(session({ activity: 'awaiting-permission' })).outcome).toBe('Waiting for permission')
     expect(fromSession(session({ activity: 'failed' })).outcome).toBe('Its last turn failed')
@@ -116,9 +127,50 @@ describe('a session waiting on you is still in flight', () => {
     expect(fromSession(fresh({ worktree: changed, prUrl: undefined })).status).toBe('yours')
   })
 
-  it('lets go once the work has landed', () => {
+  /**
+   * Merged is not the end of a session, only of its work.
+   *
+   * This used to go straight to History, which is right about the commits and
+   * wrong about everything else: the worktree, the branch and a whole checkout
+   * of the repository are still on disk, and nothing on any screen said so. So
+   * it stays on the rail, in a group of its own, until you close it.
+   */
+  it('moves a merged session to Done rather than out of sight', () => {
     const item = fromSession(fresh({ worktree: changed, landed: true }))
+    expect([item.status, item.outcome]).toEqual(['landed', 'Merged'])
+    expect(tabOf(item.status)).toBe('flight')
+  })
+
+  it('stops calling a merged session your turn, whatever its checks said', () => {
+    // The bug: merge a session and it was still listed as work waiting to land,
+    // being told its base had moved on — by the commit that merged it.
+    const passing = fromSession(fresh({ worktree: changed, landed: true, check: { status: 'passing' } } as Partial<Session>))
+    expect(passing.status).toBe('landed')
+
+    // A local failure over code that has already shipped is not a decision
+    // anybody has left to make either. Same rank `sessionBadge` gives `landed`.
+    const failing = fromSession(fresh({ worktree: changed, landed: true, check: { status: 'failing' } } as Partial<Session>))
+    expect(failing.status).toBe('landed')
+  })
+
+  it('lets a merged session back in flight when it is working again', () => {
+    // You carried on in it. What is happening now outranks what has landed.
+    const working = fromSession(fresh({ worktree: changed, landed: true, activity: 'working' }))
+    expect([working.status, working.outcome]).toEqual(['running', 'Working'])
+
+    const asking = fromSession(fresh({ worktree: changed, landed: true, activity: 'awaiting-permission' }))
+    expect(asking.status).toBe('needs-you')
+  })
+
+  it('lets go of a merged session once you say you are done with it', () => {
+    const item = fromSession(fresh({ worktree: changed, landed: true, filedAt: Date.now() }))
     expect([item.status, item.outcome]).toEqual(['done', 'Merged'])
+    expect(tabOf(item.status)).toBe('history')
+  })
+
+  it('files a merged session whose workspace is gone, since there is nothing to close', () => {
+    const item = fromSession(fresh({ landed: true, activity: 'missing' }))
+    expect(tabOf(item.status)).toBe('history')
   })
 
   it('lets go when you say you are done with it, whatever is in the workspace', () => {
@@ -277,7 +329,9 @@ describe('statusCounts', () => {
       sessions: [session({ activity: 'awaiting-permission' })],
       runs: [run({ status: 'running' })],
     })
-    expect(statusCounts(items)).toEqual({ running: 1, 'needs-you': 1, yours: 0, done: 0, failed: 0 })
+    expect(statusCounts(items)).toEqual({
+      running: 1, 'needs-you': 1, yours: 0, landed: 0, done: 0, failed: 0,
+    })
   })
 })
 

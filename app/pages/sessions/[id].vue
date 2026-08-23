@@ -784,8 +784,25 @@ const checkPanel = computed<CheckPanel>(() => {
   }
 })
 
-/** How far this session's base has moved without it. */
-const behind = computed(() => session.value?.worktree.behind ?? 0)
+/**
+ * How far this session's base has moved without it — and zero once its work is
+ * in there.
+ *
+ * Not a lie by omission: a merged session is behind by exactly the commit that
+ * merged it. Read straight off the worktree, every use of this number told the
+ * reader to go and fix a session that was finished — the verdict went amber with
+ * "Passed, before main moved on", the line under it said to bring the base in
+ * before trusting anything here, and a "Bring in main" button offered to do it.
+ * All three about the session's own merge. Same rank `sessionBadge` gives
+ * `landed` over the verdicts, for the same reason.
+ *
+ * A revert puts the number back, because the base genuinely no longer has the
+ * work and being behind it matters again.
+ */
+const behind = computed(() => {
+  if (session.value?.landed && !session.value?.reverted) return 0
+  return session.value?.worktree.behind ?? 0
+})
 const behindWord = computed(() =>
   `${behind.value} commit${behind.value === 1 ? '' : 's'} on ${session.value?.baseBranch}`,
 )

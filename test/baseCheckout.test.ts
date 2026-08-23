@@ -21,6 +21,7 @@ let root: string
 let repo: string
 let merge: typeof import('../server/utils/merge')
 let hasLanded: typeof import('../server/utils/lander')['hasLanded']
+let landedInBase: typeof import('../server/utils/lander')['landedInBase']
 
 function git(args: string[], cwd = repo) {
   return execFileSync('git', args, { cwd, encoding: 'utf-8' }).trim()
@@ -29,7 +30,7 @@ function git(args: string[], cwd = repo) {
 beforeAll(async () => {
   merge = await import('../server/utils/merge')
   // Pure, and the pairing rule it encodes is the point of the tests below.
-  ;({ hasLanded } = await import('../server/utils/lander'))
+  ;({ hasLanded, landedInBase } = await import('../server/utils/lander'))
   root = await mkdtemp(join(tmpdir(), 'agents-ui-base-'))
 })
 
@@ -149,6 +150,60 @@ describe('which branches the base already contains', () => {
 
     git(['merge', '-q', '--no-ff', 'sess-1', '-m', 'Merge session'])
     expect(hasLanded('sess-1', 1, await merge.mergedBranches(repo, 'main'))).toBe(true)
+  })
+
+  /**
+   * The half git cannot answer, and the bug it caused.
+   *
+   * A squash merge puts every line of the work into the base and leaves the
+   * branch outside it, so `--merged` says no and goes on saying no. A session
+   * landed that way sat in the list as work waiting to be merged, amber, being
+   * told its base had moved on — by the commit carrying its own changes.
+   */
+  it('trusts a filed landing that git cannot see, as a squash leaves it', async () => {
+    await commitOn('sess-squash', 'a.txt')
+    git(['merge', '-q', '--squash', 'sess-squash'])
+    git(['commit', '-qm', 'Squashed session'])
+
+    const merged = await merge.mergedBranches(repo, 'main')
+    expect(merged).not.toContain('sess-squash')
+    expect(hasLanded('sess-squash', 1, merged)).toBe(false)
+
+    expect(landedInBase({ branch: 'sess-squash', ahead: 1, merged })).toBe(false)
+    expect(landedInBase({
+      recorded: { at: 1, how: 'elsewhere' },
+      branch: 'sess-squash',
+      ahead: 1,
+      merged,
+    })).toBe(true)
+  })
+
+  it('still asks git, because a merge typed into a terminal is nobody\'s record', async () => {
+    await commitOn('sess-hand', 'b.txt')
+    git(['merge', '-q', '--no-ff', 'sess-hand', '-m', 'Merge session'])
+
+    expect(landedInBase({
+      branch: 'sess-hand',
+      ahead: 1,
+      merged: await merge.mergedBranches(repo, 'main'),
+    })).toBe(true)
+  })
+
+  it('refuses the derivation on a drifted checkout, and only the derivation', async () => {
+    // Drifted, the two halves come from two branches — see `~/utils/checkout`.
+    // A filed landing is not a measurement, so drift has nothing to say about it.
+    await commitOn('sess-drift', 'c.txt')
+    git(['merge', '-q', '--no-ff', 'sess-drift', '-m', 'Merge session'])
+    const merged = await merge.mergedBranches(repo, 'main')
+
+    expect(landedInBase({ branch: 'sess-drift', ahead: 1, merged, drifted: true })).toBe(false)
+    expect(landedInBase({
+      recorded: { at: 1, how: 'merged', into: 'main' },
+      branch: 'sess-drift',
+      ahead: 1,
+      merged,
+      drifted: true,
+    })).toBe(true)
   })
 
   it('is empty rather than throwing when the base branch is not there', async () => {

@@ -42,6 +42,14 @@ export interface Session {
   check?: SessionCheck | null
   worktree?: Pick<WorktreeState, 'changedFiles' | 'dirty'> | null
   landed?: boolean
+  /**
+   * That its landed work has since been taken back out.
+   *
+   * Only whether there is one is read by the shared utils — `workList` says so
+   * on the row and `sessionBadge` ranks it above `landed` — so the shim carries
+   * the presence and enough of the record to be recognisable, not all of it.
+   */
+  reverted?: { at: number; sha: string; branch: string }
   filedAt?: number
   updatedAt: number
   summary?: { text: string }

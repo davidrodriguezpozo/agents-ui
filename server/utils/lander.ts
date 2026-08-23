@@ -7,6 +7,7 @@ import {
 import { verifySession } from './sessionChecks'
 import { symbolMap } from './symbols'
 import { notify } from './notify'
+import type { SessionLanded } from './landed'
 import {
   describeLanding, planLanding, shouldStopRun,
   type LandingInput, type LandingOutcome, type LandingStepResult,
@@ -155,6 +156,49 @@ export async function namesIn(
  */
 export function hasLanded(branch: string, ahead: number, merged: Set<string>): boolean {
   return ahead > 0 && merged.has(branch)
+}
+
+export interface LandedFacts {
+  /** The landing filed against the session, if one ever was. */
+  recorded?: SessionLanded | null
+  branch: string
+  /** Commits from where it branched, counted in the worktree. */
+  ahead: number
+  /** Branches the base contains right now — see `mergedBranches`. */
+  merged: Set<string>
+  /** The worktree is not on the branch the record names. See `~/utils/checkout`. */
+  drifted?: boolean
+}
+
+/**
+ * Whether a session's work is in the base, asked of both things that can know.
+ *
+ * `hasLanded` asks git, and git can only answer for the one shape of merge that
+ * leaves the branch contained in the base. A squash or a rebase — which is how
+ * most pull requests land on github.com — puts every line of the work in and
+ * leaves the branch out, so for those the git answer is no, and stays no
+ * forever. That is the bug: a session merged through its pull request sat in
+ * the list as work waiting to land, amber, being told its base had moved on —
+ * by the very commit that carried its own changes.
+ *
+ * The record knows. `recordLanded` files a landing for all three routes in, the
+ * third of which is a person merging the pull request themselves. So a recorded
+ * landing wins outright, and is deliberately not subject to the drift guard:
+ * that guard exists because the derivation takes one half of its answer from the
+ * checkout and the other from the record — `ahead` counted from HEAD, `merged`
+ * asked about the branch on record, whose untouched tip *is* the base commit and
+ * so is trivially contained in it. That combination once reported the session
+ * running at the time as landed while its two commits sat on another branch. A
+ * filed landing is not a measurement of anything, so nothing in it can be taken
+ * from the wrong branch — it is a merge that happened.
+ *
+ * The derivation is still asked, because a `git merge` typed into a terminal is
+ * nobody's record and this list is the only place it will ever show up.
+ */
+export function landedInBase(facts: LandedFacts): boolean {
+  if (facts.recorded) return true
+  if (facts.drifted) return false
+  return hasLanded(facts.branch, facts.ahead, facts.merged)
 }
 
 /**

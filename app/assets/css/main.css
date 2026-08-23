@@ -1853,12 +1853,72 @@ body {
   text-overflow: ellipsis;
 }
 
+/**
+ * A row with something you can do to it, which only the Done group has.
+ *
+ * The control is laid over the row's right edge rather than placed in a column
+ * of its own: a fourth column would be 40px taken off every title in the rail
+ * for a button three rows in forty ever show. Hidden until the row is hovered or
+ * the button is focused, so the resting list is still just a list — and the
+ * timestamp underneath it gets out of the way rather than being read through.
+ */
+.rail-slot {
+  position: relative;
+}
+
+.rail-slot__close {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 2px 6px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--surface-raised);
+  font-family: var(--font-mono);
+  font-size: var(--fs-micro);
+  color: var(--text-tertiary);
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.rail-slot:hover .rail-slot__close,
+.rail-slot__close:focus-visible,
+.rail-slot__close.is-asking {
+  opacity: 1;
+}
+
+/* Only where a control is about to cover it. Every other row keeps its time. */
+.rail-slot--closeable:hover .rail-row__when,
+.rail-slot--closeable:focus-within .rail-row__when {
+  opacity: 0;
+}
+
+.rail-slot__close:hover {
+  color: var(--text-primary);
+  border-color: var(--border-emphasis);
+}
+
+/* Asked once and waiting for the second press. Amber, because this one deletes. */
+.rail-slot__close.is-asking {
+  color: var(--warning);
+  border-color: var(--warning);
+  background: var(--warning-tint);
+}
+
+.rail-slot__close:disabled {
+  opacity: 1;
+  color: var(--text-disabled);
+}
+
 .rail-row__when {
   grid-area: when;
   font-size: var(--fs-micro);
   color: var(--text-disabled);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
+  /* So it and the close control above cross over rather than swapping. */
+  transition: opacity var(--duration-fast) var(--ease-out);
 }
 
 /**

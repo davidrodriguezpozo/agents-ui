@@ -1,6 +1,6 @@
 import type { RunSummary } from '~/composables/useRuns'
 import type { Session } from '~/composables/useSessions'
-import { isSettled, outcomeOf } from '~/utils/sessionOutcome'
+import { isSettled, outcomeOf, type SessionOutcome } from '~/utils/sessionOutcome'
 
 /**
  * Sessions and runs as one list of work.
@@ -34,7 +34,15 @@ export type WorkOrigin = 'session' | 'ritual' | 'agent' | 'command'
  * you to say the next thing. It used to come out as `done`, which is how a
  * conversation you were halfway through ended up filed under History.
  */
-export type WorkStatus = 'running' | 'needs-you' | 'yours' | 'done' | 'failed'
+/**
+ * `landed` is the other one that is not about the machine, and it is the last
+ * state a session has while it still exists on disk: the commits are in the base
+ * branch and the workspace is still there. It used to come out as `done`, which
+ * put a merged session in History — correct about the work and useless about the
+ * worktree, since the only thing left to do with one is close it, and History is
+ * where you go to read rather than to act.
+ */
+export type WorkStatus = 'running' | 'needs-you' | 'yours' | 'landed' | 'done' | 'failed'
 
 export interface WorkItem {
   key: string
@@ -65,6 +73,7 @@ export const WORK_STATUS: { value: WorkStatus; label: string }[] = [
   { value: 'running', label: 'running' },
   { value: 'needs-you', label: 'needs you' },
   { value: 'yours', label: 'your turn' },
+  { value: 'landed', label: 'merged' },
   { value: 'done', label: 'done' },
   { value: 'failed', label: 'failed' },
 ]
@@ -96,7 +105,7 @@ export type WorkTab = 'flight' | 'history'
  * them.
  */
 export const TAB_STATUSES: Record<WorkTab, WorkStatus[]> = {
-  flight: ['running', 'needs-you', 'yours'],
+  flight: ['running', 'needs-you', 'yours', 'landed'],
   history: ['done', 'failed'],
 }
 
@@ -129,8 +138,40 @@ export const STATUS_LOOK: Record<WorkStatus, { icon: string; colour: string }> =
   // Not amber. A session waiting on your reply is not a problem, and dressing
   // it as one is how "needs you" stops meaning anything.
   yours: { icon: 'i-lucide-corner-down-left', colour: 'var(--info)' },
+  landed: { icon: 'i-lucide-git-merge', colour: 'var(--success)' },
   done: { icon: 'i-lucide-check', colour: 'var(--success)' },
   failed: { icon: 'i-lucide-x', colour: 'var(--error)' },
+}
+
+/**
+ * Merged, with the workspace still on disk.
+ *
+ * This is one question rather than two because both halves are needed and each
+ * one alone was wrong. `landed` alone put a merged session in History the moment
+ * it went in, which reads as filed away — and its worktree, its branch and a
+ * checkout of the whole repository were still sitting there, with nothing on any
+ * screen suggesting so. A workspace alone is every session there is.
+ *
+ * What it outranks is the point. Every verdict below — checks failing, checks
+ * passing, work waiting to land — describes code that is already in the base
+ * branch, so none of them is a decision anybody still has to make; this is the
+ * same rank `sessionBadge` gives `landed`, for the same reason, and the two
+ * disagreeing is how a row comes to say "Merged" beside a heading that says the
+ * ball is in your court.
+ *
+ * What it does not outrank is anything happening now. A landed session with a
+ * turn in flight, a permission prompt open or a failed last turn is live again —
+ * you carried on working in it — and `activity` says so. Nor does it outrank you:
+ * `filedAt` means you said you were done, and that goes to History like anything
+ * else you have finished with.
+ */
+function landedAndKept(session: Session, outcome: SessionOutcome): boolean {
+  return Boolean(session.landed)
+    && !session.filedAt
+    && session.activity === 'idle'
+    // A check running in it, which `outcomeOf` calls working. Nothing is decided
+    // while a verdict is still being taken.
+    && outcome !== 'working'
 }
 
 /** A session, in its own words. `outcomeOf` already decides the hard part. */
@@ -138,6 +179,14 @@ export function fromSession(session: Session): WorkItem {
   const outcome = outcomeOf(session)
 
   const [status, label]: [WorkStatus, string] = (() => {
+    // Above the switch, because it is above every outcome in it. See above.
+    if (landedAndKept(session, outcome)) {
+      // A revert is the later news about the same merge, and saying only
+      // "Merged" over work the base no longer has is this row's version of the
+      // lie `sessionBadge` documents.
+      return ['landed', session.reverted ? 'Merged, then reverted' : 'Merged']
+    }
+
     switch (outcome) {
       case 'working':
         return ['running', 'Working']
@@ -147,6 +196,8 @@ export function fromSession(session: Session): WorkItem {
         // Finished, and does not work — which is not the same as failing to run.
         return ['needs-you', 'Checks fail']
       case 'ready':
+        // Merged and finished with — you filed it, or a turn is in flight in it.
+        // The ordinary merged session was answered above.
         if (session.landed) return ['done', 'Merged']
         // Work sitting in a workspace nobody has merged is the definition of
         // unfinished, whatever the process table says. It leaves this tab when
@@ -270,7 +321,10 @@ const STATUS_RANK: Record<WorkStatus, number> = {
   failed: 1,
   running: 2,
   yours: 3,
-  done: 4,
+  // Below your turn and above history: nothing here is waiting on a decision,
+  // it is waiting on a tidy-up, and it must not sit above work that is not done.
+  landed: 4,
+  done: 5,
 }
 
 export function byUrgencyThenRecency(a: WorkItem, b: WorkItem): number {
@@ -280,7 +334,7 @@ export function byUrgencyThenRecency(a: WorkItem, b: WorkItem): number {
 /** How many of each status the unfiltered list holds, for the filter chips. */
 export function statusCounts(items: WorkItem[]): Record<WorkStatus, number> {
   const counts: Record<WorkStatus, number> = {
-    running: 0, 'needs-you': 0, yours: 0, done: 0, failed: 0,
+    running: 0, 'needs-you': 0, yours: 0, landed: 0, done: 0, failed: 0,
   }
   for (const item of items) counts[item.status]++
   return counts
@@ -324,6 +378,7 @@ export const RAIL_GROUPS: { status: WorkStatus; title: string }[] = [
   { status: 'needs-you', title: 'Needs you' },
   { status: 'running', title: 'Working' },
   { status: 'yours', title: 'Your turn' },
+  { status: 'landed', title: 'Done' },
 ]
 
 export interface RailGroup {
