@@ -354,12 +354,38 @@ export interface StepExecution {
 
 // ── Chat ──────────────────────────────────────────
 
+/** Image types the model accepts. `IMAGE_MEDIA_TYPES` is this list at runtime. */
+export type ImageMediaType = 'image/png' | 'image/jpeg' | 'image/gif' | 'image/webp'
+
+/**
+ * An image sent with a message, so the model sees it rather than reading about
+ * it. See `app/utils/imageAttachments.ts`.
+ */
+export interface ChatAttachment {
+  id: string
+  name: string
+  mediaType: ImageMediaType
+  /** Decoded size, for the chip. */
+  size: number
+  /**
+   * Base64 of the image itself, no data-URL prefix.
+   *
+   * Absent on a conversation read back from disk: the bytes are stripped before
+   * a conversation is saved, so a history file stays a readable record instead
+   * of a few megabytes of base64 per screenshot. The model already has them —
+   * they are in the session it is resuming.
+   */
+  data?: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
   thinking?: string
   timestamp: number
+  /** Images the user attached to this turn. User messages only. */
+  attachments?: ChatAttachment[]
 }
 
 export type StreamActivity =

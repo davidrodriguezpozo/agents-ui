@@ -985,7 +985,9 @@ model it will actually run on, so the cost of the whole thing is visible before 
 - **Plugins** — browse registered marketplaces and install without leaving the app
 - **Graph** — how your agents, commands, skills and plugins actually connect
 - **Explore** — templates and community skills, in one place
-- **Ask Claude** (`⌘J`) — a chat panel that knows about your configuration
+- **Ask Claude** (`⌘J`) — a chat panel that knows about your configuration. Paste, drop or
+  pick an image and it goes with the message, the way it does in Claude Code — up to five per
+  message, PNG, JPEG, GIF or WebP. The studio's test box takes them too.
 - **Version and updates** — which release you are on, and one click to a newer one
 - **Search** (`⌘K`) — across everything at once
 - **Simple view** — hides the configuration concepts and leads with what you can run today

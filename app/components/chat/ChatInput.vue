@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { isSendKey } from "~/utils/keys";
+import {
+  IMAGE_MEDIA_TYPES,
+  attachmentSrc,
+  formatBytes,
+  imageMediaType,
+} from "~/utils/imageAttachments";
+import type { ChatAttachment } from "~/types";
 
 const props = defineProps<{
   modelValue: string;
@@ -7,15 +14,29 @@ const props = defineProps<{
   disabled: boolean;
   isStreaming: boolean;
   projectDisplayPath: string | null;
+  /** Images already on this message. Read-only here — the panel owns them. */
+  attachments?: ChatAttachment[];
 }>();
 
 const emit = defineEmits<{
   "update:modelValue": [value: string];
   send: [];
   stop: [];
+  /**
+   * Pasted or picked. A file *dropped* in does not come through here — the whole
+   * surface catches those, see `useChatAttachments`.
+   */
+  attach: [files: File[]];
+  remove: [id: string];
 }>();
 
 const inputRef = ref<HTMLTextAreaElement | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
+
+const attached = computed(() => props.attachments ?? []);
+
+/** An image on its own is a message, so it is enough to enable the button. */
+const canSend = computed(() => Boolean(props.modelValue.trim()) || attached.value.length > 0);
 
 function autoResize() {
   const el = inputRef.value;
@@ -31,6 +52,29 @@ function handleKeydown(e: KeyboardEvent) {
     e.preventDefault();
     emit("send");
   }
+}
+
+/**
+ * ⌘V of a screenshot, which is how this gets used nearly every time.
+ *
+ * Only the image files are taken, and only then is the paste swallowed: a
+ * clipboard carrying both text and an image — copying a cell out of a
+ * spreadsheet does this — still pastes its text.
+ */
+function handlePaste(e: ClipboardEvent) {
+  const files = Array.from(e.clipboardData?.files ?? []).filter(file => imageMediaType(file));
+  if (!files.length) return;
+
+  e.preventDefault();
+  emit("attach", files);
+}
+
+function onPick(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  if (files.length) emit("attach", files);
+  // Cleared so picking the same file twice in a row still fires `change`.
+  input.value = "";
 }
 
 function focus() {
@@ -58,6 +102,48 @@ defineExpose({ focus, resetHeight });
           : '0 2px 8px var(--card-shadow)',
       }"
     >
+      <!-- What is going with the next message -->
+      <div
+        v-if="attached.length"
+        class="flex flex-wrap gap-2 px-3 pt-3"
+      >
+        <div
+          v-for="attachment in attached"
+          :key="attachment.id"
+          class="relative group rounded-lg overflow-hidden"
+          style="border: 1px solid var(--border-subtle); background: var(--badge-subtle-bg)"
+          :title="`${attachment.name} · ${formatBytes(attachment.size)}`"
+        >
+          <img
+            v-if="attachmentSrc(attachment)"
+            :src="attachmentSrc(attachment)!"
+            :alt="attachment.name"
+            class="size-14 object-cover"
+          >
+          <div
+            v-else
+            class="size-14 flex items-center justify-center"
+          >
+            <UIcon
+              name="i-lucide-image"
+              class="size-4"
+              style="color: var(--text-disabled)"
+            />
+          </div>
+          <button
+            class="absolute top-0.5 right-0.5 rounded-full p-0.5 transition-opacity opacity-0 group-hover:opacity-100 focus:opacity-100"
+            style="background: var(--surface-base); color: var(--text-secondary)"
+            :title="`Remove ${attachment.name}`"
+            @click="emit('remove', attachment.id)"
+          >
+            <UIcon
+              name="i-lucide-x"
+              class="size-3"
+            />
+          </button>
+        </div>
+      </div>
+
       <textarea
         ref="inputRef"
         :value="modelValue"
@@ -71,6 +157,7 @@ defineExpose({ focus, resetHeight });
         :placeholder="placeholder"
         :disabled="disabled"
         @keydown="handleKeydown"
+        @paste="handlePaste"
         @input="
           (e) => {
             emit('update:modelValue', (e.target as HTMLTextAreaElement).value);
@@ -95,10 +182,30 @@ defineExpose({ focus, resetHeight });
             <span class="truncate max-w-[120px]">{{ projectDisplayPath }}</span>
             <span>&middot;</span>
           </template>
-          &#x23CE; Send &middot; &#x21E7;&#x23CE; New line
+          &#x23CE; Send &middot; &#x21E7;&#x23CE; New line &middot; Paste or drop an image
         </span>
 
         <div class="flex items-center gap-1.5">
+          <input
+            ref="fileInput"
+            type="file"
+            multiple
+            :accept="IMAGE_MEDIA_TYPES.join(',')"
+            class="hidden"
+            @change="onPick"
+          >
+          <button
+            class="p-1.5 rounded-md transition-all hover-bg"
+            style="color: var(--text-tertiary)"
+            title="Attach an image"
+            :disabled="disabled"
+            @click="fileInput?.click()"
+          >
+            <UIcon
+              name="i-lucide-paperclip"
+              class="size-3"
+            />
+          </button>
           <button
             v-if="isStreaming"
             class="p-1.5 rounded-md transition-all"
@@ -115,15 +222,11 @@ defineExpose({ focus, resetHeight });
             v-else
             class="p-1.5 rounded-md transition-all duration-200"
             :style="{
-              background: modelValue.trim()
-                ? 'var(--accent)'
-                : 'var(--badge-subtle-bg)',
-              color: modelValue.trim() ? 'white' : 'var(--text-disabled)',
-              boxShadow: modelValue.trim()
-                ? '0 0 12px var(--accent-glow)'
-                : 'none',
+              background: canSend ? 'var(--accent)' : 'var(--badge-subtle-bg)',
+              color: canSend ? 'white' : 'var(--text-disabled)',
+              boxShadow: canSend ? '0 0 12px var(--accent-glow)' : 'none',
             }"
-            :disabled="!modelValue.trim()"
+            :disabled="!canSend"
             @click="emit('send')"
           >
             <UIcon

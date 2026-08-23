@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { errorMessage } from '~/utils/errors'
+import { toBase64 } from '~/utils/base64'
 import type { SkillImportFile } from '~/composables/useSkills'
 
 const props = defineProps<{
@@ -130,19 +131,6 @@ async function readImportFile(file: File, path: string): Promise<SkillImportFile
   }
 
   return { path, content: toBase64(buffer), encoding: 'base64' }
-}
-
-/**
- * Chunked because `String.fromCharCode(...bytes)` spreads every byte into an
- * argument list and blows the stack somewhere north of a hundred kilobytes.
- */
-function toBase64(bytes: Uint8Array): string {
-  let binary = ''
-  const CHUNK = 8192
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK))
-  }
-  return btoa(binary)
 }
 </script>
 
