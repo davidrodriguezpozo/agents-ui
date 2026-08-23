@@ -2,6 +2,7 @@
 import { errorMessage, errorSessionId } from '~/utils/errors'
 import { findSimilar } from '~/utils/similarSession'
 import { isSendKey } from '~/utils/keys'
+import { IMAGE_MEDIA_TYPES, imageMediaType } from '~/utils/imageAttachments'
 import type { RunQuery } from '~/composables/useRuns'
 import { RUNS_QUERY } from '~/composables/useWorkList'
 import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
@@ -23,6 +24,16 @@ const { fetchAll: fetchWorktrees } = useWorktrees()
 const { fetchRuns, hideRuns } = useRuns()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
 const { workingDir, displayPath } = useWorkingDir()
+/**
+ * Images for the first turn. A session is very often started from a screenshot
+ * of the thing that is wrong, and describing that in words first was the only
+ * way to hand it over.
+ */
+const {
+  attachments, dropZone, dragOver, attach: attachImages, remove: removeAttachment,
+  clear: clearAttachments, onDragOver, onDragLeave, onDrop,
+} = useChatAttachments()
+
 const { projects, nameFor, addProject } = useProjects()
 const router = useRouter()
 const toast = useToast()
@@ -133,6 +144,28 @@ function chooseTrust(value: TrustLevel) {
 }
 
 const batchMode = ref(false)
+/**
+ * The box that takes images is the single-session one on Start. Elsewhere on
+ * this page there is nowhere for a dropped file to go, and holding it invisibly
+ * until somebody happens to open that box is how a screenshot gets attached to
+ * a session nobody meant to attach it to — or silently thrown away.
+ *
+ * The batch box is deliberately not it: it splits on lines, one session each,
+ * and there is no answer to which of five sessions an image belongs to.
+ */
+const takesImages = computed(() => pane.value === 'start' && !batchMode.value)
+
+function onImageDragOver(event: DragEvent) {
+  if (takesImages.value) onDragOver(event)
+}
+
+function onImageDrop(event: DragEvent) {
+  if (takesImages.value) onDrop(event)
+}
+
+// Anything held when the box goes away goes with it, rather than reappearing
+// on something else later.
+watch(takesImages, (takes) => { if (!takes) clearAttachments() })
 const batchText = ref('')
 const startingBatch = ref(false)
 
@@ -262,14 +295,34 @@ onMounted(async () => {
   await Promise.all([fetchTranscripts(), countRemoved()])
 })
 
+const imageInput = ref<HTMLInputElement | null>(null)
+
+/** ⌘V of a screenshot into the box, the same gesture as everywhere else. */
+function onPromptPaste(event: ClipboardEvent) {
+  const files = Array.from(event.clipboardData?.files ?? []).filter(file => imageMediaType(file))
+  if (!files.length) return
+
+  event.preventDefault()
+  attachImages(files)
+}
+
+function onPickImages(event: Event) {
+  const picker = event.target as HTMLInputElement
+  const files = Array.from(picker.files ?? [])
+  if (files.length) attachImages(files)
+  picker.value = ''
+}
+
 async function onCreate() {
   const value = prompt.value.trim()
-  if (!value || creating.value) return
+  // A screenshot on its own says what to look at, which is enough to start on.
+  if ((!value && !attachments.value.length) || creating.value) return
 
   creating.value = true
   try {
-    const session = await create(value, undefined, startTrust.value)
+    const session = await create(value, undefined, startTrust.value, attachments.value)
     prompt.value = ''
+    clearAttachments()
     await fetchWorktrees()
 
     // The session exists either way, so go to it — a workspace that could not
@@ -608,7 +661,24 @@ async function closeEmpty(key: string, ids: string[]) {
 </script>
 
 <template>
-  <div>
+  <div
+    ref="dropZone"
+    class="relative"
+    @dragover="onImageDragOver"
+    @dragleave="onDragLeave"
+    @drop="onImageDrop"
+  >
+    <!--
+      The whole page, not just the box: a file dropped anywhere else is the
+      browser navigating away from the app.
+    -->
+    <div
+      v-if="dragOver"
+      class="fixed inset-3 z-50 pointer-events-none rounded-xl flex items-center justify-center fs-sm font-medium"
+      style="background: var(--accent-muted); border: 2px dashed var(--accent); color: var(--text-primary);"
+    >
+      Drop an image to start a session with it
+    </div>
     <PageHeader title="Work" measure>
       <template #trailing>
         <!--
@@ -762,16 +832,42 @@ async function closeEmpty(key: string, ids: string[]) {
               placeholder="What should this session do? Enter to start, Shift+Enter for a new line."
               :disabled="creating"
               @keydown="e => { if (isSendKey(e)) { e.preventDefault(); onCreate() } }"
+              @paste="onPromptPaste"
+            />
+            <input
+              ref="imageInput"
+              type="file"
+              multiple
+              :accept="IMAGE_MEDIA_TYPES.join(',')"
+              class="hidden"
+              @change="onPickImages"
+            >
+            <UButton
+              icon="i-lucide-paperclip"
+              size="sm"
+              variant="ghost"
+              color="neutral"
+              :disabled="creating"
+              title="Attach an image — or paste or drop one"
+              aria-label="Attach an image"
+              @click="imageInput?.click()"
             />
             <UButton
               label="Start session"
               icon="i-lucide-plus"
               size="sm"
               :loading="creating"
-              :disabled="!prompt.trim()"
+              :disabled="!prompt.trim() && !attachments.length"
               @click="onCreate"
             />
           </div>
+
+          <!-- What the first turn will be looking at -->
+          <ChatAttachmentStrip
+            :attachments="attachments"
+            removable
+            @remove="removeAttachment"
+          />
           <!--
             One line for what was three paragraphs: where it branches from, and
             the two other ways in. Explaining every path permanently, above a

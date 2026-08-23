@@ -2,6 +2,7 @@
 import { errorMessage } from '~/utils/errors'
 import { driftNote } from '~/utils/checkout'
 import { isSendKey } from '~/utils/keys'
+import { IMAGE_MEDIA_TYPES, imageMediaType } from '~/utils/imageAttachments'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import { composeNotes, parsePatch, type DiffNote, type PatchLine } from '~/utils/patch'
@@ -28,6 +29,14 @@ const {
   updateFromBase, close, setAside,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
+/**
+ * Images going with the next thing typed here. `attach` is already taken by the
+ * run stream above, hence the longer name.
+ */
+const {
+  attachments, dropZone, dragOver, attach: attachImages, remove: removeAttachment,
+  clear: clearAttachments, onDragOver, onDragLeave, onDrop,
+} = useChatAttachments()
 const {
   rules: projectRules, deadReason, deadReasons,
   load: loadProjectRules, allowRule, revokeRule,
@@ -322,12 +331,17 @@ onUnmounted(() => {
  */
 async function onSend() {
   const value = input.value.trim()
-  if (!value || sending.value) return
+  // A screenshot with nothing typed under it is a whole instruction.
+  if ((!value && !attachments.value.length) || sending.value) return
 
   sending.value = true
   try {
-    const result = await send(id, value)
+    // Emptied only once it has gone, which is why this is not `take()`. A send
+    // that is refused — a closed session, the day's budget — leaves the words
+    // in the box, and the images have to stay with them.
+    const result = await send(id, value, attachments.value)
     input.value = ''
+    clearAttachments()
     await load()
     if (result.runId) watchRun(result.runId)
   } catch (e) {
@@ -349,12 +363,13 @@ async function onSend() {
  */
 async function onSteer() {
   const value = input.value.trim()
-  if (!value || steering.value || sending.value) return
+  if ((!value && !attachments.value.length) || steering.value || sending.value) return
 
   steering.value = true
   try {
-    const result = await steer(id, value)
+    const result = await steer(id, value, attachments.value)
     input.value = ''
+    clearAttachments()
     await load()
 
     if (result.steered) {
@@ -1246,6 +1261,29 @@ function insertCommand(invocation: string) {
   paletteOpen.value = false
 }
 
+const imageInput = ref<HTMLInputElement | null>(null)
+
+/**
+ * ⌘V of a screenshot, which is how an image gets into a message nearly every
+ * time. Only the images are taken, and the paste is only swallowed when there
+ * were some — a clipboard carrying text as well still pastes its text.
+ */
+function onComposerPaste(event: ClipboardEvent) {
+  const files = Array.from(event.clipboardData?.files ?? []).filter(file => imageMediaType(file))
+  if (!files.length) return
+
+  event.preventDefault()
+  attachImages(files)
+}
+
+function onPickImages(event: Event) {
+  const picker = event.target as HTMLInputElement
+  const files = Array.from(picker.files ?? [])
+  if (files.length) attachImages(files)
+  // Cleared so picking the same file twice in a row still fires `change`.
+  picker.value = ''
+}
+
 /** The composer owns the keys while the list is open, so it can drive it. */
 function onComposerKey(event: KeyboardEvent) {
   // While the command palette is open it owns the keys that drive it. Enter
@@ -1278,7 +1316,25 @@ const totalChanges = computed(() => {
 </script>
 
 <template>
-  <div class="h-screen flex flex-col">
+  <div
+    ref="dropZone"
+    class="h-screen flex flex-col relative"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
+  >
+    <!--
+      The whole page catches a drop, not just the composer. A file dropped on
+      the rest of a page is the browser navigating away from the app — and on
+      this page that means leaving a running turn to find its way back.
+    -->
+    <div
+      v-if="dragOver"
+      class="absolute inset-3 z-50 pointer-events-none rounded-xl flex items-center justify-center fs-sm font-medium"
+      style="background: var(--accent-muted); border: 2px dashed var(--accent); color: var(--text-primary);"
+    >
+      Drop an image to attach it to your next message
+    </div>
     <PageHeader bleed :title="session?.title || 'Session'">
       <template #leading>
         <NuxtLink to="/work" class="focus-ring rounded p-1.5 -m-1.5" aria-label="Back to work">
@@ -1754,10 +1810,14 @@ const totalChanges = computed(() => {
               <div v-for="turn in session.turns" :key="turn.id" class="space-y-2">
                 <div class="flex justify-end">
                   <div
-                    class="rounded-md px-3.5 py-2 max-w-[80%] type-body"
+                    class="rounded-md px-3.5 py-2 max-w-[80%] type-body space-y-2"
                     style="background: var(--accent-muted); color: var(--text-primary);"
                   >
-                    {{ turn.input }}
+                    <ChatAttachmentStrip
+                      :attachments="turn.attachments ?? []"
+                      size="sm"
+                    />
+                    <div v-if="turn.input">{{ turn.input }}</div>
                   </div>
                 </div>
 
@@ -1999,7 +2059,22 @@ const totalChanges = computed(() => {
                 <span class="type-mono-meta shrink-0 pt-px" style="color: var(--text-disabled);">
                   {{ index + 1 }}
                 </span>
-                <span class="type-detail flex-1 min-w-0 line-clamp-2 whitespace-pre-wrap">{{ message.text }}</span>
+                <div class="flex-1 min-w-0 space-y-1.5">
+                  <span
+                    v-if="message.text"
+                    class="type-detail block line-clamp-2 whitespace-pre-wrap"
+                  >{{ message.text }}</span>
+                  <!--
+                    Drawn from the record, so there are no bytes to show: the
+                    chip is an icon and a name. Worth showing anyway — a row
+                    that said only "look at this" would be a row that lost the
+                    thing being looked at.
+                  -->
+                  <ChatAttachmentStrip
+                    :attachments="message.attachments ?? []"
+                    size="sm"
+                  />
+                </div>
                 <button
                   class="opacity-0 group-hover/queued:opacity-100 transition-opacity focus-ring rounded shrink-0"
                   style="color: var(--text-disabled);"
@@ -2012,6 +2087,13 @@ const totalChanges = computed(() => {
                 </button>
               </div>
             </div>
+
+            <!-- What is going with the next message -->
+            <ChatAttachmentStrip
+              :attachments="attachments"
+              removable
+              @remove="removeAttachment"
+            />
 
             <!-- Composer -->
             <!--
@@ -2046,6 +2128,7 @@ const totalChanges = computed(() => {
                   : 'What should it do next? Type / for commands'"
                 :disabled="!session.worktree.exists"
                 @keydown="onComposerKey"
+                @paste="onComposerPaste"
               />
               <!--
                 The actions in one group that does not shrink: a running turn puts
@@ -2053,6 +2136,28 @@ const totalChanges = computed(() => {
                 worse than a narrower box.
               -->
               <div class="flex items-end gap-2 shrink-0">
+              <!--
+                Paste and drop are how this gets used; the button is for the
+                image that is a file on disk rather than on a clipboard.
+              -->
+              <input
+                ref="imageInput"
+                type="file"
+                multiple
+                :accept="IMAGE_MEDIA_TYPES.join(',')"
+                class="hidden"
+                @change="onPickImages"
+              >
+              <UButton
+                icon="i-lucide-paperclip"
+                size="sm"
+                variant="ghost"
+                color="neutral"
+                :disabled="!session.worktree.exists"
+                title="Attach an image — or paste or drop one"
+                aria-label="Attach an image"
+                @click="imageInput?.click()"
+              />
               <!-- Queueing is the same key and the same button, saying what it does -->
               <UButton
                 :label="isBusy ? 'Queue for after' : 'Send'"
@@ -2060,7 +2165,7 @@ const totalChanges = computed(() => {
                 size="sm"
                 :variant="isBusy ? 'soft' : 'solid'"
                 :loading="sending"
-                :disabled="!input.trim() || !session.worktree.exists || steering"
+                :disabled="(!input.trim() && !attachments.length) || !session.worktree.exists || steering"
                 @click="onSend"
               />
               <!--
@@ -2076,7 +2181,7 @@ const totalChanges = computed(() => {
                 size="sm"
                 variant="soft"
                 :loading="steering"
-                :disabled="!input.trim() || !session.worktree.exists || sending"
+                :disabled="(!input.trim() && !attachments.length) || !session.worktree.exists || sending"
                 title="Say it to the turn that is running — it lands at the next tool call"
                 @click="onSteer"
               />

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
+import { clearQueuedAttachments } from './queuedAttachments'
 import type { SessionCheck } from './checks'
 import type { SessionSummary } from './sessionSummary'
 import type { SessionLanded } from './landed'
@@ -335,10 +336,17 @@ export async function releaseRunningSession(id: string): Promise<Session | null>
 }
 
 export async function deleteSession(id: string): Promise<boolean> {
-  return sessionStore.update((sessions) => {
+  const deleted = await sessionStore.update((sessions) => {
     const index = sessions.findIndex(s => s.id === id)
     if (index < 0) return false
     sessions.splice(index, 1)
     return true
   })
+
+  // Anything its queue was still holding. Nothing will ever look these up
+  // again, and images are the one thing a session leaves behind that is
+  // measured in megabytes.
+  if (deleted) await clearQueuedAttachments(id)
+
+  return deleted
 }

@@ -430,6 +430,13 @@ That splitting only happens in the batch box. Multi-line text in the ordinary on
 single prompt, because turning a carefully written paragraph into eight sessions is not
 a mistake worth discovering afterwards.
 
+Paste, drop or pick an image and it goes with the message — into the box that starts a
+session, into a follow-up turn, and into **Steer now**, where a screenshot of what the
+turn has just got wrong is the fastest way to say "not that". Up to five per message,
+PNG, JPEG, GIF or WebP. An image with nothing typed under it is a whole instruction. A
+message that waits behind a running turn keeps its images while it waits, so closing the
+tab does not lose them.
+
 The list is about *what each session has produced* — files changed, commits, work still
 uncommitted, turns taken — rather than about the fact that something is running.
 

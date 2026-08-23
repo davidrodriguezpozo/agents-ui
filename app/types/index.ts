@@ -378,6 +378,17 @@ export interface ChatAttachment {
   data?: string
 }
 
+/**
+ * An attachment recorded rather than carried: what it was called, what it was,
+ * how big it was, and no bytes.
+ *
+ * This is what a queued session message holds. The bytes are on disk — see
+ * `server/utils/queuedAttachments.ts` — because they are too big to live on a
+ * record that is rewritten as often as a session's is, and it is also what a
+ * chip needs to draw itself, so the page gets it for free.
+ */
+export type ChatAttachmentRef = Omit<ChatAttachment, 'data'>
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'

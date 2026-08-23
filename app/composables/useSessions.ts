@@ -1,5 +1,6 @@
 import type { Overlap } from '~/utils/overlap'
 import type { DiffNote } from '~/utils/patch'
+import type { ChatAttachment, ChatAttachmentRef } from '~/types'
 
 export interface WorktreeState {
   path: string
@@ -89,6 +90,11 @@ export interface QueuedMessage {
   id: string
   text: string
   at: number
+  /**
+   * Images waiting with it, by name and type. The bytes are on the server —
+   * they have to outlive this tab, which is the whole point of the queue.
+   */
+  attachments?: ChatAttachmentRef[]
 }
 
 /**
@@ -286,6 +292,8 @@ export interface SessionTurn {
   toolCalls?: TurnToolCall[]
   /** What was said into it mid-turn, from the same log. */
   steers?: TurnSteer[]
+  /** Images the instruction came with, by name and type — the bytes are gone. */
+  attachments?: ChatAttachmentRef[]
 }
 
 /** What a worktree with no session could be restored into, and what it holds. */
@@ -420,12 +428,17 @@ export function useSessions() {
    * Start a session. Given a prompt it also starts working, and names itself
    * from what it was asked to do rather than making you type the intent twice.
    */
-  async function create(prompt: string, agentSlug?: string, trust?: TrustLevel) {
+  async function create(
+    prompt: string,
+    agentSlug?: string,
+    trust?: TrustLevel,
+    attachments: ChatAttachment[] = [],
+  ) {
     const session = await $fetch<StartedSession>('/api/sessions', {
       method: 'POST',
       // Chosen before it starts, so the first turn — usually the longest —
       // honours it rather than running at the default and being changed after.
-      body: { prompt, agentSlug, trust },
+      body: { prompt, agentSlug, trust, attachments },
     })
     await fetchAll()
     return session
@@ -523,10 +536,10 @@ export function useSessions() {
    * as old as its last load, and deciding here is how a message typed a second
    * before a turn ended used to be refused.
    */
-  async function send(id: string, input: string): Promise<SendResult> {
+  async function send(id: string, input: string, attachments: ChatAttachment[] = []): Promise<SendResult> {
     return $fetch<SendResult>(`/api/sessions/${encodeURIComponent(id)}/message`, {
       method: 'POST',
-      body: { input },
+      body: { input, attachments },
     })
   }
 
@@ -539,10 +552,10 @@ export function useSessions() {
    * saying which of steered, sent and queued actually happened: the turn can end
    * between the press and the delivery, and the server decides, not the page.
    */
-  async function steer(id: string, input: string): Promise<SteerResult> {
+  async function steer(id: string, input: string, attachments: ChatAttachment[] = []): Promise<SteerResult> {
     return $fetch<SteerResult>(`/api/sessions/${encodeURIComponent(id)}/steer`, {
       method: 'POST',
-      body: { input },
+      body: { input, attachments },
     })
   }
 

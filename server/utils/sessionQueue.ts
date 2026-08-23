@@ -1,4 +1,9 @@
 import { sessionStore, type Session } from './sessions'
+import {
+  clearQueuedAttachments, dropQueuedAttachments, storeQueuedAttachments,
+} from './queuedAttachments'
+import type { ModelImage } from '~/utils/imageAttachments'
+import type { ChatAttachmentRef } from '~/types'
 
 /**
  * What you typed while it was still working.
@@ -22,6 +27,12 @@ import { sessionStore, type Session } from './sessions'
  * `sessionTurn` owns that, and keeping the dependency one-directional is what
  * stops "a turn ends, so flush, so a turn starts" from becoming a circular
  * import.
+ *
+ * It owns one more thing by consequence: where a waiting message's images live.
+ * A turn that goes now carries its bytes in memory and needs nothing from disk,
+ * so persisting them is the queue's problem and nobody else's — see
+ * `queuedAttachments`, and note that every path out of the queue below deletes
+ * what it took.
  */
 
 export interface QueuedMessage {
@@ -33,6 +44,13 @@ export interface QueuedMessage {
   id: string
   text: string
   at: number
+  /**
+   * Images attached to this message, by name and type only. The bytes are in
+   * `queuedAttachments`, keyed by these ids — a session record carrying a few
+   * megabytes of base64 would be one nothing could afford to write, and this is
+   * written on every turn.
+   */
+  attachments?: ChatAttachmentRef[]
 }
 
 function messageId(): string {
@@ -46,11 +64,29 @@ function messageId(): string {
  * add to the back while a turn that has just ended takes from the front — and
  * a read-modify-write of the whole array is how one of the two silently loses.
  */
-export async function queueMessage(id: string, text: string): Promise<QueuedMessage | null> {
-  const message: QueuedMessage = { id: messageId(), text: text.trim(), at: Date.now() }
-  if (!message.text) return null
+export async function queueMessage(
+  id: string,
+  text: string,
+  images: ModelImage[] = [],
+): Promise<QueuedMessage | null> {
+  const trimmed = text.trim()
 
-  return sessionStore.update((sessions) => {
+  // An image with nothing typed under it is a whole message — it is what
+  // dropping a screenshot in already said — so emptiness is about both.
+  if (!trimmed && !images.length) return null
+
+  const messageKey = messageId()
+  const message: QueuedMessage = {
+    id: messageKey,
+    text: trimmed,
+    at: Date.now(),
+    // Written before the record so the record never points at bytes that are
+    // not there yet. The other order has a window in which a flush finds a
+    // reference to a file still being written.
+    attachments: await storeQueuedAttachments(id, messageKey, images),
+  }
+
+  const queued = await sessionStore.update((sessions) => {
     const index = sessions.findIndex(s => s.id === id)
     if (index < 0) return null
 
@@ -62,6 +98,12 @@ export async function queueMessage(id: string, text: string): Promise<QueuedMess
     }
     return message
   })
+
+  // No such session. The files would otherwise sit under an id nothing will
+  // ever look up again.
+  if (!queued) await dropQueuedAttachments(id, message.attachments)
+
+  return queued
 }
 
 /** Take the next message off the front. Null when there is nothing waiting. */
@@ -105,22 +147,31 @@ export async function requeueMessage(id: string, message: QueuedMessage): Promis
 
 /** Remove one waiting message — you changed your mind about it. */
 export async function dropQueuedMessage(id: string, messageId: string): Promise<Session | null> {
-  return sessionStore.update((sessions) => {
+  const dropped = await sessionStore.update((sessions) => {
     const index = sessions.findIndex(s => s.id === id)
     if (index < 0) return null
 
     const session = sessions[index]!
+    const going = (session.queued ?? []).find(m => m.id === messageId)
     sessions[index] = {
       ...session,
       queued: (session.queued ?? []).filter(m => m.id !== messageId),
       updatedAt: Date.now(),
     }
-    return sessions[index]!
+    return { session: sessions[index]!, going }
   })
+
+  if (!dropped) return null
+
+  // After the record, not before: a file deleted first and then a write that
+  // fails leaves a row pointing at nothing.
+  await dropQueuedAttachments(id, dropped.going?.attachments)
+
+  return dropped.session
 }
 
 export async function clearQueue(id: string): Promise<Session | null> {
-  return sessionStore.update((sessions) => {
+  const cleared = await sessionStore.update((sessions) => {
     const index = sessions.findIndex(s => s.id === id)
     if (index < 0) return null
 
@@ -130,4 +181,10 @@ export async function clearQueue(id: string): Promise<Session | null> {
     sessions[index] = { ...session, queued: [], updatedAt: Date.now() }
     return sessions[index]!
   })
+
+  // The whole directory rather than a file per message: the queue is empty, so
+  // anything left under it belongs to nothing.
+  if (cleared) await clearQueuedAttachments(id)
+
+  return cleared
 }
