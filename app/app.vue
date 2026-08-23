@@ -158,6 +158,9 @@ const navLinks = computed(() => isSimple.value
       { label: 'Home', icon: 'i-lucide-house', to: '/' },
       { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
       { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
+      // In the simple set too, and if anything more so: the reader this page is
+      // for is exactly the reader simple mode is for.
+      { label: 'Shipped', icon: 'i-lucide-package-check', to: '/shipped' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       // Was "My skills", which stopped being true when the Library merged
       // agents and commands in beside them. Its Personal group is first and
@@ -171,6 +174,10 @@ const navLinks = computed(() => isSimple.value
       // nobody else does.
       { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
       { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
+      // The one page in here written for somebody who does not run the work.
+      // Kept in the navigation rather than behind a link, because the point of
+      // it is that you can turn the laptop around.
+      { label: 'Shipped', icon: 'i-lucide-package-check', to: '/shipped' },
       { label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules' },
       // Agents, commands and skills were three nav items for one question, and
       // MCP was a fourth: "what can Claude reach". The servers are a facet of

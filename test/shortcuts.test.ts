@@ -338,6 +338,7 @@ const LIST_PAGES = [
   'pages/library.vue',
   'pages/schedules.vue',
   'pages/plugins/index.vue',
+  'pages/shipped.vue',
   'pages/explore.vue',
   'pages/wall.vue',
   'pages/workflows/index.vue',
