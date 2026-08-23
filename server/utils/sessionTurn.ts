@@ -14,6 +14,7 @@ import { withRunSlot } from './runQueue'
 import {
   clearQueue, queueMessage, requeueMessage, takeQueuedMessage, type QueuedMessage,
 } from './sessionQueue'
+import { dropQueuedAttachments, loadQueuedAttachments } from './queuedAttachments'
 import { steerRun } from './liveSteer'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
@@ -21,6 +22,9 @@ import { summariseAfterTurn } from './sessionSummary'
 import { composeAfterTurn } from './reviewDraft'
 import { clearRepair, planRepair } from './sessionRepair'
 import type { SessionCheck } from './checks'
+import { base64Bytes } from '~/utils/base64'
+import type { ModelImage } from '~/utils/imageAttachments'
+import type { ChatAttachmentRef } from '~/types'
 
 /**
  * Sending a turn to a session.
@@ -136,8 +140,17 @@ export async function flushQueue(sessionId: string): Promise<string | null> {
     const next = await takeQueuedMessage(sessionId)
     if (!next) return null
 
+    // Read off disk here rather than when it was queued: this is the moment
+    // there is a turn to hand them to.
+    const images = await loadQueuedAttachments(sessionId, next.attachments)
+
     try {
-      return await startTurn(session, next.text)
+      const runId = await startTurn(session, next.text, { images })
+      // Only now. Deleting before the turn starts would leave a message that
+      // failed to send holding references to files that no longer exist, and
+      // the requeue below is exactly the case that has to survive.
+      await dropQueuedAttachments(sessionId, next.attachments)
+      return runId
     } catch {
       await requeueMessage(sessionId, next)
       return null
@@ -159,6 +172,7 @@ export async function flushQueue(sessionId: string): Promise<string | null> {
 export async function sendOrQueue(
   session: Session,
   input: string,
+  images: ModelImage[] = [],
 ): Promise<{ runId: string; queued?: undefined } | { queued: QueuedMessage; runId?: undefined }> {
   const refusal = turnRefusal(session)
   if (refusal) throw createError({ statusCode: 409, data: refusal })
@@ -172,10 +186,10 @@ export async function sendOrQueue(
    */
   const waiting = session.queued?.length ?? 0
   if (!waiting && !await isTurnRunning(session)) {
-    return { runId: await startTurn(session, input) }
+    return { runId: await startTurn(session, input, { images }) }
   }
 
-  const queued = await queueMessage(session.id, input)
+  const queued = await queueMessage(session.id, input, images)
   if (!queued) throw createError({ statusCode: 400, message: 'input is required' })
 
   /**
@@ -209,6 +223,7 @@ export async function sendOrQueue(
 export async function sendSteered(
   session: Session,
   input: string,
+  images: ModelImage[] = [],
 ): Promise<
   | { steered: true; runId: string; queued?: undefined }
   | { runId: string; steered?: undefined; queued?: undefined }
@@ -220,9 +235,9 @@ export async function sendSteered(
   // The last run is the only one that can be running — a session takes one turn
   // at a time, which `startTurn` guarantees.
   const runId = session.runIds.at(-1)
-  if (runId && steerRun(runId, input)) return { steered: true, runId }
+  if (runId && steerRun(runId, input, images)) return { steered: true, runId }
 
-  return sendOrQueue(session, input)
+  return sendOrQueue(session, input, images)
 }
 
 /**
@@ -289,11 +304,16 @@ async function actOnVerdict(sessionId: string, check: SessionCheck | null): Prom
  * `repair` marks a turn this app decided to send, rather than one a person
  * typed. The difference matters in one place: a turn somebody typed is a new
  * instruction, and ends whatever the session had been doing on its own.
+ *
+ * `images` are handed to the run rather than written onto it. The record keeps
+ * their names and the CLI keeps the bytes, which is the split every other part
+ * of this app makes about a screenshot: the model needs it once, and the history
+ * needs to say it was there.
  */
 export async function startTurn(
   session: Session,
   input: string,
-  opts: { repair?: boolean } = {},
+  opts: { repair?: boolean; images?: ModelImage[] } = {},
 ): Promise<string> {
   const refusal = turnRefusal(session)
   if (refusal) throw createError({ statusCode: 409, data: refusal })
@@ -366,10 +386,15 @@ export async function startTurn(
    */
   const by = await gitIdentity(session.repoDir)
 
+  const images = opts.images ?? []
+
   const run = createRun({
     kind: 'chat',
-    title: input.trim().slice(0, 70),
+    // An image with nothing typed under it is a whole instruction, and a turn
+    // called "" in the list is one nobody can find again.
+    title: input.trim().slice(0, 70) || titleForImages(images),
     input: input.trim(),
+    attachments: images.length ? images.map(describe) : undefined,
     agentSlug: session.agentSlug,
     projectDir: session.worktreePath,
     sessionId: session.id,
@@ -392,7 +417,11 @@ export async function startTurn(
   // that answered a question — only the first is worth a test run.
   const fingerprintBefore = await worktreeFingerprint(session.worktreePath)
 
-  const execution = { resumeSessionId: session.sdkSessionId, maxBudgetUsd: budget.maxBudgetUsd }
+  const execution = {
+    resumeSessionId: session.sdkSessionId,
+    maxBudgetUsd: budget.maxBudgetUsd,
+    images,
+  }
 
   // A turn you typed goes now — you are sitting in front of it, and "queued
   // behind a ritual" is a worse experience than a busy machine. A repair turn
@@ -475,4 +504,24 @@ export async function startTurn(
     })
 
   return run.id
+}
+
+/**
+ * What the record keeps of an image: everything except the image.
+ *
+ * Keyed by position rather than by name — two screenshots pasted in a row are
+ * both called `image.png`, and a list keyed on that draws one of them.
+ */
+function describe(image: ModelImage, index: number): ChatAttachmentRef {
+  return {
+    id: String(index),
+    name: image.name,
+    mediaType: image.mediaType,
+    size: base64Bytes(image.data),
+  }
+}
+
+function titleForImages(images: ModelImage[]): string {
+  if (!images.length) return 'Turn'
+  return images.length === 1 ? images[0]!.name : `${images.length} images`
 }

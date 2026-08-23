@@ -6,7 +6,7 @@ import { getClaudeDir } from './claudeDir'
 import { matchesFilter, sourceOf, type RunFilter, type RunSource } from './runFilter'
 import { parseSkipped, withoutSkipped, type SkippedSource } from './selfReported'
 import type { Identity } from './identity'
-import type { RunStats } from '~/types'
+import type { ChatAttachmentRef, RunStats } from '~/types'
 
 export type RunKind = 'command' | 'chat' | 'agent'
 export type RunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
@@ -27,6 +27,16 @@ export interface Run {
   title: string
   /** The prompt as sent, e.g. `/hd:goodmorning` or free text. */
   input: string
+  /**
+   * Images that went with the prompt, by name and type only.
+   *
+   * The bytes are deliberately not here. They are in the conversation the CLI
+   * keeps, which is the copy that matters — this is the record, and a run file
+   * carrying a few megabytes of base64 per screenshot is one nothing can read
+   * back. What is kept is what a turn needs to say honestly: that this
+   * instruction came with two images, and what they were called.
+   */
+  attachments?: ChatAttachmentRef[]
   invocation?: string
   agentSlug?: string
   projectDir?: string

@@ -90,8 +90,18 @@ async function steerableSession(patch: Partial<import('../server/utils/sessions'
   return { session: saved, run, prompt }
 }
 
+/**
+ * The text block, wherever it is. Images come before it now, so position is not
+ * a way to find it.
+ */
 const textOf = (message: SDKUserMessage) =>
-  (message.message.content as { text: string }[])[0]!.text
+  (message.message.content as { type: string; text?: string }[])
+    .find(block => block.type === 'text')?.text
+
+const imagesOf = (message: SDKUserMessage) =>
+  (message.message.content as { type: string; source?: { media_type: string; data: string } }[])
+    .filter(block => block.type === 'image')
+    .map(block => block.source!)
 
 const textsOf = async (id: string) =>
   ((await sessions.findSession(id))?.queued ?? []).map(m => m.text)
@@ -159,7 +169,7 @@ describe('the channel a running turn reads its input from', () => {
     expect(steer.steerRun(run.id, '   \n ')).toBe(false)
     expect(steer.steerRun(run.id, '  not that file  ')).toBe(true)
 
-    expect(steer.closeSteerChannel(run.id)).toEqual(['not that file'])
+    expect(steer.closeSteerChannel(run.id).map(m => m.text)).toEqual(['not that file'])
   })
 
   it('takes nothing once the input is closed', async () => {
@@ -179,9 +189,48 @@ describe('the channel a running turn reads its input from', () => {
     steer.steerRun(run.id, 'first')
     steer.steerRun(run.id, 'second')
 
-    expect(steer.closeSteerChannel(run.id)).toEqual(['first', 'second'])
+    expect(steer.closeSteerChannel(run.id).map(m => m.text)).toEqual(['first', 'second'])
     // Closing twice is the ordinary case — on the result, then on teardown.
     expect(steer.closeSteerChannel(run.id)).toEqual([])
+  })
+
+  it('puts the opening images before the words, and only the words after that', async () => {
+    const run = runningRun()
+    const prompt = steer.openSteerChannel(run.id, 'why is this off centre?', [
+      { name: 'shot.png', mediaType: 'image/png', data: 'aGk=' },
+    ])
+    const reader = prompt[Symbol.asyncIterator]()
+
+    const opening = (await reader.next()).value!
+    expect(imagesOf(opening)).toEqual([{ type: 'base64', media_type: 'image/png', data: 'aGk=' }])
+    expect(textOf(opening)).toBe('why is this off centre?')
+
+    // A correction typed afterwards is words unless it carries its own.
+    steer.steerRun(run.id, 'the header, not the footer')
+    const next = (await reader.next()).value!
+    expect(imagesOf(next)).toEqual([])
+    expect(textOf(next)).toBe('the header, not the footer')
+
+    steer.closeSteerChannel(run.id)
+  })
+
+  it('takes a screenshot with nothing typed under it, mid-turn', async () => {
+    const run = runningRun()
+    const prompt = steer.openSteerChannel(run.id, 'opening')
+    const reader = prompt[Symbol.asyncIterator]()
+    await reader.next()
+
+    expect(steer.steerRun(run.id, '  ', [
+      { name: 'wrong.png', mediaType: 'image/png', data: 'aGk=' },
+    ])).toBe(true)
+
+    const message = (await reader.next()).value!
+    expect(imagesOf(message)).toHaveLength(1)
+    // No empty text block: an image on its own is the whole message, and a
+    // blank one is something the model has to interpret.
+    expect(textOf(message)).toBeUndefined()
+
+    steer.closeSteerChannel(run.id)
   })
 
   it('refuses a run that has stopped, however open its channel looks', async () => {

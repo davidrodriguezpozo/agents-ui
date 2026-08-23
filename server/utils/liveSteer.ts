@@ -1,4 +1,6 @@
 import { emit, getActive } from './runStore'
+import { userTurn } from './chatPrompt'
+import type { ModelImage } from '~/utils/imageAttachments'
 import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
 
 /**
@@ -35,9 +37,15 @@ import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
  * typed, it was accepted, and nothing would say where it went.
  */
 
+/** What was said, and anything it was said about. */
+export interface SteerMessage {
+  text: string
+  images: ModelImage[]
+}
+
 interface Channel {
   /** Accepted, not yet handed to the CLI. Usually empty or one long. */
-  pending: string[]
+  pending: SteerMessage[]
   closed: boolean
   /** Resolves the iterable out of its wait. Present only while it is waiting. */
   wake?: () => void
@@ -46,17 +54,17 @@ interface Channel {
 const channels = new Map<string, Channel>()
 
 /**
- * The one message shape the SDK writes for a string prompt, built by hand
- * because we are no longer passing a string. Keeping it identical is what makes
- * this a change of who closes stdin rather than a change of what the CLI reads.
+ * The message shape comes from `chatPrompt`, which is where the assistant panel
+ * builds the same thing.
+ *
+ * It used to be built here as a single text block, which was correct for as
+ * long as a turn was only ever words. Two copies of "what a user message looks
+ * like" is how one of them ends up without images on it, and the one that would
+ * have drifted is this one — the panel's is exercised by every screenshot
+ * anybody pastes, and this path is only exercised by a session.
  */
-function userMessage(text: string): SDKUserMessage {
-  return {
-    type: 'user',
-    session_id: '',
-    parent_tool_use_id: null,
-    message: { role: 'user', content: [{ type: 'text', text }] },
-  }
+function userMessage(text: string, images: ModelImage[] = []): SDKUserMessage {
+  return userTurn(text, images)
 }
 
 /**
@@ -65,13 +73,17 @@ function userMessage(text: string): SDKUserMessage {
  * The iterable yields the opening instruction, then blocks — which is the point.
  * A generator that has not returned is a stdin that is still open.
  */
-export function openSteerChannel(runId: string, input: string): AsyncIterable<SDKUserMessage> {
+export function openSteerChannel(
+  runId: string,
+  input: string,
+  images: ModelImage[] = [],
+): AsyncIterable<SDKUserMessage> {
   const channel: Channel = { pending: [], closed: false }
   channels.set(runId, channel)
 
   return {
     async *[Symbol.asyncIterator]() {
-      yield userMessage(input)
+      yield userMessage(input, images)
 
       for (;;) {
         const next = channel.pending.shift()
@@ -79,8 +91,8 @@ export function openSteerChannel(runId: string, input: string): AsyncIterable<SD
           // Recorded here rather than where it was accepted, because this is the
           // moment it goes to the CLI. An event written on acceptance would
           // claim a delivery for the one message that never made it.
-          emit(runId, { type: 'steer', text: next })
-          yield userMessage(next)
+          emit(runId, { type: 'steer', text: next.text })
+          yield userMessage(next.text, next.images)
           continue
         }
 
@@ -104,10 +116,14 @@ export function openSteerChannel(runId: string, input: string): AsyncIterable<SD
  * finished or been stopped, a channel already closed, nothing to say. All of
  * them mean the same thing to the caller — this has to go through the queue
  * instead — so they are one answer rather than five.
+ *
+ * An image with nothing typed under it is something to say. "Not this, look at
+ * this" is the correction a screenshot is for, and refusing it for having no
+ * words would send the person back to describing the picture.
  */
-export function steerRun(runId: string, text: string): boolean {
+export function steerRun(runId: string, text: string, images: ModelImage[] = []): boolean {
   const trimmed = text.trim()
-  if (!trimmed) return false
+  if (!trimmed && !images.length) return false
 
   const channel = channels.get(runId)
   if (!channel || channel.closed) return false
@@ -119,7 +135,7 @@ export function steerRun(runId: string, text: string): boolean {
   const entry = getActive(runId)
   if (!entry || entry.run.status !== 'running' || entry.abort.signal.aborted) return false
 
-  channel.pending.push(trimmed)
+  channel.pending.push({ text: trimmed, images })
   channel.wake?.()
   return true
 }
@@ -130,8 +146,11 @@ export function steerRun(runId: string, text: string): boolean {
  * Idempotent: called on the turn's result and again when the run tears down, and
  * the second call has nothing to report. Closing is what lets the CLI exit, so
  * it must happen on every ending — including the ones that throw.
+ *
+ * Whatever came back still has its images: they are handed to the queue along
+ * with the words, and the queue is what puts them somewhere that survives.
  */
-export function closeSteerChannel(runId: string): string[] {
+export function closeSteerChannel(runId: string): SteerMessage[] {
   const channel = channels.get(runId)
   if (!channel) return []
 

@@ -39,6 +39,9 @@ export default defineEventHandler(async (event) => {
     turns.push({
       id: run.id,
       input: run.input,
+      // What the instruction came with. Names and types only — the bytes were
+      // never written here, see `Run`.
+      attachments: run.attachments,
       output: run.output,
       status: run.status,
       createdAt: run.createdAt,

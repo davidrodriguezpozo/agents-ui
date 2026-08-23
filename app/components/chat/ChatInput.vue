@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { isSendKey } from "~/utils/keys";
-import {
-  IMAGE_MEDIA_TYPES,
-  attachmentSrc,
-  formatBytes,
-  imageMediaType,
-} from "~/utils/imageAttachments";
+import { IMAGE_MEDIA_TYPES, imageMediaType } from "~/utils/imageAttachments";
 import type { ChatAttachment } from "~/types";
 
 const props = defineProps<{
@@ -103,46 +98,13 @@ defineExpose({ focus, resetHeight });
       }"
     >
       <!-- What is going with the next message -->
-      <div
+      <ChatAttachmentStrip
         v-if="attached.length"
-        class="flex flex-wrap gap-2 px-3 pt-3"
-      >
-        <div
-          v-for="attachment in attached"
-          :key="attachment.id"
-          class="relative group rounded-lg overflow-hidden"
-          style="border: 1px solid var(--border-subtle); background: var(--badge-subtle-bg)"
-          :title="`${attachment.name} · ${formatBytes(attachment.size)}`"
-        >
-          <img
-            v-if="attachmentSrc(attachment)"
-            :src="attachmentSrc(attachment)!"
-            :alt="attachment.name"
-            class="size-14 object-cover"
-          >
-          <div
-            v-else
-            class="size-14 flex items-center justify-center"
-          >
-            <UIcon
-              name="i-lucide-image"
-              class="size-4"
-              style="color: var(--text-disabled)"
-            />
-          </div>
-          <button
-            class="absolute top-0.5 right-0.5 rounded-full p-0.5 transition-opacity opacity-0 group-hover:opacity-100 focus:opacity-100"
-            style="background: var(--surface-base); color: var(--text-secondary)"
-            :title="`Remove ${attachment.name}`"
-            @click="emit('remove', attachment.id)"
-          >
-            <UIcon
-              name="i-lucide-x"
-              class="size-3"
-            />
-          </button>
-        </div>
-      </div>
+        class="px-3 pt-3"
+        :attachments="attached"
+        removable
+        @remove="(id: string) => emit('remove', id)"
+      />
 
       <textarea
         ref="inputRef"

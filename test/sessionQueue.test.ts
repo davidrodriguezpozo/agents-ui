@@ -21,6 +21,7 @@ let sessions: typeof import('../server/utils/sessions')
 let queue: typeof import('../server/utils/sessionQueue')
 let turn: typeof import('../server/utils/sessionTurn')
 let runStore: typeof import('../server/utils/runStore')
+let attachments: typeof import('../server/utils/queuedAttachments')
 
 beforeAll(async () => {
   claudeDir = await mkdtemp(join(tmpdir(), 'agents-ui-queue-'))
@@ -31,6 +32,7 @@ beforeAll(async () => {
   queue = await import('../server/utils/sessionQueue')
   turn = await import('../server/utils/sessionTurn')
   runStore = await import('../server/utils/runStore')
+  attachments = await import('../server/utils/queuedAttachments')
 })
 
 afterAll(async () => {
@@ -253,5 +255,105 @@ describe('sending into a session that is already working', () => {
   it('has nothing to say about a session with an empty queue', async () => {
     const s = await workingSession()
     expect(await turn.flushQueue(s.id)).toBeNull()
+  })
+})
+
+/**
+ * Images on a message that is waiting rather than being sent.
+ *
+ * The bytes go on disk and the record keeps a reference, because the queue's
+ * whole reason for existing is outliving the tab — see `queuedAttachments`.
+ * What is proved here is the pairing: every path that removes a message from
+ * the queue also removes what it was holding, and the one path that puts a
+ * message back leaves the files where the retry can still find them.
+ */
+describe('images waiting in the queue', () => {
+  const shot = (name = 'shot.png') => ({
+    name,
+    mediaType: 'image/png' as const,
+    // 'hi', which is two bytes decoded — enough to prove the round trip.
+    data: 'aGk=',
+  })
+
+  it('keeps the bytes on disk and only a reference on the session', async () => {
+    const s = await session()
+
+    const message = await queue.queueMessage(s.id, 'why is this off centre?', [shot()])
+
+    expect(message?.attachments).toEqual([
+      { id: `${message!.id}-0`, name: 'shot.png', mediaType: 'image/png', size: 2 },
+    ])
+    // Nothing on the record that a JSON file cannot afford.
+    expect(JSON.stringify(await sessions.findSession(s.id))).not.toContain('aGk=')
+    expect(await attachments.countQueuedAttachments(s.id)).toBe(1)
+  })
+
+  it('reads them back for the turn that finally takes the message', async () => {
+    const s = await session()
+    await queue.queueMessage(s.id, 'look', [shot(), shot('other.png')])
+
+    const next = (await queue.takeQueuedMessage(s.id))!
+    expect(await attachments.loadQueuedAttachments(s.id, next.attachments)).toEqual([
+      { name: 'shot.png', mediaType: 'image/png', data: 'aGk=' },
+      { name: 'other.png', mediaType: 'image/png', data: 'aGk=' },
+    ])
+  })
+
+  it('takes an image with nothing typed under it, and refuses neither', async () => {
+    const s = await session()
+
+    expect(await queue.queueMessage(s.id, '  ', [shot()])).toBeTruthy()
+    expect(await queue.queueMessage(s.id, '   ')).toBeNull()
+  })
+
+  it('forgets the files when the message is taken back out', async () => {
+    const s = await session()
+    const message = await queue.queueMessage(s.id, 'never mind', [shot()])
+
+    await queue.dropQueuedMessage(s.id, message!.id)
+
+    expect(await attachments.countQueuedAttachments(s.id)).toBe(0)
+  })
+
+  it('forgets all of them when the queue is dropped', async () => {
+    const s = await session()
+    await queue.queueMessage(s.id, 'one', [shot()])
+    await queue.queueMessage(s.id, 'two', [shot()])
+
+    await queue.clearQueue(s.id)
+
+    expect(await attachments.countQueuedAttachments(s.id)).toBe(0)
+  })
+
+  it('forgets them when the session itself goes', async () => {
+    const s = await session()
+    await queue.queueMessage(s.id, 'one', [shot()])
+
+    await sessions.deleteSession(s.id)
+
+    expect(await attachments.countQueuedAttachments(s.id)).toBe(0)
+  })
+
+  it('keeps the files behind a message that was put back', async () => {
+    const s = await session()
+    const message = await queue.queueMessage(s.id, 'still meant it', [shot()])
+
+    const taken = (await queue.takeQueuedMessage(s.id))!
+    await queue.requeueMessage(s.id, taken)
+
+    // A turn that would not start is why this happens, and the next attempt has
+    // to be able to read the same images.
+    expect(await attachments.countQueuedAttachments(s.id)).toBe(1)
+    expect(await attachments.loadQueuedAttachments(s.id, taken.attachments)).toHaveLength(1)
+    expect(message!.attachments).toEqual(taken.attachments)
+  })
+
+  it('skips a reference whose file has gone rather than failing the turn', async () => {
+    const s = await session()
+    const message = await queue.queueMessage(s.id, 'look', [shot()])
+
+    await attachments.clearQueuedAttachments(s.id)
+
+    expect(await attachments.loadQueuedAttachments(s.id, message!.attachments)).toEqual([])
   })
 })

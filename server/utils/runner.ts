@@ -9,9 +9,10 @@ import { notify } from './notify'
 import { budgetStoppedMessage } from './budget'
 import { tokenUsageOf } from './usage'
 import { nowTrustedFully } from './liveTrust'
-import { closeSteerChannel, openSteerChannel } from './liveSteer'
+import { closeSteerChannel, openSteerChannel, type SteerMessage } from './liveSteer'
 import { queueMessage } from './sessionQueue'
 import { paragraphBreaks } from './textBlocks'
+import type { ModelImage } from '~/utils/imageAttachments'
 
 function toolResultText(content: unknown): string {
   return typeof content === 'string'
@@ -34,7 +35,16 @@ function previewToolResult(content: unknown): string {
 export async function executeRun(
   run: Run,
   options: ResolvedRunOptions,
-  opts: { unattended?: boolean; resumeSessionId?: string; maxBudgetUsd?: number } = {},
+  opts: {
+    unattended?: boolean
+    resumeSessionId?: string
+    maxBudgetUsd?: number
+    /**
+     * Images for the opening message. Passed per execution rather than read off
+     * the run, because the run record deliberately holds no bytes — see `Run`.
+     */
+    images?: ModelImage[]
+  } = {},
 ): Promise<void> {
   const entry = getActive(run.id)
   if (!entry) return
@@ -115,10 +125,10 @@ export async function executeRun(
    * this is running can reach it. See `liveSteer` — the cost of the choice is
    * that closing the input is now this function's job, on every ending.
    */
-  const prompt = openSteerChannel(run.id, run.input)
+  const prompt = openSteerChannel(run.id, run.input, opts.images)
 
   /** Accepted mid-turn and never handed over, because the turn ended first. */
-  const undelivered: string[] = []
+  const undelivered: SteerMessage[] = []
 
   /** Where one block of the answer ends and the next begins. */
   const breaks = paragraphBreaks()
@@ -312,8 +322,10 @@ export async function executeRun(
      * queue, which `startTurn` flushes as soon as this run's status settles.
      */
     if (run.sessionId) {
-      for (const text of undelivered) {
-        await queueMessage(run.sessionId, text).catch(() => null)
+      for (const message of undelivered) {
+        // Its images go with it. They were in memory for a turn that never took
+        // them, and the queue is what puts them somewhere that outlives this.
+        await queueMessage(run.sessionId, message.text, message.images).catch(() => null)
       }
     }
 
