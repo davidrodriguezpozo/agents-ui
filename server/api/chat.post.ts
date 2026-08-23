@@ -3,6 +3,8 @@ import { resolveRunOptions, toQueryOptions } from '../utils/runOptions'
 import { createPermissionBroker, newPermissionOwnerId } from '../utils/permissionBroker'
 import { tokenUsageOf } from '../utils/usage'
 import { paragraphBreaks } from '../utils/textBlocks'
+import { chatPrompt } from '../utils/chatPrompt'
+import { sanitiseAttachments } from '~/utils/imageAttachments'
 import type { PermissionMode } from '~/types'
 
 interface ChatMessage {
@@ -12,6 +14,14 @@ interface ChatMessage {
 
 interface ChatRequest {
   messages: ChatMessage[]
+  /**
+   * Images attached to *this* turn, sent alongside the messages rather than
+   * inside them. Only the last user message is handed to the SDK, and the
+   * earlier ones are already in the session being resumed — re-sending a
+   * conversation's worth of screenshots on every turn would be paying to say
+   * the same thing twice.
+   */
+  attachments?: unknown
   sessionId?: string
   agentSlug?: string
   projectDir?: string
@@ -35,6 +45,13 @@ export default defineEventHandler(async (event) => {
   const lastUserMessage = body.messages.filter(m => m.role === 'user').pop()
   if (!lastUserMessage) {
     throw createError({ statusCode: 400, message: 'No user message found' })
+  }
+
+  // An image with nothing typed under it is a whole message, so text is only
+  // required when nothing came with it.
+  const images = sanitiseAttachments(body.attachments)
+  if (!lastUserMessage.content?.trim() && !images.length) {
+    throw createError({ statusCode: 400, message: 'The last message is empty' })
   }
 
   // Shared with the detached runner, so an interactive chat and a scheduled run
@@ -101,7 +118,7 @@ export default defineEventHandler(async (event) => {
     let resultText = ''
 
     for await (const message of query({
-      prompt: lastUserMessage.content,
+      prompt: chatPrompt(lastUserMessage.content ?? '', images),
       options: {
         ...toQueryOptions(options, sessionId),
         canUseTool: broker.canUseTool,

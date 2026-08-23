@@ -1,4 +1,5 @@
-import type { SkillInvocation, ChatMessage, PermissionRequest, StreamActivity, TokenUsage, ToolCallRecord } from '~/types'
+import { withoutImageBytes } from '~/utils/imageAttachments'
+import type { ChatAttachment, SkillInvocation, ChatMessage, PermissionRequest, StreamActivity, TokenUsage, ToolCallRecord } from '~/types'
 
 /** Agent slug the global assistant panel files its conversations under. */
 export const MANAGER_SLUG = '__manager'
@@ -36,7 +37,7 @@ export function useChat() {
         body: {
           id: conversationId.value,
           origin: activeAgent.value ? 'studio' : 'manager',
-          messages: messages.value,
+          messages: messages.value.map(withoutImageBytes),
           toolCalls: toolCalls.value,
           tokenUsage: tokenUsage.value,
           costUsd: costUsd.value,
@@ -49,12 +50,13 @@ export function useChat() {
     }
   }
 
-  function addMessage(role: 'user' | 'assistant', content: string): ChatMessage {
+  function addMessage(role: 'user' | 'assistant', content: string, attachments?: ChatAttachment[]): ChatMessage {
     const msg: ChatMessage = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       role,
       content,
       timestamp: Date.now(),
+      ...(attachments?.length ? { attachments } : {}),
     }
     messages.value.push(msg)
     return msg
@@ -69,12 +71,17 @@ export function useChat() {
 
   const usedTools = ref(false)
 
-  async function sendMessage(content: string) {
-    if (!content.trim() || isStreaming.value) return
+  /**
+   * `attachments` are images the user dropped, pasted or picked in the
+   * composer. An image on its own is a message — "look at this" — so a send
+   * with attachments and nothing typed is allowed.
+   */
+  async function sendMessage(content: string, attachments: ChatAttachment[] = []) {
+    if ((!content.trim() && !attachments.length) || isStreaming.value) return
 
     error.value = null
     usedTools.value = false
-    addMessage('user', content)
+    addMessage('user', content, attachments)
 
     // Parse slash command
     let invoke: SkillInvocation | undefined
@@ -104,9 +111,15 @@ export function useChat() {
       const response = await $fetch<ReadableStream>('/api/chat', {
         method: 'POST',
         body: {
+          // A user message can be nothing but an image, so an empty `content`
+          // is only empty if nothing came with it — filtering on the text alone
+          // dropped the turn the images were attached to.
           messages: messages.value
-            .filter(m => m.content)
+            .filter(m => m.content || m.attachments?.length)
             .map(m => ({ role: m.role, content: m.content })),
+          ...(attachments.length
+            ? { attachments: attachments.map(a => ({ name: a.name, mediaType: a.mediaType, data: a.data })) }
+            : {}),
           sessionId: sessionId.value,
           ...(invoke ? { invoke } : {}),
           ...(activeAgent.value ? { agentSlug: activeAgent.value.slug } : {}),

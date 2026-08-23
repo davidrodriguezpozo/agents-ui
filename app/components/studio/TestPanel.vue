@@ -9,6 +9,7 @@ const props = defineProps<{
 
 const { messages, isStreaming, error, activity, toolCalls, sendMessage, stopStreaming, clearChat, pendingPermissions, isAnsweringPermission, answerPermission } = useStudioChat()
 const { workingDir, displayPath: projectDisplayPath } = useWorkingDir()
+const { attachments, dropZone, dragOver, attach, remove: removeAttachment, clear: clearAttachments, take: takeAttachments, onDragOver, onDragLeave, onDrop } = useChatAttachments()
 
 const input = ref('')
 const inputRef = ref<{ focus: () => void; resetHeight: () => void } | null>(null)
@@ -57,22 +58,42 @@ function isLastAssistantStreaming(idx: number): boolean {
 
 async function handleSend() {
   const text = input.value.trim()
-  if (!text) return
+  if (!text && !attachments.value.length) return
   input.value = ''
+  const images = takeAttachments()
   inputRef.value?.resetHeight()
-  await sendMessage(text, { agentSlug: props.agentSlug, projectDir: workingDir.value || undefined })
+  await sendMessage(text, {
+    agentSlug: props.agentSlug,
+    projectDir: workingDir.value || undefined,
+    attachments: images,
+  })
 }
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
+  <div
+    ref="dropZone"
+    class="relative flex flex-col h-full"
+    @dragover="onDragOver"
+    @dragleave="onDragLeave"
+    @drop="onDrop"
+  >
+    <!-- Dropped anywhere in the panel, not only on the composer: a file dropped
+         on the rest of the page is the browser navigating away from the app. -->
+    <div
+      v-if="dragOver"
+      class="absolute inset-3 z-30 pointer-events-none rounded-xl flex items-center justify-center fs-sm font-medium"
+      style="background: var(--accent-muted); border: 2px dashed var(--accent); color: var(--text-primary);"
+    >
+      Drop an image to attach it
+    </div>
     <div class="shrink-0 px-4 py-2.5 flex items-center justify-between border-b" style="border-color: var(--border-subtle);">
       <div class="flex items-center gap-2">
         <span class="fs-sm font-medium ink">Test</span>
         <span v-if="isDraft" class="fs-micro font-mono px-1.5 py-px rounded-full" style="background: var(--accent-muted); color: var(--accent);">Draft</span>
         <span class="fs-micro font-mono tracking-widest uppercase px-1.5 py-px rounded-full transition-all" :style="{ background: isStreaming ? 'var(--accent-muted)' : 'var(--badge-subtle-bg)', color: isStreaming ? 'var(--accent)' : 'var(--text-disabled)' }">{{ statusText }}</span>
       </div>
-      <button v-if="messages.length" class="p-1 rounded-md hover-bg transition-all ink-4" title="New conversation" @click="clearChat">
+      <button v-if="messages.length" class="p-1 rounded-md hover-bg transition-all ink-4" title="New conversation" @click="() => { clearChat(); clearAttachments() }">
         <UIcon name="i-lucide-rotate-ccw" class="size-3" />
       </button>
     </div>
@@ -104,6 +125,6 @@ async function handleSend() {
       />
     </div>
 
-    <ChatInput ref="inputRef" v-model="input" :placeholder="`Ask ${agentName} something...`" :disabled="isStreaming" :is-streaming="isStreaming" :project-display-path="projectDisplayPath" @send="handleSend" @stop="stopStreaming" />
+    <ChatInput ref="inputRef" v-model="input" :placeholder="`Ask ${agentName} something...`" :disabled="isStreaming" :is-streaming="isStreaming" :project-display-path="projectDisplayPath" :attachments="attachments" @send="handleSend" @stop="stopStreaming" @attach="attach" @remove="removeAttachment" />
   </div>
 </template>

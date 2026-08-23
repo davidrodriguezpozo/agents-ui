@@ -1,4 +1,6 @@
+import { withoutImageBytes } from '~/utils/imageAttachments'
 import type {
+  ChatAttachment,
   ChatMessage,
   ConversationSession,
   PermissionRequest,
@@ -45,8 +47,14 @@ export function useStudioChat() {
   let abortController: AbortController | null = null
   let currentAgentSlug = ''
 
-  function addMessage(role: 'user' | 'assistant', content: string): ChatMessage {
-    const msg: ChatMessage = { id: newId(), role, content, timestamp: Date.now() }
+  function addMessage(role: 'user' | 'assistant', content: string, attachments?: ChatAttachment[]): ChatMessage {
+    const msg: ChatMessage = {
+      id: newId(),
+      role,
+      content,
+      timestamp: Date.now(),
+      ...(attachments?.length ? { attachments } : {}),
+    }
     messages.value.push(msg)
     return msg
   }
@@ -69,7 +77,7 @@ export function useStudioChat() {
         body: {
           id: conversationId.value,
           origin: 'studio',
-          messages: messages.value,
+          messages: messages.value.map(withoutImageBytes),
           toolCalls: toolCalls.value,
           tokenUsage: tokenUsage.value,
           costUsd: costUsd.value,
@@ -88,12 +96,15 @@ export function useStudioChat() {
     agentSlug: string
     systemPromptOverride?: string
     projectDir?: string
+    /** Images attached to this turn. An image on its own is a whole message. */
+    attachments?: ChatAttachment[]
   }) {
-    if (!content.trim() || isStreaming.value) return
+    const attachments = opts.attachments ?? []
+    if ((!content.trim() && !attachments.length) || isStreaming.value) return
 
     currentAgentSlug = opts.agentSlug
     error.value = null
-    addMessage('user', content)
+    addMessage('user', content, attachments)
 
     const assistantMsg = addMessage('assistant', '')
     isStreaming.value = true
@@ -105,9 +116,14 @@ export function useStudioChat() {
       const response = await $fetch<ReadableStream>('/api/chat', {
         method: 'POST',
         body: {
+          // A turn can be nothing but an image, so a message is only empty when
+          // nothing came with it.
           messages: messages.value
-            .filter(m => m.content)
+            .filter(m => m.content || m.attachments?.length)
             .map(m => ({ role: m.role, content: m.content })),
+          ...(attachments.length
+            ? { attachments: attachments.map(a => ({ name: a.name, mediaType: a.mediaType, data: a.data })) }
+            : {}),
           sessionId: sessionId.value,
           agentSlug: opts.agentSlug,
           ...(opts.systemPromptOverride ? { systemPromptOverride: opts.systemPromptOverride } : {}),

@@ -11,6 +11,8 @@ const { fetchAll: fetchCommands } = useCommands()
 const { fetchAll: fetchSkills } = useSkills()
 const { fetchAll: fetchPlugins } = usePlugins()
 
+const { attachments, dropZone, dragOver, attach, remove: removeAttachment, clear: clearAttachments, take: takeAttachments, onDragOver, onDragLeave, onDrop } = useChatAttachments()
+
 const input = ref('')
 const inputRef = ref<{ focus: () => void; resetHeight: () => void } | null>(null)
 const messagesContainer = ref<HTMLElement | null>(null)
@@ -55,10 +57,11 @@ watch(() => messages.value[messages.value.length - 1]?.content, scrollToBottom)
 
 async function handleSend() {
   const text = input.value.trim()
-  if (!text) return
+  if (!text && !attachments.value.length) return
   input.value = ''
+  const images = takeAttachments()
   inputRef.value?.resetHeight()
-  await sendMessage(text)
+  await sendMessage(text, images)
   if (usedTools.value) {
     await Promise.all([fetchAgents(), fetchCommands(), fetchSkills(), fetchPlugins()])
   }
@@ -113,9 +116,25 @@ function handleQuickAction(prompt: string) {
   <Transition name="slide">
     <div
       v-if="open"
+      ref="dropZone"
       class="chat-panel fixed right-0 top-0 bottom-0 z-50 w-full md:w-[640px] flex flex-col overflow-hidden"
       style="background: var(--surface-raised); border-left: 1px solid var(--border-subtle);"
+      @dragover="onDragOver"
+      @dragleave="onDragLeave"
+      @drop="onDrop"
     >
+      <!--
+        Dropped anywhere in the panel, not only on the composer. A file dropped
+        onto the rest of a page is the browser navigating away from the app, and
+        the conversation with it.
+      -->
+      <div
+        v-if="dragOver"
+        class="absolute inset-3 z-[60] pointer-events-none rounded-xl flex items-center justify-center fs-sm font-medium"
+        style="background: var(--accent-muted); border: 2px dashed var(--accent); color: var(--text-primary);"
+      >
+        Drop an image to attach it
+      </div>
       <!-- Edge glow line -->
       <div class="absolute left-0 top-0 bottom-0 w-px" style="background: var(--border-subtle);">
         <div v-if="isStreaming" class="absolute top-0 left-0 w-full chat-edge-pulse" style="background: linear-gradient(180deg, transparent 0%, var(--accent) 50%, transparent 100%); height: 120px;" />
@@ -138,7 +157,7 @@ function handleQuickAction(prompt: string) {
             </div>
             <span class="fs-micro font-mono ink-4">{{ activeAgent ? activeAgent.name : 'Agents Studio' }}</span>
           </div>
-          <button v-if="messages.length" class="p-1.5 rounded-md transition-all hover-bg ink-4" title="New conversation" @click="() => { clearChat(); clearAgent() }">
+          <button v-if="messages.length" class="p-1.5 rounded-md transition-all hover-bg ink-4" title="New conversation" @click="() => { clearChat(); clearAgent(); clearAttachments() }">
             <UIcon name="i-lucide-rotate-ccw" class="size-3.5" />
           </button>
           <button class="p-1.5 rounded-md transition-all hover-bg ink-3" @click="emit('update:open', false)">
@@ -210,8 +229,11 @@ function handleQuickAction(prompt: string) {
         :disabled="isStreaming"
         :is-streaming="isStreaming"
         :project-display-path="projectDisplayPath"
+        :attachments="attachments"
         @send="handleSend"
         @stop="stopStreaming"
+        @attach="attach"
+        @remove="removeAttachment"
       />
     </div>
   </Transition>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ChatMessage, StreamActivity } from '~/types'
 import { renderMarkdown } from '~/utils/markdown'
+import { attachmentSrc } from '~/utils/imageAttachments'
 
 defineProps<{
   message: ChatMessage
@@ -14,10 +15,36 @@ defineProps<{
   <!-- User message -->
   <div v-if="message.role === 'user'" class="flex justify-end chat-msg-enter">
     <div
-      class="max-w-[80%] rounded-xl rounded-br-md px-4 py-2.5 fs-base leading-relaxed"
+      class="max-w-[80%] rounded-xl rounded-br-md px-4 py-2.5 fs-base leading-relaxed space-y-2"
       style="background: var(--accent-muted); border: 1px solid var(--accent-muted); color: var(--text-primary); font-family: var(--font-sans);"
     >
-      {{ message.content }}
+      <!--
+        The images this turn carried. A conversation read back from history has
+        their names but not their bytes — see `ChatAttachment.data` — so it
+        names them instead of showing a broken thumbnail.
+      -->
+      <div v-if="message.attachments?.length" class="flex flex-wrap gap-2">
+        <template v-for="attachment in message.attachments" :key="attachment.id">
+          <img
+            v-if="attachmentSrc(attachment)"
+            :src="attachmentSrc(attachment)!"
+            :alt="attachment.name"
+            :title="attachment.name"
+            class="rounded-lg max-h-40 max-w-full object-contain"
+            style="border: 1px solid var(--border-subtle);"
+          >
+          <span
+            v-else
+            class="inline-flex items-center gap-1.5 rounded-md px-2 py-1 fs-micro font-mono"
+            style="background: var(--badge-subtle-bg); color: var(--text-tertiary);"
+          >
+            <UIcon name="i-lucide-image" class="size-3" />
+            {{ attachment.name }}
+          </span>
+        </template>
+      </div>
+
+      <div v-if="message.content">{{ message.content }}</div>
     </div>
   </div>
 
