@@ -26,6 +26,10 @@
 
 const { data, loading, syncing, error, lastSync, load, sync } = useTeamLedger()
 const { projects, active, ensureLoaded } = useProjects()
+
+const projectOptions = computed(() =>
+  projects.value.map(project => ({ value: project.path, label: project.name })),
+)
 const toast = useToast()
 
 const repoDir = ref<string>('')
@@ -120,17 +124,13 @@ async function syncNow() {
         saying that is more use than offering the press.
       -->
       <div class="flex items-center gap-2 shrink-0">
-        <select
+        <FieldSelect
           v-if="projects.length"
           v-model="repoDir"
-          class="text-xs rounded-md px-2 py-1"
-          style="background: var(--input-bg); color: var(--text-primary);"
+          :options="projectOptions"
+          variant="inline"
           aria-label="Repository to sync the ledger through"
-        >
-          <option v-for="project in projects" :key="project.path" :value="project.path">
-            {{ project.name }}
-          </option>
-        </select>
+        />
         <span v-else class="type-meta">Add a project to sync through</span>
         <UButton
           label="Sync now"

@@ -95,6 +95,11 @@ async function shareSandbox(stop = false) {
 
 /** How much history the audit export covers. A window, and nothing else. */
 const auditDays = ref(7)
+const AUDIT_WINDOWS = [
+  { value: 7, label: 'the last 7 days' },
+  { value: 30, label: 'the last 30 days' },
+  { value: 90, label: 'the last 90 days' },
+]
 
 const rawJson = ref('')
 const saving = ref(false)
@@ -292,6 +297,11 @@ const notifications = ref<Record<NotificationKey, boolean>>({
  */
 type NotificationChannel = 'browser' | 'system' | 'both'
 const notificationChannel = ref<NotificationChannel>('browser')
+const NOTIFICATION_CHANNEL_OPTIONS = [
+  { value: 'browser', label: 'In this browser', hint: 'the default' },
+  { value: 'system', label: 'On the desktop' },
+  { value: 'both', label: 'Both' },
+]
 const {
   permission: notificationPermission,
   support: notificationSupport,
@@ -317,14 +327,35 @@ const notificationsNeedPermission = computed(() =>
 )
 const summariseSessions = ref(true)
 const repairAttempts = ref(0)
+const REPAIR_ATTEMPT_OPTIONS = [
+  { value: 0, label: 'Never' },
+  { value: 1, label: '1 attempt' },
+  { value: 2, label: '2 attempts' },
+  { value: 3, label: '3 attempts' },
+  { value: 5, label: '5 attempts' },
+]
 const maxTurns = ref('')
 const maxConcurrentRuns = ref(3)
+const CONCURRENCY_OPTIONS = [
+  { value: 1, label: 'One at a time' },
+  { value: 2, label: '2 at once' },
+  { value: 3, label: '3 at once' },
+  { value: 5, label: '5 at once' },
+  { value: 0, label: 'No limit' },
+]
 /**
  * How hard runs think. Mirrors the SDK's `effort`, which is the same dial the
  * CLI turns — and which this app never set, so every run took whatever the SDK
  * happened to default to rather than what anyone had chosen.
  */
 const effort = ref<'low' | 'medium' | 'high' | 'xhigh' | 'max'>('high')
+const EFFORT_OPTIONS = [
+  { value: 'low', label: 'Low', hint: 'barely stops to think' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High', hint: 'the default' },
+  { value: 'xhigh', label: 'Higher than high' },
+  { value: 'max', label: 'Maximum' },
+]
 const dailyCap = ref('')
 const runCap = ref('')
 const spentToday = ref(0)
@@ -819,6 +850,10 @@ async function removePlugin(name: string) {
 
 const statusLineType = ref('')
 const statusLineCommand = ref('')
+const STATUS_LINE_OPTIONS = [
+  { value: '', label: 'None' },
+  { value: 'command', label: 'command' },
+]
 
 watch(settings, (val) => {
   if (val?.statusLine) {
@@ -1093,23 +1128,18 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               </div>
             </div>
             <!--
-              Width on a wrapper, not on the control. `.field-select` sets
+              Width on a wrapper, not on the control. `.select-trigger` sets
               `width: 100%`, which beats a `w-32` utility — and with `shrink-0`
               on top, flex could not correct it either, so the select ate the
               row and left the prose in a column one word wide.
             -->
             <div class="w-36 shrink-0">
-              <select
-                class="field-select"
-                :value="String(repairAttempts)"
-                @change="setRepairAttempts(Number(($event.target as HTMLSelectElement).value))"
-              >
-                <option value="0">Never</option>
-                <option value="1">1 attempt</option>
-                <option value="2">2 attempts</option>
-                <option value="3">3 attempts</option>
-                <option value="5">5 attempts</option>
-              </select>
+              <FieldSelect
+                :model-value="repairAttempts"
+                :options="REPAIR_ATTEMPT_OPTIONS"
+                aria-label="How many times it tries to fix its own checks"
+                @update:model-value="value => setRepairAttempts(Number(value))"
+              />
             </div>
           </div>
         </div>
@@ -1340,13 +1370,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
         <div class="field-group">
           <div class="w-56">
-            <select v-model="effort" class="field-select" @change="saveEffort">
-              <option value="low">Low — barely stops to think</option>
-              <option value="medium">Medium</option>
-              <option value="high">High (default)</option>
-              <option value="xhigh">Higher than high</option>
-              <option value="max">Maximum</option>
-            </select>
+            <FieldSelect
+              :model-value="effort"
+              :options="EFFORT_OPTIONS"
+              aria-label="How hard every run thinks"
+              @update:model-value="value => { effort = value as typeof effort; void saveEffort() }"
+            />
           </div>
           <p class="field-hint">
             Applies to everything — sessions, rituals, workflow steps — unless something asked
@@ -1393,13 +1422,11 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         <div class="field-group">
           <label class="field-label">How much runs at once</label>
           <div class="w-48">
-            <select v-model.number="maxConcurrentRuns" class="field-select">
-              <option :value="1">One at a time</option>
-              <option :value="2">2 at once</option>
-              <option :value="3">3 at once</option>
-              <option :value="5">5 at once</option>
-              <option :value="0">No limit</option>
-            </select>
+            <FieldSelect
+              v-model="maxConcurrentRuns"
+              :options="CONCURRENCY_OPTIONS"
+              aria-label="How much runs at once"
+            />
           </div>
           <p class="field-hint">
             Work nobody is watching — rituals, sessions fixing their own checks, workflow
@@ -1873,10 +1900,11 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div class="field-group">
             <label class="field-label">Type</label>
-            <select v-model="statusLineType" class="field-select">
-              <option value="">None</option>
-              <option value="command">command</option>
-            </select>
+            <FieldSelect
+              v-model="statusLineType"
+              :options="STATUS_LINE_OPTIONS"
+              aria-label="Status line type"
+            />
           </div>
           <div class="field-group">
             <label class="field-label">Command</label>
@@ -1906,15 +1934,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
         <div class="field-group">
           <label class="field-label">Where they come from</label>
           <div class="w-72">
-            <select
-              :value="notificationChannel"
-              class="field-select"
-              @change="setNotificationChannel(($event.target as HTMLSelectElement).value as 'browser' | 'system' | 'both')"
-            >
-              <option value="browser">In this browser (default)</option>
-              <option value="system">On the desktop</option>
-              <option value="both">Both</option>
-            </select>
+            <FieldSelect
+              :model-value="notificationChannel"
+              :options="NOTIFICATION_CHANNEL_OPTIONS"
+              aria-label="Where notifications come from"
+              @update:model-value="value => setNotificationChannel(value as NotificationChannel)"
+            />
           </div>
           <p class="field-hint">
             A banner from the browser can bring you back here: clicking it focuses the window you
@@ -2231,16 +2256,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           deliberately left out and why.
         </p>
         <div class="flex items-center gap-2 flex-wrap">
-          <select
+          <FieldSelect
             v-model="auditDays"
-            class="text-xs rounded-md px-2 py-1"
-            style="background: var(--input-bg); color: var(--text-primary);"
+            :options="AUDIT_WINDOWS"
+            variant="inline"
             aria-label="How much history the export covers"
-          >
-            <option :value="7">the last 7 days</option>
-            <option :value="30">the last 30 days</option>
-            <option :value="90">the last 90 days</option>
-          </select>
+          />
           <UButton
             label="Download it"
             icon="i-lucide-download"
@@ -2293,10 +2314,12 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
 
           <div class="field-group">
             <label class="field-label" data-required>When this happens</label>
-            <select v-model="newHookEvent" class="field-select">
-              <option value="" disabled>Select an event...</option>
-              <option v-for="opt in hookEventOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-            </select>
+            <FieldSelect
+              v-model="newHookEvent"
+              :options="hookEventOptions"
+              placeholder="Choose an event"
+              aria-label="When this happens"
+            />
           </div>
 
           <div class="field-group">
