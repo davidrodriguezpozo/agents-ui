@@ -208,7 +208,15 @@ async function onInstall(marketplace: string, plugin: string) {
       <p class="type-body">
         You're set up. Everything your team installed is ready to use.
       </p>
-      <UButton label="See what I can do" icon="i-lucide-arrow-right" size="sm" @click="emit('done')" />
+      <!--
+        Tools are the first half of joining and the easy half. The second is a
+        checkout, the rituals the repository already runs, and a spend cap of your
+        own — and knowing which of those is yours. That path is `/join`.
+      -->
+      <UButton label="Join the team's repository" icon="i-lucide-arrow-right" size="sm" to="/join" />
+      <p class="type-detail">
+        <button class="hover:underline ink-accent" @click="emit('done')">Or just look around first</button>
+      </p>
     </div>
 
     <!--

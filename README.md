@@ -863,6 +863,12 @@ press **Share with the repository** in Settings or on a ritual, the file changes
 working tree, and it reaches anybody else when you commit it — reviewed, in a diff, like
 every other decision about the project.
 
+**Joining a team that already runs this** has its own path: open `/join` — or press
+**Join the team's repository** at the end of first-run setup — and it walks the five steps
+in order, labelling each one *yours* or *the team's*: point it at your own clone, read what
+the repository already decided, turn on the shared rituals you want, set your own spend
+cap, start one session. It ends by saying what will now happen without you, and when.
+
 **Precedence is one rule: your machine, then the repository, then the default.** A shared
 value is a default and never an imposition, so pulling `main` cannot change what your
 machine runs or what it is allowed to reach. Every place a shared value is in force says
