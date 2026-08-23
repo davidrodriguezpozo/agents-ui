@@ -38,6 +38,12 @@ interface Day {
 const days = ref<Day[]>([])
 const summary = ref('')
 const windowDays = ref(14)
+
+const WINDOWS = [
+  { value: 7, label: 'the last week' },
+  { value: 14, label: 'the last fortnight' },
+  { value: 30, label: 'the last month' },
+]
 const loading = ref(true)
 
 /**
@@ -89,17 +95,14 @@ function timeLabel(at: number): string {
   <div>
     <PageHeader title="Shipped">
       <template #right>
-        <select
-          :value="windowDays"
-          class="text-xs rounded-md px-2 py-1"
-          style="background: var(--input-bg); color: var(--text-primary);"
+        <FieldSelect
+          :model-value="windowDays"
+          :options="WINDOWS"
+          variant="inline"
+          align="end"
           aria-label="How far back to show"
-          @change="load(Number(($event.target as HTMLSelectElement).value))"
-        >
-          <option :value="7">the last week</option>
-          <option :value="14">the last fortnight</option>
-          <option :value="30">the last month</option>
-        </select>
+          @update:model-value="value => load(Number(value))"
+        />
       </template>
     </PageHeader>
 

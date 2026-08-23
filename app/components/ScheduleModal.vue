@@ -47,17 +47,37 @@ onMounted(ensureProjectsLoaded)
  * removed since, or seeded from before it existed. Dropping it from the
  * options would silently repoint the ritual the next time anyone saved it.
  */
-const options = computed(() => {
-  const known = projects.value.map(p => ({ path: p.path, name: p.name, missing: !p.exists }))
-  if (projectDir.value && !known.some(o => o.path === projectDir.value)) {
+const projectOptions = computed(() => {
+  const known = projects.value.map(p => ({
+    value: p.path,
+    label: p.name,
+    hint: p.exists ? undefined : 'not on disk',
+  }))
+
+  if (projectDir.value && !known.some(o => o.value === projectDir.value)) {
     known.unshift({
-      path: projectDir.value,
-      name: projectDir.value.split('/').filter(Boolean).pop() ?? projectDir.value,
-      missing: true,
+      value: projectDir.value,
+      label: projectDir.value.split('/').filter(Boolean).pop() ?? projectDir.value,
+      hint: 'not on disk',
     })
   }
-  return known
+
+  return [...known, {
+    value: '',
+    label: 'No project',
+    hint: 'runs against your Claude settings folder',
+  }]
 })
+
+/** Every hour, and the quarters — the granularity a ritual is worth having. */
+const HOURS = Array.from({ length: 24 }, (_, h) => ({ value: h, label: String(h).padStart(2, '0') }))
+const MINUTES = [0, 15, 30, 45].map(m => ({ value: m, label: String(m).padStart(2, '0') }))
+
+const EXPECTS_OPTIONS = [
+  { value: '', label: 'Work it out from what it has landed' },
+  { value: 'code', label: 'Code that gets merged' },
+  { value: 'report', label: 'A report', hint: 'nothing is meant to merge' },
+]
 
 const title = ref(props.schedule?.title ?? props.presetTitle ?? '')
 const input = ref(props.schedule?.input ?? props.presetInput ?? '')
@@ -468,11 +488,11 @@ async function onSave() {
       </div>
 
       <div v-if="firesOn === 'event'" class="space-y-2 pt-2">
-        <select v-model="eventKind" class="field-select w-full">
-          <option v-for="option in EVENT_OPTIONS" :key="option.value" :value="option.value">
-            {{ option.label }}
-          </option>
-        </select>
+        <FieldSelect
+          v-model="eventKind"
+          :options="EVENT_OPTIONS"
+          aria-label="What it waits for"
+        />
         <!--
           A name typed slightly wrong does not fail here, it just never matches
           — so a trigger with a typo in it is indistinguishable from one with
@@ -507,13 +527,13 @@ async function onSave() {
       </div>
 
       <div v-else class="flex items-center gap-2 pt-2">
-        <select v-model.number="hour" class="field-select w-20">
-          <option v-for="h in 24" :key="h - 1" :value="h - 1">{{ String(h - 1).padStart(2, '0') }}</option>
-        </select>
+        <div class="w-24">
+          <FieldSelect v-model="hour" :options="HOURS" aria-label="Hour it runs at" />
+        </div>
         <span class="fs-base text-meta">:</span>
-        <select v-model.number="minute" class="field-select w-20">
-          <option v-for="m in [0, 15, 30, 45]" :key="m" :value="m">{{ String(m).padStart(2, '0') }}</option>
-        </select>
+        <div class="w-24">
+          <FieldSelect v-model="minute" :options="MINUTES" aria-label="Minute it runs at" />
+        </div>
       </div>
       <div v-if="firesOn === 'clock'" class="flex gap-1 pt-2">
         <button
@@ -556,12 +576,11 @@ async function onSave() {
     <!-- Where it will run, pinned now because the scheduler can't ask later -->
     <div class="field-group">
       <label class="field-label">Always runs in</label>
-      <select v-model="projectDir" class="field-select w-full">
-        <option v-for="option in options" :key="option.path" :value="option.path">
-          {{ option.name }}{{ option.missing ? ' — not on disk' : '' }}
-        </option>
-        <option value="">No project — your Claude settings folder</option>
-      </select>
+      <FieldSelect
+        v-model="projectDir"
+        :options="projectOptions"
+        aria-label="Where it runs"
+      />
       <span class="field-hint font-mono">
         {{ projectDir ? display(projectDir) : 'Runs against ~/.claude, with no repository of its own.' }}
       </span>
@@ -610,11 +629,11 @@ async function onSave() {
     -->
     <div class="field-group">
       <label class="field-label">What should come out of it?</label>
-      <select v-model="expects" class="field-select w-full">
-        <option value="">Work it out from what it has landed</option>
-        <option value="code">Code that gets merged</option>
-        <option value="report">A report — nothing is meant to merge</option>
-      </select>
+      <FieldSelect
+        v-model="expects"
+        :options="EXPECTS_OPTIONS"
+        aria-label="What should come out of it"
+      />
       <span class="field-hint">
         Decides what its row says about the money. Left as it is, a ritual that has never
         landed anything is taken to be reporting, so it is never told it landed nothing.

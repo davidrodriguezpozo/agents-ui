@@ -65,6 +65,15 @@ const loading = ref(true)
 const busy = ref<string | null>(null)
 const proposal = ref<Proposal | null>(null)
 const chosen = ref<Record<string, Destination['destination']>>({})
+
+/** A file that does not exist yet says so on its own line, not in brackets. */
+const destinationOptions = computed(() =>
+  destinations.value.map(d => ({
+    value: d.destination,
+    label: d.label,
+    hint: d.creates ? 'a new file' : undefined,
+  })),
+)
 const toast = useToast()
 
 /** What each signal is, in the fewest words that let somebody judge it. */
@@ -198,16 +207,18 @@ async function reject(key: string) {
           </div>
 
           <div v-if="repoDir" class="flex items-center gap-2 shrink-0">
-            <select
-              v-model="chosen[lesson.key]"
-              class="text-xs rounded-md px-2 py-1"
-              style="background: var(--input-bg); color: var(--text-primary);"
+            <!--
+              Shows the first destination while nothing has been picked, because
+              that is the one "Draft a line" would use. A placeholder here would
+              claim the button did not know where to write yet.
+            -->
+            <FieldSelect
+              :model-value="chosen[lesson.key] ?? destinations[0]?.destination"
+              :options="destinationOptions"
+              variant="inline"
               :aria-label="`Where a line about ${lesson.subjects[0] ?? 'this'} would go`"
-            >
-              <option v-for="d in destinations" :key="d.destination" :value="d.destination">
-                {{ d.label }}{{ d.creates ? ' (new file)' : '' }}
-              </option>
-            </select>
+              @update:model-value="value => { chosen[lesson.key] = value as Destination['destination'] }"
+            />
             <UButton
               label="Draft a line"
               size="xs"

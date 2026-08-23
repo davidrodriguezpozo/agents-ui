@@ -42,6 +42,10 @@ interface Result {
 }
 
 const { projects, active, ensureLoaded } = useProjects()
+
+const projectOptions = computed(() =>
+  projects.value.map(project => ({ value: project.path, label: project.name })),
+)
 const toast = useToast()
 
 const connection = ref<Connection | null>(null)
@@ -142,17 +146,13 @@ async function connect() {
     <template v-else>
       <!-- The path: one press, no JSON. -->
       <div class="row">
-        <select
+        <FieldSelect
           v-if="projects.length"
           v-model="repoDir"
-          class="text-xs rounded-md px-2 py-1"
-          style="background: var(--input-bg); color: var(--text-primary);"
+          :options="projectOptions"
+          variant="inline"
           aria-label="Which project to connect"
-        >
-          <option v-for="project in projects" :key="project.path" :value="project.path">
-            {{ project.name }}
-          </option>
-        </select>
+        />
         <span v-else class="type-meta">Add a project first — the file goes in a repository.</span>
         <UButton
           label="Add it to this project"
