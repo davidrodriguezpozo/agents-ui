@@ -18,7 +18,9 @@ leaving: edit the files, run a shell, see the app, and land it.
 <a href="#handing-work-to-it">Hand-off</a> ·
 <a href="#a-tool-server-not-only-a-client">MCP tools</a> ·
 <a href="#what-a-run-may-touch">Sandboxing</a> ·
+<a href="#when-it-is-not-only-you">Team</a> ·
 <a href="#activity">Activity</a> ·
+<a href="#what-it-bought">Cost</a> ·
 <a href="#alongside-claude-code-desktop">vs. Desktop</a> ·
 <a href="CONTRIBUTING.md">Contributing</a>
 
@@ -71,14 +73,19 @@ change one line was the thing breaking that loop.
 
 | Section | What it's for |
 | --- | --- |
+| **Now** | What wants you, in the order it wants you — and the brief every cold run is handed |
+| **Work** | Start something, read what finished, see what it cost — with every workspace on a rail beside it |
+| **Land** | Everything with a diff and a decision still to make: the merge train, pull requests, issues and tickets |
+| **Shipped** | What shipped, by day, in sentences somebody outside engineering can act on |
 | **Daily** | Rituals — work on a schedule, retried when it blips, stopped when it breaks |
-| **Sessions** | Several pieces of work at once, each on its own branch, each verified |
-| **Activity** | Every run there has ever been, with cost, duration and outcome |
-| **Workflows** | Agents chained into a pipeline, run to the end and kept |
-| **Projects** | The repositories you work in — switch between them in a click |
 | **Library** | Agents, commands, skills and MCP servers — everything Claude can reach, with where each came from and which of it actually works |
+| **Workflows** | Agents chained into a pipeline, run to the end and kept |
 | **Plugins** | What is installed and what each one adds |
 | **Explore · Graph** | Find new things to install; see how what you have connects |
+| **Fleet** | Every run on one screen, for a monitor you leave on |
+
+The repositories you work in are not in that list — they are a switch at the bottom of the
+sidebar, because every one of these pages is *about* whichever one you are in.
 
 ---
 
@@ -511,9 +518,10 @@ Four distinctions it is careful about:
   as describing code that no longer exists, rather than quietly believed.
 - **So does the base it was taken against.** Merge one session and every other one is
   suddenly verified against a `main` that no longer exists. Git will catch a textual
-  conflict; it has nothing to say about one session renaming a function another one calls.
-  Sessions show how far behind they are, and offer to bring the base in and re-check in
-  one go.
+  conflict; it has nothing to say about one session renaming a function another one calls,
+  which is what the [collision warning](#land) is for. Sessions show how far behind they
+  are and offer to bring the base in and re-check in one go — and after a merge, [for all
+  of them at once](#then-everything-behind-it).
 - **Checks queue per repository.** Six sessions finishing together would otherwise build
   the same project six times at once, which thrashes the machine and breaks any suite
   that binds a port.
@@ -522,6 +530,24 @@ The command is guessed from your repository — a `check` target in your `Makefi
 `check` or `test` script in `package.json`, `Cargo.toml`, `go.mod`, `pytest` — and is set
 per project in Settings. Telling it your project has no checks is a real answer, and it
 stops asking.
+
+**And it says which failure is merely flaky.** One verdict per session is enough to gate a
+merge and not enough to argue with it. A suite that fails one run in five blocks real work
+and reads on the page as broken code, so you either re-run it on a hunch or override by
+reflex — and a gate people override by reflex has stopped being a gate. Six worktrees a night
+against one repository is an accidental reliability dataset that exists on this machine and
+nowhere else, and it was being thrown away one verdict at a time. Every run that produced a
+verdict is now kept, broken down into the checks that failed, per project — and the merge
+dialog says *flaky* next to a failure it recognises.
+
+What counts as flaky is the strictest definition available, on purpose: **the same check has
+both passed and failed on an identical workspace** — same commit, same uncommitted edits,
+nothing changed in between — so nothing about the code can account for the difference. The
+looser version, "it fails more often than a stable check does", cannot survive this dataset:
+six sessions run the same suite against six different branches, so a check one branch
+genuinely broke looks exactly like a flake when the runs are read in order. Identical
+workspace, two answers, is not an inference. It is a contradiction, and the only thing that
+can produce one is the check itself.
 
 ### Making the workspace runnable first
 
@@ -604,6 +630,36 @@ base without asking GitHub anything. It lived at the top of the Work page, nine 
 pushing the box you start work in below the fold — and it was answering a different
 question from everything around it.
 
+**The order is not the order they finished in.** Every merge moves the base, so every other
+session is behind the moment one lands and its green verdict was earned against a branch
+that no longer exists. Usually for one reason: a session changed a name another session
+uses. Merge the definition first and the caller is re-checked once, against code that is
+finished; merge them the other way round and that re-check runs against a definition about
+to change again — a pass that means nothing, and it will be run twice.
+
+So Ready here is sorted to minimise re-verification, **and the page says why that order**. A
+session whose changed names another one uses goes first; everything the constraint leaves
+free stays cheapest-first, then checks-green, then the smaller diff — which is the previous
+behaviour exactly, and deliberately kept, because dependency edges are rare and an ordering
+that reshuffles a page full of independent sessions for no reason is one nobody trusts. Two
+sessions that use each other's changes have no order that avoids a re-check, so the answer
+is the cheapest-first order and a sentence saying no order would have helped.
+
+**And merging one can break another without git noticing.** Session A renames a function,
+session B adds four call sites to it, the two never touch the same file, git merges both
+without a murmur, and `main` stops compiling. Nothing had anything to say about that — not
+the overlap badge, which needs a shared path, and not the conflict list, which needs a
+shared line. So the merge dialog now names the live sessions still calling a name this merge
+takes away.
+
+It is the one thing here no cloud tool can do: answering it needs every checkout on one
+machine at once, which is exactly what this app has. And it **reports, it does not block** —
+the checks gate, this informs, and a warning that stops you working is a warning you learn
+to click through. It reads only the names that exist before the merge and do not exist
+after, because a name the merge *adds* cannot break a call site, and the looser set lights up
+on any two sessions sharing a helper, which is most of them. False positives are how a
+warning like this stops being read.
+
 **On GitHub** asks the two questions you open that tab for, in the project you are already
 in: *what is waiting on me*, and *where has my own work got to*. Read through `gh`, with
 the sign-in you already have — no token to paste, nothing stored, nothing listening on a
@@ -665,6 +721,31 @@ looking exactly as it had — idle, checks passing, work in flight — so *what 
 night*, the first thing anybody asks, was the one question with no answer anywhere. It is now
 the top line of what came out of a night, in the app and in the message.
 
+### Then everything behind it
+
+A merge is not one event. It is one event and five silent consequences: every other session
+in that repository is behind the moment it lands, and each of their green verdicts was earned
+against a branch that no longer exists. Bringing the base into one of them was always a
+button on that session's own page — so the work was there, and you had to remember to do it
+five times, on five pages, in the right order.
+
+Now the offer appears once the merge has succeeded, and says how many sessions it would
+touch. The restraint in it is the point:
+
+- **It is offered, never automatic.** A merge is a thing you pressed. A rebase of five other
+  workspaces is not implied by it.
+- **Every precondition is checked before anything is written**, and a session that fails one
+  is skipped with a sentence rather than half-attempted. A session mid-turn is the one that
+  matters most: two agents in one worktree is the exact problem sessions exist to prevent.
+- **A branch another checkout holds is never touched** — not the session's own worktree,
+  which is where it lives, but any other path holding the same branch, which is what happens
+  when somebody runs `gh pr checkout` in the main repository. Writing to it would move a
+  branch under a person's feet.
+- **A conflict becomes a turn, not a failure.** It is left in the workspace where the session
+  can see both sides, and that session is asked to resolve it with the files and the base
+  named. This is the one place an agent is unambiguously the right tool: a small,
+  well-specified, verifiable task, in a worktree that already exists.
+
 ---
 
 ## Handing work to it
@@ -700,6 +781,26 @@ standing brief draws — counts from outside cross it, prose does not.
 
 So the expectation to give the person who filed it is *this gets looked at today, and a
 person decides what happens to it*. Not that it is being handled.
+
+### When the work does not arrive as an issue
+
+For plenty of teams GitHub is not where work turns up — the tickets live in Notion, and a
+band that only reads issues misses the beginning of most pieces of work. So **Notion tickets
+carrying a status you nominate appear in the same band**, saying which source they came from,
+and become a session the same way.
+
+It is not a new integration. The Now queue has reached Notion since it learned to ask [what
+is waiting elsewhere](#what-a-run-knows-before-it-starts), through the MCP server this
+machine already has configured, with a deny-list that stops the run touching the machine it
+runs on. This borrows all of it: the same server, the same allowed tools, the same denied
+ones, the same pre-flight. No API key, no OAuth flow of its own, and **nothing is ever
+written back** — the one comment described below is a GitHub-only affordance.
+
+What is different is that tickets are *stored* rather than polled, and here that is not
+optional. The Land band re-reads itself every two minutes in a tab left open all day; asking
+Notion on that timer would be a job rather than a request, since a real refresh takes tens of
+seconds and costs cents. So a run produces the tickets and writes them down, the band reads
+what was written — instantly and for nothing — and the button on the band goes and looks now.
 
 ### What it will not do to your issue
 
@@ -746,6 +847,35 @@ One line it does not carry: the titles of what is waiting in Slack or Notion. Th
 written by anyone with access to a channel you are in, and this text goes into the system
 prompt of a run that can edit files and execute commands. Counts cross that line; prose from
 outside does not.
+
+### Rules that learn, as a diff
+
+Three signals were being thrown away one record at a time. A landing that was reverted an
+hour later. A check that went red across every session in a repository right after a merge. A
+tool or a host refused in run after run. Each is a fact about how work here actually fails,
+and none of them was ever looked at twice.
+
+They are collected into one list of candidate lessons — and collection is where it stops. No
+prose and no model: every field is an id, a count, a name or a timestamp, because a sentence
+written by a model about why your merge was reverted is a sentence nobody can check, and the
+whole value of the list is that every row traces back to the records it came from. Lessons
+are deduplicated on the thing they are *about* — a repository, a check, a tool — so the same
+one surfacing every week is one row with a count of five rather than five rows. And they age
+out: a tool refused ten times in March and never since is not a lesson, it is history.
+
+Then a candidate can be turned into **one proposed line** — for `CLAUDE.md`, for a project
+rule, or for the half of the standing brief you write — shown as a diff and written only when
+you accept it. What the cloud tools sell as memory that improves silently, this does as a
+line in a file and a diff you can decline.
+
+The compounding is real and comes from where the line lands: `CLAUDE.md` is in the
+repository, so one person accepting a rule improves everybody's agents on the next pull.
+Which only works if it is auditable — which means a file and a diff rather than a store
+nobody can read. Two rules make that safe. **The model only ever sees the structured
+candidate** — the ids, counts and timestamps above, never a transcript, a session title or a
+commit message, so nothing from outside this machine can influence the rule it proposes. And
+**a rejection is recorded**, so next week's list does not open with the suggestion you have
+already considered and declined.
 
 ---
 
@@ -907,31 +1037,211 @@ the file's name.
 
 ---
 
+## When it is not only you
+
+Everything above works on one laptop and most of it was built for one. The moment a second
+person has this open, a set of questions appears that no record here could answer — not for
+want of records, but because every one of them was written by "the machine".
+
+Five things close that, and they are deliberately five small ones rather than a server.
+
+**A name on everything.** A merge commit already records that somebody went ahead over a
+failing check. It did not record *who*, and neither did a run, a turn or a landing. Identity
+here is git's and only git's — `user.name` and `user.email` as the repository resolves them,
+which is already the name on every commit this app makes. No accounts, no login, no store of
+people: all three would be a second source of truth about a fact git keeps anyway, and git's
+is the one that ends up in the history regardless.
+
+Nothing is inferred. Asking git for a committer identity would *always* answer, because git
+invents a name from your system login and your hostname when the config is empty — and that
+invented name is a person who never agreed to be one, filed against merges they did not
+take. So the two settings are read directly, a repository with neither gives no answer at
+all, and every reader turns that into **unattributed**. Records written before any of this
+carry no
+name and read the same way, for the same reason: unattributed is a real answer, and the
+honest one about a record that never held a name.
+
+**One ledger out of several.** A team of three has three ledgers, each honest and none of
+them the total. The obvious fix is a server with everybody's data in it, which is the thing
+this app is built not to be. So: one file per instance, append-only, one line per outcome,
+and git as the transport — pushed to a branch nobody reviews and read back by anyone.
+
+That choice settles the awkward cases before they happen. Two machines never write the same
+file, so a merge is a concatenation and there is nothing to resolve. An instance offline for
+a week is not a failure state — it appends locally and pushes when it can. Nothing is
+central, so nothing has to be running for a colleague's numbers to be readable, and there is
+no account, no schema migration and no server to outlive the team. A line is never rewritten,
+which is what keeps that concatenation from becoming a conflict, and every line carries the
+format version it was written with, because a colleague who updates first will push lines
+your copy has never seen.
+
+The lines carry ids, numbers, routes and timestamps, and **no prose** — not as a style rule.
+These lines are written by one machine, pushed to a branch, and read into a page on somebody
+else's, so a session title would be text a colleague wrote arriving in your browser. The
+serialiser takes named fields and nothing else, so a title cannot reach a line by being added
+to a record upstream. The Ledger tab reads it for team totals alongside your own.
+
+**One message a day about what the team shipped.** The [morning report](#the-morning-message)
+is the model, and its four carefulnesses are copied wholesale: nothing on a quiet day,
+nothing scheduled until a send has worked by hand, the destination resolved to an id once,
+and a window covering everything since the last message rather than a calendar day. A team
+channel needs all four harder than a DM does — a daily "all quiet" is how a channel gets
+muted, and a muted channel loses the feature entirely.
+
+It reads the shared ledger, not this machine, because that is the only honest source for a
+message about "the team": a digest assembled from one laptop would report one laptop's day
+under a plural pronoun. And a machine that has gone quiet for two days is **named, not
+averaged over** — silence from somebody's laptop is the most useful line in the message on
+the day it appears, and the easiest thing to hide behind a total by accident.
+
+What it deliberately cannot say yet: the ledger carries outcomes, not attention, so "blocked,
+and on whom" has no lines to read. An absent band beats a band assembled from this machine's
+own state and labelled as the team's.
+
+**A board you can turn the laptop around for.** Every other view here is for the person
+running the work: branch names, commit counts, check fingerprints, cost per merge. All of it
+correct, none of it showable to the person who asked for the feature. The desktop tools have
+the same gap and cannot close it, because a branch is what they know about. What this has
+that they do not is a sentence per session, written when the work finished — and **Shipped**
+is what those sentences were for.
+
+- **No jargon in the default view, structurally.** Not hidden behind a toggle: a row does not
+  *carry* a branch, a commit, a fingerprint or a token count, so no later template change can
+  leak one onto the page. What is technical is one press away, on the session itself.
+- **A day with nothing says so.** Grouped by whole local days with the empty ones present,
+  because "nothing shipped on Tuesday" is a fact somebody is entitled to read, and a list
+  that silently skips days reads as a list still loading.
+- **Green or not, on every row.** A board that only says what shipped is a board that
+  flatters. Whether the checks passed when it went in — and whether somebody merged it anyway
+  — is the one technical fact a non-engineer genuinely needs.
+- **Read-only by construction.** Nothing on it returns an id anything can act on. The session
+  id is carried so a *link* can exist, and the page it links to is the one with the buttons.
+
+**And the record, as one file.** Every governance conversation about agents assumes a vendor
+console: a company asks who ran what, and the answer is a dashboard somebody else hosts. A
+team running this has the opposite problem and the better position — nothing ever left the
+building, and *therefore* there is no console. The **audit export** in Settings turns that
+from the weak half of the conversation into the argument, by making the record a file: a
+window's worth of every run, what it cost, what it touched, what the sandbox allowed and
+refused, and every merge that went in with the checks red and who took it.
+
+- **JSON Lines, not something clever.** One object per line, greppable with the tools an
+  auditor already has. A format that needs a parser is a format somebody has to trust.
+- **A header line saying what is *not* in the file, and why.** Silent redaction is the
+  failure that makes a record worthless: a reader who finds one omission stops believing the
+  rest. So the exclusions are declared, in the file, with a reason each.
+- **Transcripts are referenced, never embedded.** One file containing every conversation is a
+  liability nobody asked for, and it is the file that would leak. The export says where they
+  are on this disk instead.
+- **Absent is null, and never zero.** A run with no cost recorded is not a free run, and a
+  run from before identity existed has nobody rather than an unknown somebody. Reporting
+  either as a number is how a record becomes a lie.
+
+---
+
 ## Activity
 
-The **History** tab of Work: every run there has ever been — scheduled work, agent
-invocations and session turns — with what it cost, how long it took and how it ended,
-under a chart of the night that shows *when* rather than merely what. Runs keep going if
-you close the tab; the log replays for whoever attaches next.
+Work is three tabs and a rail, and the rail is the part that decides what the tabs are for.
 
-It is a tab rather than a page because the other half — **In flight** — is the same list
-asking the opposite question. A session you might still interrupt and a ritual that failed
-on Tuesday are both work, but nobody looks for both at once, and in one list the finished
-rows win on volume: forty of them, and the two you could act on at the bottom.
+**The rail** runs down the left of every page in this half of the app, and it holds the work
+that is not finished with — every live session and workspace, sorted by how much it wants
+you, still there when you click into one. That used to be a tab called **In flight**, which
+was the wrong shape for it twice over: a list you have to navigate *to* in order to see what
+is happening is a list you check on a schedule, and a session you are reading is exactly
+when you most want the other five visible.
 
-In flight does not mean "something is running". A session that answered your question,
-committed nothing and opened no pull request has stopped, and is the most in-flight it will
-ever be — the next thing due to happen is you typing. So the cut between the two tabs is
-whether the work is *finished with*, and there are only three ways for a session to get
-there: its commits land in the base branch, you set it aside from the session's own menu,
-or it produced nothing at all and a week went by. Work sitting unmerged in a workspace
-never ages out on its own, and sending a session an instruction pulls it back out of
-History.
+So what is left in the tabs are three jobs, none of which is "what is happening":
 
-Filter by what started it and how it ended, and search what a run *said* rather than only
-what it was called. Searching covers the whole log, not the page of it on screen.
+**Start** is where work begins — the composer, the other two ways in, and the workspaces
+already cut.
+
+**History** is every run there has ever been — scheduled work, agent invocations and session
+turns — with what it cost, how long it took and how it ended, under a chart of the night
+that shows *when* rather than merely what. Filter by what started it and how it ended, and
+search what a run *said* rather than only what it was called; searching covers the whole
+log, not the page of it on screen. Runs keep going if you close the tab; the log replays for
+whoever attaches next.
+
+**Ledger** is that same history with the money against it, and it has its own section
+[below](#what-it-bought). It is a tab here rather than a page of its own precisely so its
+headline can be checked against the rows one tab away.
+
+Moving the live rows to the rail did not move the line they were on. Being in the rail rather
+than in History still means the work is not *finished with* — and there are still only three
+ways for a session to get there: its commits land in the base branch, you set it aside from
+the session's own menu, or it produced nothing at all and a week went by. A session that
+answered your question, committed nothing and opened no pull request has stopped, and is the
+most unfinished it will ever be: the next thing due to happen is you typing. Work sitting
+unmerged in a workspace never ages out on its own, and sending a session an instruction
+pulls it back out of History.
 
 ![Run history with cost, duration and outcome](docs/screenshots/09-activity.jpg)
+
+---
+
+### What it bought
+
+Three records here each held a third of an answer and none of them could reach the other
+two. What everything cost. What went into a base branch, and by which of three routes.
+Whether the code held up. So the question anybody actually has after a night of unattended
+work — *was that a good trade* — was unanswerable, not for want of records but for want of
+a join.
+
+The **Ledger** tab is that join: what the work that actually shipped cost, broken down by
+ritual, agent, model and repository, for a window you choose — against the same number for
+the window before it, because "seven days cost this much per merge" is not a fact anybody
+can act on until it sits next to the seven before.
+
+It is worth being blunt about which numbers are exact, since a ledger that overclaims is
+worse than no ledger:
+
+- **Turn counts and landing counts are exact.** They are counted records.
+- **Dollar figures are as exact as the SDK's own.** On an API key they are real charges. On
+  a subscription nothing is billed per turn, so the same number is what the work *would*
+  have cost at list price — a sense of scale, not an invoice.
+- **Cost per landing is indicative, and generously so.** A session's cost includes the turns
+  that were you changing your mind, a wrong guess, or a conversation about something else.
+  Nothing separates work from rework, so the figure is an upper bound on the work and a
+  lower bound on the waste.
+- **A merge somebody else did is counted, and kept separate.** The work was accepted either
+  way; this machine did not do it and should not take the credit.
+- **A change is only reported when both windows have a merge.** Zero merges is not an
+  improvement on one, and a percentage off a denominator of nothing is the kind of number
+  that gets a page distrusted for good.
+
+The window is a count of whole local days, and the window it compares against is the same
+count — not "this calendar week", which on a Tuesday compares two days against seven and
+reports a triumph. The current one runs short by whatever is left of today, which is why
+what it compares is a *ratio*: cost per landing survives a window cut off partway, where a
+total would not. The page says it includes today.
+
+**And "it merged" is no longer the last thing this app knows.** A merge reverted an hour
+later used to read forever as a merge that held, which made the one number you would judge
+unattended work on the flattering one. A revert of a commit this machine landed is now
+recorded against the session, the agent and the model — a signal that costs no model call
+and no network, since it is a commit sitting on a branch already on this disk, and one only
+*this* machine can see, because nobody else recorded that this machine made that merge.
+
+It records and does nothing about it. That restraint is the design: a revert is frequently
+the right thing to have happened — a release being cut, a flag pulled, somebody sequencing
+two changes differently — and an app that treated it as a failure to repair would be
+arguing with the person who reverted. The wording everywhere is what happened, not whose
+fault it was.
+
+### Does this ritual earn its keep
+
+Rituals get the same treatment on the **Daily** page, because "stopped working" and "still
+working, still costing, producing nothing anybody uses" are different sentences and only one
+of them ever gets acted on. Each row carries what it has cost and what it has produced over
+its recent runs, and one that has spent real money and landed nothing says so in words.
+
+Two things make that harder than spend divided by merges, and both are handled rather than
+ignored. **Not every ritual is meant to land code** — a morning briefing's output is a
+message, and judged on merges it would score nothing every week of its life while being the
+most useful thing on the page; so what a ritual is *for* is a property of the ritual, set on
+the record when somebody knows and otherwise read off whether it has ever landed anything.
+And **two runs are not evidence**: under three firings there is nothing to conclude, and a
+verdict there is a guess wearing a number.
 
 ---
 
