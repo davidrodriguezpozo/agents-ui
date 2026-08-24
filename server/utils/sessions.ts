@@ -93,6 +93,22 @@ export interface Session {
    */
   provider?: ProviderId
   /**
+   * That this session is one of several started together on one instruction,
+   * one per agent, to see which of them does it best.
+   *
+   * Shared by every entrant and by nothing else, so it is both the grouping and
+   * the answer to "why are there three of these". Absent on every ordinary
+   * session, which is nearly all of them.
+   *
+   * The entrants are otherwise completely independent — their own worktree,
+   * branch, turns, checks and record — and that is the design rather than a
+   * shortcut. A race is a way of *starting* work and a way of *reading* it; it
+   * is deliberately not a thing that runs, because every mechanism it would need
+   * already exists per session and a second one that coordinated them would be a
+   * second place for a session to get stuck.
+   */
+  raceId?: string
+  /**
    * Continuity across turns. Set from the first run's init message.
    *
    * "The id this provider resumes with" — a Claude Code `session_id`, or a

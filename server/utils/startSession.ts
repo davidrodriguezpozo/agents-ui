@@ -49,6 +49,8 @@ export async function startSession(options: {
    * Code, which is what every session before this used.
    */
   provider?: ProviderId
+  /** Set when this session is one entrant in a race. See `Session.raceId`. */
+  raceId?: string
   /**
    * The branch to cut, when the caller has a better name than the title gives.
    *
@@ -134,6 +136,8 @@ export async function startSession(options: {
     trust: options.trust,
     // Absent means Claude Code. See `providerFor`.
     provider: options.provider,
+    // Absent on every session that is not one entrant of several.
+    raceId: options.raceId,
     issueOf: options.issueOf,
     ticketOf: options.ticketOf,
     sdkSessionId: options.sdkSessionId,

@@ -19,7 +19,7 @@ import {
  */
 definePageMeta({ layout: 'work' })
 
-const { needsYouCount, create, createMany, startFrom, fetchAll } = useSessions()
+const { needsYouCount, create, createMany, race, startFrom, fetchAll } = useSessions()
 const { fetchAll: fetchWorktrees } = useWorktrees()
 const { fetchRuns, hideRuns } = useRuns()
 const { transcripts, fetchAll: fetchTranscripts, adopt } = useTranscripts()
@@ -161,6 +161,24 @@ onMounted(() => void fetchProviders())
 
 /** What the picked agent cannot do, said before the worktree is cut. */
 const agentShortfalls = computed(() => startProvider.value ? shortfalls(startProvider.value) : [])
+
+/**
+ * Race the agents rather than picking one: one instruction, one session per
+ * agent, and whichever passes `make check` is the one worth landing.
+ *
+ * Not remembered, unlike the trust level. Racing costs a session per agent for
+ * one piece of work, and a setting that quietly stayed on would turn every
+ * instruction typed afterwards into N of them. It is a decision per piece of
+ * work, so it is asked per piece of work.
+ */
+const racing = ref(false)
+
+/** Turning it on makes the single-agent choice meaningless, so it goes. */
+watch(racing, (on) => {
+  if (on) startProvider.value = null
+})
+
+const racingAgents = computed(() => agents.value.map(a => a.label).join(' vs '))
 
 const batchMode = ref(false)
 /**
@@ -339,6 +357,26 @@ async function onCreate() {
 
   creating.value = true
   try {
+    if (racing.value) {
+      const result = await race(value, undefined, startTrust.value, attachments.value)
+      prompt.value = ''
+      clearAttachments()
+      await fetchWorktrees()
+
+      toast.add({
+        title: `${result.started.length} agents on it`,
+        description: result.failed.length
+          ? `${result.failed.length} could not start — the rest are working.`
+          : 'Each in its own workspace. Whichever passes the checks is the one to land.',
+        color: result.failed.length ? 'warning' : 'success',
+      })
+
+      // Into the first one, which is where its own race band lists the others.
+      const first = result.started[0]
+      if (first) await router.push(`/sessions/${first.id}`)
+      return
+    }
+
     const session = await create(value, undefined, startTrust.value, attachments.value, startProvider.value)
     prompt.value = ''
     clearAttachments()
@@ -1028,7 +1066,7 @@ async function closeEmpty(key: string, ids: string[]) {
             be. `Default` leaves it to whatever this repository was set to in
             Settings, so the common case is one fewer decision.
           -->
-          <div v-if="canChooseAgent" class="pill-picker">
+          <div v-if="canChooseAgent && !racing" class="pill-picker">
             <button
               type="button"
               class="pill-picker__option"
@@ -1049,7 +1087,41 @@ async function closeEmpty(key: string, ids: string[]) {
               {{ agent.label }}
             </button>
           </div>
+
+          <!--
+            The other thing you can do with more than one agent: stop choosing.
+            Offered beside the picker rather than as a mode of its own, because it
+            is an answer to the same question — which agent should do this — and
+            "all of them, and I will keep whichever passes" is a legitimate one.
+          -->
+          <label
+            v-if="canChooseAgent && !batchMode"
+            class="flex items-center gap-2 cursor-pointer type-detail"
+            :title="`Starts one session per agent on the same instruction: ${racingAgents}`"
+          >
+            <input v-model="racing" type="checkbox" class="shrink-0">
+            <span :style="racing ? { color: 'var(--accent)' } : undefined">Race the agents</span>
+          </label>
         </div>
+
+        <!--
+          Said before the button, because it is the cost of pressing it: a race is
+          a session per agent for one piece of work. Worth it against an afternoon
+          spent on a diff that was never going to pass, and not worth it by
+          accident — which is why the checkbox above is not remembered.
+        -->
+        <p
+          v-if="racing"
+          class="type-detail flex items-start gap-1.5"
+          style="color: var(--accent);"
+        >
+          <UIcon name="i-lucide-flag" class="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            {{ agents.length }} workspaces, one per agent — {{ racingAgents }}. Each runs the
+            same instruction and its own <code>make check</code>; whichever passes is the one
+            worth landing. It costs {{ agents.length }}× the tokens of one session.
+          </span>
+        </p>
 
         <!--
           What the chosen agent cannot do, before the worktree is cut rather than

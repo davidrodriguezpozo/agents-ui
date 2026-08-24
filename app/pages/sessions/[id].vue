@@ -26,7 +26,7 @@ const {
   fetchOne, send, steer, sendQueued, dropQueued, fetchTranscript, setTrust, fetchDiff,
   fetchNotes, addNote, dropNotes,
   previewPullRequest, openPullRequest, watchPullRequest, previewMerge, merge, runCheck, repair,
-  updateFromBase, close, setAside,
+  updateFromBase, close, setAside, sessions: allSessions,
 } = useSessions()
 const { live, attach, cancelRun, promptsFor, isAnsweringPermission, answerPermission } = useRuns()
 /**
@@ -1261,6 +1261,22 @@ const palette = ref<{ move: (d: number) => void; choose: () => void; hasMatches:
 const hasLibrary = computed(() => !session.value?.provider || session.value.provider === 'claude')
 
 /**
+ * The other agents on this same instruction, when this session is one of several.
+ *
+ * Read off the sessions list the work layout is already polling rather than
+ * fetched again — the entrants are ordinary sessions, so their verdicts arrive
+ * with everything else's, and a second request would be a slower copy of a list
+ * already on screen beside this page.
+ *
+ * Null on every ordinary session, which is nearly all of them.
+ */
+const race = computed(() => {
+  const mine = session.value
+  if (!mine?.raceId) return null
+  return raceFor(allSessions.value, mine)
+})
+
+/**
  * Whether a correction can reach the turn that is running.
  *
  * Read from the same capability the server refuses on, so the button and the
@@ -1577,6 +1593,51 @@ const totalChanges = computed(() => {
                 class="size-4 shrink-0 mt-0.5"
               />
               <span>{{ session.prWatch.reason }}</span>
+            </div>
+
+            <!--
+              One of several agents on the same instruction. Shown here rather
+              than only in the list because this is the page you land on from a
+              race, and "why is there another session with almost this name" is
+              the first question it raises. Each entrant links to its own page:
+              reading the diffs is how a race is actually decided, and nothing
+              here pretends to decide it — see `~/utils/race`.
+            -->
+            <div
+              v-if="race"
+              class="rounded-md px-4 py-3 space-y-2"
+              style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+            >
+              <div class="flex items-start gap-2">
+                <UIcon name="i-lucide-flag" class="size-3.5 shrink-0 mt-0.5 ink-4" />
+                <span class="type-detail ink-2">
+                  {{ race.entrants.length }} agents were given this instruction.
+                  {{ raceSummary(race) }}
+                </span>
+              </div>
+
+              <div class="space-y-1 pl-6">
+                <component
+                  :is="entrant.session.id === id ? 'div' : 'NuxtLink'"
+                  v-for="entrant in race.entrants"
+                  :key="entrant.session.id"
+                  :to="entrant.session.id === id ? undefined : `/sessions/${entrant.session.id}`"
+                  class="flex items-center gap-2 type-detail"
+                  :class="entrant.session.id === id ? 'ink-2' : 'focus-ring rounded ink-3 hover:underline'"
+                >
+                  <UIcon
+                    :name="providerLook(entrant.provider).icon"
+                    class="size-3 shrink-0"
+                  />
+                  <span :class="entrant.session.id === id ? 'type-strong' : ''">
+                    {{ providerLabel(entrant.provider) }}
+                  </span>
+                  <span :style="{ color: standingColour(entrant.standing) }">
+                    {{ standingLabel(entrant) }}
+                  </span>
+                  <span v-if="entrant.session.id === id" class="ink-4">— this one</span>
+                </component>
+              </div>
             </div>
 
             <!-- Where this session is working, stated plainly -->

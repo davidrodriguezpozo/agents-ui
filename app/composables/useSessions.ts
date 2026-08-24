@@ -128,6 +128,11 @@ export interface Session {
    * which is every session started before there was a choice.
    */
   provider?: string
+  /**
+   * Set when this session is one of several started together on one instruction,
+   * one per agent. Shared by every entrant — see `~/utils/race`.
+   */
+  raceId?: string
   runIds: string[]
   createdAt: number
   updatedAt: number
@@ -407,6 +412,14 @@ export interface BatchResult {
   failed: { prompt: string; reason: string }[]
 }
 
+export interface RaceResult {
+  raceId: string
+  /** One per agent that got a workspace, whether or not its first turn went. */
+  started: StartedSession[]
+  /** Never made it as far as a workspace, and which agent it was for. */
+  failed: { provider: string; reason: string }[]
+}
+
 export interface DiffFile {
   path: string
   added: number
@@ -450,6 +463,31 @@ export function useSessions() {
     })
     await fetchAll()
     return session
+  }
+
+  /**
+   * One instruction, one session per agent, all at once — and then whichever one
+   * passed is the one that lands.
+   *
+   * The other axis of `createMany`: that one is N instructions on one agent, this
+   * is one instruction on N agents. Costs N times the tokens for one piece of
+   * work, which is the trade being made on purpose and which the page says out
+   * loud before the button is pressed.
+   */
+  async function race(
+    prompt: string,
+    providers?: string[],
+    trust?: TrustLevel,
+    attachments: ChatAttachment[] = [],
+  ) {
+    const result = await $fetch<RaceResult>('/api/sessions/race', {
+      method: 'POST',
+      // Every entrant gets the same images: they are being asked the same
+      // question, and one that could not see the screenshot is not a comparison.
+      body: { prompt, providers, trust, attachments },
+    })
+    await fetchAll()
+    return result
   }
 
   /** One session per instruction, each on its own branch, all working at once. */
@@ -768,6 +806,7 @@ export function useSessions() {
     fetchAll,
     create,
     createMany,
+    race,
     startFrom,
     fetchOne,
     send,
