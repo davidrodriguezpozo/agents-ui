@@ -2,16 +2,24 @@ import { describe, it, expect } from 'vitest'
 import {
   buildWorkList, railCount, railGroups, RAIL_GROUPS, TAB_STATUSES,
 } from '~/utils/workList'
+import { closableFromRail, closeIntent } from '~/utils/sessionClose'
 import type { Session } from '~/composables/useSessions'
 import type { RunSummary } from '~/composables/useRuns'
 
 /**
- * The rail's grouping.
+ * The rail: its grouping, and the one control it carries.
  *
- * The one thing worth guarding here is coverage: the rail is the only place
- * in-flight work is listed now, so a status it has no group for is a session that
- * silently never appears anywhere. That is a worse failure than a mis-sorted
- * heading, and it is the kind that ships — nothing on screen looks broken.
+ * Two failures worth guarding, both of the kind that ships because nothing on
+ * screen looks broken.
+ *
+ * **Coverage.** The rail is the only place in-flight work is listed, so a status
+ * it has no group for is a session that silently never appears anywhere — worse
+ * than a mis-sorted heading.
+ *
+ * **What Close destroys.** `deleteBranch` on the server runs `git branch -D`, so
+ * offering Close on a session whose commits are not in the base would throw them
+ * away from a sidebar. `closeIntent` lives in `~/utils/sessionClose` and is
+ * tested here, beside the grouping it depends on and the fixture they share.
  */
 
 function session(over: Partial<Session> = {}): Session {
@@ -164,5 +172,109 @@ describe('the count beside the heading', () => {
 
     const total = railGroups(items).reduce((n, group) => n + group.items.length, 0)
     expect(total).toBe(railCount(items))
+  })
+})
+
+/**
+ * Closing a session from the rail.
+ *
+ * The whole risk here is one line in the server: `deleteBranch` runs
+ * `git branch -D`, a force delete. That is correct for work that has landed and
+ * is destruction for work that has not — so the only failure worth guarding
+ * against is a row offering a close that quietly throws away commits.
+ */
+describe('which rows can be closed from the rail', () => {
+  it('offers it on a merged session, which is the only thing left to do with one', () => {
+    const [item] = buildWorkList({ sessions: [session({ landed: true })], runs: [] })
+    expect(closableFromRail(item!)).toBe(true)
+  })
+
+  /** The point of the change: this is where sessions nobody wants collect. */
+  it('offers it on "Your turn", where the tidying-up piles up', () => {
+    const [item] = buildWorkList({ sessions: [session({ worktree: changed })], runs: [] })
+    expect(item!.status).toBe('yours')
+    expect(closableFromRail(item!)).toBe(true)
+  })
+
+  it('does not offer it while a turn is still going', () => {
+    const [item] = buildWorkList({ sessions: [session({ activity: 'working' })], runs: [] })
+    expect(item!.status).toBe('running')
+    expect(closableFromRail(item!)).toBe(false)
+  })
+
+  it('does not offer it on a session waiting for a permission answer', () => {
+    const [item] = buildWorkList({ sessions: [session({ activity: 'awaiting-permission' })], runs: [] })
+    expect(item!.status).toBe('needs-you')
+    expect(closableFromRail(item!)).toBe(false)
+  })
+
+  /** A run has no workspace to remove, so there is nothing for this to mean. */
+  it('never offers it on a run', () => {
+    const [item] = buildWorkList({ sessions: [], runs: [run({ status: 'completed' })] })
+    expect(closableFromRail(item!)).toBe(false)
+  })
+})
+
+describe('what closing a row will actually do', () => {
+  it('deletes the branch of a merged session, because the commits are in the base', () => {
+    const merged = session({ landed: true })
+    const [item] = buildWorkList({ sessions: [merged], runs: [] })
+    const intent = closeIntent(item!, merged)
+
+    expect(intent.keepBranch).toBe(false)
+    expect(intent.hint).toContain('deletes the branch')
+    expect(intent.hint).toContain('The commits are in main')
+  })
+
+  /**
+   * The one that matters. `git branch -D` on this would destroy the commit, from
+   * a sidebar, behind a button labelled "Close".
+   */
+  it('keeps the branch when there are commits the base does not have', () => {
+    const unlanded = session({ worktree: changed })
+    const [item] = buildWorkList({ sessions: [unlanded], runs: [] })
+    const intent = closeIntent(item!, unlanded)
+
+    expect(intent.keepBranch).toBe(true)
+    expect(intent.hint).toContain('keeps the branch')
+    expect(intent.hint).toContain('Nothing committed is lost')
+  })
+
+  it('counts those commits in words a person can check against git', () => {
+    const one = session({ worktree: { ...changed, ahead: 1 } })
+    const three = session({ worktree: { ...changed, ahead: 3 } })
+
+    expect(closeIntent(buildWorkList({ sessions: [one], runs: [] })[0]!, one).hint)
+      .toContain('1 commit that is not in main')
+    expect(closeIntent(buildWorkList({ sessions: [three], runs: [] })[0]!, three).hint)
+      .toContain('3 commits that are not in main')
+  })
+
+  /**
+   * A session that answered a question and produced nothing. The full tidy-up is
+   * right here — there is no work to keep a branch for.
+   */
+  it('deletes the branch of a session that committed nothing', () => {
+    const empty = session({ worktree: { ...changed, changedFiles: 2, ahead: 0 } })
+    const [item] = buildWorkList({ sessions: [empty], runs: [] })
+    const intent = closeIntent(item!, empty)
+
+    expect(item!.status).toBe('yours')
+    expect(intent.keepBranch).toBe(false)
+    expect(intent.hint).toContain('Nothing has been committed here')
+  })
+
+  /** Never says "deletes the branch" about a branch it is about to keep. */
+  it('never promises to delete a branch it keeps, or keep one it deletes', () => {
+    for (const s of [
+      session({ landed: true }),
+      session({ worktree: changed }),
+      session({ worktree: { ...changed, ahead: 0 } }),
+    ]) {
+      const [item] = buildWorkList({ sessions: [s], runs: [] })
+      const intent = closeIntent(item!, s)
+      expect(intent.hint.includes('deletes the branch')).toBe(!intent.keepBranch)
+      expect(intent.hint.includes('keeps the branch')).toBe(intent.keepBranch)
+    }
   })
 })

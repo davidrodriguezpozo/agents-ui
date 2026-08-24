@@ -2,6 +2,7 @@
 import type { Session } from '~/composables/useSessions'
 import type { WorkItem } from '~/utils/workList'
 import { railGroups } from '~/utils/workList'
+import { closableFromRail, closeIntent } from '~/utils/sessionClose'
 import { errorMessage } from '~/utils/errors'
 
 /**
@@ -15,8 +16,9 @@ import { errorMessage } from '~/utils/errors'
  * "switching between two running agents is a keypress rather than a trip out to a
  * list and back". This is that rail.
  *
- * It is presentation, a filter box and one action — closing a session whose work
- * has landed, which is the only thing the Done group at the bottom is for. The
+ * It is presentation, a filter box and one action — closing a session, which is
+ * the only thing left to do with one whose work has landed and the way a session
+ * you are finished with stops taking up a row. The
  * fetching and the poll belong to `layouts/work.vue`, which is mounted for as
  * long as the surface is — if they lived here, collapsing the rail would stop the
  * poll that keeps the session you are *looking at* up to date.
@@ -71,22 +73,25 @@ function repoFor(item: WorkItem): string | null {
 }
 
 /**
- * Closing a merged session from the rail, in two presses.
+ * Closing a session from the rail, in two presses.
  *
- * The Done group exists because a session whose work is in the base still has a
- * worktree, a branch and a whole checkout of the repository sitting on disk, and
- * closing it is the only thing left to do with it. Doing that from here rather
- * than from inside the session is the same argument the rail is built on: it is a
- * tidy-up, and a tidy-up that costs a trip into a page and back does not happen.
+ * Every session holds a worktree, a branch and a whole checkout of the repository
+ * on disk. Closing it from here rather than from inside the session is the
+ * argument the rail is built on: it is a tidy-up, and a tidy-up that costs a trip
+ * into a page and back does not happen — which is exactly what was happening to
+ * "Your turn", where the sessions nobody has any further use for collect.
  *
- * Asked twice, unlike everything else on this rail, because this one cannot be
- * undone — the worktree is removed and the branch deleted. Not a modal, though:
- * a dialog for a decision this small is heavier than the decision, and the second
- * press is on the same 60 pixels as the first.
+ * Asked twice, unlike everything else on this rail, because it cannot be undone.
+ * Not a modal, though: a dialog for a decision this small is heavier than the
+ * decision, and the second press is on the same 60 pixels as the first. What the
+ * second press says depends on what it will do — `closeIntent` decides, and the
+ * one thing it will never do is force-delete a branch holding commits that are
+ * not in the base.
  *
- * Uncommitted work is refused by the server rather than checked for here. A
- * merged session with edits still in it is unusual enough that spending a rail
- * row on saying so is worse than the toast that says it if you try.
+ * Uncommitted work is refused by the server rather than checked for here, and
+ * that is the right place for it: a rail row is the wrong surface to talk anyone
+ * through discarding an agent's unsaved output, and the refusal arrives as a
+ * toast that says so.
  */
 const asking = ref<string | null>(null)
 const closingKey = ref<string | null>(null)
@@ -100,7 +105,9 @@ async function onClose(item: WorkItem, session: Session) {
   asking.value = null
   closingKey.value = item.key
   try {
-    const result = await close(session.id)
+    // What this row's close means — see `closeIntent`. A session whose commits
+    // are not in the base keeps its branch; nothing else changes.
+    const result = await close(session.id, { keepBranch: closeIntent(item, session).keepBranch })
     toast.add({
       title: result.branchKept
         ? `Closed — workspace removed, branch ${result.branchKept} kept`
@@ -241,14 +248,15 @@ watch(() => route.fullPath, () => {
           Wrapped rather than given a button of its own inside the row, because
           the row is a link: a second target inside one is invalid markup and a
           click nobody can aim — the same call `SessionCard` makes about a pull
-          request. So the control is a sibling laid over the row's right edge,
-          and only the Done group has one.
+          request. So the control is a sibling laid over the row's right edge, on
+          the two groups that have somewhere to go: Done and Your turn. What
+          closing each of them destroys is not the same thing — see `closeIntent`.
         -->
         <div
           v-for="item in group.items"
           :key="item.key"
           class="rail-slot"
-          :class="{ 'rail-slot--closeable': item.status === 'landed' }"
+          :class="{ 'rail-slot--closeable': closableFromRail(item) && sessionFor(item) }"
         >
           <WorkRailRow
             :item="item"
@@ -257,13 +265,11 @@ watch(() => route.fullPath, () => {
             :repo-name="repoFor(item)"
           />
           <button
-            v-if="item.status === 'landed' && sessionFor(item)"
+            v-if="closableFromRail(item) && sessionFor(item)"
             class="rail-slot__close"
             :class="{ 'is-asking': asking === item.key }"
             :disabled="closingKey === item.key"
-            :title="asking === item.key
-              ? `Removes ${sessionFor(item)!.worktreePath} and deletes the branch. The commits are in ${sessionFor(item)!.baseBranch}.`
-              : `Close it — remove the workspace now its commits are in ${sessionFor(item)!.baseBranch}`"
+            :title="closeIntent(item, sessionFor(item)!).hint"
             @click="onClose(item, sessionFor(item)!)"
           >
             {{ closingKey === item.key ? 'Closing…' : asking === item.key ? 'Remove?' : 'Close' }}

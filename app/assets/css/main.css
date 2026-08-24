@@ -1857,10 +1857,11 @@ body {
  * A row with something you can do to it, which only the Done group has.
  *
  * The control is laid over the row's right edge rather than placed in a column
- * of its own: a fourth column would be 40px taken off every title in the rail
- * for a button three rows in forty ever show. Hidden until the row is hovered or
- * the button is focused, so the resting list is still just a list — and the
- * timestamp underneath it gets out of the way rather than being read through.
+ * of its own: a fourth column would be 40px taken off every title in the rail,
+ * on every row, for a control that is only ever wanted on the row under the
+ * pointer. Hidden until the row is hovered or the button is focused, so the
+ * resting list is still just a list — and the timestamp underneath it gets out of
+ * the way rather than being read through.
  */
 .rail-slot {
   position: relative;
@@ -1899,7 +1900,8 @@ body {
   border-color: var(--border-emphasis);
 }
 
-/* Asked once and waiting for the second press. Amber, because this one deletes. */
+/* Asked once and waiting for the second press. Amber because it cannot be undone
+   — the workspace goes in every case, whether or not the branch does. */
 .rail-slot__close.is-asking {
   color: var(--warning);
   border-color: var(--warning);
