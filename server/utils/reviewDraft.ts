@@ -40,6 +40,22 @@ import {
 
 export type ReviewEvent = 'COMMENT' | 'REQUEST_CHANGES' | 'APPROVE'
 
+/** Why a composed review stopped being something anybody could send. */
+export type RetireReason =
+  /** You submitted a review on GitHub yourself after this was composed. */
+  | 'already_reviewed'
+  /** The pull request is closed or merged, so a review would reach nobody. */
+  | 'pr_closed'
+  /** It has been pushed to since, so every anchor these comments carry is dead. */
+  | 'head_moved'
+
+export interface Retirement {
+  at: number
+  reason: RetireReason
+  /** One sentence, for wherever the draft is explained rather than counted. */
+  detail: string
+}
+
 export interface DraftFinding {
   /** Stable across recomposes, so an edit survives one. */
   id: string
@@ -93,6 +109,19 @@ export interface ReviewDraft {
   /** The run whose output this was parsed from. */
   runId?: string
   posted?: { at: number; url: string; event: ReviewEvent; comments: number }
+  /**
+   * Set when GitHub said this can no longer be sent — see `reviewRetire`.
+   *
+   * Kept rather than deleted, and separate from `posted`, because the two are
+   * different claims. `posted` means this app sent it and can link to it;
+   * `retired` means it went out some other way, or the pull request moved out
+   * from under it. Writing the second into the first would put a review in your
+   * sent record that this app never sent.
+   *
+   * Cleared by a recompose: a new turn is a new opinion, and the next reading
+   * will retire it again if it is still stale.
+   */
+  retired?: Retirement
 }
 
 interface DraftFile {
@@ -122,15 +151,34 @@ export async function saveDraft(draft: ReviewDraft): Promise<ReviewDraft> {
 }
 
 /**
- * Drafts composed and not yet sent, for the count on Land.
+ * Whether a draft is still something a person could press send on.
  *
  * A review with nothing checked but a written summary counts: "I read this and
  * it looks fine" is a review, and it is the one a reviewer is most likely to
  * forget to send.
  */
+export function isPending(draft: ReviewDraft): boolean {
+  return !draft.posted
+    && !draft.retired
+    && (draft.findings.some(f => f.include) || Boolean(draft.summary.trim()))
+}
+
+/** Drafts composed and not yet sent, for the band on Land. */
 export async function pendingDrafts(): Promise<ReviewDraft[]> {
   const { drafts } = await reviewDraftStore.read()
-  return drafts.filter(d => !d.posted && (d.findings.some(f => f.include) || d.summary.trim()))
+  return drafts.filter(isPending)
+}
+
+/**
+ * Drafts retired since a moment, for saying so once rather than never.
+ *
+ * A row that vanishes with no explanation is the same problem as a row that
+ * should have vanished and did not: both leave you unsure what the list means.
+ * So Land gets a count for a day afterwards, and then stops mentioning it.
+ */
+export async function retiredSince(at: number): Promise<ReviewDraft[]> {
+  const { drafts } = await reviewDraftStore.read()
+  return drafts.filter(d => d.retired && d.retired.at >= at)
 }
 
 /**

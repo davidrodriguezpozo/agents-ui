@@ -48,6 +48,7 @@ interface Draft {
   violations: string[]
   composedAt: number
   posted?: { at: number; url: string; event: ReviewEvent; comments: number }
+  retired?: { at: number; reason: 'already_reviewed' | 'pr_closed' | 'head_moved'; detail: string }
 }
 
 interface Preview {
@@ -273,6 +274,27 @@ onMounted(load)
                 class="underline"
                 style="color: var(--accent);"
               >Read it on GitHub</a>
+            </p>
+          </div>
+
+          <!--
+            Taken off Land because GitHub said it can no longer be sent — you
+            answered the pull request yourself, it closed, or it was pushed
+            over. Said here rather than only there, because this is the page you
+            come to when a review you remember writing is not on the list, and
+            "it is gone" without "here is why" is the worse half of the fix.
+
+            The form below stays live: `guard` decides what may actually be
+            sent, and a draft retired a minute before you pressed send should
+            refuse with its own reason rather than be disabled by this one.
+          -->
+          <div
+            v-if="draft.retired"
+            class="px-3 py-2 rounded"
+            style="background: var(--surface-raised); border: 1px solid var(--border-subtle);"
+          >
+            <p class="type-detail" style="color: var(--text-secondary);">
+              No longer waiting to be sent. {{ draft.retired.detail }}
             </p>
           </div>
 
