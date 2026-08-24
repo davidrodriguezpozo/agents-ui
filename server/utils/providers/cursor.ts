@@ -7,6 +7,8 @@ import { toSettingsPermissions } from '../permissionRules'
 import { refusedHostsIn } from '../sandboxViolations'
 import { paragraphBreaks } from '../textBlocks'
 import { cursorAgentExecutable } from '../cursorAgentExecutable'
+import { turnsStoppedMessage } from '../budget'
+import { notify, runPath } from '../notify'
 import type { Run, RunEvent } from '../runStore'
 import type { Provider, ProviderTurn } from './types'
 
@@ -36,10 +38,23 @@ import type { Provider, ProviderTurn } from './types'
  *
  * **Three things do not port, and all three are said out loud rather than
  * emulated.** See `capabilities` at the bottom: no `canUseTool` so no prompting,
- * no open stdin so no steering, and no `total_cost_usd` so no cost. The fourth
- * is smaller and has nowhere to be said: `cursor-agent` has no turn limit and no
- * budget flag, so `maxTurns` and `maxBudgetUsd` cannot be enforced on a Cursor
- * turn at all. Nothing here pretends otherwise.
+ * no open stdin so no steering, and no `total_cost_usd` so no cost.
+ *
+ * **The limits are the fourth, and they split.** `cursor-agent` has neither a
+ * turn limit nor a budget flag, which left a Cursor session unbounded in a way a
+ * Claude one is not — the worst kind of gap in an app whose premise is leaving
+ * work running unattended. The two halves have different answers:
+ *
+ *   - **Turns are enforced here**, by counting model calls and killing the
+ *     process on the one past the limit. Not as good as the CLI doing it — the
+ *     turn is cut rather than declined — but it is a real bound, and it produces
+ *     the same `stoppedBy: 'turns'` ending the Claude path does.
+ *   - **A dollar budget cannot be**, and no arithmetic here can change that: the
+ *     limit is in dollars and nothing reports what a turn cost. Enforcing a token
+ *     ceiling derived from a price table would be a limit whose number came from
+ *     a guess, which is worse than a limit that says it does not apply. So it
+ *     says it does not apply — see `reportsCostUsd`, the settings page, and the
+ *     lines the session picker shows before a session is created.
  */
 
 /**
@@ -202,6 +217,35 @@ export function createCursorMapper(options: ResolvedRunOptions) {
     /** Set once the turn reported its own ending. */
     get complete(): boolean {
       return sawResult
+    },
+
+    /**
+     * Model calls seen so far — the nearest thing Cursor reports to a turn, and
+     * what the turn limit is enforced against. Read after every message, because
+     * the whole point is to stop part-way rather than to notice afterwards.
+     */
+    get turns(): number {
+      return modelCalls.size
+    },
+
+    /**
+     * The stats for a turn that was stopped before it reported its own.
+     *
+     * The token counts are zero and unknowable rather than zero and measured:
+     * Cursor sends `usage` only in the final `result`, which a stopped turn never
+     * reaches. Saying so is the honest option — the alternative is estimating
+     * from the text we happened to see, which would be a number with nothing
+     * behind it in the same field that elsewhere holds a real one.
+     */
+    partialStats() {
+      return {
+        usage: { input: 0, output: 0, cacheRead: 0, cacheCreation: 0 },
+        costUsd: 0,
+        durationMs: 0,
+        numTurns: modelCalls.size,
+        model: model ?? options.model,
+        permissionDenials: denied.map(toolName => ({ toolName })),
+      }
     },
 
     take(message: unknown): MappedMessage {
@@ -501,6 +545,15 @@ async function runTurn(turn: ProviderTurn): Promise<void> {
     const stop = () => child.kill('SIGTERM')
     abort.signal.addEventListener('abort', stop, { once: true })
 
+    /**
+     * Set when *we* ended the turn rather than Cursor doing so.
+     *
+     * Load-bearing below: without it the missing `result` reads as the process
+     * having died, and a run this app deliberately stopped would be reported as
+     * a failure with somebody else's error message on it.
+     */
+    let stoppedBy: 'turns' | null = null
+
     // The prompt goes on stdin rather than in argv: a first turn carries the
     // agent's instructions and the standing brief, which is more than a command
     // line is guaranteed to hold. Closing it is what tells Cursor to begin.
@@ -527,6 +580,31 @@ async function runTurn(turn: ProviderTurn): Promise<void> {
 
         const { events, patch: fields } = mapper.take(parsed)
         for (const event of events) emit(event)
+
+        /**
+         * The turn limit, enforced here because there is nowhere else to enforce
+         * it: `cursor-agent` has no `--max-turns`, so a run that decides to loop
+         * loops until the account stops it. Claude Code stops itself and reports
+         * `error_max_turns`; this is the same ending, reached by counting model
+         * calls and killing the process on the one past the limit.
+         *
+         * `>` rather than `>=`, and the overshoot that follows is not a bug worth
+         * "fixing" by clamping: a limit of one has to allow one turn, and the only
+         * evidence that a further turn has begun is that it has begun. So a run
+         * stopped at a limit of one reports `numTurns: 2` — two calls were
+         * started, which is what happened, and a count edited down to the limit
+         * would be the record agreeing with the setting rather than with the run.
+         *
+         * Checked before the patch below rather than after, so the turn that
+         * broke the limit does not also get to record its work as though it had
+         * been allowed.
+         */
+        if (!stoppedBy && mapper.turns > options.maxTurns) {
+          stoppedBy = 'turns'
+          stop()
+          return
+        }
+
         if (fields) {
           // Merged rather than overwritten: two refused hosts in one turn are
           // both refused, and the same is true of denied tools.
@@ -551,6 +629,32 @@ async function runTurn(turn: ProviderTurn): Promise<void> {
     abort.signal.removeEventListener('abort', stop)
 
     if (abort.signal.aborted) return
+
+    /**
+     * Stopped part-way rather than finished, which is the same situation as a run
+     * refused a tool it needed — so it is flagged the same way and does not read
+     * as a clean success. The fields are the ones the Claude path sets, so the
+     * work rail's "Ran out of turns" and the run page's "Change the limits"
+     * button work on a Cursor run without knowing it is one.
+     */
+    if (stoppedBy === 'turns') {
+      const stats = mapper.partialStats()
+      const text = turnsStoppedMessage(options.maxTurns)
+
+      patch({ stats, output: text, needsAttention: true, stoppedBy: 'turns' })
+      emit({ type: 'result', text, stats })
+
+      // Same notification the Claude path sends for the same ending. A run that
+      // stopped short is the kind of thing you want to hear about rather than
+      // find later at the bottom of a list.
+      await notify(
+        'failed',
+        `${run.title} stopped early`,
+        'It reached its turn limit.',
+        runPath(run),
+      )
+      return
+    }
 
     /**
      * A turn can end without a `result`, and this is not theoretical — it

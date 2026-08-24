@@ -68,6 +68,16 @@ const {
 } = useProviders()
 
 /**
+ * Installed agents that report no cost, named beside the spending limits.
+ *
+ * A dollar cap cannot measure or stop work whose price is never reported, so on
+ * a machine with one of these installed both caps quietly cover less than they
+ * appear to. Listed by name rather than described in general, because "some
+ * agents" sends the reader looking for which.
+ */
+const uncostedAgents = computed(() => installedAgents.value.filter(a => !a.capabilities.reportsCostUsd))
+
+/**
  * The repository's half of this project's configuration.
  *
  * Two sections below read it for the same two sentences: whether the value in
@@ -1493,6 +1503,31 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             </span>
           </div>
         </div>
+
+        <!--
+          Said where the caps are set, not only where a session is started. Both
+          figures above are dollars, and an agent that reports no cost cannot be
+          measured against them or stopped by them — so a machine doing its work
+          on one would have a limit that quietly covered nothing. The turn limit
+          is what actually bounds those sessions, and it is on this same page.
+        -->
+        <p
+          v-if="uncostedAgents.length"
+          class="fs-sm flex items-start gap-1.5"
+          style="color: var(--warning);"
+        >
+          <UIcon name="i-lucide-info" class="size-3.5 shrink-0 mt-0.5" />
+          <span>
+            The two limits above are in dollars, and
+            {{ uncostedAgents.map(a => a.label).join(' and ') }}
+            {{ uncostedAgents.length === 1 ? 'does' : 'do' }} not report what a turn cost —
+            so sessions on
+            {{ uncostedAgents.length === 1 ? 'it' : 'them' }}
+            neither count towards the daily total nor can be stopped by either cap.
+            <strong>Most turns in one run</strong>, above, is what bounds them, and it is
+            enforced by this app rather than by the agent.
+          </span>
+        </p>
 
         <!--
           The limit that fits the plan most people are actually on. The two

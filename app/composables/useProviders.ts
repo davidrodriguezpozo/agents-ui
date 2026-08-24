@@ -77,7 +77,9 @@ export function useProviders() {
         : 'cannot be interrupted mid-turn, so a correction is queued as the next turn instead',
       can.reportsCostUsd
         ? null
-        : 'does not report what a turn cost, so its spend is recorded as unknown rather than as nothing',
+        : 'does not report what a turn cost, so its spend is recorded as unknown rather than as nothing '
+          + '— and the spending limits in Settings cannot apply to it. Its turn limit is what bounds a '
+          + 'runaway.',
     ].filter((line): line is string => line !== null)
   }
 

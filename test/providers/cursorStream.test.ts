@@ -243,3 +243,102 @@ describe('tool names', () => {
     expect(toolNameOf('somethingNewToolCall')).toBe('SomethingNew')
   })
 })
+
+/**
+ * The turn limit, which `cursor-agent` does not have.
+ *
+ * Claude Code stops itself at `maxTurns` and reports `error_max_turns`. Cursor
+ * has no such flag, so a run that decides to loop loops — which left a Cursor
+ * session unbounded in a way a Claude one is not, in an app whose whole premise
+ * is leaving work running unattended. The adapter counts model calls instead, so
+ * these assert the counting rather than the killing: the kill is one `if` over
+ * the number, and the number is the part that can be wrong.
+ */
+describe('counting turns, so the limit has something to enforce against', () => {
+  it('counts the distinct model calls of a real turn', () => {
+    const mapper = createCursorMapper(base)
+    const lines = readFileSync(join(__dirname, '..', 'fixtures', 'cursor-stream-turn1.jsonl'), 'utf8')
+      .split('\n').filter(l => l.trim())
+
+    // Two model calls: one that read the file, one that edited it.
+    for (const line of lines) mapper.take(JSON.parse(line))
+    expect(mapper.turns).toBe(2)
+  })
+
+  it('rises as the turn goes, rather than only being known at the end', () => {
+    const mapper = createCursorMapper(base)
+    const lines = readFileSync(join(__dirname, '..', 'fixtures', 'cursor-stream-turn1.jsonl'), 'utf8')
+      .split('\n').filter(l => l.trim())
+
+    const seen: number[] = []
+    for (const line of lines) {
+      mapper.take(JSON.parse(line))
+      seen.push(mapper.turns)
+    }
+
+    // The whole point of enforcing rather than reporting: the count has to be
+    // above zero part-way through, or nothing could be stopped part-way through.
+    expect(seen[0]).toBe(0)
+    expect(Math.max(...seen.slice(0, Math.floor(seen.length / 2)))).toBeGreaterThan(0)
+    // Never goes down — a limit checked against a falling number is no limit.
+    expect(seen).toEqual([...seen].sort((a, b) => a - b))
+  })
+
+  it('counts a refused run\'s attempts, which is what a loop looks like', () => {
+    const mapper = createCursorMapper(base)
+    const lines = readFileSync(join(__dirname, '..', 'fixtures', 'cursor-stream-rejected.jsonl'), 'utf8')
+      .split('\n').filter(l => l.trim())
+
+    for (const line of lines) mapper.take(JSON.parse(line))
+    // Three tries at the same refused command: exactly the shape a turn limit is
+    // for, and each one is its own model call.
+    expect(mapper.turns).toBe(3)
+  })
+})
+
+/**
+ * The stats for a turn this app stopped.
+ *
+ * Cursor sends `usage` only in the final `result`, which a stopped turn never
+ * reaches — so the token counts are unknown rather than zero. Reported as zero
+ * and said to be unknown, because the alternative is estimating from the text we
+ * happened to see, which would put a number with nothing behind it in the field
+ * that elsewhere holds a measured one.
+ */
+describe('a turn stopped before it reported its own ending', () => {
+  it('keeps the turn count, which is the number that stopped it', () => {
+    const mapper = createCursorMapper(base)
+    const lines = readFileSync(join(__dirname, '..', 'fixtures', 'cursor-stream-rejected.jsonl'), 'utf8')
+      .split('\n').filter(l => l.trim())
+    for (const line of lines) mapper.take(JSON.parse(line))
+
+    expect(mapper.partialStats().numTurns).toBe(3)
+  })
+
+  it('keeps the denials, so a stopped run still says what it was refused', () => {
+    const mapper = createCursorMapper(base)
+    const lines = readFileSync(join(__dirname, '..', 'fixtures', 'cursor-stream-rejected.jsonl'), 'utf8')
+      .split('\n').filter(l => l.trim())
+    for (const line of lines) mapper.take(JSON.parse(line))
+
+    expect(mapper.partialStats().permissionDenials).toEqual([
+      { toolName: 'Bash' }, { toolName: 'Bash' }, { toolName: 'Bash' },
+    ])
+  })
+
+  it('reports no tokens, because a stopped turn was never told any', () => {
+    const mapper = createCursorMapper(base)
+    mapper.take({ type: 'system', subtype: 'init', session_id: 's', model: 'Auto' })
+
+    const stats = mapper.partialStats()
+    expect(stats.usage).toEqual({ input: 0, output: 0, cacheRead: 0, cacheCreation: 0 })
+    // And still no invented cost, for the same reason as everywhere else.
+    expect(stats.costUsd).toBe(0)
+  })
+
+  it('still names the model, which the init line already gave', () => {
+    const mapper = createCursorMapper(base)
+    mapper.take({ type: 'system', subtype: 'init', session_id: 's', model: 'Cursor Grok 4.6' })
+    expect(mapper.partialStats().model).toBe('Cursor Grok 4.6')
+  })
+})

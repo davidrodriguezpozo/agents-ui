@@ -5,7 +5,7 @@ import { recordQuota } from '../quota'
 import { answerPermission, createPermissionBroker } from '../permissionBroker'
 import { mergeRules } from '../permissionRules'
 import { notify, runPath } from '../notify'
-import { budgetStoppedMessage } from '../budget'
+import { budgetStoppedMessage, turnsStoppedMessage } from '../budget'
 import { tokenUsageOf } from '../usage'
 import { nowTrustedFully } from '../liveTrust'
 import { closeSteerChannel, openSteerChannel, type SteerMessage } from '../liveSteer'
@@ -269,7 +269,7 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
           ?? (subtype === 'error_max_budget_usd'
             ? budgetStoppedMessage(turn.maxBudgetUsd)
             : subtype === 'error_max_turns'
-              ? `This run reached its limit of ${options.maxTurns} turns and was stopped, so the work is unfinished.`
+              ? turnsStoppedMessage(options.maxTurns)
               : 'The run ended without a final answer.')
 
         // The final result is authoritative — streamed deltas can be partial.

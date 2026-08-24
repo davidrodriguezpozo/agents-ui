@@ -189,3 +189,47 @@ tick above cover it: a Cursor session has not been put through the *merge train*
 run has been read on the spend page beside a Claude one. Neither is a guess about whether it
 works — both are places the new `landingsWithoutCost` arithmetic shows up, and arithmetic is
 worth looking at once with real numbers in it.
+
+## Follow-up, done: bounding a Cursor turn
+
+The finding above — that `maxTurns` and `maxBudgetUsd` do not reach a Cursor run — turned out to
+be three holes rather than one, and worth closing straight away rather than logging. A Claude
+session is bounded and a Cursor session was not, in an app whose premise is leaving work running
+unattended.
+
+| Limit | Claude | Cursor, before | Cursor, now |
+| --- | --- | --- | --- |
+| `maxTurns` | SDK stops the run | not passed — unbounded | counted and enforced by the adapter |
+| `runCapUsd` → `maxBudgetUsd` | SDK stops the query part-way | not passed — no stop | cannot apply; said so |
+| `dailyCapUsd` | cost accrues to `spentToday` | contributes $0 silently | cannot apply; said so |
+
+- **Turns are enforced by counting model calls** and killing the process on the one past the
+  limit, producing the same `stoppedBy: 'turns'`, `needsAttention`, notification and
+  `turnsStoppedMessage` a Claude run produces — so "Ran out of turns" on the work rail and
+  "Change the limits" on the run page work on a Cursor run without knowing it is one. That
+  sentence moved into `budget.ts` so both providers say it once.
+- **The overshoot is deliberate.** `>` not `>=`, because a limit of one must allow one turn and
+  the only evidence a further turn has begun is that it has begun. A run stopped at a limit of
+  one therefore reports `numTurns: 2`. Clamping it to the limit would make the record agree with
+  the setting rather than with the run.
+- **A stopped turn's tokens are unknown, not zero.** Cursor sends `usage` only in the final
+  `result`, which a killed turn never reaches — confirmed by grepping every non-`result` event in
+  the fixtures for a token field. `partialStats()` reports zeros and the comment says why;
+  estimating from the text we happened to see would put a number with nothing behind it in the
+  field that elsewhere holds a measured one.
+- **The dollar caps get said, not faked.** Deriving a token ceiling from a price table is the one
+  thing this unit's scope rules out, and it would be a limit whose number came from a guess. So
+  the Limits section of Settings names the installed agents that report no cost and states that
+  neither cap covers them, pointing at the turn limit on the same page; the shortfall lines at
+  session creation say the same thing before a worktree is cut.
+
+**Verified live**, driving the provider against a scratch repository with `maxTurns: 1`: a run
+asked to make three files did one model call's work, started a second, and was stopped —
+`stoppedBy: 'turns'`, `needsAttention: true`, the standard sentence, 29 seconds. Not through the
+UI; the settings copy and the picker lines are still read-only-by-inspection.
+
+**Still open after this.** The daily cap genuinely cannot see Cursor spend, so a machine working
+mostly on Cursor has a cap that covers a shrinking fraction of its work. Nothing here can fix
+that without a price table. If it matters, the honest fix is a *token* budget alongside the
+dollar one — a limit denominated in something both agents actually report — which is its own
+unit and a change to what the Limits page means.

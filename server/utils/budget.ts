@@ -143,6 +143,22 @@ export async function checkBudget(
   return { allowed: true, maxBudgetUsd, spentToday, dailyCapUsd }
 }
 
+/**
+ * Shown when a run was stopped for reaching its turn limit.
+ *
+ * Here rather than in either provider because both of them stop runs for it and
+ * the sentence has to be the same one — a reader who has seen it on a Claude run
+ * should recognise it on a Cursor run, and two copies of it is how one of them
+ * ends up describing a limit that has since been renamed.
+ *
+ * Claude Code stops itself and reports `error_max_turns`; Cursor has no turn
+ * limit of its own, so the adapter counts model calls and stops the process. The
+ * ending is the same either way, which is the point of saying it once.
+ */
+export function turnsStoppedMessage(maxTurns: number): string {
+  return `This run reached its limit of ${maxTurns} turns and was stopped, so the work is unfinished.`
+}
+
 /** Shown when the SDK stopped a run for hitting the ceiling it was given. */
 export function budgetStoppedMessage(limitUsd: number | undefined): string {
   return limitUsd
