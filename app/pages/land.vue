@@ -88,10 +88,13 @@ const mineWaiting = computed(() => reading.value.mine.filter(p => !p.verdict.onY
 /**
  * Reviews composed on this machine and not yet sent.
  *
- * Read from the draft store alone — no git and no GitHub — so this poll costs
- * nothing next to the one beside it. Its own request rather than a field on the
- * pull request reading, because it survives GitHub being unreachable: a review
- * you have already written and read is still yours to send when it comes back.
+ * Its own request rather than a field on the pull request reading, because the
+ * two fail differently: a review you have written and read is still yours to
+ * send when GitHub comes back, so this band outlives the one below it going
+ * dark. It does ask GitHub now — `reviewRetire` says why, and drops the ones you
+ * already answered some other way — and it says when the answer did not arrive,
+ * because a list that quietly stopped filtering looks exactly like the list that
+ * never filtered at all.
  */
 interface DraftedReview {
   sessionId: string
@@ -103,12 +106,26 @@ interface DraftedReview {
   inCurrentProject: boolean
 }
 
+interface RetiredCounts {
+  alreadyReviewed: number
+  prClosed: number
+  headMoved: number
+}
+
 const draftedReviews = ref<DraftedReview[]>([])
+const draftsUnchecked = ref(0)
+const draftsRetired = ref<RetiredCounts>({ alreadyReviewed: 0, prClosed: 0, headMoved: 0 })
 
 async function loadDraftedReviews() {
   try {
-    const { pending } = await $fetch<{ pending: DraftedReview[] }>('/api/sessions/reviews')
-    draftedReviews.value = pending
+    const payload = await $fetch<{
+      pending: DraftedReview[]
+      unchecked: number
+      retired: RetiredCounts
+    }>('/api/sessions/reviews')
+    draftedReviews.value = payload.pending
+    draftsUnchecked.value = payload.unchecked
+    draftsRetired.value = payload.retired
   } catch {
     // A rollup that cannot be read is a missing band, not an error on a page
     // whose actual job is the pull requests below it.
@@ -116,6 +133,36 @@ async function loadDraftedReviews() {
 }
 
 onMounted(loadDraftedReviews)
+
+/**
+ * What stopped waiting, said once and then dropped.
+ *
+ * Counted over a day rather than over the request, so the sentence is still
+ * there on the next poll — the first time this band empties out it will empty
+ * out by five or six rows at once, and rows that vanish without a reason are
+ * how a page earns the same distrust the stale list had.
+ */
+const retiredNote = computed(() => {
+  const { alreadyReviewed, prClosed, headMoved } = draftsRetired.value
+  const total = alreadyReviewed + prClosed + headMoved
+  if (!total) return null
+
+  const parts: string[] = []
+  if (alreadyReviewed) parts.push(`${alreadyReviewed} you had already reviewed on GitHub`)
+  if (prClosed) parts.push(`${prClosed} on pull requests that have closed since`)
+  if (headMoved) parts.push(`${headMoved} composed against commits that have been pushed over`)
+
+  return `${total} ${total === 1 ? 'review' : 'reviews'} stopped waiting in the last day — ${parts.join(', ')}.`
+})
+
+/** Shown rather than hidden: an unfiltered row is better than a missing one. */
+const uncheckedNote = computed(() => {
+  const count = draftsUnchecked.value
+  if (!count) return null
+  return count === 1
+    ? 'One of these could not be checked against GitHub, so it may already have been sent.'
+    : `${count} of these could not be checked against GitHub, so they may already have been sent.`
+})
 
 /* ----------------------------------------------------- already started it -- */
 
@@ -541,7 +588,7 @@ const issuesEmptyLine = computed(() => {
             the review is written, read and waiting on the one thing a machine
             must not do on its own.
           -->
-          <div v-if="draftedReviews.length" class="space-y-2">
+          <div v-if="draftedReviews.length || retiredNote" class="space-y-2">
             <h3 class="text-section-label">Reviews waiting to be sent</h3>
             <NuxtLink
               v-for="review in draftedReviews"
@@ -568,6 +615,15 @@ const issuesEmptyLine = computed(() => {
               </div>
               <UIcon name="i-lucide-chevron-right" class="size-4 shrink-0" style="color: var(--text-disabled);" />
             </NuxtLink>
+
+            <!--
+              Both notes are about the rows that are not here. The first says
+              what left, the second admits the list may not have been filtered
+              at all — which is the difference between a short list and a list
+              that only looks short.
+            -->
+            <p v-if="uncheckedNote" class="type-detail">{{ uncheckedNote }}</p>
+            <p v-if="retiredNote" class="type-detail">{{ retiredNote }}</p>
           </div>
 
           <!-- Four numbers that answer "is there anything here for me" from the doorway -->
