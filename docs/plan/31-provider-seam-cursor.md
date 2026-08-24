@@ -179,7 +179,13 @@ against a scratch git repository on its own branch, twice.
   flagged `needsAttention` with `deniedTools: ['Bash']` and both denials recorded — the same
   ending an unattended Claude run reaches, with no widening to get moving.
 
-**What remains unproven, and who has to press it:** everything above the provider. Nobody has
-picked Cursor in the picker on Start, watched a Cursor session's turns stream into the session
-page, or put one through the merge train — the provider is proven, the path through the UI to it
-is not. That needs a person with the app running.
+**Then proven above the provider too.** The path through the UI was the half a session cannot
+press itself, and it was pressed by hand: a session created on Cursor from the picker on Start,
+given a prompt, running its turns through `cursor-agent`. So the acceptance line is met end to
+end.
+
+**What is still unproven** is narrower than it was, and worth naming rather than letting the
+tick above cover it: a Cursor session has not been put through the *merge train*, and no Cursor
+run has been read on the spend page beside a Claude one. Neither is a guess about whether it
+works — both are places the new `landingsWithoutCost` arithmetic shows up, and arithmetic is
+worth looking at once with real numbers in it.
