@@ -6,6 +6,7 @@ import { getClaudeDir } from './claudeDir'
 import { matchesFilter, sourceOf, type RunFilter, type RunSource } from './runFilter'
 import { parseSkipped, withoutSkipped, type SkippedSource } from './selfReported'
 import type { Identity } from './identity'
+import type { ProviderId } from './providers/types'
 import type { ChatAttachmentRef, RunStats } from '~/types'
 
 export type RunKind = 'command' | 'chat' | 'agent'
@@ -48,6 +49,22 @@ export interface Run {
   output: string
   error?: string
   stats?: RunStats
+  /**
+   * Which agent took this turn. **Absent means Claude Code.**
+   *
+   * Every run already on disk is one, so absence already carries the answer and
+   * a migration that rewrote them to say what they imply would be risk bought
+   * for nothing. Read through `providerFor`, which treats an unknown value the
+   * same way for the same reason.
+   */
+  provider?: ProviderId
+  /**
+   * The id this run's provider resumes the conversation with.
+   *
+   * Named for the SDK because it was, and on disk in every session record, which
+   * is why it keeps the name. It means "the id this provider resumes with" now:
+   * a `session_id` from Claude Code, a chat id from `cursor-agent`.
+   */
   sdkSessionId?: string
   /**
    * When the reader took this off the Work list, if they did.
@@ -381,6 +398,11 @@ export interface RunSummary {
   chainId?: string
   stepIndex?: number
   sessionId?: string
+  /**
+   * Which agent took the turn. **Absent means Claude Code**, so a list of runs
+   * from before there were two says nothing rather than saying the wrong thing.
+   */
+  provider?: ProviderId
   /** What set it going — worked out once here rather than in every view. */
   source: RunSource
 }
@@ -428,6 +450,7 @@ export function summarizeRun(run: Run): RunSummary {
     chainId: run.chainId,
     stepIndex: run.stepIndex,
     sessionId: run.sessionId,
+    provider: run.provider,
     hiddenAt: run.hiddenAt,
     source: sourceOf(run),
   }

@@ -143,6 +143,25 @@ function chooseTrust(value: TrustLevel) {
   }
 }
 
+/**
+ * Which agent the session runs on, chosen beside the trust it is given and for
+ * the same reason: both are decided before the first turn, because the first
+ * turn is the one that does the work.
+ *
+ * Not remembered in `localStorage` like the trust level, and that is deliberate.
+ * The answer to "which agent" belongs to the repository — a project whose suite
+ * only one agent reliably passes is a real thing — so the default comes from the
+ * server, per repository, and this only overrides it for the session in front of
+ * you. See `projectProvider.ts`.
+ */
+const { available: agents, hasChoice: canChooseAgent, shortfalls, fetchAll: fetchProviders } = useProviders()
+const startProvider = ref<string | null>(null)
+
+onMounted(() => void fetchProviders())
+
+/** What the picked agent cannot do, said before the worktree is cut. */
+const agentShortfalls = computed(() => startProvider.value ? shortfalls(startProvider.value) : [])
+
 const batchMode = ref(false)
 /**
  * The box that takes images is the single-session one on Start. Elsewhere on
@@ -181,7 +200,7 @@ async function onCreateMany() {
 
   startingBatch.value = true
   try {
-    const result = await createMany(batchPrompts.value, undefined, startTrust.value)
+    const result = await createMany(batchPrompts.value, undefined, startTrust.value, startProvider.value)
     await fetchWorktrees()
 
     if (result.started.length) {
@@ -320,7 +339,7 @@ async function onCreate() {
 
   creating.value = true
   try {
-    const session = await create(value, undefined, startTrust.value, attachments.value)
+    const session = await create(value, undefined, startTrust.value, attachments.value, startProvider.value)
     prompt.value = ''
     clearAttachments()
     await fetchWorktrees()
@@ -1001,7 +1020,54 @@ async function closeEmpty(key: string, ids: string[]) {
             <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
             Runs commands without asking, sandboxed, in its own workspace.
           </span>
+
+          <!--
+            Which agent, offered only when this machine has more than one. A
+            picker with a single option is a control that cannot do anything, and
+            on a machine with only Claude Code installed that is what it would
+            be. `Default` leaves it to whatever this repository was set to in
+            Settings, so the common case is one fewer decision.
+          -->
+          <div v-if="canChooseAgent" class="pill-picker">
+            <button
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': startProvider === null }"
+              title="Whatever this repository is set to in Settings"
+              @click="startProvider = null"
+            >
+              Default
+            </button>
+            <button
+              v-for="agent in agents"
+              :key="agent.id"
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': startProvider === agent.id }"
+              @click="startProvider = agent.id"
+            >
+              {{ agent.label }}
+            </button>
+          </div>
         </div>
+
+        <!--
+          What the chosen agent cannot do, before the worktree is cut rather than
+          after two turns. The one that actually bites is permissions: a session
+          on an agent that cannot stop and ask does not wait to be let through,
+          it is refused and carries on having done less — which reads like a turn
+          that simply went badly.
+        -->
+        <ul
+          v-if="agentShortfalls.length"
+          class="type-detail space-y-0.5"
+          style="color: var(--warning);"
+        >
+          <li v-for="line in agentShortfalls" :key="line" class="flex items-start gap-1.5">
+            <UIcon name="i-lucide-info" class="size-3.5 shrink-0 mt-0.5" />
+            <span>{{ line }}</span>
+          </li>
+        </ul>
 
         <!-- Or start on something that already exists -->
         <div v-if="!batchMode && showExisting" class="space-y-1.5 pt-1">

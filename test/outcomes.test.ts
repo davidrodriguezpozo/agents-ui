@@ -688,3 +688,136 @@ describe('outcomeTurnOf', () => {
     expect(outcomeTurnOf({ ...record, events: undefined }).changedFiles).toBeUndefined()
   })
 })
+
+/**
+ * A merge whose price nobody here can know.
+ *
+ * The failure this guards against is the flattering kind, and it is the one the
+ * provider seam introduced: an agent that reports no cost adds landings to the
+ * denominator of cost-per-landing and nothing to the numerator, so the headline
+ * figure would fall every time one merged. The number would improve while
+ * nothing about the work had — which is worse than a blank, because a blank
+ * makes somebody go and look.
+ */
+describe('a landing whose cost is not knowable', () => {
+  it('counts the merge, because the work landed either way', () => {
+    const landed = session({ landed: { at: NOW - DAY, how: 'merged', into: 'main' } })
+    const report = joinOutcomes({
+      turns: [turn({ sessionId: landed.id, costUsd: 0, costReported: false })],
+      sessions: [landed],
+      since: SINCE,
+    })
+
+    expect(report.landings.total).toBe(1)
+    expect(report.landings.merged).toBe(1)
+  })
+
+  it('keeps it out of cost per landing, and says how many it left out', () => {
+    const landed = session({ landed: { at: NOW - DAY, how: 'merged', into: 'main' } })
+    const report = joinOutcomes({
+      turns: [turn({ sessionId: landed.id, costUsd: 0, costReported: false })],
+      sessions: [landed],
+      since: SINCE,
+    })
+
+    // One merge, none of it costable: there is no average to report.
+    expect(report.costPerLandingUsd).toBeNull()
+    expect(report.landingsWithoutCost).toBe(1)
+    expect(report.uncostedTurns).toBe(1)
+  })
+
+  /** The point of the whole thing: the figure must not fall for a bad reason. */
+  it('does not drag the average down when it lands beside a costed one', () => {
+    const costed = session({ id: 'costed', landed: { at: NOW - DAY, how: 'merged', into: 'main' } })
+    const free = session({ id: 'free', landed: { at: NOW - DAY, how: 'merged', into: 'main' } })
+
+    const report = joinOutcomes({
+      turns: [
+        turn({ sessionId: costed.id, costUsd: 6 }),
+        turn({ sessionId: free.id, costUsd: 0, costReported: false }),
+      ],
+      sessions: [costed, free],
+      since: SINCE,
+    })
+
+    expect(report.landings.total).toBe(2)
+    expect(report.landingsWithoutCost).toBe(1)
+    // $6 over the one merge it can account for — not $3 over two.
+    expect(report.costPerLandingUsd).toBeCloseTo(6)
+  })
+
+  /**
+   * The load-bearing default. Every turn recorded before there was a second
+   * agent says nothing about whether its cost was reported, and all of them
+   * were — reading absence as "unreported" would empty the figure for every
+   * record on disk.
+   */
+  it('reads a turn that says nothing as one whose cost was reported', () => {
+    const landed = session({ landed: { at: NOW - DAY, how: 'merged', into: 'main' } })
+    const report = joinOutcomes({
+      turns: [turn({ sessionId: landed.id, costUsd: 4 })],
+      sessions: [landed],
+      since: SINCE,
+    })
+
+    expect(report.landingsWithoutCost).toBe(0)
+    expect(report.uncostedTurns).toBe(0)
+    expect(report.costPerLandingUsd).toBeCloseTo(4)
+  })
+
+  /**
+   * A Claude turn really can cost nothing — cached, instant, or refused before
+   * it did anything. That is a *measured* zero and belongs in the average, which
+   * is why the question is asked of the provider rather than of the number.
+   */
+  it('keeps a genuinely free costed turn in the average', () => {
+    const landed = session({ landed: { at: NOW - DAY, how: 'merged', into: 'main' } })
+    const report = joinOutcomes({
+      turns: [turn({ sessionId: landed.id, costUsd: 0, costReported: true })],
+      sessions: [landed],
+      since: SINCE,
+    })
+
+    expect(report.landingsWithoutCost).toBe(0)
+    expect(report.costPerLandingUsd).toBe(0)
+  })
+
+  /**
+   * The same rule catches something that predates providers: a session that
+   * landed in this window having done all its work before it has no turn here to
+   * cost either. It was already contributing nothing to the numerator while
+   * sitting in the denominator, understating cost per merge in exactly the same
+   * direction.
+   */
+  it('also leaves out a landing whose work happened before the window', () => {
+    const earlier = session({ landed: { at: NOW - DAY, how: 'merged', into: 'main' } })
+    const report = joinOutcomes({
+      // The only turn is older than the window, so it is filtered out entirely.
+      turns: [turn({ sessionId: earlier.id, createdAt: SINCE - DAY, costUsd: 9 })],
+      sessions: [earlier],
+      since: SINCE,
+    })
+
+    expect(report.landings.total).toBe(1)
+    expect(report.landingsWithoutCost).toBe(1)
+    expect(report.costPerLandingUsd).toBeNull()
+  })
+})
+
+/**
+ * The provider is read off the run rather than guessed from its cost, so a
+ * record's own account of which agent ran it is what decides this.
+ */
+describe('reading whether a run reports its cost', () => {
+  it('treats a run with no provider as one that does', () => {
+    expect(outcomeTurnOf({
+      id: 'r1', title: 't', kind: 'chat', status: 'completed', createdAt: NOW,
+    }).costReported).toBe(true)
+  })
+
+  it('treats a Cursor run as one that does not', () => {
+    expect(outcomeTurnOf({
+      id: 'r2', title: 't', kind: 'chat', status: 'completed', createdAt: NOW, provider: 'cursor',
+    }).costReported).toBe(false)
+  })
+})

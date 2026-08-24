@@ -297,6 +297,9 @@ onMounted(async () => {
   await load()
   await refreshDiff()
   await loadProjectRules()
+  // What this session's agent can do, so the composer offers Steer only where
+  // there is something to steer. Cached across pages — see `useProviders`.
+  await fetchProviders()
 
   // Notes written before the tab was closed. Failing to read them is not worth
   // an error on the way in — the diff is still there to write new ones on.
@@ -1245,12 +1248,40 @@ async function onTrust(level: TrustLevel) {
 const paletteOpen = ref(false)
 const palette = ref<{ move: (d: number) => void; choose: () => void; hasMatches: boolean } | null>(null)
 
+/**
+ * Whether this session's agent can use the library at all.
+ *
+ * Agents, skills, commands, plugins and MCP servers are Claude Code's own
+ * on-disk formats. Cursor has its own and they do not share a schema, so
+ * offering `/code-review` to a Cursor session would be offering something that
+ * resolves to nothing — the turn goes with a literal slash-word in it and comes
+ * back having guessed. Porting the library is its own piece of work; not
+ * offering it is this one.
+ */
+const hasLibrary = computed(() => !session.value?.provider || session.value.provider === 'claude')
+
+/**
+ * Whether a correction can reach the turn that is running.
+ *
+ * Read from the same capability the server refuses on, so the button and the
+ * endpoint cannot disagree — see `steerRefusal`. Without stdin held open there
+ * is nothing to write to, and `sessionQueue` is the fallback that was always
+ * there.
+ */
+const { find: findProvider, fetchAll: fetchProviders } = useProviders()
+const canSteer = computed(() => findProvider(session.value?.provider)?.capabilities.canSteer ?? true)
+
 const commandQuery = computed(() => {
   const match = input.value.match(/^\/(\S*)$/)
   return match ? match[1] ?? '' : ''
 })
 
 watch(input, () => {
+  // Nothing to offer on an agent whose commands these are not.
+  if (!hasLibrary.value) {
+    paletteOpen.value = false
+    return
+  }
   // Typing past the command itself means you are writing a message now.
   if (input.value.startsWith('/') && !input.value.includes(' ')) paletteOpen.value = true
   else if (!input.value.startsWith('/')) paletteOpen.value = false
@@ -2103,7 +2134,7 @@ const totalChanges = computed(() => {
             -->
             <div class="flex items-end gap-2 relative">
               <!-- Sits above the box, where what you are typing still shows -->
-              <div v-if="paletteOpen" class="absolute bottom-full left-0 right-0 mb-2 z-10">
+              <div v-if="paletteOpen && hasLibrary" class="absolute bottom-full left-0 right-0 mb-2 z-10">
                 <CommandPalette
                   ref="palette"
                   :commands="commands"
@@ -2124,8 +2155,12 @@ const totalChanges = computed(() => {
                 rows="1"
                 class="field-textarea field-textarea--compact flex-1"
                 :placeholder="isBusy
-                  ? 'Working — type anyway: queue it for after, or steer this turn now'
-                  : 'What should it do next? Type / for commands'"
+                  ? (canSteer
+                    ? 'Working — type anyway: queue it for after, or steer this turn now'
+                    : 'Working — type anyway and it goes as the next turn')
+                  : (hasLibrary
+                    ? 'What should it do next? Type / for commands'
+                    : 'What should it do next?')"
                 :disabled="!session.worktree.exists"
                 @keydown="onComposerKey"
                 @paste="onComposerPaste"
@@ -2175,7 +2210,7 @@ const totalChanges = computed(() => {
                 second's thought, and queueing is right far more often.
               -->
               <UButton
-                v-if="isBusy"
+                v-if="isBusy && canSteer"
                 label="Steer now"
                 icon="i-lucide-navigation"
                 size="sm"
@@ -2197,7 +2232,14 @@ const totalChanges = computed(() => {
                 :disabled="!activeRunId"
                 @click="onStop"
               />
+              <!--
+                Not offered on an agent whose commands these are not: these are
+                Claude Code's on-disk formats, and Cursor's are its own. A button
+                that opens a list of things that would resolve to nothing is
+                worse than no button.
+              -->
               <UButton
+                v-if="hasLibrary"
                 icon="i-lucide-slash"
                 size="sm"
                 variant="ghost"

@@ -35,6 +35,10 @@ const meta = ref<{
   stoppedBy?: 'budget' | 'turns'
   scheduleId?: string
   sessionId?: string
+  /** Which agent took the turn. Absent means Claude Code. */
+  provider?: string
+  /** What that agent can do, answered by the server. See the endpoint. */
+  capabilities: { canSteer: boolean; canPromptForPermission: boolean; reportsCostUsd: boolean }
   /** Where a grant from this run should be filed — the repo, not a worktree. */
   rulesDir?: string
 } | null>(null)
@@ -223,6 +227,29 @@ function formatCost(usd?: number) {
   if (!usd) return null
   return usd < 0.01 ? '<$0.01' : `$${usd.toFixed(2)}`
 }
+
+/**
+ * What is worth knowing about the agent that ran this, beyond its name.
+ *
+ * Only the things that are *missing*, and only where their absence changes how
+ * the rest of the page reads. Listing what an agent can do would be a tooltip
+ * nobody needs; saying that a blank where the cost goes means unknown rather
+ * than nothing is the difference between a record and a wrong record.
+ */
+const providerCaveat = computed(() => {
+  const can = meta.value?.capabilities
+  if (!can) return providerLabel(meta.value?.provider)
+
+  const missing = [
+    can.reportsCostUsd ? null : 'does not report what a turn cost',
+    can.canPromptForPermission ? null : 'cannot stop to ask for a tool',
+    can.canSteer ? null : 'cannot be interrupted mid-turn',
+  ].filter(Boolean)
+
+  return missing.length
+    ? `${providerLabel(meta.value?.provider)} — ${missing.join('; ')}`
+    : providerLabel(meta.value?.provider)
+})
 </script>
 
 <template>
@@ -243,6 +270,16 @@ function formatCost(usd?: number) {
         </span>
         <span v-if="meta?.invocation" class="font-mono fs-sm ink-accent">
           {{ meta.invocation }}
+        </span>
+        <!--
+          Always, unlike the list rows: here the question "what ran this" is
+          being asked directly, so it gets an answer even when the answer is the
+          usual one. A run recorded before there was a choice reads as Claude
+          Code, which is what it was.
+        -->
+        <span class="fs-micro flex items-center gap-1 ink-4" :title="providerCaveat">
+          <UIcon :name="providerLook(meta?.provider).icon" class="size-3 shrink-0" />
+          {{ providerLabel(meta?.provider) }}
         </span>
       </template>
       <template #right>
@@ -455,6 +492,19 @@ function formatCost(usd?: number) {
             <div class="flex items-center gap-3 type-mono-meta">
               <span v-if="run.stats">{{ run.stats.numTurns }} turns</span>
               <span v-if="formatCost(run.stats?.costUsd)">{{ formatCost(run.stats?.costUsd) }}</span>
+              <!--
+                An agent that reports no cost leaves a blank where a figure
+                goes, and a blank reads as nothing spent. Said instead, because
+                unknown and free are different facts and the ledger treats them
+                as different — see `landingsWithoutCost`.
+              -->
+              <span
+                v-else-if="meta && !meta.capabilities.reportsCostUsd"
+                class="ink-4"
+                :title="`${providerLabel(meta.provider)} does not report what a turn cost, so this is unknown rather than nothing.`"
+              >
+                cost not reported
+              </span>
             </div>
           </div>
           <div

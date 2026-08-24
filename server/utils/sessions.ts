@@ -12,6 +12,7 @@ import type { SessionIssueReply } from './issueReply'
 import type { QueuedMessage } from './sessionQueue'
 import type { TrustLevel } from './trust'
 import type { Identity } from './identity'
+import type { ProviderId } from './providers/types'
 
 /**
  * A session is a conversation with its own isolated copy of a repository.
@@ -82,7 +83,22 @@ export interface Session {
    */
   borrowedBranch?: true
   status: SessionStatus
-  /** Continuity across turns. Set from the first run's init message. */
+  /**
+   * Which agent this session's turns run through. **Absent means Claude Code.**
+   *
+   * Chosen when the session is created and not changed afterwards: the
+   * conversation lives inside one provider's history, and `sdkSessionId` is an
+   * id only that provider can resume. Switching mid-session would silently
+   * start a second conversation in a worktree already half-finished.
+   */
+  provider?: ProviderId
+  /**
+   * Continuity across turns. Set from the first run's init message.
+   *
+   * "The id this provider resumes with" — a Claude Code `session_id`, or a
+   * `cursor-agent` chat id. It keeps the SDK's name because it is on disk in
+   * every session record ever written here.
+   */
   sdkSessionId?: string
   agentSlug?: string
   /**

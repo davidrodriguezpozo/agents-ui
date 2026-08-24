@@ -16,6 +16,7 @@ import {
 } from './sessionQueue'
 import { dropQueuedAttachments, loadQueuedAttachments } from './queuedAttachments'
 import { steerRun } from './liveSteer'
+import { capabilitiesOf, providerFor } from './providers'
 import { worktreeFingerprint } from './checks'
 import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
@@ -86,6 +87,31 @@ export function turnRefusal(session: Session): { error: string; message: string 
   }
 
   return null
+}
+
+/**
+ * Whether this session's provider can be told anything mid-turn.
+ *
+ * Steering needs a stdin that stays open — see `liveSteer` — and a headless
+ * `cursor-agent` closes its after the prompt, so there is nothing to write to.
+ *
+ * A refusal rather than a quiet fall back to the queue, and that is the choice
+ * worth stating: the composer reads `canSteer` and offers Queue only, so a
+ * request arriving here at all means something is out of step. Queueing it
+ * anyway would hide that while appearing to work, which is how a button ends up
+ * doing something other than what it says.
+ *
+ * Beside `turnRefusal` and shaped like it, so both are answerable without
+ * starting anything.
+ */
+export function steerRefusal(session: Session): { error: string; message: string } | null {
+  if (capabilitiesOf(session.provider).canSteer) return null
+
+  return {
+    error: 'steer_unavailable',
+    message: `${providerFor(session.provider).label} cannot be interrupted mid-turn. `
+      + 'Queue the message instead and it goes as the next turn.',
+  }
 }
 
 /**
@@ -231,6 +257,9 @@ export async function sendSteered(
 > {
   const refusal = turnRefusal(session)
   if (refusal) throw createError({ statusCode: 409, data: refusal })
+
+  const unavailable = steerRefusal(session)
+  if (unavailable) throw createError({ statusCode: 409, data: unavailable })
 
   // The last run is the only one that can be running — a session takes one turn
   // at a time, which `startTurn` guarantees.
@@ -398,6 +427,8 @@ export async function startTurn(
     agentSlug: session.agentSlug,
     projectDir: session.worktreePath,
     sessionId: session.id,
+    // Which agent takes this turn is the session's, decided when it was created.
+    provider: session.provider,
     by,
   })
 

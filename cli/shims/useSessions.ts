@@ -55,4 +55,9 @@ export interface Session {
   summary?: { text: string }
   branch?: string
   turnCount?: number
+  /**
+   * Which agent its turns run through. Absent means Claude Code — the shared
+   * `workList` puts it on the row, and only when it is not the usual one.
+   */
+  provider?: string
 }

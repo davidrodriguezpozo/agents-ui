@@ -6,6 +6,7 @@ import {
   type Session, type SessionIssueOf, type SessionTicketOf,
 } from './sessions'
 import type { TrustLevel } from './trust'
+import type { ProviderId } from './providers/types'
 import {
   branchNameFor,
   createWorktree,
@@ -39,6 +40,15 @@ export async function startSession(options: {
    * one somebody most wants to leave running — ignored the intent entirely.
    */
   trust?: TrustLevel
+  /**
+   * Which agent this session's turns run through.
+   *
+   * Decided here and not changed afterwards, for the same reason trust is
+   * decided up front: the conversation lives inside one provider's history, and
+   * `sdkSessionId` is an id only that provider can resume. Absent means Claude
+   * Code, which is what every session before this used.
+   */
+  provider?: ProviderId
   /**
    * The branch to cut, when the caller has a better name than the title gives.
    *
@@ -122,6 +132,8 @@ export async function startSession(options: {
     // Absent means the default, which is what every session had before this
     // could be chosen up front.
     trust: options.trust,
+    // Absent means Claude Code. See `providerFor`.
+    provider: options.provider,
     issueOf: options.issueOf,
     ticketOf: options.ticketOf,
     sdkSessionId: options.sdkSessionId,

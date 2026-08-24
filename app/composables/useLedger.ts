@@ -30,7 +30,17 @@ export interface LedgerTotals {
   abandonedCostUsd: number
   openCostUsd: number
   unattributedCostUsd: number
-  /** Indicative, and null when nothing landed. */
+  /**
+   * Merges in `landings.total` that no figure here can cost: their work was done
+   * by an agent that reports no cost, or before this window opened. Counted as
+   * merges, and left out of `costPerLandingUsd` — otherwise the headline figure
+   * would fall every time one happened, improving because the records got worse
+   * rather than because the work did.
+   */
+  landingsWithoutCost: number
+  /** Turns run by an agent that reports no cost. Their spend is absent, not zero. */
+  uncostedTurns: number
+  /** Indicative, and null when nothing landed or nothing landed costably. */
   costPerLandingUsd: number | null
   changedFiles: { turns: number; measured: number; share: number | null }
 }

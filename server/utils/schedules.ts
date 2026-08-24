@@ -12,6 +12,7 @@ import { permissionModeFor, type TrustLevel } from './trust'
 import { describeTrigger, type EventTrigger } from './eventTriggers'
 import { normalizeSteps, type ChainStep } from './ritualChain'
 import type { RitualExpectation } from './ritualValue'
+import type { ProviderId } from './providers/types'
 
 /**
  * Deliberately not cron. "Every weekday at 08:00" is the shape a daily ritual
@@ -54,6 +55,17 @@ export interface Schedule {
   invocation?: string
   agentSlug?: string
   projectDir?: string
+  /**
+   * Which agent this ritual's runs go through. **Absent means Claude Code**,
+   * which is what every ritual written before this existed used.
+   *
+   * Worth being blunt about one consequence: a ritual on a provider that cannot
+   * stop to ask has no way to be granted a tool mid-run, so its allow list is
+   * the whole of what it can do. `suggestedRules` still accumulates, and the
+   * refusals still show on the run, so the ritual can be widened afterwards —
+   * but it will fail the first time rather than wait to be let through.
+   */
+  provider?: ProviderId
   recurrence: Recurrence
   /**
    * Fire on something happening instead of on the clock.

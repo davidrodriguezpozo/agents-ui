@@ -45,6 +45,28 @@ const {
   reset: resetSandboxChoice,
 } = useProjectSandbox()
 
+const {
+  state: projectProvider,
+  saving: providerSaving,
+  load: loadProjectProvider,
+  save: saveProjectProvider,
+  reset: resetProjectProvider,
+} = useProjectProvider()
+
+/**
+ * The agents installed here, so the setting cannot name one that is missing.
+ *
+ * Shown at all only when there is more than one: on a machine with only Claude
+ * Code this section would be a control with a single option and nothing to say,
+ * which is worse than not being there.
+ */
+const {
+  available: installedAgents,
+  hasChoice: canChooseAgent,
+  shortfalls: agentShortfalls,
+  fetchAll: loadInstalledAgents,
+} = useProviders()
+
 /**
  * The repository's half of this project's configuration.
  *
@@ -118,6 +140,7 @@ const sectionNav = [
   { id: 'checks', label: 'Checks' },
   { id: 'setup', label: 'Workspace setup' },
   { id: 'dev', label: 'Running it' },
+  { id: 'agent', label: 'Which agent' },
   { id: 'sandbox', label: 'Sandbox' },
   { id: 'statusline', label: 'Status line' },
   { id: 'notifications', label: 'Notifications' },
@@ -489,6 +512,8 @@ onMounted(async () => {
   void loadChecks()
   void loadSetup()
   void loadSandbox()
+  void loadProjectProvider()
+  void loadInstalledAgents()
   void loadDev()
   void loadShared()
 
@@ -1746,6 +1771,86 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               @click="resetDevCommand"
             />
           </div>
+        </template>
+      </div>
+
+      <!--
+        Which agent. Only on a machine that has more than one — otherwise this is
+        a picker with a single option, which says nothing and takes up a section.
+      -->
+      <div v-if="canChooseAgent" id="settings-agent" class="rounded-lg p-5 space-y-4 bg-card">
+        <h3 class="text-section-title flex items-center gap-2">
+          Which agent
+          <HelpTip
+            title="Choosing an agent"
+            body="Sessions run their turns through a coding agent's own CLI. Everything around them is the same whichever one you pick — the worktree, the checks, the merge train, the ledger — so the choice is which model does the work. Set per repository, and overridable on any single session where it is started."
+          />
+        </h3>
+        <p class="fs-sm text-meta">
+          New sessions in this repository start on this agent. Existing sessions keep the one
+          they were created with: a conversation lives inside one agent's history, so switching
+          part-way would start a second one in a workspace that is already half-finished.
+        </p>
+
+        <div v-if="!projectProvider?.dir" class="fs-sm text-label">
+          Pick a project folder in the sidebar first — this is set per repository.
+        </div>
+
+        <template v-else>
+          <div class="pill-picker">
+            <button
+              v-for="agent in installedAgents"
+              :key="agent.id"
+              type="button"
+              class="pill-picker__option"
+              :class="{ 'pill-picker__option--active': projectProvider.provider === agent.id }"
+              :disabled="providerSaving"
+              @click="saveProjectProvider(agent.id)"
+            >
+              {{ agent.label }}
+            </button>
+          </div>
+
+          <p class="fs-sm text-label">
+            <template v-if="projectProvider.source === 'default'">
+              Nothing chosen, so new sessions here start on Claude Code.
+            </template>
+            <template v-else>
+              Chosen for this repository.
+            </template>
+          </p>
+
+          <!--
+            What it cannot do, next to the choice rather than in a footnote. The
+            permissions line is the one that matters: an agent that cannot stop
+            and ask does not wait to be let through, it is refused and the turn
+            carries on having done less — which reads like a turn that went badly.
+          -->
+          <ul
+            v-if="agentShortfalls(projectProvider.provider).length"
+            class="fs-sm space-y-1"
+            style="color: var(--warning);"
+          >
+            <li
+              v-for="line in agentShortfalls(projectProvider.provider)"
+              :key="line"
+              class="flex items-start gap-1.5"
+            >
+              <UIcon name="i-lucide-info" class="size-3.5 shrink-0 mt-0.5" />
+              <span>{{ line }}</span>
+            </li>
+          </ul>
+
+          <!-- Forgetting the choice, not choosing Claude Code — see `source`. -->
+          <UButton
+            v-if="projectProvider.source === 'configured'"
+            label="Reset to the default"
+            size="xs"
+            variant="ghost"
+            color="neutral"
+            :loading="providerSaving"
+            @click="resetProjectProvider()"
+          />
         </template>
       </div>
 

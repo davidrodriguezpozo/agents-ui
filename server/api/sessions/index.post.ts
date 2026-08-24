@@ -1,5 +1,7 @@
 import { getProjectDir } from '../../utils/scope'
 import { startSession } from '../../utils/startSession'
+import { asProviderId } from '../../utils/providers'
+import { providerForProject } from '../../utils/projectProvider'
 import type { TrustLevel } from '../../utils/trust'
 import { titleFromPrompt } from '../../utils/sessions'
 import { startTurn } from '../../utils/sessionTurn'
@@ -29,6 +31,8 @@ export default defineEventHandler(async (event) => {
     agentSlug?: string
     baseRef?: string
     trust?: TrustLevel
+    /** Which agent runs the turns. Omitted falls back to the repository's default. */
+    provider?: string
   }>(event)
 
   const repoDir = body?.repoDir || getProjectDir(event)
@@ -68,6 +72,11 @@ export default defineEventHandler(async (event) => {
     agentSlug: body?.agentSlug,
     baseRef: body?.baseRef,
     trust: body?.trust,
+    // What was picked for this session, then what the repository was set to.
+    // Anything unrecognised reads as nothing chosen rather than as an error —
+    // the answer is Claude Code either way, and refusing to cut a worktree over
+    // a bad provider name would lose more than it protects.
+    provider: asProviderId(body?.provider) ?? await providerForProject(repoDir),
   })
 
   if (!prompt && !images.length) return session

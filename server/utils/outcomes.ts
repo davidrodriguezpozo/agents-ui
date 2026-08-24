@@ -4,6 +4,7 @@ import { landedSince, type LandedHow, type SessionLanded } from './landed'
 import { personKey, type Identity } from './identity'
 import type { SessionReverted } from './revertWatch'
 import type { CheckStatus, SessionCheck } from './checks'
+import { capabilitiesOf } from './providers'
 import type { SideCost } from './spend'
 
 /**
@@ -153,6 +154,22 @@ export interface OutcomeTurn {
    * nothing — see `turnChangedFiles`.
    */
   changedFiles?: boolean
+  /**
+   * Whether the agent that ran this turn reports what it cost at all.
+   *
+   * **Absent means yes**, which is every turn recorded before there was more
+   * than one agent. False is a different fact from `costUsd: 0` and the
+   * distinction is the whole reason this field exists: a turn on Cursor has no
+   * `total_cost_usd` to read, so its zero means *unknown*, not *free*.
+   *
+   * Conflating the two would make the ledger's most-quoted figure lie in the
+   * flattering direction. A window of Cursor merges would add landings to the
+   * denominator of cost-per-landing and nothing to the numerator, so switching
+   * agent would appear to make the work cheaper — the number would improve while
+   * nothing about the work had. So an uncostable landing is counted, kept out of
+   * that division, and said.
+   */
+  costReported?: boolean
 }
 
 /** A session, structurally: where it lives, how it ended, and what the checks said. */
@@ -184,6 +201,8 @@ export interface OutcomeRunRecord {
   scheduleId?: string
   sessionId?: string
   stats?: { costUsd?: number; model?: string }
+  /** Which agent took it. Absent means Claude Code — see `providerFor`. */
+  provider?: string
   /** Who asked for it. Absent on a ritual and on everything older. */
   by?: Identity
   events?: RunEvent[]
@@ -210,6 +229,10 @@ export function outcomeTurnOf(run: OutcomeRunRecord): OutcomeTurn {
     input: run.input,
     model: run.stats?.model,
     projectDir: run.projectDir,
+    // Asked of the provider rather than inferred from a zero cost: a Claude
+    // turn really can cost nothing (cached, instant, refused), and reading that
+    // as "uncostable" would quietly drop it out of cost-per-landing.
+    costReported: capabilitiesOf(run.provider).reportsCostUsd,
     // The key, not the identity — the name beside it is a label a caller looks
     // up, and two spellings of one person must not become two rows.
     person: personKey(run.by),
@@ -290,6 +313,15 @@ export interface OutcomeTotals {
   openCostUsd: number
   /** Spend no session owns: rituals, one-off commands, agent runs. */
   unattributedCostUsd: number
+  /**
+   * Landings whose cost this app cannot know, because the agent that did the
+   * work does not report one. Counted in `landings.total` — the work landed
+   * either way — and excluded from `costPerLandingUsd`, which is the only
+   * figure they would distort.
+   */
+  landingsWithoutCost: number
+  /** Turns run by an agent that reports no cost. Their spend is absent, not zero. */
+  uncostedTurns: number
   /** Indicative. See the note at the top of this file. */
   costPerLandingUsd: number | null
   changedFiles: ChangedShare
@@ -347,6 +379,8 @@ interface Tally {
   running: number
   unknown: number
   landedOverFailing: number
+  landingsWithoutCost: number
+  uncostedTurns: number
 }
 
 function tally(): Tally {
@@ -369,6 +403,8 @@ function tally(): Tally {
     running: 0,
     unknown: 0,
     landedOverFailing: 0,
+    landingsWithoutCost: 0,
+    uncostedTurns: 0,
   }
 }
 
@@ -380,6 +416,9 @@ function totalsOf(t: Tally): OutcomeTotals {
     elsewhere: t.elsewhere,
   }
 
+  /** Landings there is any hope of costing. Never negative, however odd the records. */
+  const costable = Math.max(0, landings.total - t.landingsWithoutCost)
+
   return {
     turns: t.turns,
     costUsd: t.costUsd,
@@ -389,9 +428,20 @@ function totalsOf(t: Tally): OutcomeTotals {
     abandonedCostUsd: t.abandonedCostUsd,
     openCostUsd: t.openCostUsd,
     unattributedCostUsd: t.unattributedCostUsd,
-    // Divided by the landings, not by the sessions: what a merge cost is the
-    // question, and a window with no merge has no answer rather than a zero.
-    costPerLandingUsd: landings.total > 0 ? t.landedCostUsd / landings.total : null,
+    landingsWithoutCost: t.landingsWithoutCost,
+    uncostedTurns: t.uncostedTurns,
+    /*
+     * Divided by the landings, not by the sessions: what a merge cost is the
+     * question, and a window with no merge has no answer rather than a zero.
+     *
+     * And divided only by the landings whose cost is knowable. A merge done by
+     * an agent that reports no cost contributes nothing to the numerator, so
+     * leaving it in the denominator would make the average fall every time one
+     * happened — the figure improving because the records got worse. A window of
+     * nothing but those has no answer at all, which is the honest result and the
+     * one the page shows as a blank.
+     */
+    costPerLandingUsd: costable > 0 ? t.landedCostUsd / costable : null,
     changedFiles: {
       turns: t.changed,
       measured: t.measured,
@@ -505,6 +555,16 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
 
   /** The last costed turn of each session in this window — the last hand on it. */
   const lastTurn = new Map<string, OutcomeTurn>()
+  /**
+   * The last turn of each session in this window whether it could be costed or
+   * not, which is what says whether a landing is costable at all.
+   *
+   * Kept beside `lastTurn` rather than replacing it, so grouping is unchanged: a
+   * landing is still filed under the group of the last *costed* turn. This one
+   * answers a narrower question — was the last hand on this session an agent
+   * that reports what it spent — and is read only for that.
+   */
+  const lastAnyTurn = new Map<string, OutcomeTurn>()
   /** Every session with a turn in this window, costed or not. */
   const touched = new Set<string>()
 
@@ -512,10 +572,13 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
     const session = turn.sessionId ? sessions.get(turn.sessionId) : undefined
     const cost = typeof turn.costUsd === 'number' && turn.costUsd > 0 ? turn.costUsd : 0
     const fate = fateOf(session)
+    // Absent means yes: every turn recorded before there was a second agent.
+    const costReported = turn.costReported !== false
 
     into(turn, (t) => {
       t.turns += 1
       t.costUsd += cost
+      if (!costReported) t.uncostedTurns += 1
       if (turn.changedFiles !== undefined) {
         t.measured += 1
         if (turn.changedFiles) t.changed += 1
@@ -532,6 +595,8 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
       const previous = lastTurn.get(turn.sessionId)
       if (!previous || turnAt(turn) >= turnAt(previous)) lastTurn.set(turn.sessionId, turn)
     }
+    const previousAny = lastAnyTurn.get(turn.sessionId)
+    if (!previousAny || turnAt(turn) >= turnAt(previousAny)) lastAnyTurn.set(turn.sessionId, turn)
   }
 
   /*
@@ -550,8 +615,20 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
     // `landedSince` filters on the record but is typed on the session, so the
     // narrowing does not survive the call.
     if (!landed || landed.at > until) continue
+    /*
+     * A landing nothing here can cost. Either the agent that did the work
+     * reports no cost, or — the case that predates providers entirely — the
+     * session did all its work before this window and has no turn in it to
+     * cost. Both mean the same thing to cost-per-landing: it landed, and its
+     * price is not knowable, so counting it in that division would report an
+     * average of merges that were never all costed.
+     */
+    const last = lastAnyTurn.get(id)
+    const uncostable = !last || last.costReported === false
+
     into(lastTurn.get(id), (t) => {
       t[LANDED_FIELD[landed.how]] += 1
+      if (uncostable) t.landingsWithoutCost += 1
       if (landed.overrodeChecks) t.landedOverFailing += 1
       /*
        * Not gated on `until`, unlike everything else here, and that is a choice

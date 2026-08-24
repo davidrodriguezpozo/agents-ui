@@ -123,6 +123,11 @@ export interface Session {
   baseSha: string
   status: 'idle' | 'running' | 'archived'
   agentSlug?: string
+  /**
+   * Which agent this session's turns run through. **Absent means Claude Code**,
+   * which is every session started before there was a choice.
+   */
+  provider?: string
   runIds: string[]
   createdAt: number
   updatedAt: number
@@ -433,22 +438,30 @@ export function useSessions() {
     agentSlug?: string,
     trust?: TrustLevel,
     attachments: ChatAttachment[] = [],
+    /** Which agent runs the turns. Null leaves it to the repository's default. */
+    provider?: string | null,
   ) {
     const session = await $fetch<StartedSession>('/api/sessions', {
       method: 'POST',
       // Chosen before it starts, so the first turn — usually the longest —
       // honours it rather than running at the default and being changed after.
-      body: { prompt, agentSlug, trust, attachments },
+      // Which agent is the same kind of choice, and is made in the same place.
+      body: { prompt, agentSlug, trust, attachments, provider: provider ?? undefined },
     })
     await fetchAll()
     return session
   }
 
   /** One session per instruction, each on its own branch, all working at once. */
-  async function createMany(prompts: string[], agentSlug?: string, trust?: TrustLevel) {
+  async function createMany(
+    prompts: string[],
+    agentSlug?: string,
+    trust?: TrustLevel,
+    provider?: string | null,
+  ) {
     const result = await $fetch<BatchResult>('/api/sessions/batch', {
       method: 'POST',
-      body: { prompts, agentSlug, trust },
+      body: { prompts, agentSlug, trust, provider: provider ?? undefined },
     })
     await fetchAll()
     return result
@@ -928,6 +941,60 @@ export function useProjectSandbox() {
     saving.value = true
     try {
       await $fetch('/api/project/sandbox', { method: 'POST', body: { reset: true } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  return { state, saving, load, save, reset }
+}
+
+export interface ProjectProviderState {
+  dir: string | null
+  provider: string
+  /** `default` means nobody chose, which is not the same as choosing Claude Code. */
+  source: 'configured' | 'default' | null
+}
+
+/**
+ * Which agent this project's new sessions start on.
+ *
+ * The quieter of the two places a provider is chosen: the picker on Start is for
+ * the session in front of you, and this is for the answer you would otherwise
+ * give it every time. A repository whose suite only one agent reliably passes is
+ * a real thing, and setting it once beats remembering it per session.
+ *
+ * Same shape as `useProjectSandbox`, including `source`, and for the same
+ * reason: forgetting a choice has to be distinguishable from making the default
+ * one, or Reset vanishes for everybody who never set anything.
+ */
+export function useProjectProvider() {
+  const state = useState<ProjectProviderState | null>('project-provider', () => null)
+  const saving = useState('project-provider-saving', () => false)
+
+  async function load() {
+    try {
+      state.value = await $fetch<ProjectProviderState>('/api/project/provider')
+    } catch (e) {
+      console.error('[useProjectProvider] load:', e)
+    }
+  }
+
+  async function save(provider: string) {
+    saving.value = true
+    try {
+      await $fetch('/api/project/provider', { method: 'POST', body: { provider } })
+      await load()
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function reset() {
+    saving.value = true
+    try {
+      await $fetch('/api/project/provider', { method: 'POST', body: { reset: true } })
       await load()
     } finally {
       saving.value = false

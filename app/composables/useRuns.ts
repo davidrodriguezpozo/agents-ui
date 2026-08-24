@@ -48,6 +48,11 @@ export interface RunSummary {
   stoppedBy?: 'budget' | 'turns'
   scheduleId?: string
   sessionId?: string
+  /**
+   * Which agent took the turn. **Absent means Claude Code**, which is every run
+   * recorded before there was a choice.
+   */
+  provider?: string
   source: RunSource
 }
 

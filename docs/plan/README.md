@@ -84,6 +84,15 @@ four separate units — that file is the reason this plan has waves at all rathe
 | 29 | A second engineer's first hour | 9 | 16, 18 |
 | 30 | Reconcile the roadmap's premise | 1 | — |
 
+## Beyond the thirty
+
+Units after 30 are not from the roadmap scan and are not in a wave. They are written the same
+way and run the same way; each says what it changes and what it must run alone against.
+
+| # | Unit | Depends on |
+| --- | --- | --- |
+| 31 | One session, any agent | — |
+
 ## Two honest caveats
 
 **Depth is graduated.** Units 01–15 name real files, real functions and real edge cases, and

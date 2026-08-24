@@ -45,6 +45,8 @@ export interface Session {
   runIds: string[]
   createdAt: number
   updatedAt: number
+  /** Which agent its turns run through. Absent means Claude Code. */
+  provider?: string
   trust?: TrustLevel
   prUrl?: string
   check?: SessionCheck
@@ -135,6 +137,8 @@ export interface RunSummary {
   stoppedBy?: 'budget' | 'turns'
   hiddenAt?: number
   sessionId?: string
+  /** Which agent took the turn. Absent means Claude Code. */
+  provider?: string
   source: string
 }
 

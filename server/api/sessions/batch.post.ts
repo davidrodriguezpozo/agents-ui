@@ -1,6 +1,8 @@
 import { getProjectDir } from '../../utils/scope'
 import { startSession } from '../../utils/startSession'
 import type { TrustLevel } from '../../utils/trust'
+import { asProviderId } from '../../utils/providers'
+import { providerForProject } from '../../utils/projectProvider'
 import { titleFromPrompt, type Session } from '../../utils/sessions'
 import { startTurn } from '../../utils/sessionTurn'
 import { checkBudget } from '../../utils/budget'
@@ -33,6 +35,8 @@ export default defineEventHandler(async (event): Promise<BatchResult> => {
     agentSlug?: string
     baseRef?: string
     trust?: TrustLevel
+    /** Which agent runs the turns. Omitted falls back to the repository's default. */
+    provider?: string
   }>(event)
 
   const repoDir = body?.repoDir || getProjectDir(event)
@@ -77,6 +81,13 @@ export default defineEventHandler(async (event): Promise<BatchResult> => {
   const started: BatchResult['started'] = []
   const failed: BatchResult['failed'] = []
 
+  /*
+   * Resolved once, before the loop. Twenty sessions started together are one
+   * decision, and reading the repository's default per session would be twenty
+   * reads of a file that cannot change in between.
+   */
+  const provider = asProviderId(body?.provider) ?? await providerForProject(repoDir)
+
   // Deliberately sequential. Every one of these runs `git worktree add` against
   // the same repository, and concurrent ones contend on the index lock — the
   // failures are intermittent and read like nothing in particular. The turns
@@ -90,6 +101,7 @@ export default defineEventHandler(async (event): Promise<BatchResult> => {
         title: titleFromPrompt(prompt),
         agentSlug: body?.agentSlug,
         baseRef: body?.baseRef,
+        provider,
       })
 
       try {

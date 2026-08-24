@@ -61,6 +61,12 @@ export interface WorkItem {
   changedFiles?: number
   turnCount?: number
   /**
+   * Which agent did it. **Absent means Claude Code**, which is every row
+   * recorded before there was a choice — see `marksProvider` for why only the
+   * rows that differ carry a badge.
+   */
+  provider?: string
+  /**
    * Runs only: the id to address it by, so removing a row does not mean taking
    * `key` apart to find the thing it refers to.
    */
@@ -225,6 +231,7 @@ export function fromSession(session: Session): WorkItem {
     at: session.updatedAt,
     changedFiles: session.worktree?.changedFiles,
     turnCount: session.turnCount,
+    provider: session.provider,
   }
 }
 
@@ -257,6 +264,7 @@ export function fromRun(run: RunSummary): WorkItem {
     title: run.title,
     outcome: label,
     detail: run.invocation ?? run.error ?? run.preview,
+    provider: run.provider,
     to: `/runs/${run.id}`,
     at: run.completedAt ?? run.startedAt ?? run.createdAt,
     costUsd: run.costUsd,

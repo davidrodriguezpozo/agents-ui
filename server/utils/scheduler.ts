@@ -539,6 +539,7 @@ async function runOnce(
     agentSlug: schedule.agentSlug,
     projectDir: options.cwd,
     scheduleId: schedule.id,
+    provider: schedule.provider,
   })
 
   // Advance the schedule before the run finishes, so a long run can't cause
@@ -618,6 +619,7 @@ async function runChain(
       agentSlug: schedule.agentSlug,
       projectDir: options.cwd,
       scheduleId: schedule.id,
+      provider: schedule.provider,
       chainId,
       stepIndex: index,
     })

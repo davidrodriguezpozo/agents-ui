@@ -22,5 +22,7 @@ export interface RunSummary {
   needsAttention?: boolean
   deniedTools?: string[]
   stoppedBy?: 'budget' | 'turns'
+  /** Which agent took the turn. Absent means Claude Code. */
+  provider?: string
   source: string
 }

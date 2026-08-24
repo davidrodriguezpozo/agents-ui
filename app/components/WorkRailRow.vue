@@ -109,6 +109,17 @@ const pullNote = computed(() => {
       <!-- What is wrong with the pull request outranks where the session got to -->
       <span v-if="pullNote" :style="{ color: pullNote.color }">{{ pullNote.text }}</span>
       <span v-else>{{ item.outcome }}</span>
+      <!--
+        Which agent, at rail width: the icon alone, because the label would take
+        a third of the row to repeat what the tooltip says. Only on rows that are
+        not the usual agent — see `marksProvider`.
+      -->
+      <UIcon
+        v-if="marksProvider(item.provider)"
+        :name="providerLook(item.provider).icon"
+        class="size-3 shrink-0 ink-4"
+        :title="`Ran on ${providerLabel(item.provider)}`"
+      />
       <span v-if="repoName" class="shrink-0 ink-4">{{ repoName }}</span>
     </span>
 

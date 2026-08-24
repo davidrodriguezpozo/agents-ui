@@ -108,6 +108,20 @@ const change = computed(() => {
     : { text: `${percent}% dearer per merge`, tone: 'var(--warning)' }
 })
 
+/**
+ * The merges the headline figure is actually an average over.
+ *
+ * Not `landings.total`: a merge whose work was done by an agent that reports no
+ * cost, or before this window opened, contributes nothing to `landedCostUsd`, so
+ * dividing by it would report an average of merges that were never all costed.
+ * The count beside the figure has to be the count that made it.
+ */
+const costedLandings = computed(() => {
+  const totals = current.value
+  if (!totals) return 0
+  return Math.max(0, totals.landings.total - totals.landingsWithoutCost)
+})
+
 /** Spend that no merge will be credited with — see the note at the top. */
 const unmerged = computed(() => {
   const totals = current.value
@@ -186,11 +200,28 @@ function windowLabel(from: number, to: number): string {
 
         <p class="headline-note">
           <template v-if="current.costPerLandingUsd !== null">
-            {{ current.landings.total }} merge{{ current.landings.total === 1 ? '' : 's' }} from
+            {{ costedLandings }} merge{{ costedLandings === 1 ? '' : 's' }} from
             {{ money(current.landedCostUsd) }} spent on the sessions behind them.
+          </template>
+          <template v-else-if="current.landings.total">
+            {{ current.landings.total }} merge{{ current.landings.total === 1 ? '' : 's' }} in this
+            window, and none of them can be costed, so there is no figure to report.
           </template>
           <template v-else>
             {{ money(current.costUsd) }} spent and nothing merged in this window.
+          </template>
+
+          <!--
+            Said where the figure is, not in the caveat: a denominator smaller
+            than the merge count above it is the kind of discrepancy somebody
+            checks the arithmetic over, and the answer has to be next to it.
+          -->
+          <template v-if="current.landingsWithoutCost">
+            <br>
+            {{ current.landingsWithoutCost }} more merge{{ current.landingsWithoutCost === 1 ? '' : 's' }}
+            left out of that: {{ current.landingsWithoutCost === 1 ? 'its' : 'their' }} work was done by
+            an agent that reports no cost, or before this window began. Counted as
+            {{ current.landingsWithoutCost === 1 ? 'a merge' : 'merges' }}, not as free work.
           </template>
 
           <br>

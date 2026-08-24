@@ -170,6 +170,20 @@ const marker = computed(() => {
         uncommitted
       </span>
       <!--
+        Which agent, but only when it is not the usual one. A badge reading
+        "Claude Code" on every row of a machine that has only ever used Claude
+        Code is a column identical on every row — the row worth a glance is the
+        one that differs.
+      -->
+      <span
+        v-if="marksProvider(session.provider)"
+        class="ink-3 flex items-center gap-1"
+        :title="`This session's turns run through ${providerLabel(session.provider)}`"
+      >
+        <UIcon :name="providerLook(session.provider).icon" class="size-3 shrink-0" />
+        {{ providerLabel(session.provider) }}
+      </span>
+      <!--
         Said on the row because it is the one that goes wrong quietly: merge one
         session and every other one is now judged against a base it does not
         have, while still showing the green it earned beforehand.
