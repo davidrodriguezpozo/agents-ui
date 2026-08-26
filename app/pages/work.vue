@@ -2,6 +2,7 @@
 import { errorMessage, errorSessionId } from '~/utils/errors'
 import { findSimilar } from '~/utils/similarSession'
 import { isSendKey } from '~/utils/keys'
+import { offersCommands, slashQuery } from '~/utils/slashCommands'
 import { IMAGE_MEDIA_TYPES, imageMediaType } from '~/utils/imageAttachments'
 import type { RunQuery } from '~/composables/useRuns'
 import { RUNS_QUERY } from '~/composables/useWorkList'
@@ -180,6 +181,90 @@ watch(racing, (on) => {
 
 const racingAgents = computed(() => agents.value.map(a => a.label).join(' vs '))
 
+/**
+ * The command list, in the box a session starts from.
+ *
+ * The session composer has had it since it shipped; this box had nothing, and
+ * it is the one place where the *first* turn is written — the turn that does
+ * the bulk of the work. `/code-review` typed here went off as literal text and
+ * came back having guessed at it, which is the failure this removes.
+ *
+ * Same component, same keys and the same rule as the session composer, so the
+ * habit carries between the two boxes. See `utils/slashCommands.ts`.
+ */
+const { commands, fetchAll: fetchCommands } = useCommands()
+const paletteOpen = ref(false)
+const palette = ref<{ move: (d: number) => void; choose: () => void; hasMatches: boolean } | null>(null)
+
+/**
+ * Which agent this instruction will actually reach.
+ *
+ * `Default` means whatever this repository is set to in Settings, so the answer
+ * is not readable off the picker alone — it comes from the same endpoint the
+ * setting is written through, and the server resolves a session the same way.
+ */
+const { state: projectProvider, load: loadProjectProvider } = useProjectProvider()
+const effectiveProvider = computed(() => startProvider.value ?? projectProvider.value?.provider ?? 'claude')
+
+// Another repository is another default agent. The command lists themselves are
+// refetched app-wide on a switch; this answer is not, so it is asked again here.
+watch(workingDir, () => { void loadProjectProvider() })
+
+/**
+ * Whether the session being started can use the library at all.
+ *
+ * Commands, skills and agents are Claude Code's own on-disk formats; Cursor has
+ * its own and they do not share a schema, so offering `/code-review` to a
+ * Cursor session offers something that resolves to nothing. A race is every
+ * agent at once, which is the same problem for whichever of them is not Claude
+ * Code — so it is not offered there either. This is the session page's
+ * `hasLibrary`, asked before the session exists.
+ */
+const hasLibrary = computed(() => !racing.value && effectiveProvider.value === 'claude')
+
+/** An agent that cannot use them takes the list away rather than leaving it up. */
+watch(hasLibrary, (can) => { if (!can) paletteOpen.value = false })
+
+const commandQuery = computed(() => slashQuery(prompt.value))
+
+watch(prompt, () => {
+  if (!hasLibrary.value) {
+    paletteOpen.value = false
+    return
+  }
+  paletteOpen.value = offersCommands(prompt.value)
+})
+
+function insertCommand(invocation: string) {
+  prompt.value = `${invocation} `
+  paletteOpen.value = false
+  // Back in the box with the cursor after the space, because what follows the
+  // command is usually the argument you opened the list to write.
+  nextTick(() => promptBox.value?.focus())
+}
+
+/** The box owns the keys while the list is open, so it can drive it. */
+function onPromptKey(event: KeyboardEvent) {
+  // Enter here means "pick the highlighted command", which has to win over
+  // starting — otherwise choosing one would cut a worktree for a half-typed
+  // instruction.
+  if (paletteOpen.value) {
+    if (event.key === 'ArrowDown') { event.preventDefault(); palette.value?.move(1); return }
+    if (event.key === 'ArrowUp') { event.preventDefault(); palette.value?.move(-1); return }
+    if (event.key === 'Escape') { event.preventDefault(); paletteOpen.value = false; return }
+    if (event.key === 'Enter' && !event.metaKey && palette.value?.hasMatches) {
+      event.preventDefault()
+      palette.value.choose()
+      return
+    }
+  }
+
+  if (!isSendKey(event)) return
+
+  event.preventDefault()
+  onCreate()
+}
+
 const batchMode = ref(false)
 /**
  * The box that takes images is the single-session one on Start. Elsewhere on
@@ -328,8 +413,12 @@ async function onAdopt(sdkSessionId: string) {
 onMounted(async () => {
   // The sessions, the runs, the worktrees and the projects are the layout's — it
   // owns them because the rail needs them on every route of this surface, not
-  // just this one. These two are only ever read here.
-  await Promise.all([fetchTranscripts(), countRemoved()])
+  // just this one. These are only ever read here.
+  //
+  // The commands and the repository's agent are for the box: the list has to be
+  // there before the first `/`, and which agent this starts on decides whether
+  // the list is offered at all.
+  await Promise.all([fetchTranscripts(), countRemoved(), fetchCommands(), loadProjectProvider()])
 })
 
 const imageInput = ref<HTMLInputElement | null>(null)
@@ -880,15 +969,31 @@ async function closeEmpty(key: string, ids: string[]) {
       <div v-if="workingDir && pane === 'start'" class="order-3 space-y-1.5">
         <!-- One session, told what to do in the same breath -->
         <template v-if="!batchMode">
-          <div class="flex gap-2 items-start">
+          <div class="flex gap-2 items-start relative">
+            <!--
+              Sits above the box, where the instruction being typed still shows.
+              The same list the session composer opens, in the box where the
+              first turn is written.
+            -->
+            <div v-if="paletteOpen && hasLibrary" class="absolute bottom-full left-0 right-0 mb-2 z-10">
+              <CommandPalette
+                ref="palette"
+                :commands="commands"
+                :query="commandQuery"
+                @select="insertCommand"
+                @close="() => { paletteOpen = false }"
+              />
+            </div>
             <textarea
               ref="promptBox"
               v-model="prompt"
               rows="2"
               class="field-input flex-1 resize-y"
-              placeholder="What should this session do? Enter to start, Shift+Enter for a new line."
+              :placeholder="hasLibrary
+                ? 'What should this session do? Type / for commands. Enter to start, Shift+Enter for a new line.'
+                : 'What should this session do? Enter to start, Shift+Enter for a new line.'"
               :disabled="creating"
-              @keydown="e => { if (isSendKey(e)) { e.preventDefault(); onCreate() } }"
+              @keydown="onPromptKey"
               @paste="onPromptPaste"
             />
             <input
@@ -908,6 +1013,22 @@ async function closeEmpty(key: string, ids: string[]) {
               title="Attach an image — or paste or drop one"
               aria-label="Attach an image"
               @click="imageInput?.click()"
+            />
+            <!--
+              For the command you do not know exists. Not offered when the
+              session would not start on Claude Code: a button opening a list of
+              things that resolve to nothing is worse than no button.
+            -->
+            <UButton
+              v-if="hasLibrary"
+              icon="i-lucide-slash"
+              size="sm"
+              variant="ghost"
+              color="neutral"
+              :disabled="creating"
+              :title="`${commands.length} commands available`"
+              aria-label="Show commands"
+              @click="() => { paletteOpen = !paletteOpen }"
             />
             <UButton
               label="Start session"
