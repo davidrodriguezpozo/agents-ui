@@ -4,6 +4,8 @@ import { startTurn } from '../../../utils/sessionTurn'
 import { checkBudget } from '../../../utils/budget'
 import { intentFor, readPulls, turnForIntent, type WorkIntent } from '../../../utils/reviews'
 import { readPreferences } from '../../../utils/preferences'
+import { asProviderId } from '../../../utils/providers'
+import { providerForProject } from '../../../utils/projectProvider'
 
 /**
  * Turn a pull request into a session that is already working on it.
@@ -25,7 +27,13 @@ import { readPreferences } from '../../../utils/preferences'
  * a confusing transcript.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ number?: number; intent?: WorkIntent; agentSlug?: string }>(event)
+  const body = await readBody<{
+    number?: number
+    intent?: WorkIntent
+    agentSlug?: string
+    /** Which agent runs the turns. Omitted falls back to the repository's default. */
+    provider?: string
+  }>(event)
   const repoDir = getProjectDir(event)
 
   if (!repoDir) {
@@ -86,6 +94,12 @@ export default defineEventHandler(async (event) => {
     agentSlug: body.agentSlug,
     title: `#${pull.number} ${pull.title}`,
     detach: intent === 'review',
+    // The same answer the box on /work would have given, asked here because a
+    // row on Land has no picker on it. Without this every session started from
+    // this page ran on Claude Code whatever the repository was set to — the
+    // choice was made in settings and then quietly ignored by the one surface
+    // that starts most of the work.
+    provider: asProviderId(body?.provider) ?? await providerForProject(repoDir),
   })
 
   // The opening turn is your own command for this action when you have set one,

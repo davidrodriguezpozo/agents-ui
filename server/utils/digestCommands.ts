@@ -1,6 +1,7 @@
 import { runClaude } from './cli'
 import { describeRunFailure, salvageEnvelope, type RunEnvelope } from './inbox'
 import { startSession } from './startSession'
+import { providerForProject } from './projectProvider'
 import { startTurn } from './sessionTurn'
 import { titleFromPrompt } from './sessions'
 import { checkBudget } from './budget'
@@ -231,7 +232,14 @@ async function startFromReply(
   repoDir: string,
 ): Promise<{ sessionId: string; title: string; ts: string } | { error: string }> {
   try {
-    const session = await startSession({ repoDir, title: titleFromPrompt(command.text) })
+    const session = await startSession({
+      repoDir,
+      title: titleFromPrompt(command.text),
+      // Nobody is here to pick one, so the repository's choice is the whole
+      // answer. A session started by replying to the digest is an ordinary
+      // session and has to run on the agent this repository was set to.
+      provider: await providerForProject(repoDir),
+    })
 
     try {
       await startTurn(session, command.text)

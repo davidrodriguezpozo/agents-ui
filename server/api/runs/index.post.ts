@@ -3,6 +3,8 @@ import { createRun } from '../../utils/runStore'
 import { executeRun } from '../../utils/runner'
 import { checkBudget } from '../../utils/budget'
 import { gitIdentity } from '../../utils/identity'
+import { asProviderId } from '../../utils/providers'
+import { providerForProject } from '../../utils/projectProvider'
 import type { RunKind } from '../../utils/runStore'
 
 interface StartRunBody extends RunRequest {
@@ -10,6 +12,8 @@ interface StartRunBody extends RunRequest {
   kind?: RunKind
   title?: string
   invocation?: string
+  /** Which agent takes it. Omitted falls back to the repository's default. */
+  provider?: string
 }
 
 /**
@@ -41,6 +45,9 @@ export default defineEventHandler(async (event) => {
     invocation: body.invocation,
     agentSlug: body.agentSlug,
     projectDir: options.cwd,
+    // A run is a turn like any other, so it answers to the same choice a
+    // session does. Keyed by repository, never by `cwd` — see `RunRequest.repoDir`.
+    provider: asProviderId(body.provider) ?? await providerForProject(body.repoDir ?? options.cwd),
     // Somebody pressed something to get here — the page, the palette, or the
     // terminal client, all of which post to this route. A ritual does not: the
     // scheduler builds its own run and leaves it unattributed, which is the

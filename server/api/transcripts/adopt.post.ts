@@ -40,6 +40,11 @@ export default defineEventHandler(async (event) => {
     agentSlug: body.agentSlug,
     sdkSessionId: transcript.sdkSessionId,
     adoptedAt: Date.now(),
+    // Deliberately not the repository's chosen agent, and the one exception to
+    // that rule. `sdkSessionId` is an id only Claude Code can resume, and the
+    // transcript copied below is Claude Code's own file — handing either to
+    // another agent would produce a session whose first turn cannot find the
+    // conversation it exists to continue.
   })
 
   // Without this the first turn fails with "no conversation found": the SDK

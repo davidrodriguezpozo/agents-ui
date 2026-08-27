@@ -1,5 +1,6 @@
 import { findBranchHolder } from './branchHolder'
 import { newSessionId, saveSession, type Session } from './sessions'
+import type { ProviderId } from './providers/types'
 import {
   createDetachedWorktree,
   createWorktreeOn,
@@ -64,6 +65,17 @@ export async function startSessionFromRef(options: {
   repoDir: string
   ref: string
   agentSlug?: string
+  /**
+   * Which agent this session's turns run through, decided before it starts for
+   * the reason `startSession` gives: the conversation lives inside one
+   * provider's history and cannot be moved to another half way through.
+   *
+   * Only reaches a workspace this call creates. Continuing or adopting one that
+   * already has the branch hands back the session that is already there, and
+   * that session keeps the agent it was started with — a repository whose
+   * default changed yesterday must not silently switch an open conversation.
+   */
+  provider?: ProviderId
   /** Overrides the title derived from the ref, for a caller with a better one. */
   title?: string
   /**
@@ -137,6 +149,7 @@ export async function startSessionFromRef(options: {
     branch,
     baseBranch,
     agentSlug: options.agentSlug,
+    provider: options.provider,
     prUrl,
   }
 
@@ -218,6 +231,8 @@ type Draft = {
   branch: string
   baseBranch: string
   agentSlug?: string
+  /** Absent means Claude Code, exactly as it does on a saved session. */
+  provider?: ProviderId
   prUrl?: string
 }
 

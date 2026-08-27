@@ -5,6 +5,8 @@ import { checkBudget } from '../../../utils/budget'
 import { findSession, readSessions, type Session } from '../../../utils/sessions'
 import { findTicket, notionIntakeStore } from '../../../utils/notionIntake'
 import { resolveRef } from '../../../utils/worktrees'
+import { asProviderId, type ProviderId } from '../../../utils/providers'
+import { providerForProject } from '../../../utils/projectProvider'
 import {
   issueBranchName, issuePrompt, parseIssueKey, readIssueDetail, sanitiseIssueIntent,
   sessionOnIssue, sessionOnTicket, ticketBranchName, ticketDetail,
@@ -46,6 +48,8 @@ export default defineEventHandler(async (event) => {
     number?: number
     intent?: string
     agentSlug?: string
+    /** Which agent runs the turns. Omitted falls back to the repository's default. */
+    provider?: string
   }>(event)
 
   const repoDir = getProjectDir(event)
@@ -90,9 +94,19 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, data: { error: 'over_budget', message: budget.reason! } })
   }
 
+  // Asked only when a workspace is about to be cut. A session that already has
+  // this issue keeps the agent it was started with, for the reason
+  // `startSession` gives: the conversation lives inside one provider's history.
   const { session, how } = prepared.existing
     ? { session: await continueOn(prepared.existing.id), how: 'continued' as const }
-    : { session: await prepared.cut(repoDir, body.agentSlug), how: 'created' as const }
+    : {
+        session: await prepared.cut(
+          repoDir,
+          body.agentSlug,
+          asProviderId(body?.provider) ?? await providerForProject(repoDir),
+        ),
+        how: 'created' as const,
+      }
 
   const prompt = issuePrompt(prepared.detail, intent, { branch: session.branch })
 
@@ -114,7 +128,7 @@ export default defineEventHandler(async (event) => {
 interface Prepared {
   detail: IssueDetail
   existing: { id: string; title: string } | null
-  cut: (repoDir: string, agentSlug?: string) => Promise<Session>
+  cut: (repoDir: string, agentSlug?: string, provider?: ProviderId) => Promise<Session>
 }
 
 /** A GitHub issue, read again at the moment of the press. */
@@ -144,7 +158,7 @@ async function prepareIssue(repoDir: string, number: number, all: Session[]): Pr
     // This repository's sessions only. #42 exists in every project on the
     // machine, and matching across them would hand the work to somebody else's.
     existing: sessionOnIssue(number, all.filter(s => s.repoDir === repoDir)),
-    cut: (dir, agentSlug) => cutForIssue(dir, issue, agentSlug),
+    cut: (dir, agentSlug, provider) => cutForIssue(dir, issue, agentSlug, provider),
   }
 }
 
@@ -177,7 +191,7 @@ async function prepareTicket(ticketId: string, all: Session[]): Promise<Prepared
     // Every project's sessions — see `sessionOnTicket` for why a page id does not
     // need the restriction an issue number does.
     existing: sessionOnTicket(ticket.id, all),
-    cut: (dir, agentSlug) => cutForTicket(dir, ticket, agentSlug),
+    cut: (dir, agentSlug, provider) => cutForTicket(dir, ticket, agentSlug, provider),
   }
 }
 
@@ -227,6 +241,7 @@ async function cutForIssue(
   repoDir: string,
   issue: { number: number | null; title: string; url: string },
   agentSlug?: string,
+  provider?: ProviderId,
 ): Promise<Session> {
   const preferred = issueBranchName(issue.number!, issue.title)
   const taken = Boolean(await resolveRef(repoDir, `refs/heads/${preferred}`))
@@ -236,6 +251,7 @@ async function cutForIssue(
     title: `#${issue.number} ${issue.title}`,
     branch: taken ? undefined : preferred,
     agentSlug,
+    provider,
     issueOf: { number: issue.number!, url: issue.url, title: issue.title },
   })
 }
@@ -248,6 +264,7 @@ async function cutForTicket(
   repoDir: string,
   ticket: { id: string; title: string; url: string },
   agentSlug?: string,
+  provider?: ProviderId,
 ): Promise<Session> {
   const preferred = ticketBranchName(ticket)
   const taken = Boolean(await resolveRef(repoDir, `refs/heads/${preferred}`))
@@ -257,6 +274,7 @@ async function cutForTicket(
     title: ticket.title,
     branch: taken ? undefined : preferred,
     agentSlug,
+    provider,
     ticketOf: { id: ticket.id, url: ticket.url, title: ticket.title },
   })
 }

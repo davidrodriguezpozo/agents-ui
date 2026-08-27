@@ -1,6 +1,7 @@
 import type { Workflow } from '~/types'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, getActive, readRun } from './runStore'
+import { providerForProject } from './projectProvider'
 import { executeRun } from './runner'
 import { checkBudget } from './budget'
 import { withRunSlot } from './runQueue'
@@ -111,6 +112,15 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
   /** Where a banner about this workflow takes you: the workflow's own page. */
   const workflowLink = `/workflows/${record.workflowSlug}`
 
+  /**
+   * Every step runs on the agent this repository was set to.
+   *
+   * Read once rather than per step: a workflow is one piece of work, and a
+   * setting changed while it is running should not hand step four to a
+   * different agent than step three.
+   */
+  const provider = await providerForProject(record.projectDir)
+
   try {
     for (const [index, step] of workflow.steps.entries()) {
       // Between steps as well as before the first: a workflow is the easiest
@@ -141,6 +151,7 @@ async function execute(workflow: Workflow, record: WorkflowRun): Promise<void> {
         input: stepInput(record.input, previous, step.label),
         agentSlug: step.agentSlug,
         projectDir: options.cwd,
+        provider,
       })
 
       steps.push({ stepId: step.id, agentSlug: step.agentSlug, runId: run.id })
