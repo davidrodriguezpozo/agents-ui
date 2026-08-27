@@ -3,7 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { isPending, pendingDrafts, retiredSince, type ReviewDraft } from '../server/utils/reviewDraft'
-import { forgetLivePulls, retireStale, retirementFor, type LivePull } from '../server/utils/reviewRetire'
+import {
+  forgetLivePulls,
+  retireStale,
+  retirementFor,
+  retirementForClosedSession,
+  type LivePull,
+} from '../server/utils/reviewRetire'
 
 ;(globalThis as any).createError = (init: any) => Object.assign(new Error(init.message), init)
 
@@ -106,6 +112,17 @@ describe('retirementFor', () => {
     expect(out?.reason).toBe('pr_closed')
   })
 
+  /**
+   * Said in the draft's own terms, because it is the sentence the pane shows
+   * where the review used to have a send button.
+   */
+  it('names the pull request when the session that composed it was closed', () => {
+    const out = retirementForClosedSession(draft(), NOW)
+    expect(out.reason).toBe('session_closed')
+    expect(out.detail).toContain('#5442')
+    expect(out.at).toBe(NOW)
+  })
+
   /** An empty state field is an answer that did not arrive, not a closed pull request. */
   it('does not read a missing state as closed', () => {
     expect(retirementFor(draft(), pull({ state: '' }), NOW)).toBeNull()
@@ -155,6 +172,53 @@ describe('against a store', () => {
 
     expect((await pendingDrafts()).map(d => d.sessionId)).toEqual(['live'])
     expect((await retiredSince(NOW - 86_400_000)).map(d => d.sessionId)).toEqual(['gone'])
+  })
+
+  /**
+   * The one this was reopened for. A reviewing session told Claude to post the
+   * review itself and it went out through `gh`, so GitHub still calls the pull
+   * request open, unreviewed and unpushed — every question in the pass says
+   * "still waiting". Closing the session is the fact that says otherwise, and
+   * it is the only one this machine has.
+   */
+  it('retires a draft whose session has been closed, without asking GitHub', async () => {
+    await seed([draft({ sessionId: 'closed' })])
+
+    const result = await retireStale(
+      [{
+        draft: draft({ sessionId: 'closed' }),
+        // Unreachable on purpose: the verdict must not depend on the answer.
+        repoDir: join(dir, 'no-such-repository'),
+        sessionClosed: true,
+      }],
+      NOW,
+    )
+
+    expect(result.live).toHaveLength(0)
+    // Not unchecked either — nothing was asked, so nothing went unanswered.
+    expect(result.unchecked).toBe(0)
+    expect(result.retired.map(d => d.retired!.reason)).toEqual(['session_closed'])
+
+    expect(await pendingDrafts()).toHaveLength(0)
+    expect((await retiredSince(NOW - 86_400_000)).map(d => d.sessionId)).toEqual(['closed'])
+  })
+
+  /** A closed session next to an open one takes only its own draft off the list. */
+  it('leaves the drafts of sessions that are still open alone', async () => {
+    await seed([draft({ sessionId: 'closed' }), draft({ sessionId: 'open' })])
+
+    const result = await retireStale(
+      [
+        { draft: draft({ sessionId: 'closed' }), repoDir: join(dir, 'nowhere'), sessionClosed: true },
+        { draft: draft({ sessionId: 'open' }), repoDir: join(dir, 'nowhere') },
+      ],
+      NOW,
+    )
+
+    expect(result.retired.map(d => d.sessionId)).toEqual(['closed'])
+    expect(result.live.map(d => d.sessionId)).toEqual(['open'])
+    expect(result.unchecked).toBe(1)
+    expect((await pendingDrafts()).map(d => d.sessionId)).toEqual(['open'])
   })
 
   /**

@@ -48,6 +48,13 @@ export type RetireReason =
   | 'pr_closed'
   /** It has been pushed to since, so every anchor these comments carry is dead. */
   | 'head_moved'
+  /**
+   * The session that composed it has been closed, so nobody is coming back to
+   * press send. A reviewing session often posts its own review from the chat —
+   * `gh` in the conversation, this app never told — and closing it is the last
+   * thing you do afterwards. Either way a closed session is a finished one.
+   */
+  | 'session_closed'
 
 export interface Retirement {
   at: number
