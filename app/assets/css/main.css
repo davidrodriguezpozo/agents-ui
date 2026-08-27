@@ -2654,6 +2654,69 @@ details summary::-webkit-details-marker {
   white-space: pre;
 }
 
+/*
+ * A fenced block, and the button that takes it with you.
+ *
+ * The wrapper exists only to hold the button: it is positioned against this and
+ * not against the `<pre>`, which scrolls sideways — pinned to the pre, the
+ * button would slide off the first command long enough to need copying.
+ *
+ * At rest it is faint rather than absent. A control that only exists on hover is
+ * a control nobody finds, and this one is the answer to "how do I get that
+ * command out of here", which is a question people ask once.
+ */
+.markdown .code-block {
+  position: relative;
+}
+
+.markdown .code-copy {
+  position: absolute;
+  top: 0.55em;
+  right: 0.55em;
+  display: grid;
+  place-items: center;
+  width: 1.7em;
+  height: 1.7em;
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  /* Its own ground, because the code scrolls underneath it. */
+  background: var(--surface-raised);
+  color: var(--text-tertiary);
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+}
+
+.markdown .code-block:hover .code-copy,
+.markdown .code-copy:focus-visible {
+  opacity: 1;
+  color: var(--text-secondary);
+  border-color: var(--border-default);
+}
+
+.markdown .code-copy svg {
+  width: 0.95em;
+  height: 0.95em;
+}
+
+/* Only ever one of the two icons, and the check is the "it happened". */
+.markdown .code-copy .code-copy__done { display: none; }
+.markdown .code-copy[data-state='copied'] .code-copy__icon { display: none; }
+.markdown .code-copy[data-state='copied'] .code-copy__done { display: block; }
+
+.markdown .code-copy[data-state='copied'] {
+  opacity: 1;
+  color: var(--success);
+  border-color: var(--success);
+}
+
+/* A clipboard the browser refused is not a copy that quietly worked. */
+.markdown .code-copy[data-state='refused'] {
+  opacity: 1;
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
 .markdown strong { font-weight: 600; color: var(--text-primary); }
 .markdown em { font-style: italic; }
 
