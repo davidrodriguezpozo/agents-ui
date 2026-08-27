@@ -4,6 +4,8 @@ import {
 } from './schedules'
 import { hasGap, pollTrigger, promptFor, selectNew, titleFor, type TriggerEvent } from './eventTriggers'
 import { chainPrompt, shouldContinue, stepTitleFor } from './ritualChain'
+import { providerForProject } from './projectProvider'
+import type { ProviderId } from './providers/types'
 import { resolveRunOptionsFor } from './runOptions'
 import { createRun, listRunsBySchedule, type Run } from './runStore'
 import { executeRun } from './runner'
@@ -534,8 +536,18 @@ async function runOnce(
     return lateBy ? latePrompt(withEvent, lateBy) : withEvent
   }
 
+  /**
+   * What the ritual was set to, then what its repository was set to.
+   *
+   * A ritual has never had a picker of its own on the page that creates one, so
+   * `schedule.provider` is absent on every one of them — which meant an 8am
+   * ritual in a repository set to Cursor ran on Claude Code, silently and every
+   * morning. Read once per firing, so a chain cannot change agent partway.
+   */
+  const provider = await providerForSchedule(schedule)
+
   if (schedule.steps?.length) {
-    return runChain(schedule, schedule.steps, title, options, maxBudgetUsd, decorate)
+    return runChain(schedule, schedule.steps, title, options, maxBudgetUsd, decorate, provider)
   }
 
   const run = createRun({
@@ -546,7 +558,7 @@ async function runOnce(
     agentSlug: schedule.agentSlug,
     projectDir: options.cwd,
     scheduleId: schedule.id,
-    provider: schedule.provider,
+    provider,
   })
 
   // Advance the schedule before the run finishes, so a long run can't cause
@@ -558,6 +570,11 @@ async function runOnce(
   // not the exception.
   await withRunSlot(() => executeRun(run, options, { unattended: true, maxBudgetUsd }))
   return run
+}
+
+/** The ritual's own choice, or the one its repository was set to. */
+async function providerForSchedule(schedule: Schedule): Promise<ProviderId> {
+  return schedule.provider ?? await providerForProject(schedule.projectDir)
 }
 
 function newChainId(): string {
@@ -585,6 +602,7 @@ async function runChain(
   options: Awaited<ReturnType<typeof resolveRunOptionsFor>>,
   maxBudgetUsd: number | undefined,
   decorate: (base: string) => string,
+  provider: ProviderId,
 ): Promise<Run> {
   const chainId = newChainId()
   const done: { title: string; output: string }[] = []
@@ -626,7 +644,7 @@ async function runChain(
       agentSlug: schedule.agentSlug,
       projectDir: options.cwd,
       scheduleId: schedule.id,
-      provider: schedule.provider,
+      provider,
       chainId,
       stepIndex: index,
     })

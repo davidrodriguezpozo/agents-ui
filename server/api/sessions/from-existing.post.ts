@@ -1,5 +1,7 @@
 import { getProjectDir } from '../../utils/scope'
 import { startSessionFromRef } from '../../utils/sessionFromRef'
+import { asProviderId } from '../../utils/providers'
+import { providerForProject } from '../../utils/projectProvider'
 
 /**
  * Start a session on a branch or a pull request that already exists.
@@ -13,7 +15,13 @@ import { startSessionFromRef } from '../../utils/sessionFromRef'
  * which conversation you are now in.
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ ref?: string; repoDir?: string; agentSlug?: string }>(event)
+  const body = await readBody<{
+    ref?: string
+    repoDir?: string
+    agentSlug?: string
+    /** Which agent runs the turns. Omitted falls back to the repository's default. */
+    provider?: string
+  }>(event)
   const repoDir = body?.repoDir || getProjectDir(event)
 
   if (!repoDir) {
@@ -27,6 +35,9 @@ export default defineEventHandler(async (event) => {
     repoDir,
     ref: body?.ref ?? '',
     agentSlug: body?.agentSlug,
+    // The repository's answer unless this call gave one, the same order the
+    // sessions route uses. Only lands on a workspace this cuts — see `how`.
+    provider: asProviderId(body?.provider) ?? await providerForProject(repoDir),
   })
 
   return { ...session, how, note }

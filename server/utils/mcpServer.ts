@@ -7,6 +7,7 @@ import { checkBudget, startOfToday } from './budget'
 import { readPreferences } from './preferences'
 import { runsSince } from './runStore'
 import { readSessions, titleFromPrompt } from './sessions'
+import { providerForProject } from './projectProvider'
 import { startSession } from './startSession'
 import { startTurn } from './sessionTurn'
 import { localDay, summarizeSpend, type SideCost } from './spend'
@@ -320,7 +321,14 @@ const START_SESSION_TOOL: McpToolDefinition = {
     const budget = await checkBudget()
     if (!budget.allowed) return failure(budget.reason!)
 
-    const session = await startSession({ repoDir, title: titleFromPrompt(instruction) })
+    const session = await startSession({
+      repoDir,
+      title: titleFromPrompt(instruction),
+      // The repository's choice, the same one the sessions route falls back to.
+      // A session started over MCP is an ordinary session, and an agent asking
+      // for one has no business overriding what this repository was set to.
+      provider: await providerForProject(repoDir),
+    })
 
     const started = {
       id: session.id,
