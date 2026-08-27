@@ -543,40 +543,55 @@ function badgeFor(to: string) {
             </div>
           </div>
 
-          <ProjectSwitcher />
-          <!-- Where new items get written -->
-          <div v-if="workingDir" class="mt-2 space-y-1.5">
-            <div v-if="canUseProjectScope" class="flex items-center gap-1 p-0.5 rounded-md" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
+          <!--
+            Client-only, because which project is active is not something the
+            server can know.
+
+            `useWorkingDir` seeds itself from local storage during setup so the
+            sidebar names the right repository on the first frame rather than
+            after a round trip. That is worth keeping — but it made the server
+            render "Pick a project" where the client rendered `storefront-demo`,
+            and Vue logged a hydration mismatch on every single page load. A
+            production build does not rectify a mismatch, so the flash stayed.
+            Rendering nothing on the server is honest: it has nothing to say
+            here, and the client has the answer before it paints.
+          -->
+          <ClientOnly>
+            <ProjectSwitcher />
+            <!-- Where new items get written -->
+            <div v-if="workingDir" class="mt-2 space-y-1.5">
+              <div v-if="canUseProjectScope" class="flex items-center gap-1 p-0.5 rounded-md" style="background: var(--input-bg); border: 1px solid var(--border-subtle);">
+                <button
+                  v-for="option in [{ value: 'user' as const, label: 'Personal' }, { value: 'project' as const, label: 'Project' }]"
+                  :key="option.value"
+                  class="flex-1 px-2 py-1 rounded-md fs-micro font-medium transition-all"
+                  :style="{
+                    background: createScope === option.value ? 'var(--accent-muted)' : 'transparent',
+                    color: createScope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+                  }"
+                  :title="option.value === 'project' ? 'New agents, commands and skills go in this project\'s .claude' : 'New items go in your global ~/.claude'"
+                  @click="createScope = option.value"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+
               <button
-                v-for="option in [{ value: 'user' as const, label: 'Personal' }, { value: 'project' as const, label: 'Project' }]"
-                :key="option.value"
-                class="flex-1 px-2 py-1 rounded-md fs-micro font-medium transition-all"
-                :style="{
-                  background: createScope === option.value ? 'var(--accent-muted)' : 'transparent',
-                  color: createScope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
-                }"
-                :title="option.value === 'project' ? 'New agents, commands and skills go in this project\'s .claude' : 'New items go in your global ~/.claude'"
-                @click="createScope = option.value"
+                v-else-if="!projectClaudeExists"
+                class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md fs-micro transition-all hover-bg"
+                style="color: var(--text-disabled); border: 1px dashed var(--border-subtle);"
+                :disabled="initializingProject"
+                @click="createProjectConfig"
               >
-                {{ option.label }}
+                <UIcon
+                  :name="initializingProject ? 'i-lucide-loader-2' : 'i-lucide-folder-plus'"
+                  class="size-3 shrink-0"
+                  :class="{ 'animate-spin': initializingProject }"
+                />
+                <span class="truncate">Add .claude to this project</span>
               </button>
             </div>
-
-            <button
-              v-else-if="!projectClaudeExists"
-              class="w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md fs-micro transition-all hover-bg"
-              style="color: var(--text-disabled); border: 1px dashed var(--border-subtle);"
-              :disabled="initializingProject"
-              @click="createProjectConfig"
-            >
-              <UIcon
-                :name="initializingProject ? 'i-lucide-loader-2' : 'i-lucide-folder-plus'"
-                class="size-3 shrink-0"
-                :class="{ 'animate-spin': initializingProject }"
-              />
-              <span class="truncate">Add .claude to this project</span>
-            </button>
-          </div>
+          </ClientOnly>
 
           <div class="font-mono fs-micro truncate tracking-wide mt-1.5 px-1 ink-4">
             {{ claudeDir || 'No config directory' }}
