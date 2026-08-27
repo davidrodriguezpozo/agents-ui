@@ -4,6 +4,7 @@ import { workByPull } from '~/utils/pullWork'
 import { relativeTime } from '~/utils/time'
 import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
 import type { Issue, IssueIntent } from '~/composables/useGithubIssues'
+import type { Arrival } from '~/composables/useQuickActions'
 
 /**
  * Everything with a diff behind it, and the decision to ship it or send it back.
@@ -38,6 +39,8 @@ const {
   readingNotion, refresh: refreshIssues, work: workIssue, readNotion,
 } = useGithubIssues()
 const { sessions, fetchAll: fetchSessions } = useSessions()
+/** Where a press leaves you, and the sentence it leaves behind — see `useQuickActions`. */
+const { load: loadQuickActions, arrive } = useQuickActions()
 const { workingDir } = useWorkingDir()
 const { projects } = useProjects()
 const toast = useToast()
@@ -45,6 +48,7 @@ const toast = useToast()
 /** The pull request a merge has been offered on but not yet confirmed. */
 const confirming = ref<number | null>(null)
 
+onMounted(loadQuickActions)
 onMounted(() => watchContinuously())
 onUnmounted(stopWatching)
 
@@ -213,7 +217,47 @@ onMounted(() => {
 onUnmounted(() => { if (sessionPoll) clearInterval(sessionPoll) })
 
 /**
- * Press a row, land in the session for it.
+ * What the server did on the way in, when it is not what was asked for.
+ *
+ * One function for both bands rather than a toast per case: a workspace that was
+ * continued and a turn that would not start are the same news whether the row
+ * was a pull request or a ticket, and the three of them differ only in their
+ * words. Null is the ordinary press, which `arrive` then says its own line about.
+ */
+function noteFor(
+  session: { startError?: string; how?: string; note?: string },
+  name: string,
+): Arrival['note'] {
+  if (session.startError) {
+    return {
+      title: 'Session started, but not working',
+      description: session.startError,
+      color: 'warning',
+    }
+  }
+
+  if (session.how === 'continued') {
+    return {
+      title: `Continued the session on ${name}`,
+      description: session.note
+        ?? 'A session was already on this, so the instruction went there rather than to a second one.',
+      color: 'info',
+    }
+  }
+
+  if (session.how === 'adopted') {
+    return {
+      title: `Reused the workspace on ${name}`,
+      description: session.note ?? 'A workspace already had this branch and no session behind it.',
+      color: 'info',
+    }
+  }
+
+  return null
+}
+
+/**
+ * Press a row, and a session starts working on it.
  *
  * Pressing one twice used to be a dead end: the first press left a workspace
  * holding the pull request's branch, and every press after it came back with
@@ -225,29 +269,19 @@ onUnmounted(() => { if (sessionPoll) clearInterval(sessionPoll) })
  * A refusal that names a session is not really a refusal. The only case left is
  * a branch held by a session that is mid-turn, and the answer to that is to go
  * and look at it, which is what happens.
+ *
+ * Whether arriving means the conversation or staying on this page is a
+ * preference, and it is off by default, so `arrive` owns the ending.
  */
 async function startWork(pull: Pull, intent?: WorkIntent) {
   try {
     const session = await work(pull.number, intent)
 
-    if (session.startError) {
-      toast.add({ title: 'Session started, but not working', description: session.startError, color: 'warning' })
-    } else if (session.how === 'continued') {
-      toast.add({
-        title: `Continued the session on #${pull.number}`,
-        description: session.note
-          ?? 'A session already had this branch checked out, so the instruction went there rather than to a second one.',
-        color: 'info',
-      })
-    } else if (session.how === 'adopted') {
-      toast.add({
-        title: `Reused the workspace on #${pull.number}`,
-        description: session.note ?? 'A workspace already had this branch and no session behind it.',
-        color: 'info',
-      })
-    }
-
-    await navigateTo(`/sessions/${session.id}`)
+    await arrive(session.id, {
+      title: `Working on #${pull.number}`,
+      description: 'A session has it in its own worktree. This row says so from now on.',
+      note: noteFor(session, `#${pull.number}`),
+    })
   } catch (e: any) {
     const held = errorSessionId(e)
     if (held) {
@@ -276,10 +310,9 @@ function nameOf(issue: Issue): string {
  * The same press, from the other end of the workflow.
  *
  * Deliberately a second function rather than a branch inside `startWork`: the
- * two share a shape and nothing else. An issue or a ticket has no branch to
- * collide over, so there is no "adopted" arrival and no takeover to explain — the
- * only thing worth saying is when the instruction went to a session that already
- * had it rather than to a new workspace.
+ * two share the words for an arrival — `noteFor` — and nothing else. An issue or
+ * a ticket has no branch to collide over, so the server never reports an
+ * "adopted" workspace here and there is no takeover to explain.
  *
  * Keyed on `issue.key` rather than a number, because the band has two sources and
  * a number cannot name a Notion page. The server settles which tracker it is.
@@ -290,17 +323,11 @@ async function startIssueWork(issue: Issue, intent: IssueIntent) {
   try {
     const session = await workIssue(issue.key, intent)
 
-    if (session.startError) {
-      toast.add({ title: 'Session started, but not working', description: session.startError, color: 'warning' })
-    } else if (session.how === 'continued') {
-      toast.add({
-        title: `Continued the session on ${name}`,
-        description: 'A session was already on this, so the instruction went there rather than to a second one.',
-        color: 'info',
-      })
-    }
-
-    await navigateTo(`/sessions/${session.id}`)
+    await arrive(session.id, {
+      title: `Working on ${name}`,
+      description: 'A session has it in its own worktree.',
+      note: noteFor(session, name),
+    })
   } catch (e: any) {
     const held = errorSessionId(e)
     if (held) {

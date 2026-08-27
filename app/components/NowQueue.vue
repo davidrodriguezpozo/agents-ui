@@ -2,6 +2,7 @@
 import { buildNowQueue, NOW_LOOK, type NowItem } from '~/utils/nowQueue'
 import { errorMessage } from '~/utils/errors'
 import { agedFor, relativeTime } from '~/utils/time'
+import type { Arrival } from '~/composables/useQuickActions'
 
 /**
  * What needs you, in one place, ranked.
@@ -23,12 +24,14 @@ const {
   sources: inboxSources, refreshing, load: loadInbox, refresh: refreshInbox, setSchedule,
 } = useInbox()
 const { create: createSession } = useSessions()
-const router = useRouter()
+/** Where a resolved row leaves you, on the same switch Land reads. */
+const { load: loadQuickActions, arrive } = useQuickActions()
 const toast = useToast()
 
 onMounted(() => {
   if (!digest.value) void loadDigest()
   void loadInbox()
+  void loadQuickActions()
 })
 
 /** Resolved locally so a row disappears the moment you deal with it. */
@@ -97,6 +100,14 @@ async function onSchedule(source: { key: string; label: string; refreshAt?: stri
   })
 }
 
+/** The same words either way a row is resolved into a session. */
+function startedOn(item: NowItem): Arrival {
+  return {
+    title: `Working on ${item.title}`,
+    description: 'A session has it in its own worktree. It is on Work until it finishes.',
+  }
+}
+
 async function resolve(item: NowItem) {
   if (!item.action) return
   busy.value = item.key
@@ -116,10 +127,13 @@ async function resolve(item: NowItem) {
       return
     }
 
+    // Resolving a row is a dispatch, not a decision to go and watch one — the
+    // whole point of the queue is getting through it — so where it leaves you is
+    // the preference Land reads, and the toast carries the way in.
     if (item.action.kind === 'work-on-pull') {
       const session = await work(Number(item.action.target))
       settled.value = new Set([...settled.value, item.key])
-      if (session?.id) router.push(`/sessions/${session.id}`)
+      if (session?.id) await arrive(session.id, startedOn(item))
       return
     }
 
@@ -128,7 +142,7 @@ async function resolve(item: NowItem) {
     if (item.action.kind === 'work-on-inbox') {
       const session = await createSession(item.action.prompt ?? String(item.action.target))
       settled.value = new Set([...settled.value, item.key])
-      if (session?.id) router.push(`/sessions/${session.id}`)
+      if (session?.id) await arrive(session.id, startedOn(item))
     }
   } catch (e) {
     toast.add({ title: 'Could not do that', description: errorMessage(e), color: 'error' })
