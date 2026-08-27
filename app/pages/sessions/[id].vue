@@ -4,6 +4,7 @@ import { driftNote } from '~/utils/checkout'
 import { isSendKey } from '~/utils/keys'
 import { IMAGE_MEDIA_TYPES, imageMediaType } from '~/utils/imageAttachments'
 import { renderMarkdown } from '~/utils/markdown'
+import { atEnd } from '~/utils/transcriptScroll'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
 import { composeNotes, parsePatch, type DiffNote, type PatchLine } from '~/utils/patch'
 import { DEFAULT_TRUST, TRUST_CHOICES, type TrustLevel } from '~/composables/useSessions'
@@ -293,8 +294,75 @@ function suggestedOpener(): string {
     + `Then carry on from where we left off.`
 }
 
+/* --------------------------------------------------------- opening at the end -- */
+
+/**
+ * A conversation opens at its end, not its beginning.
+ *
+ * The transcript is a column with its own scroll, and it opened at the top —
+ * which for a session with forty turns in it means the page opens on an
+ * instruction you gave yesterday, with the thing you came to read a thumb's
+ * worth of scrolling below the fold. Every chat anybody has ever used opens at
+ * the last thing said, and this is the same thing.
+ *
+ * `pinned` is the other half, and it is what makes the first half worth having:
+ * a session opened while a turn is running would land at the end and then be
+ * left behind by the next token. So new content follows the end while you are
+ * *at* the end, and stops the moment you scroll up to read something — which is
+ * the one thing a chat that auto-scrolls must never fight you about.
+ */
+const transcript = ref<HTMLElement | null>(null)
+
+const pinned = ref(true)
+
+function onTranscriptScroll() {
+  if (transcript.value) pinned.value = atEnd(transcript.value)
+}
+
+/**
+ * Twice, a frame apart. The first lands on the height the browser has now; the
+ * second catches the transcript growing under it — a code block being
+ * highlighted, an image in a message deciding how tall it is — which otherwise
+ * leaves the page a few hundred pixels short of the end it claimed to open at.
+ */
+function toEnd() {
+  const el = transcript.value
+  if (!el) return
+
+  el.scrollTop = el.scrollHeight
+  requestAnimationFrame(() => {
+    if (transcript.value) transcript.value.scrollTop = transcript.value.scrollHeight
+  })
+}
+
+async function openAtEnd() {
+  await nextTick()
+  toEnd()
+  // The scroll above fires the handler, but on a transcript shorter than its
+  // column there is nothing to scroll and no event: said here so the first
+  // streamed token still follows.
+  pinned.value = true
+}
+
+/**
+ * Everything that makes the transcript longer: another turn, another token of
+ * the one running, and the inherited history an adopted session fetches after
+ * the page is already up.
+ */
+watch(
+  () => [session.value?.turns.length, liveRun.value?.output, inherited.value.length],
+  async () => {
+    if (!pinned.value) return
+    await nextTick()
+    toEnd()
+  },
+)
+
 onMounted(async () => {
   await load()
+  // Before the diff and the rest: they are slower, and the conversation is what
+  // the page is for.
+  void openAtEnd()
   await refreshDiff()
   await loadProjectRules()
   // What this session's agent can do, so the composer offers Steer only where
@@ -1569,7 +1637,7 @@ const totalChanges = computed(() => {
         :class="pane ? 'shrink-0' : 'flex-1'"
         :style="pane ? { width: `${conversationWidth}%` } : undefined"
       >
-        <div class="flex-1 overflow-y-auto">
+        <div ref="transcript" class="flex-1 overflow-y-auto" @scroll.passive="onTranscriptScroll">
           <div class="py-5 space-y-5" :class="pane ? 'px-8' : 'page-container'">
             <div v-if="loadError" class="rounded-md px-4 py-3 type-detail" style="background: var(--error-wash); color: var(--error);">
               {{ loadError }}
