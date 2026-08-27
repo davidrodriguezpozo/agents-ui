@@ -160,6 +160,16 @@ export interface Session {
    */
   reviewOf?: { number: number; headSha: string; url?: string }
   /**
+   * What GitHub says about that pull request now.
+   *
+   * Absent means nobody has asked yet, or the answer was "open and unchanged" —
+   * which is not news and is deliberately not stored. `headSha` is what it has
+   * now, against `reviewOf.headSha` which is what this session read: the two
+   * differing is somebody pushing after the review was written. Mirrors
+   * `SessionPrNews` on the server, which is where it is decided.
+   */
+  prNews?: { at: number; number: number; state: 'OPEN' | 'CLOSED' | 'MERGED'; headSha: string }
+  /**
    * Other sessions changing files this one changes.
    *
    * Computed on the server from paths it already had, and absent when there are

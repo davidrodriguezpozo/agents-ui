@@ -419,3 +419,82 @@ describe('which half of /work a row belongs to', () => {
     expect(onTab([stuck], 'flight')).toEqual([stuck])
   })
 })
+
+/**
+ * What the rail says about the pull request behind a review.
+ *
+ * The failure this exists to stop is a screenful of "Your turn" rows over pull
+ * requests that were merged an hour ago — a to-do list you stop reading, which
+ * is the same failure `reviewRetire` documents about the review band. So the
+ * three answers are pinned, and so is the one thing that must outrank them:
+ * a session with a turn in flight is live whatever GitHub says.
+ */
+describe('a review whose pull request moved on', () => {
+  // Recent, because a session nobody has touched for a week is settled and files
+  // itself — see `isSettled`. The rows this is about are hours old.
+  const reviewing = (over: Partial<Session> = {}) => session({
+    title: '#5683 serve suppliers',
+    reviewOf: { number: 5683, headSha: 'read-sha' },
+    updatedAt: Date.now(),
+    ...over,
+  })
+
+  it('says who merged it, and files the row under Done', () => {
+    const item = fromSession(reviewing({
+      prNews: { at: 1, number: 5683, state: 'MERGED', headSha: 'read-sha' },
+    }))
+
+    expect(item.status).toBe('landed')
+    expect(item.outcome).toBe('#5683 merged')
+  })
+
+  it('says closed rather than merged, which is not the same news', () => {
+    const item = fromSession(reviewing({
+      prNews: { at: 1, number: 5683, state: 'CLOSED', headSha: 'read-sha' },
+    }))
+
+    expect(item.status).toBe('landed')
+    expect(item.outcome).toBe('#5683 closed')
+  })
+
+  it('says the head moved without moving the row out of your turn', () => {
+    // There is something to do about this one, and it is still yours.
+    const item = fromSession(reviewing({
+      prNews: { at: 1, number: 5683, state: 'OPEN', headSha: 'pushed-since' },
+    }))
+
+    expect(item.status).toBe('yours')
+    expect(item.outcome).toBe('#5683 pushed since')
+  })
+
+  it('says nothing when the pull request is where the review left it', () => {
+    const item = fromSession(reviewing({
+      prNews: { at: 1, number: 5683, state: 'OPEN', headSha: 'read-sha' },
+    }))
+
+    expect(item.status).toBe('yours')
+    expect(item.outcome).toBe('Your turn')
+  })
+
+  it('never reports a push on your own work', () => {
+    // `prUrl` sessions read no commit, so a moved head is only ever their own.
+    const item = fromSession(session({
+      prUrl: 'https://github.com/acme/app/pull/57',
+      prNews: { at: 1, number: 57, state: 'OPEN', headSha: 'anything' },
+      updatedAt: Date.now(),
+    }))
+
+    expect(item.outcome).toBe('Your turn')
+  })
+
+  it('leaves a session that is working alone', () => {
+    // Merged or not, a turn in flight is the only thing worth saying about a row.
+    const item = fromSession(reviewing({
+      activity: 'working',
+      prNews: { at: 1, number: 5683, state: 'MERGED', headSha: 'read-sha' },
+    }))
+
+    expect(item.status).toBe('running')
+    expect(item.outcome).toBe('Working')
+  })
+})
