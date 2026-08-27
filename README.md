@@ -699,6 +699,14 @@ session claims any more, and the page says which of those happened. The only ref
 is a branch held by a session mid-turn, or by your own checkout, and both name where it is
 rather than leaving you to find it.
 
+**And it leaves you where you were.** Dispatching a review is something you do to four
+pull requests in a row, so the press starts the session and says so rather than dropping
+you into a full-screen transcript you were not going to read: the row keeps a chip saying
+a session has it, and the line that says it started links to it. The other choice is in
+Settings — *Open the session the action starts*, off by default — for when the press is
+one you mean to watch. It covers this page and the Needs you queue; Fleet's own menu says
+"Review it here" and still means it.
+
 Merging is the exception and is treated like one: it only appears on your own pull
 request, only when it is genuinely ready, and the page re-reads GitHub at the moment you
 press it rather than trusting what it drew ten minutes ago.
