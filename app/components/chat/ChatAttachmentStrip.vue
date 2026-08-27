@@ -13,6 +13,13 @@ import type { ChatAttachment, ChatAttachmentRef } from '~/types'
  * and no bytes: the thumbnail becomes an icon and `removable` is off. That is
  * what a turn in a session's history is, and it is worth saying "this came with
  * two images" rather than showing the words alone.
+ *
+ * The filename carries the `Chat` prefix on purpose. `components/chat` is
+ * registered with `pathPrefix: false`, so the directory adds nothing and the
+ * file name *is* the component name. As `AttachmentStrip.vue` it registered as
+ * `AttachmentStrip` while all four call sites asked for `ChatAttachmentStrip`,
+ * so it silently resolved to nothing and no attachment chip ever drew — a
+ * console warning in dev and no strip at all in a build.
  */
 const props = defineProps<{
   attachments: ChatAttachment[] | ChatAttachmentRef[]
