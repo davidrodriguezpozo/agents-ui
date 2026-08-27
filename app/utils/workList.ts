@@ -180,11 +180,54 @@ function landedAndKept(session: Session, outcome: SessionOutcome): boolean {
     && outcome !== 'working'
 }
 
+/**
+ * What has happened to the pull request a session is about.
+ *
+ * Three answers worth a row's one line, and the order is the point: an ending
+ * outranks a push, because new commits on a pull request that has since been
+ * merged are not something anybody is going to look at.
+ *
+ * `pushed` compares what GitHub has now against `reviewOf.headSha` — the commit
+ * this session actually read — so it is only ever said of a review. Your own
+ * branch moves because you moved it.
+ *
+ * Null is both "nobody has asked" and "open, unchanged", which are the same
+ * thing as far as a row is concerned. See `server/utils/prNews.ts`, which is
+ * where the asking happens and why nothing is stored for the quiet answer.
+ */
+export function reviewNewsFor(session: Session): 'merged' | 'closed' | 'pushed' | null {
+  const news = session.prNews
+  if (!news) return null
+
+  if (news.state === 'MERGED') return 'merged'
+  if (news.state === 'CLOSED') return 'closed'
+
+  const read = session.reviewOf?.headSha
+  return read && news.headSha && news.headSha !== read ? 'pushed' : null
+}
+
 /** A session, in its own words. `outcomeOf` already decides the hard part. */
 export function fromSession(session: Session): WorkItem {
   const outcome = outcomeOf(session)
 
+  const news = reviewNewsFor(session)
+
   const [status, label]: [WorkStatus, string] = (() => {
+    /**
+     * Above `landed`, and above everything under it, on the same argument: a
+     * pull request that is merged or closed is the end of the story, and every
+     * verdict below describes a decision nobody has to make any more. It is a
+     * *review* that ends here, so `Done` is read from your side of it — the
+     * number says whose merge it was.
+     *
+     * Guarded on the same two conditions `landedAndKept` uses, and for the same
+     * reason: a session with a turn in flight in it is live again whatever
+     * GitHub says about the pull request it started from.
+     */
+    if ((news === 'merged' || news === 'closed') && session.activity === 'idle' && outcome !== 'working') {
+      return ['landed', `#${session.prNews!.number} ${news}`]
+    }
+
     // Above the switch, because it is above every outcome in it. See above.
     if (landedAndKept(session, outcome)) {
       // A revert is the later news about the same merge, and saying only
@@ -225,7 +268,13 @@ export function fromSession(session: Session): WorkItem {
     origin: 'session',
     status,
     title: session.title,
-    outcome: label,
+    /**
+     * A push since the review takes the line, without taking the group: there is
+     * something to do here and it is still yours, which is what the heading
+     * already says. "Your turn" is the less useful half of that sentence — the
+     * row's own line is where the reason goes.
+     */
+    outcome: news === 'pushed' ? `#${session.prNews!.number} pushed since` : label,
     detail: session.summary?.text ?? session.branch,
     to: `/sessions/${session.id}`,
     at: session.updatedAt,

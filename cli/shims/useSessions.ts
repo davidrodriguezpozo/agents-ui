@@ -51,6 +51,16 @@ export interface Session {
    */
   reverted?: { at: number; sha: string; branch: string }
   filedAt?: number
+  /**
+   * The pull request this session was opened to read, and the commit it read.
+   *
+   * Carried for the same reason `reverted` is: `workList` reads it to say what
+   * has happened to that pull request since — see `prNews` below, which is the
+   * other half of that comparison.
+   */
+  reviewOf?: { number: number; headSha: string }
+  /** What GitHub says about that pull request now. */
+  prNews?: { at: number; number: number; state: 'OPEN' | 'CLOSED' | 'MERGED'; headSha: string }
   updatedAt: number
   summary?: { text: string }
   branch?: string

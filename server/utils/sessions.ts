@@ -5,6 +5,7 @@ import { clearQueuedAttachments } from './queuedAttachments'
 import type { SessionCheck } from './checks'
 import type { SessionSummary } from './sessionSummary'
 import type { SessionLanded } from './landed'
+import type { SessionPrNews } from './prNews'
 import type { SessionReverted } from './revertWatch'
 import type { SessionRepair } from './sessionRepair'
 import type { SessionPrWatch } from './prWatch'
@@ -158,6 +159,16 @@ export interface Session {
    * and posting it would attach real comments to the wrong code.
    */
   reviewOf?: SessionReviewOf
+  /**
+   * What GitHub says about that pull request now — merged, closed, or pushed to
+   * since this session read it.
+   *
+   * Absent means nobody has asked yet, or the answer was "open, unchanged",
+   * which is not news. It is written by a poll rather than by anything you do
+   * here, and deliberately without touching `updatedAt` — see `prNews.ts`, which
+   * is the only writer and says why.
+   */
+  prNews?: SessionPrNews
   /**
    * The issue this session was started from.
    *

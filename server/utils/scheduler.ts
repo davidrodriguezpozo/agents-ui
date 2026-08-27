@@ -19,6 +19,7 @@ import { tickTeamDigest } from './teamDelivery'
 import { refreshBrief } from './brief'
 import { withRunSlot } from './runQueue'
 import { pollPullRequests } from './prWatchRunner'
+import { pollPrNews } from './prNews'
 import { pollReverts } from './revertWatch'
 
 const TICK_MS = 30_000
@@ -203,6 +204,12 @@ export async function pollWatchedPullRequests(): Promise<void> {
 
   try {
     await pollPullRequests()
+    // On the back of the same pass, and after it: the watcher can land a pull
+    // request itself, and asking about it afterwards means a row says "merged"
+    // on the same tick rather than two minutes later. Its own failures are
+    // swallowed inside it — a rail that cannot be told the news is not a reason
+    // to stop watching anything.
+    await pollPrNews()
   } finally {
     watching = false
   }

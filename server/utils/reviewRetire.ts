@@ -122,7 +122,7 @@ interface GraphqlAnswer {
  * still on stdout; throwing the whole batch away because one pull request was
  * deleted would strand every other draft in the repository as unchecked.
  */
-async function readLivePulls(repoDir: string, numbers: number[]): Promise<Map<number, LivePull> | null> {
+export async function readLivePulls(repoDir: string, numbers: number[]): Promise<Map<number, LivePull> | null> {
   if (!numbers.length || !existsSync(repoDir)) return null
 
   let nameWithOwner: string
