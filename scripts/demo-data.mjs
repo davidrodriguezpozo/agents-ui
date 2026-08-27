@@ -771,6 +771,388 @@ If both hold, pushing onto the existing array is a two-line fix. I have not made
       },
     ],
   },
+  /**
+   * Two that already went in.
+   *
+   * Without these the demo had no landings at all, and three screens were
+   * honestly but uselessly empty: Shipped said "nothing has shipped in the last
+   * 14 days", the ledger's headline read "No merges", and cost-per-merge — the
+   * one number in here that answers "was this worth it" — had nothing to divide
+   * by. A demo of a tool that lands work has to contain some landed work.
+   *
+   * Their branches are really merged into `main` after every worktree is cut, so
+   * the sessions still sitting on the old base are genuinely behind it. That is
+   * the state "Bring main into 1" exists for, and it costs nothing to be true.
+   */
+  {
+    title: 'Stop the cart badge counting removed lines',
+    nightAgo: 34,
+    // `merged`, not `merge`: `LandedHow` is the union in `landed.ts`, and the
+    // ledger indexes a field map by it — an unknown value counts as nothing at
+    // all, silently, which is exactly how this was wrong the first time.
+    landed: { how: 'merged', daysAgo: 1.4, commits: 1 },
+    summary: 'The cart badge counts lines still in the basket, so removing one now drops the number.',
+    check: {
+      status: 'passing',
+      exitCode: 0,
+      durationMs: 6_910,
+      output: ` ✓ src/lib/cart.test.ts (4 tests) 28ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)`,
+    },
+    commits: [
+      {
+        message: 'Count only lines still in the basket',
+        files: {
+          'src/lib/cart.ts': `export interface CartLine {
+  sku: string
+  quantity: number
+  removed?: boolean
+}
+
+/**
+ * What the badge over the cart icon shows.
+ *
+ * A removed line stays in the array until the next fetch — undo needs it — so
+ * counting the array counted things the customer had already taken out.
+ */
+export function badgeCount(lines: CartLine[]): number {
+  return lines
+    .filter(line => !line.removed)
+    .reduce((total, line) => total + line.quantity, 0)
+}
+`,
+          'src/lib/cart.test.ts': `import { expect, it } from 'vitest'
+import { badgeCount, type CartLine } from './cart'
+
+const lines: CartLine[] = [
+  { sku: 'a', quantity: 2 },
+  { sku: 'b', quantity: 1, removed: true },
+  { sku: 'c', quantity: 3 },
+]
+
+it('adds up the quantities still in the basket', () => {
+  expect(badgeCount(lines)).toBe(5)
+})
+
+it('ignores removed lines', () => {
+  expect(badgeCount([{ sku: 'a', quantity: 9, removed: true }])).toBe(0)
+})
+
+it('is zero for an empty basket', () => {
+  expect(badgeCount([])).toBe(0)
+})
+
+it('treats a missing flag as present', () => {
+  expect(badgeCount([{ sku: 'a', quantity: 1 }])).toBe(1)
+})
+`,
+        },
+      },
+    ],
+    uncommitted: {},
+    turns: [
+      {
+        input: 'Removing something from the cart leaves the badge showing the old number until you reload. Can you fix that?',
+        output: `\`badgeCount\` in \`src/lib/cart.ts\` was summing the whole array:
+
+\`\`\`ts
+return lines.reduce((total, line) => total + line.quantity, 0)
+\`\`\`
+
+A removed line is not taken out of the array — undo needs it there until the next fetch — so it kept being counted. Filtering on the flag that already exists:
+
+\`\`\`ts
+return lines.filter(line => !line.removed).reduce((total, line) => total + line.quantity, 0)
+\`\`\`
+
+Four tests: the ordinary sum, a removed line, an empty basket, and a line with no flag at all — that last one because \`!undefined\` is the case a future refactor is most likely to get backwards.`,
+        toolCalls: [
+          { toolName: 'Grep', input: { pattern: 'badgeCount' }, preview: 'badgeCount — 3 matches' },
+          { toolName: 'Edit', input: { file_path: `${REPO}/src/lib/cart.ts` }, preview: 'src/lib/cart.ts' },
+          { toolName: 'Write', input: { file_path: `${REPO}/src/lib/cart.test.ts` }, preview: 'src/lib/cart.test.ts — 24 lines' },
+        ],
+        costUsd: 0.0413, durationMs: 22 * MINUTE,
+      },
+    ],
+  },
+  {
+    title: 'Give the product API a page size it will admit to',
+    nightAgo: 96,
+    // Went in over a red check, on purpose: Shipped has to be able to say
+    // "merged with the checks failing" about something, or the board only ever
+    // flatters. `overrodeChecks` is what puts that sentence on the row.
+    landed: { how: 'pull-request', daysAgo: 3.8, commits: 1, overrodeChecks: true, pr: 214 },
+    summary: 'The products endpoint caps page size at 100 and says so in the response.',
+    check: {
+      status: 'failing',
+      exitCode: 1,
+      durationMs: 8_260,
+      output: ` ❯ src/server/products.test.ts (3 tests | 1 failed) 44ms
+   × rejects a page size over the cap
+
+ FAIL  src/server/products.test.ts > rejects a page size over the cap
+AssertionError: expected 200 to be 400
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 2 passed (3)`,
+    },
+    commits: [
+      {
+        message: 'Cap products page size at 100 and report it',
+        files: {
+          'src/server/products.ts': `export const MAX_PAGE_SIZE = 100
+
+export interface PageRequest {
+  page?: number
+  pageSize?: number
+}
+
+export interface Page<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  /** What was asked for, when it was more than we will serve. */
+  requestedPageSize?: number
+}
+
+/**
+ * Paging that tells the caller what it actually did.
+ *
+ * Asking for 5000 products used to return 5000, which is the sort of thing that
+ * is fine until a client does it in a loop. Clamping silently was worse: the
+ * caller had no way to tell a short page from the last page.
+ */
+export function paginate<T>(items: T[], request: PageRequest = {}): Page<T> {
+  const page = Math.max(1, request.page ?? 1)
+  const asked = request.pageSize ?? 25
+  const pageSize = Math.min(asked, MAX_PAGE_SIZE)
+  const start = (page - 1) * pageSize
+
+  return {
+    items: items.slice(start, start + pageSize),
+    page,
+    pageSize,
+    ...(asked > pageSize && { requestedPageSize: asked }),
+  }
+}
+`,
+        },
+      },
+    ],
+    uncommitted: {},
+    turns: [
+      {
+        input: 'Someone pulled the whole catalogue by asking for pageSize=50000. Put a cap on it.',
+        output: `Capped at 100 in \`src/server/products.ts\`.
+
+The part worth your attention is what happens when somebody asks for more. Clamping quietly means a client asking for 5000 and getting 100 cannot tell whether it hit the cap or reached the end of the catalogue, so the page carries \`requestedPageSize\` when it had to reduce it.
+
+I have left one test failing rather than editing it: it asserts that an oversized \`pageSize\` returns 400, and I have made it return 200 with a smaller page. Both are defensible — rejecting is stricter, clamping is kinder to existing callers — and which one you want is a product decision, not a test bug. Say which and I will make them agree.`,
+        toolCalls: [
+          { toolName: 'Read', input: { file_path: `${REPO}/src/server/products.ts` }, preview: 'src/server/products.ts — 12 lines' },
+          { toolName: 'Edit', input: { file_path: `${REPO}/src/server/products.ts` }, preview: 'src/server/products.ts' },
+          { toolName: 'Bash', input: { command: 'pnpm vitest run' }, preview: '1 failed | 2 passed' },
+        ],
+        costUsd: 0.0687, durationMs: 31 * MINUTE,
+      },
+    ],
+  },
+  /**
+   * One instruction, two agents, and a verdict that came from the tests.
+   *
+   * `raceId` is shared by both and by nothing else. They are otherwise ordinary
+   * sessions — own worktree, own branch, own checks — which is the whole design:
+   * a race is a way of starting work and of reading it, not a thing that runs.
+   *
+   * Deliberately one pass and one fail. Two passes would demo the standings but
+   * not the point; the point is that the project's own `pnpm vitest run` picked
+   * the entrant, and that the losing diff is still there to read rather than
+   * thrown away.
+   */
+  {
+    title: 'Debounce the search box',
+    nightAgo: 5.5,
+    raceId: 'demo-race-search',
+    provider: 'claude',
+    summary: 'Search waits 250ms after the last keystroke, with the trailing call guaranteed.',
+    check: {
+      status: 'passing',
+      exitCode: 0,
+      durationMs: 5_480,
+      output: ` ✓ src/lib/debounce.test.ts (3 tests) 31ms
+
+ Test Files  1 passed (1)
+      Tests  3 passed (3)`,
+    },
+    commits: [
+      {
+        message: 'Debounce search, keeping the trailing call',
+        files: {
+          'src/lib/debounce.ts': `/**
+ * Wait until the typing stops, then run once.
+ *
+ * The trailing call is the whole contract: a leading-edge debounce searches for
+ * "w" and never searches for "wool", which is the bug this replaced.
+ */
+export function debounce<A extends unknown[]>(
+  fn: (...args: A) => void,
+  waitMs: number,
+): ((...args: A) => void) & { cancel: () => void } {
+  let timer: ReturnType<typeof setTimeout> | null = null
+
+  const run = (...args: A) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      fn(...args)
+    }, waitMs)
+  }
+
+  run.cancel = () => {
+    if (timer) clearTimeout(timer)
+    timer = null
+  }
+
+  return run
+}
+`,
+          'src/lib/debounce.test.ts': `import { expect, it, vi } from 'vitest'
+import { debounce } from './debounce'
+
+it('runs once after the last call', () => {
+  vi.useFakeTimers()
+  const spy = vi.fn()
+  const debounced = debounce(spy, 250)
+  debounced('w')
+  debounced('wo')
+  debounced('wool')
+  vi.advanceTimersByTime(250)
+  expect(spy).toHaveBeenCalledExactlyOnceWith('wool')
+})
+
+it('does not run before the wait elapses', () => {
+  vi.useFakeTimers()
+  const spy = vi.fn()
+  debounce(spy, 250)('wool')
+  vi.advanceTimersByTime(249)
+  expect(spy).not.toHaveBeenCalled()
+})
+
+it('cancel stops a pending call', () => {
+  vi.useFakeTimers()
+  const spy = vi.fn()
+  const debounced = debounce(spy, 250)
+  debounced('wool')
+  debounced.cancel()
+  vi.advanceTimersByTime(500)
+  expect(spy).not.toHaveBeenCalled()
+})
+`,
+        },
+      },
+    ],
+    uncommitted: {},
+    turns: [
+      {
+        input: 'The search box fires a request on every keystroke. Debounce it.',
+        output: `\`src/lib/debounce.ts\`, 250ms, trailing edge.
+
+Trailing rather than leading is the part that matters. A leading-edge debounce fires on \`w\` and then swallows everything up to \`wool\`, so the customer types a word and sees results for its first letter — which is the failure the current per-keystroke version at least does not have.
+
+Three tests: that it runs once with the *last* arguments, that it has not run at 249ms, and that \`cancel\` stops a pending call. The third is there because the search box unmounts while a call is pending every time somebody navigates away mid-type.`,
+        toolCalls: [
+          { toolName: 'Write', input: { file_path: `${REPO}/src/lib/debounce.ts` }, preview: 'src/lib/debounce.ts — 27 lines' },
+          { toolName: 'Write', input: { file_path: `${REPO}/src/lib/debounce.test.ts` }, preview: 'src/lib/debounce.test.ts — 31 lines' },
+          { toolName: 'Bash', input: { command: 'pnpm vitest run' }, preview: '3 passed' },
+        ],
+        costUsd: 0.0296, durationMs: 14 * MINUTE,
+      },
+    ],
+  },
+  {
+    title: 'Debounce the search box',
+    nightAgo: 5.5,
+    raceId: 'demo-race-search',
+    provider: 'cursor',
+    summary: 'Search is throttled rather than debounced, and one test says the wrong term arrives last.',
+    check: {
+      status: 'failing',
+      exitCode: 1,
+      durationMs: 5_120,
+      output: ` ❯ src/lib/debounce.test.ts (2 tests | 1 failed) 37ms
+   × runs once after the last call
+
+ FAIL  src/lib/debounce.test.ts > runs once after the last call
+AssertionError: expected "spy" to be called once with arguments: [ 'wool' ]
+
+Received:
+  1st spy call: [ 'w' ]
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)`,
+    },
+    commits: [
+      {
+        message: 'Throttle the search callback',
+        files: {
+          'src/lib/debounce.ts': `export function debounce<A extends unknown[]>(
+  fn: (...args: A) => void,
+  waitMs: number,
+): (...args: A) => void {
+  let last = 0
+
+  return (...args: A) => {
+    const now = Date.now()
+    if (now - last < waitMs) return
+    last = now
+    fn(...args)
+  }
+}
+`,
+          'src/lib/debounce.test.ts': `import { expect, it, vi } from 'vitest'
+import { debounce } from './debounce'
+
+it('runs once after the last call', () => {
+  vi.useFakeTimers()
+  const spy = vi.fn()
+  const debounced = debounce(spy, 250)
+  debounced('w')
+  debounced('wo')
+  debounced('wool')
+  vi.advanceTimersByTime(250)
+  expect(spy).toHaveBeenCalledExactlyOnceWith('wool')
+})
+
+it('lets a later call through once the window passes', () => {
+  vi.useFakeTimers()
+  const spy = vi.fn()
+  const debounced = debounce(spy, 250)
+  debounced('wool')
+  vi.advanceTimersByTime(300)
+  debounced('scarf')
+  expect(spy).toHaveBeenCalledTimes(2)
+})
+`,
+        },
+      },
+    ],
+    uncommitted: {},
+    turns: [
+      {
+        input: 'The search box fires a request on every keystroke. Debounce it.',
+        output: `Added \`src/lib/debounce.ts\` with a 250ms guard: the first call in a window goes through and the rest are dropped.
+
+One test is failing. It expects the callback to receive \`wool\` — the last thing typed — and it receives \`w\`, because this implementation fires on the first call rather than the last. I have left it failing rather than changing the assertion.`,
+        toolCalls: [
+          { toolName: 'Write', input: { file_path: `${REPO}/src/lib/debounce.ts` }, preview: 'src/lib/debounce.ts — 14 lines' },
+          { toolName: 'Bash', input: { command: 'pnpm vitest run' }, preview: '1 failed | 1 passed' },
+        ],
+        costUsd: 0.0231, durationMs: 11 * MINUTE,
+      },
+    ],
+  },
 ]
 
 // ================================================================= rituals
@@ -1282,6 +1664,8 @@ async function seed() {
   // ---- sessions with real worktrees
   const sessions = []
   const runs = []
+  /** Branches to merge into `main` once every worktree has been cut. */
+  const landings = []
 
   for (const [index, spec] of SESSIONS.entries()) {
     const id = `demo${index}${Math.random().toString(36).slice(2, 8)}`
@@ -1338,9 +1722,16 @@ async function seed() {
     // later than the work it is about.
     const checkedAt = finishedAt + 3 * MINUTE
 
+    // Merged after every worktree is cut, not here: a branch that went into
+    // `main` mid-loop would move the base the later sessions branch from, and
+    // they all really did start from the same commit.
+    if (spec.landed) landings.push({ id, branch, spec })
+
     sessions.push({
       id, title: spec.title, repoDir: REPO, worktreePath, branch,
       baseBranch: 'main', baseSha, status: 'idle', runIds,
+      ...(spec.provider && { provider: spec.provider }),
+      ...(spec.raceId && { raceId: spec.raceId }),
       createdAt: firstTurnAt - 4 * MINUTE,
       updatedAt: finishedAt,
       ...(spec.check && {
@@ -1361,6 +1752,38 @@ async function seed() {
       }),
     })
     log(`session: ${spec.title}${spec.check ? ` — checks ${spec.check.status}` : ''}`)
+  }
+
+  /**
+   * The landings, as real merges.
+   *
+   * A `landed` record with no merge behind it would be the one kind of lie this
+   * script is written to avoid: Shipped would list work that is not in `main`,
+   * and "2 of 4 could land" would be counting a branch already in. So the merge
+   * happens, `--no-ff` so there is a merge commit to name, and `landed.sha` is
+   * the commit somebody could actually go and read.
+   *
+   * Every worktree is already cut by now, so the sessions that did not land are
+   * left genuinely behind `main` — which is the state the Land page's "Bring
+   * main into 1" is for.
+   */
+  for (const { id, branch, spec } of landings) {
+    const { how, daysAgo, commits, overrodeChecks, pr } = spec.landed
+    await git(REPO, ['merge', '--no-ff', '-q', '-m', `Merge branch '${branch}'`, branch])
+    const sha = (await git(REPO, ['rev-parse', 'HEAD'])).stdout.trim()
+
+    const session = sessions.find(s => s.id === id)
+    session.landed = {
+      at: NOW - daysAgo * DAY,
+      how,
+      into: 'main',
+      commits,
+      sha,
+      ...(overrodeChecks && { overrodeChecks: true }),
+      ...(pr && { pr }),
+      by: { name: 'Storefront Team', email: 'demo@storefront.test' },
+    }
+    log(`landed: ${spec.title}${overrodeChecks ? ' — over a failing check' : ''}`)
   }
 
   // ---- rituals
