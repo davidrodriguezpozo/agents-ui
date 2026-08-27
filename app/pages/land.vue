@@ -114,11 +114,14 @@ interface RetiredCounts {
   alreadyReviewed: number
   prClosed: number
   headMoved: number
+  sessionClosed: number
 }
 
 const draftedReviews = ref<DraftedReview[]>([])
 const draftsUnchecked = ref(0)
-const draftsRetired = ref<RetiredCounts>({ alreadyReviewed: 0, prClosed: 0, headMoved: 0 })
+const draftsRetired = ref<RetiredCounts>({
+  alreadyReviewed: 0, prClosed: 0, headMoved: 0, sessionClosed: 0,
+})
 
 async function loadDraftedReviews() {
   try {
@@ -147,14 +150,15 @@ onMounted(loadDraftedReviews)
  * how a page earns the same distrust the stale list had.
  */
 const retiredNote = computed(() => {
-  const { alreadyReviewed, prClosed, headMoved } = draftsRetired.value
-  const total = alreadyReviewed + prClosed + headMoved
+  const { alreadyReviewed, prClosed, headMoved, sessionClosed } = draftsRetired.value
+  const total = alreadyReviewed + prClosed + headMoved + sessionClosed
   if (!total) return null
 
   const parts: string[] = []
   if (alreadyReviewed) parts.push(`${alreadyReviewed} you had already reviewed on GitHub`)
   if (prClosed) parts.push(`${prClosed} on pull requests that have closed since`)
   if (headMoved) parts.push(`${headMoved} composed against commits that have been pushed over`)
+  if (sessionClosed) parts.push(`${sessionClosed} whose session you closed`)
 
   return `${total} ${total === 1 ? 'review' : 'reviews'} stopped waiting in the last day — ${parts.join(', ')}.`
 })

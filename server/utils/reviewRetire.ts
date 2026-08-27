@@ -22,6 +22,14 @@ const exec = promisify(execFile)
  * commit these comments were anchored against. Any of those, and the draft is
  * *retired* — kept in the store as a record, dropped from the band.
  *
+ * One question comes before all three and costs nothing: has the session been
+ * closed. A reviewing session that told Claude to post the review itself — `gh`
+ * from inside the chat, this app never involved — leaves a draft that GitHub
+ * may well still call open, unreviewed and unpushed, because the review went
+ * out under the agent's hand rather than yours. Closing the session is what you
+ * do when you are done with it, whichever route the review took, so a closed
+ * session retires its draft without anybody being asked.
+ *
  * Two properties this is built around:
  *
  *   - **Retirement is durable.** It is written back to the draft, so a review
@@ -86,6 +94,26 @@ export function retirementFor(draft: ReviewDraft, live: LivePull, at: number): R
   }
 
   return null
+}
+
+/**
+ * What a closed session means for its draft.
+ *
+ * Its own function rather than a branch inside `retirementFor`, because it is
+ * decided without asking anybody: `retirementFor` reads GitHub's answer, and
+ * this one reads a fact already on the session record. It also has to hold when
+ * GitHub cannot be reached at all — a closed session's draft is retired even in
+ * the pass that retires nothing else, which is the one exception to "silence
+ * never retires anything" and is safe because no network call was involved.
+ */
+export function retirementForClosedSession(draft: ReviewDraft, at: number): Retirement {
+  return {
+    at,
+    reason: 'session_closed',
+    detail:
+      `The session that composed this review of #${draft.pr} has been closed, `
+      + 'so nothing here is waiting on you.',
+  }
 }
 
 async function gh(cwd: string, args: string[], timeout = 30_000): Promise<string> {
@@ -231,20 +259,33 @@ export interface RetireResult {
   unchecked: number
 }
 
+export interface RetireInput {
+  draft: ReviewDraft
+  repoDir: string
+  /** That the session which composed it has been closed. */
+  sessionClosed?: boolean
+}
+
 /**
  * Ask GitHub about every live draft, retire the ones it has answers for.
  *
- * Grouped by repository because that is what one query covers, and because a
- * machine with four projects on it should cost four round trips rather than
- * one per review. A repository that cannot be reached takes only its own drafts
- * down with it — the rest are still checked.
+ * Drafts from closed sessions are retired first and never asked about, which
+ * is both the correct answer and one fewer alias in the query.
+ *
+ * The rest are grouped by repository because that is what one query covers, and
+ * because a machine with four projects on it should cost four round trips rather
+ * than one per review. A repository that cannot be reached takes only its own
+ * drafts down with it — the rest are still checked.
  */
 export async function retireStale(
-  pairs: { draft: ReviewDraft; repoDir: string }[],
+  pairs: RetireInput[],
   now = Date.now(),
 ): Promise<RetireResult> {
-  const byRepo = new Map<string, { draft: ReviewDraft; repoDir: string }[]>()
-  for (const pair of pairs) {
+  const closed = pairs.filter(pair => pair.sessionClosed)
+  const open = pairs.filter(pair => !pair.sessionClosed)
+
+  const byRepo = new Map<string, RetireInput[]>()
+  for (const pair of open) {
     const held = byRepo.get(pair.repoDir)
     if (held) held.push(pair)
     else byRepo.set(pair.repoDir, [pair])
@@ -260,10 +301,13 @@ export async function retireStale(
   const pulls = new Map(readings.map(r => [r.repoDir, r.pulls]))
 
   const live: ReviewDraft[] = []
-  const retired: ReviewDraft[] = []
+  const retired: ReviewDraft[] = closed.map(({ draft }) => ({
+    ...draft,
+    retired: retirementForClosedSession(draft, now),
+  }))
   let unchecked = 0
 
-  for (const { draft, repoDir } of pairs) {
+  for (const { draft, repoDir } of open) {
     const reading = pulls.get(repoDir)
     const pull = reading?.get(draft.pr)
 

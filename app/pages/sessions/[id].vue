@@ -2,6 +2,7 @@
 import { errorMessage } from '~/utils/errors'
 import { driftNote } from '~/utils/checkout'
 import { isSendKey } from '~/utils/keys'
+import { offersCommands, slashQuery } from '~/utils/slashCommands'
 import { IMAGE_MEDIA_TYPES, imageMediaType } from '~/utils/imageAttachments'
 import { renderMarkdown } from '~/utils/markdown'
 import { describeToolCall, filesTouched, type ToolCallLike } from '~/utils/toolCalls'
@@ -1287,10 +1288,7 @@ const race = computed(() => {
 const { find: findProvider, fetchAll: fetchProviders } = useProviders()
 const canSteer = computed(() => findProvider(session.value?.provider)?.capabilities.canSteer ?? true)
 
-const commandQuery = computed(() => {
-  const match = input.value.match(/^\/(\S*)$/)
-  return match ? match[1] ?? '' : ''
-})
+const commandQuery = computed(() => slashQuery(input.value))
 
 watch(input, () => {
   // Nothing to offer on an agent whose commands these are not.
@@ -1298,9 +1296,9 @@ watch(input, () => {
     paletteOpen.value = false
     return
   }
-  // Typing past the command itself means you are writing a message now.
-  if (input.value.startsWith('/') && !input.value.includes(' ')) paletteOpen.value = true
-  else if (!input.value.startsWith('/')) paletteOpen.value = false
+  // Typing past the command itself means you are writing a message now — see
+  // `offersCommands`, which the box on the Work page reads the same way.
+  paletteOpen.value = offersCommands(input.value)
 })
 
 function insertCommand(invocation: string) {

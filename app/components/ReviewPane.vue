@@ -48,7 +48,11 @@ interface Draft {
   violations: string[]
   composedAt: number
   posted?: { at: number; url: string; event: ReviewEvent; comments: number }
-  retired?: { at: number; reason: 'already_reviewed' | 'pr_closed' | 'head_moved'; detail: string }
+  retired?: {
+    at: number
+    reason: 'already_reviewed' | 'pr_closed' | 'head_moved' | 'session_closed'
+    detail: string
+  }
 }
 
 interface Preview {

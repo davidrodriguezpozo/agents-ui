@@ -1,5 +1,5 @@
 import { readSessions, type Session } from '../../utils/sessions'
-import { pendingDrafts, retiredSince, type ReviewDraft } from '../../utils/reviewDraft'
+import { pendingDrafts, retiredSince } from '../../utils/reviewDraft'
 import { retireStale } from '../../utils/reviewRetire'
 import { getProjectDir } from '../../utils/scope'
 
@@ -18,6 +18,13 @@ import { getProjectDir } from '../../utils/scope'
  * anchored to commits three pushes back. So it asks GitHub too, and retires what
  * it learns about — see `reviewRetire` for why that stays affordable, and for
  * the rule that an unreachable GitHub retires nothing.
+ *
+ * A closed session is settled here rather than in GitHub's answer. Closing is
+ * how you say you are finished with a review, and a session that posted its own
+ * review from the chat leaves a pull request that still looks open, unreviewed
+ * and unpushed — so the only record of the work being over is the one on this
+ * machine. A session whose record was deleted outright counts the same: Close
+ * without keeping the branch is what deleted it.
  */
 
 const DAY = 86_400_000
@@ -28,20 +35,23 @@ export default defineEventHandler(async (event) => {
 
   const byId = new Map(sessions.map(session => [session.id, session]))
 
-  // A draft whose session is gone has no repository to ask about and nothing to
-  // link to, which is the same reason it was already left off the list.
-  const known = drafts
-    .map(draft => ({ draft, session: byId.get(draft.sessionId) }))
-    .filter((pair): pair is { draft: ReviewDraft; session: Session } => Boolean(pair.session))
+  const pairs = drafts.map((draft) => {
+    const session = byId.get(draft.sessionId)
+    return {
+      draft,
+      session,
+      repoDir: session?.repoDir ?? '',
+      sessionClosed: !session || session.status === 'archived',
+    }
+  })
 
-  const { live, unchecked } = await retireStale(
-    known.map(({ draft, session }) => ({ draft, repoDir: session.repoDir })),
-  )
+  const { live, unchecked } = await retireStale(pairs)
 
   const stillWaiting = new Set(live.map(draft => draft.sessionId))
 
-  const pending = known
-    .filter(({ draft }) => stillWaiting.has(draft.sessionId))
+  const pending = pairs
+    .filter((pair): pair is typeof pair & { session: Session } =>
+      Boolean(pair.session) && stillWaiting.has(pair.draft.sessionId))
     .map(({ draft, session }) => ({
       sessionId: draft.sessionId,
       pr: draft.pr,
@@ -70,6 +80,7 @@ export default defineEventHandler(async (event) => {
       alreadyReviewed: gone.filter(d => d.retired!.reason === 'already_reviewed').length,
       prClosed: gone.filter(d => d.retired!.reason === 'pr_closed').length,
       headMoved: gone.filter(d => d.retired!.reason === 'head_moved').length,
+      sessionClosed: gone.filter(d => d.retired!.reason === 'session_closed').length,
     },
   }
 })
