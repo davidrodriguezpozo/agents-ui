@@ -29,6 +29,7 @@ export default defineEventHandler(async (event) => {
     dailyCapUsd?: number
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
+    openStartedSessions?: boolean
     effort?: RunEffort
     issueLabel?: string
     notionIntake?: Partial<NotionIntakeConfig>
@@ -46,6 +47,7 @@ export default defineEventHandler(async (event) => {
     dailyCapUsd?: number
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
+    openStartedSessions?: boolean
     effort?: RunEffort
     issueLabel?: string
     notionIntake?: Partial<NotionIntakeConfig>
@@ -68,6 +70,12 @@ export default defineEventHandler(async (event) => {
 
   if (typeof body?.pauseOnQuotaWarning === 'boolean') {
     patch.pauseOnQuotaWarning = body.pauseOnQuotaWarning
+  }
+
+  // A boolean or nothing, like the switches above: a truthy string arriving
+  // from a hand-rolled request must not be able to turn navigation back on.
+  if (typeof body?.openStartedSessions === 'boolean') {
+    patch.openStartedSessions = body.openStartedSessions
   }
 
   // 0 is meaningful — it is how a limit is turned off — so these are only

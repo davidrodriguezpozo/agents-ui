@@ -215,6 +215,18 @@ export interface Preferences {
    */
   pullActions: PullActionCommands
   /**
+   * Whether a pull request or issue quick action takes you into the session it
+   * starts, or leaves you on the row you pressed.
+   *
+   * Off by default, which is a change: every quick action used to navigate. The
+   * press it exists for is dispatching a review — you do that to five pull
+   * requests in a row and read none of the five conversations, and being thrown
+   * into a full-screen transcript each time meant walking back to Land to press
+   * the next one. Nothing is lost by staying: the row grows a chip saying a
+   * session has it, and the toast that says it started links to it.
+   */
+  openStartedSessions: boolean
+  /**
    * How hard every run thinks, unless it was asked for something else.
    *
    * One setting for the machine rather than one per session, for the same
@@ -286,6 +298,7 @@ export const DEFAULT_PREFERENCES: Preferences = {
   maxConcurrentRuns: 3,
   pauseOnQuotaWarning: false,
   pullActions: { review: '', address: '', fix: '', update: '' },
+  openStartedSessions: false,
   effort: DEFAULT_EFFORT,
   issueLabel: DEFAULT_ISSUE_LABEL,
   notionIntake: DEFAULT_NOTION_INTAKE,
@@ -365,6 +378,10 @@ export const preferencesStore = defineJsonStore<Preferences>({
     // Filled key by key, so a file written before this existed reads as "every
     // action uses its built-in prompt" rather than as undefined.
     pullActions: sanitisePullActions(parsed?.preferences?.pullActions),
+    // `=== true` rather than `??`: absent means a file written before this
+    // preference existed, and reading that as "navigate" would put every quick
+    // action back to leaving the page. So would a hand-edited `"yes"`.
+    openStartedSessions: parsed?.preferences?.openStartedSessions === true,
     // Absent means the default, which is also what an unrecognised level means
     // — a typo here must not hand the SDK a value it will reject.
     effort: sanitiseEffort(parsed?.preferences?.effort),
@@ -406,6 +423,7 @@ export async function savePreferences(
     maxConcurrentRuns?: number
     pauseOnQuotaWarning?: boolean
     pullActions?: Partial<PullActionCommands>
+    openStartedSessions?: boolean
     effort?: RunEffort
     issueLabel?: string
     notionIntake?: Partial<NotionIntakeConfig>
@@ -415,7 +433,8 @@ export async function savePreferences(
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning, pullActions, effort, issueLabel, notionIntake, issueWriteback, editor,
+    pauseOnQuotaWarning, pullActions, openStartedSessions, effort, issueLabel, notionIntake,
+    issueWriteback, editor,
     ...notifications
   } = patch
 
@@ -438,6 +457,9 @@ export async function savePreferences(
       pullActions: pullActions === undefined
         ? current.pullActions
         : sanitisePullActions({ ...current.pullActions, ...pullActions }),
+      openStartedSessions: openStartedSessions === undefined
+        ? current.openStartedSessions
+        : openStartedSessions === true,
       effort: effort === undefined ? current.effort : sanitiseEffort(effort),
       issueLabel: issueLabel === undefined ? current.issueLabel : sanitiseIssueLabel(issueLabel),
       // Merged over what is stored, like `pullActions`: the settings page saves

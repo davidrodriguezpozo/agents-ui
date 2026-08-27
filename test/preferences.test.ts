@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   positiveOrZero,
   clampTurns,
@@ -10,6 +13,8 @@ import {
   MAX_TURNS_CEILING,
   DEFAULT_ISSUE_LABEL,
   DEFAULT_PREFERENCES,
+  readPreferences,
+  savePreferences,
 } from '../server/utils/preferences'
 
 describe('positiveOrZero', () => {
@@ -159,5 +164,62 @@ describe('what is on by default', () => {
     // because "off by default" is the whole safety argument for the feature, and
     // it is one word away from being untrue.
     expect(DEFAULT_PREFERENCES.issueWriteback).toBe(false)
+  })
+
+  it('stays where you are when a quick action starts a session', () => {
+    // Pinned because "off" is the whole point of the setting — see the field's
+    // own comment for why. It is one word away from being untrue.
+    expect(DEFAULT_PREFERENCES.openStartedSessions).toBe(false)
+  })
+})
+
+/**
+ * The same answer, read off a file rather than off the defaults.
+ *
+ * Worth its own block because the interesting readings are the ones nobody
+ * chose: a preferences file written before this existed, and a hand-edit that
+ * put a string where a switch goes. Both have to come back as "stay here" —
+ * a reading of `undefined` would put the pages back to navigating.
+ */
+describe('openStartedSessions, off a stored file', () => {
+  let dir: string
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'agents-ui-preferences-'))
+    // Never the real one: it holds this machine's actual preferences.
+    process.env.CLAUDE_DIR = dir
+    await mkdir(join(dir, 'agents-ui'), { recursive: true })
+  })
+
+  afterAll(async () => {
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  async function stored(preferences: Record<string, unknown>) {
+    const path = join(dir, 'agents-ui', 'preferences.json')
+    await rm(path, { force: true })
+    await writeFile(path, `${JSON.stringify({ version: 1, preferences }, null, 2)}\n`, 'utf-8')
+  }
+
+  it('is off in a file written before it existed', async () => {
+    await stored({ summariseSessions: true })
+    expect((await readPreferences()).openStartedSessions).toBe(false)
+  })
+
+  it('is off for anything that is not an explicit yes', async () => {
+    await stored({ openStartedSessions: 'yes' })
+    expect((await readPreferences()).openStartedSessions).toBe(false)
+  })
+
+  it('is on once it has been turned on', async () => {
+    await stored({ openStartedSessions: true })
+    expect((await readPreferences()).openStartedSessions).toBe(true)
+  })
+
+  it('does not blank the rest of the file when only it is saved', async () => {
+    await stored({ issueLabel: 'studio', openStartedSessions: false })
+    const saved = await savePreferences({ openStartedSessions: true })
+    expect(saved.openStartedSessions).toBe(true)
+    expect(saved.issueLabel).toBe('studio')
   })
 })

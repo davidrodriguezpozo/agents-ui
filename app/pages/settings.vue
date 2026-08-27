@@ -415,6 +415,16 @@ const pullActions = ref<Record<PullActionKey, string>>({ review: '', address: ''
 const savedPullActions = ref<Record<PullActionKey, string>>({ review: '', address: '', fix: '', update: '' })
 
 /**
+ * Whether those buttons take you into the session they start.
+ *
+ * The composable's own state rather than a local ref, so flipping it here means
+ * the same thing on Land without a reload — it is the state those pages read,
+ * and `hydrate` hands it the value this page has already fetched rather than
+ * leaving it to ask for the same boolean again a route later.
+ */
+const { openStarted, hydrate: hydrateQuickActions } = useQuickActions()
+
+/**
  * Which label puts an issue on Land, on top of the ones assigned to you.
  *
  * Blank is a real setting rather than a missing one — it means no label is
@@ -547,6 +557,7 @@ onMounted(async () => {
       issueLabel?: string
       notionIntake?: Record<NotionIntakeKey, string>
       issueWriteback?: boolean
+      openStartedSessions?: boolean
     }>('/api/preferences')
     notifications.value = prefs.notifications
     notificationChannel.value = prefs.notifications.channel ?? 'browser'
@@ -565,6 +576,7 @@ onMounted(async () => {
     // Anything but an explicit yes reads as off, the same way the server decodes
     // it: this is the switch on a write somebody else can see.
     issueWriteback.value = prefs.issueWriteback === true
+    hydrateQuickActions(prefs.openStartedSessions)
     if (prefs.notionIntake) {
       for (const key of ['dataSource', 'statusProperty', 'statusValue'] as NotionIntakeKey[]) {
         const value = prefs.notionIntake[key] ?? NOTION_INTAKE_DEFAULT[key]
@@ -634,6 +646,30 @@ async function savePullAction(key: PullActionKey) {
     savedPullActions.value[key] = previous
     pullActions.value[key] = previous
     toast.add({ title: 'Could not save that', color: 'error' })
+  }
+}
+
+/**
+ * Turn "and take me there" on or off.
+ *
+ * The toast says what the buttons will do from now on rather than "Saved",
+ * because this setting is only ever noticed at the moment somebody presses one.
+ */
+async function setOpenStarted(value: boolean) {
+  const previous = openStarted.value
+  openStarted.value = value
+  try {
+    await $fetch('/api/preferences', { method: 'PUT', body: { openStartedSessions: value } })
+    toast.add({
+      title: value ? 'Actions open their session' : 'Actions leave you on the page',
+      description: value
+        ? 'Pressing one on Land or in Needs you starts the session and goes straight into the conversation.'
+        : 'Pressing one starts the session and says so. The toast links to it, and the row keeps a chip.',
+      color: 'success',
+    })
+  } catch (e) {
+    openStarted.value = previous
+    toast.add({ title: 'Could not save that', description: errorMessage(e), color: 'error' })
   }
 }
 
@@ -1225,6 +1261,34 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           post anything to GitHub — so a command that posts a review will post it. The session still
           starts in a fresh worktree with the branch checked out, the same as before.
         </p>
+
+        <!--
+          Where the press leaves you. Lives in this card because it is the second
+          half of the same question the boxes above answer: what happens when you
+          press "Review it".
+        -->
+        <div class="flex items-center justify-between gap-4">
+          <div class="flex-1 min-w-0">
+            <div class="type-strong">Open the session the action starts</div>
+            <div class="fs-sm mt-0.5 text-label">
+              Off by default. Dispatching a review is something you do to several pull requests in a
+              row, and being dropped into each conversation means walking back for the next one. With
+              this off the row says a session has it and the toast links to it. It covers the buttons
+              on Land and the rows in Needs you; the wall's own menu says "Review it here" and still
+              means it.
+            </div>
+          </div>
+          <label class="field-toggle">
+            <input
+              type="checkbox"
+              :checked="openStarted"
+              @change="setOpenStarted(($event.target as HTMLInputElement).checked)"
+            />
+            <span class="field-toggle__track">
+              <span class="field-toggle__thumb" />
+            </span>
+          </label>
+        </div>
       </div>
 
       <!--
