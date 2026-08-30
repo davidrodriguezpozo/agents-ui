@@ -2,7 +2,7 @@
 import { errorMessage } from '~/utils/errors'
 import {
   DAY_LABELS, PERMISSION_CHOICES, WEEKDAYS,
-  type GithubEventKind, type Schedule, type SchedulePermission,
+  type CheckScope, type GithubEventKind, type Schedule, type SchedulePermission,
 } from '~/composables/useSchedules'
 
 /** Create or edit a daily ritual. Time and days, not cron. */
@@ -223,14 +223,39 @@ const eventLabel = ref(props.schedule?.trigger?.label ?? '')
 const eventReviewer = ref(props.schedule?.trigger?.reviewer ?? '')
 
 /**
+ * Whose failures count, for a failing check.
+ *
+ * The old two answers were "every failing run in this repository" and "one
+ * branch, named now". In a repository shared with other people the first fires
+ * on everybody's failures and the second names a branch that is gone with the
+ * next pull request — so the ritual people actually want has a third answer.
+ *
+ * A ritual saved before this existed had no scope, and its branch is what it
+ * meant: set was that branch, empty was the whole repository.
+ */
+const CHECK_SCOPES: { value: CheckScope; label: string }[] = [
+  { value: 'any', label: 'Anywhere' },
+  { value: 'branch', label: 'One branch' },
+  { value: 'mine', label: 'Your pull requests' },
+]
+
+const eventScope = ref<CheckScope>(
+  props.schedule?.trigger?.scope
+  ?? (props.schedule?.trigger?.branch?.trim() ? 'branch' : 'any'),
+)
+
+/**
  * Each kind narrows by a different thing, so only one box is ever shown.
  *
  * Offering all three would suggest they combine, which they do not — a review
- * request has no branch and an issue has no reviewer.
+ * request has no branch and an issue has no reviewer. A failing check narrows
+ * by a branch only when it has been scoped to one; the other two scopes have
+ * nothing to type.
  */
-const narrowsBy = computed<'branch' | 'label' | 'reviewer'>(() => {
+const narrowsBy = computed<'branch' | 'label' | 'reviewer' | 'none'>(() => {
   if (eventKind.value === 'issue_labelled') return 'label'
   if (eventKind.value === 'review_requested') return 'reviewer'
+  if (eventKind.value === 'check_failed') return eventScope.value === 'branch' ? 'branch' : 'none'
   return 'branch'
 })
 
@@ -245,7 +270,14 @@ function toggleDay(day: number) {
 const preview = computed(() => {
   if (firesOn.value === 'event') {
     const what = EVENT_OPTIONS.find(o => o.value === eventKind.value)?.label ?? eventKind.value
-    const where = eventBranch.value.trim() ? ` on ${eventBranch.value.trim()}` : ''
+    // The scope is what the poll filters on, so it is what the preview says. A
+    // branch still in the box but not being filtered on is not part of it.
+    if (eventKind.value === 'check_failed' && eventScope.value === 'mine') {
+      return `${what} on a pull request you opened`
+    }
+    const where = narrowsBy.value === 'branch' && eventBranch.value.trim()
+      ? ` on ${eventBranch.value.trim()}`
+      : ''
     return `${what}${where}`
   }
 
@@ -301,6 +333,9 @@ async function onSave() {
             branch: narrowsBy.value === 'branch' ? eventBranch.value.trim() || undefined : undefined,
             label: narrowsBy.value === 'label' ? eventLabel.value.trim() || undefined : undefined,
             reviewer: narrowsBy.value === 'reviewer' ? eventReviewer.value.trim() || undefined : undefined,
+            // Only the kind that has scopes carries one, for the same reason a
+            // review trigger carries no branch.
+            scope: eventKind.value === 'check_failed' ? eventScope.value : undefined,
           }
         : null,
       permission: permission.value,
@@ -494,6 +529,31 @@ async function onSave() {
           aria-label="What it waits for"
         />
         <!--
+          Which failures are yours. Only a failing check has this: a pull
+          request being opened is already about one pull request, and an issue
+          has no branch to belong to.
+        -->
+        <div v-if="eventKind === 'check_failed'" class="flex gap-1">
+          <button
+            v-for="option in CHECK_SCOPES"
+            :key="option.value"
+            class="flex-1 px-2 py-1.5 rounded-md fs-mono font-medium transition-all"
+            :style="{
+              background: eventScope === option.value ? 'var(--accent-muted)' : 'var(--surface-raised)',
+              color: eventScope === option.value ? 'var(--accent)' : 'var(--text-disabled)',
+              border: '1px solid ' + (eventScope === option.value ? 'var(--accent-glow)' : 'var(--border-subtle)'),
+            }"
+            @click="eventScope = option.value"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+        <p v-if="eventKind === 'check_failed' && eventScope === 'mine'" class="field-hint">
+          A check that failed on a branch with an open pull request you opened. Everybody
+          else's failures are left alone.
+        </p>
+
+        <!--
           A name typed slightly wrong does not fail here, it just never matches
           — so a trigger with a typo in it is indistinguishable from one with
           nothing to do. Still free text: a branch or label that does not exist
@@ -513,7 +573,7 @@ async function onSave() {
           spellcheck="false"
         />
         <input
-          v-else
+          v-else-if="narrowsBy === 'reviewer'"
           v-model="eventReviewer"
           class="field-input font-mono"
           placeholder="Anyone — or a username or team"

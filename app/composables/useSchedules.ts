@@ -15,6 +15,12 @@ export type GithubEventKind =
   | 'issue_labelled'
   | 'review_requested'
 
+/**
+ * Which failing runs a `check_failed` trigger counts as its own: everything in
+ * the repository, one branch, or a branch with an open pull request you opened.
+ */
+export type CheckScope = 'any' | 'branch' | 'mine'
+
 /** Each kind narrows by exactly one of these; the others are absent. */
 export interface EventTrigger {
   kind: GithubEventKind
@@ -24,6 +30,8 @@ export interface EventTrigger {
   label?: string
   /** Only fire when this person or team was asked. Absent means anyone. */
   reviewer?: string
+  /** `check_failed` only. Absent means whatever `branch` already said. */
+  scope?: CheckScope
 }
 
 /** One instruction in a chained ritual. */

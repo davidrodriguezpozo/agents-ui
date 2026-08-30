@@ -58,6 +58,35 @@ check go red on demand:
 - A schedule written before this field exists behaves identically. Assert it from a fixture
   of the old shape, not by reasoning about the default.
 
+## Findings
+
+- **The trigger editor is not in `app/pages/schedules.vue`.** It is
+  `app/components/ScheduleModal.vue`, which the page opens. The scope control went there,
+  next to the kind select: three buttons — *Anywhere*, *One branch*, *Your pull requests* —
+  shown only for `check_failed`, with the branch box appearing only under *One branch*.
+- **`scope` is compared as what it means, not as what is stored.** `upsertSchedule` drops a
+  trigger's cursor whenever the question changes, and a ritual saved before this field
+  existed says the same thing as one whose `scope` spells out what its `branch` already
+  implied. Comparing the raw field would have re-baselined every old `check_failed` ritual
+  the first time somebody opened and saved it. `checkScopeOf` is the comparison, and
+  `test/scheduleStore.test.ts` holds both halves.
+- **The key stays the workflow run's `databaseId` under `mine`,** not the pull request
+  number. A pull request goes red, gets pushed to, and goes red again; keyed by pull request
+  the second failure is not news and would never fire — which is the firing you most want.
+- **Matching is by head branch name,** because that is the only thing `gh run list` offers.
+  Two of your *own* open pull requests can only collide on it across forks; the first wins,
+  and the cost is a summary naming the wrong one of your pull requests, not a wrong ritual.
+- **`gh pr list` gets `--limit 50`,** matching `LOOKBACK` rather than `gh`'s default thirty.
+  A truncated listing is indistinguishable from a pull request that is not yours, so the two
+  windows have to agree.
+- **What remains unproven.** The intersection, the scopes, the in-flight rule, the
+  unreachable-GitHub rule and the old-shape fixture are all mechanised in
+  `test/eventTriggers.test.ts` against `checkEventsFrom`. What no session can perform is the
+  live half: that `gh pr list --author @me` in a real shared repository returns what
+  `checkEventsFrom` is fed, and that a real failing check on a real pull request of yours
+  starts a run. Somebody with an open pull request and red CI has to create the ritual once
+  and watch it fire.
+
 ## Out of scope
 
 Fixing the CI. That is the instruction the ritual carries, and it is already the thing this
