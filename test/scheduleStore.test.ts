@@ -224,3 +224,40 @@ describe('turning a ritual into a chain and back', () => {
     expect(edited.steps).toBeUndefined()
   })
 })
+
+/**
+ * A trigger whose question changed has a cursor belonging to a question nobody
+ * is asking any more, so it is dropped and the ritual starts from now. The
+ * awkward case is the one that only *looks* changed: a `check_failed` ritual
+ * saved before `scope` existed, re-opened and saved again, now spells out the
+ * scope its branch always implied.
+ */
+describe('a trigger scope and the cursor', () => {
+  const triggered = (trigger: any) => ({ ...ritual('red-ci'), trigger })
+
+  it('keeps the cursor when an old trigger only gains the scope it already meant', async () => {
+    const created = await schedules.upsertSchedule(triggered({ kind: 'check_failed', branch: 'main' }))
+    await schedules.setTriggerCursor(created.id, 19_400_000_001)
+
+    const edited = await schedules.upsertSchedule({
+      ...triggered({ kind: 'check_failed', branch: 'main', scope: 'branch' }),
+      id: created.id,
+    })
+
+    expect(edited.triggerCursor).toBe(19_400_000_001)
+  })
+
+  it('drops the cursor when the scope becomes your pull requests', async () => {
+    // A different question, over a different set of runs. Re-baselining fires
+    // nothing and starts from now, which is what "changed" has always meant.
+    const created = await schedules.upsertSchedule(triggered({ kind: 'check_failed', branch: 'main' }))
+    await schedules.setTriggerCursor(created.id, 19_400_000_001)
+
+    const edited = await schedules.upsertSchedule({
+      ...triggered({ kind: 'check_failed', scope: 'mine' }),
+      id: created.id,
+    })
+
+    expect(edited.triggerCursor).toBeUndefined()
+  })
+})

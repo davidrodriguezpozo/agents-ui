@@ -9,7 +9,7 @@ import {
 import { defineJsonStore } from './jsonStore'
 import { mergeRules } from './permissionRules'
 import { permissionModeFor, type TrustLevel } from './trust'
-import { describeTrigger, type EventTrigger } from './eventTriggers'
+import { checkScopeOf, describeTrigger, type CheckScope, type EventTrigger } from './eventTriggers'
 import { normalizeSteps, type ChainStep } from './ritualChain'
 import type { RitualExpectation } from './ritualValue'
 import type { ProviderId } from './providers/types'
@@ -252,6 +252,11 @@ export function describeSchedule(schedule: Pick<Schedule, 'recurrence' | 'trigge
   return schedule.trigger ? describeTrigger(schedule.trigger) : describeRecurrence(schedule.recurrence)
 }
 
+/** What a trigger's scope means, with "there is no trigger" as its own answer. */
+function scopeOfTrigger(trigger: EventTrigger | undefined): CheckScope | undefined {
+  return trigger ? checkScopeOf(trigger) : undefined
+}
+
 export function describeRecurrence(recurrence: Recurrence): string {
   const { hour, minute, days } = normalizeRecurrence(recurrence)
   const time = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
@@ -375,6 +380,11 @@ export async function upsertSchedule(
       || existing?.trigger?.branch !== schedule.trigger?.branch
       || existing?.trigger?.label !== schedule.trigger?.label
       || existing?.trigger?.reviewer !== schedule.trigger?.reviewer
+      // Compared as what it means rather than as what is stored: a trigger
+      // written before `scope` existed says the same thing as one that spells
+      // out the scope its branch already implied, and re-opening an old ritual
+      // and saving it unchanged must not silently re-baseline its cursor.
+      || scopeOfTrigger(existing?.trigger) !== scopeOfTrigger(schedule.trigger)
       // The repository counts too. Pull request numbers and workflow run ids
       // are per repository, so a ritual repointed from one where they reached
       // 400 to one whose PRs are in the tens keeps a high-water mark nothing

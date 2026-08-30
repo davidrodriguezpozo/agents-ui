@@ -29,6 +29,21 @@ export type GithubEventKind =
   | 'issue_labelled'
   | 'review_requested'
 
+/**
+ * Which failing runs a `check_failed` trigger counts as its own.
+ *
+ * `any` and `branch` are the two settings this trigger has always had — every
+ * failing run in the repository, or one branch named in advance. Both are the
+ * wrong question in a repository shared with other people: the first fires on
+ * everybody's failures, and the second names a branch that changes with every
+ * pull request you open.
+ *
+ * `mine` is the question actually being asked, which the run records show typed
+ * by hand five times in a month: a check that failed on a branch with an open
+ * pull request *you* authored.
+ */
+export type CheckScope = 'any' | 'branch' | 'mine'
+
 export interface EventTrigger {
   kind: GithubEventKind
   /** Only fire for this branch, when set. Empty means any. `pr_opened`, `check_failed`. */
@@ -40,6 +55,29 @@ export interface EventTrigger {
    * anyone. `review_requested`.
    */
   reviewer?: string
+  /**
+   * Which failures count. `check_failed`. Absent is every schedule written
+   * before this field existed, and means whatever `branch` already said — see
+   * `checkScopeOf`.
+   */
+  scope?: CheckScope
+}
+
+/**
+ * What a trigger with no `scope` on it means.
+ *
+ * Every `check_failed` schedule already on disk predates the field, and has to
+ * go on firing exactly as it does now: `branch` set was "that branch", `branch`
+ * empty was "the whole repository". So the absent case is read off `branch`
+ * rather than defaulting to a constant, and no stored record needs rewriting.
+ *
+ * Once set, `scope` wins outright — `any` alongside a leftover branch means the
+ * branch is not a filter any more, and both the poll and the sentence on the row
+ * have to agree about that.
+ */
+export function checkScopeOf(trigger: EventTrigger): CheckScope {
+  if (trigger.scope) return trigger.scope
+  return trigger.branch?.trim() ? 'branch' : 'any'
 }
 
 /**
@@ -139,6 +177,15 @@ export function describeTrigger(trigger: EventTrigger): string {
     return `When a review is requested from ${trigger.reviewer.trim()}`
   }
 
+  if (trigger.kind === 'check_failed') {
+    // The scope is what the poll filters on, so it is what the row must say. A
+    // branch left on a trigger scoped to `any` or `mine` is not a filter any
+    // more, and naming it here would describe a ritual that does not exist.
+    const scope = checkScopeOf(trigger)
+    if (scope === 'mine') return 'When a workflow run fails on a pull request you opened'
+    if (scope === 'any') return `When ${what}`
+  }
+
   return trigger.branch ? `When ${what} on ${trigger.branch}` : `When ${what}`
 }
 
@@ -206,28 +253,39 @@ export async function pollTrigger(
     )
     if (!rows) return null
 
-    const typed = rows
-      .map(row => row as {
-        databaseId?: number; status?: string; conclusion?: string
-        headBranch?: string; workflowName?: string; url?: string
-      })
+    const typed = (rows as CheckRunRow[])
       .filter(row => typeof row.databaseId === 'number' && row.url)
+
+    /**
+     * One extra question per poll, and only for `mine`.
+     *
+     * One call rather than one per run — the failing runs are intersected with
+     * the head branches it comes back with — and it happens on a poll that was
+     * already asking GitHub something. `LOOKBACK` rather than `gh`'s default
+     * thirty, so the two windows agree: a truncated listing here would look
+     * exactly like a pull request that is not yours.
+     */
+    const authored = checkScopeOf(trigger) === 'mine'
+      ? await gh(
+          ['pr', 'list', '--author', '@me', '--state', 'open', '--limit', String(LOOKBACK),
+            '--json', 'number,url,headRefName,title'],
+          repoDir,
+        ) as AuthoredPull[] | null
+      : null
+
+    const events = checkEventsFrom(typed, trigger, authored)
+    // Not knowing which pull requests are yours is not the same as none of them
+    // being yours. Returning a poll here would advance the cursor past every
+    // failure that arrived while `gh pr list` was unhappy, and none of them
+    // would ever fire.
+    if (!events) return null
 
     return {
       // Every run in the window, not only the failing ones: how far back we
       // looked is a property of the request. Fifty runs containing two
       // failures still only reached as far as the fiftieth run.
       reachedBack: reachedBackOf(rows, typed.map(row => row.databaseId!)),
-      events: typed
-        // Only a finished run has a verdict. An in-flight one is not yet news,
-        // and firing on it would fire again when it finishes.
-        .filter(row => row.status === 'completed' && row.conclusion === 'failure')
-        .filter(row => !branch || row.headBranch === branch)
-        .map(row => ({
-          key: row.databaseId!,
-          summary: `${row.workflowName ?? 'A workflow'} failed on ${row.headBranch ?? 'a branch'}`,
-          url: row.url!,
-        })),
+      events,
     }
   }
 
@@ -247,6 +305,107 @@ export async function pollTrigger(
 function reachedBackOf(raw: unknown[], keys: number[]): number | undefined {
   if (raw.length < LOOKBACK || !keys.length) return undefined
   return Math.min(...keys)
+}
+
+/** One row of `gh run list`. Only the fields actually read. */
+export interface CheckRunRow {
+  databaseId?: number
+  status?: string
+  conclusion?: string
+  headBranch?: string
+  workflowName?: string
+  url?: string
+}
+
+/** One row of `gh pr list --author @me`. Only the fields actually read. */
+export interface AuthoredPull {
+  number?: number
+  title?: string
+  url?: string
+  headRefName?: string
+}
+
+/**
+ * The failing runs this trigger cares about, given what the two listings said.
+ *
+ * Split from the request the same way `issueEventsFrom` is, and for the same
+ * reason: the intersection is where the mistakes are, and a session cannot make
+ * a real check go red on demand to find them.
+ *
+ * `null` means the question could not be asked — `mine` needs to know which
+ * pull requests are yours, and being told nothing is not the same as being told
+ * none. The caller must not advance a cursor on it.
+ *
+ * The key stays the workflow run's `databaseId` rather than becoming the pull
+ * request's number, under every scope. A pull request goes red, gets pushed to,
+ * and goes red again; keyed by pull request that second failure is not news and
+ * would never fire.
+ */
+export function checkEventsFrom(
+  rows: CheckRunRow[],
+  trigger: EventTrigger,
+  authored: AuthoredPull[] | null,
+): TriggerEvent[] | null {
+  const scope = checkScopeOf(trigger)
+  const branch = trigger.branch?.trim()
+
+  if (scope === 'mine' && !authored) return null
+
+  /**
+   * Your open pull requests by head branch, which is the only thing `gh run
+   * list` gives us to match on. Two of your own pull requests can only share a
+   * head branch name across forks, and the first one wins — matching the wrong
+   * one of your own pull requests is a worse summary, not a wrong ritual.
+   */
+  const mine = new Map<string, AuthoredPull>()
+  for (const pull of authored ?? []) {
+    if (typeof pull.number !== 'number' || !pull.url || !pull.headRefName) continue
+    if (!mine.has(pull.headRefName)) mine.set(pull.headRefName, pull)
+  }
+
+  const events: TriggerEvent[] = []
+
+  for (const row of rows) {
+    // A row with no id has no ordering identity and one with no url has nowhere
+    // to send anybody. The caller filters these out before measuring how far
+    // back the window reached; checked again here so the fixtures a test writes
+    // are the same rows this function defends against.
+    if (typeof row.databaseId !== 'number' || !row.url) continue
+
+    // Only a finished run has a verdict. An in-flight one is not yet news, and
+    // firing on it would fire again when it finishes.
+    if (row.status !== 'completed' || row.conclusion !== 'failure') continue
+
+    if (scope === 'branch' && branch && row.headBranch !== branch) continue
+
+    if (scope !== 'mine') {
+      events.push({
+        key: row.databaseId,
+        summary: `${row.workflowName ?? 'A workflow'} failed on ${row.headBranch ?? 'a branch'}`,
+        url: row.url,
+      })
+      continue
+    }
+
+    const pull = row.headBranch ? mine.get(row.headBranch) : undefined
+    if (!pull) continue
+
+    /**
+     * The pull request, not the branch or the run.
+     *
+     * The instruction this carries is "let's fix the CI here", and what a
+     * person opening the row wants — and what the instruction will quote — is
+     * the pull request. The workflow's own name is still in the sentence,
+     * because which check went red is the first thing you need to know.
+     */
+    events.push({
+      key: row.databaseId,
+      summary: `#${pull.number} ${pull.title ?? '(untitled)'} — ${row.workflowName ?? 'a workflow'} failed`,
+      url: pull.url!,
+    })
+  }
+
+  return events
 }
 
 /**

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
-  MAX_EVENTS_PER_POLL, describeTrigger, hasGap, issueEventsFrom, promptFor, selectNew, titleFor,
-  type IssueEventRow, type TriggerEvent,
+  MAX_EVENTS_PER_POLL, checkEventsFrom, checkScopeOf, describeTrigger, hasGap, issueEventsFrom,
+  promptFor, selectNew, titleFor,
+  type AuthoredPull, type CheckRunRow, type EventTrigger, type IssueEventRow, type TriggerEvent,
 } from '../server/utils/eventTriggers'
 
 /**
@@ -272,6 +273,166 @@ describe('events on issues and pull requests', () => {
     const [event] = issueEventsFrom([labelled({ label: undefined })], { kind: 'issue_labelled' })
 
     expect(event?.summary).toContain('#14118')
+  })
+})
+
+/**
+ * A failing check that is yours.
+ *
+ * "Let's fix the CI here: <pull request url>" was typed by hand five times in a
+ * month because the trigger that should have carried it could only say "every
+ * failing run in this repository" or "one branch, named in advance" — and in a
+ * repository shared with other people both are the wrong question.
+ *
+ * Fixtures rather than a live repository: a session cannot make a real check go
+ * red on demand, and the intersection between two listings is where the
+ * mistakes live anyway.
+ */
+describe('a failing check, scoped', () => {
+  const run = (over: Partial<CheckRunRow> = {}): CheckRunRow => ({
+    databaseId: 19_400_000_001,
+    status: 'completed',
+    conclusion: 'failure',
+    headBranch: 'fix/products-lint',
+    workflowName: 'Lint',
+    url: 'https://github.com/o/r/actions/runs/19400000001',
+    ...over,
+  })
+
+  const pull = (over: Partial<AuthoredPull> = {}): AuthoredPull => ({
+    number: 5762,
+    title: 'fix(products): stop the lint from tripping on generated files',
+    url: 'https://github.com/o/r/pull/5762',
+    headRefName: 'fix/products-lint',
+    ...over,
+  })
+
+  const mine: EventTrigger = { kind: 'check_failed', scope: 'mine' }
+
+  it('leaves a colleague\'s failure alone, and fires on it under `any`', () => {
+    // The whole point. A shared monorepo produces fifty of these in a morning
+    // and none of them are yours to fix.
+    const theirs = run({ databaseId: 2, headBranch: 'feat/somebody-else' })
+
+    expect(checkEventsFrom([theirs], mine, [pull()])).toEqual([])
+    expect(checkEventsFrom([theirs], { kind: 'check_failed' }, null)).toHaveLength(1)
+  })
+
+  it('fires on a failure on a branch with a pull request you opened', () => {
+    const events = checkEventsFrom([run()], mine, [pull()])
+
+    expect(events).toHaveLength(1)
+    expect(events![0]!.key).toBe(19_400_000_001)
+  })
+
+  it('names the pull request rather than the workflow run', () => {
+    // What a person opening this row wants, and what the instruction quotes.
+    const [event] = checkEventsFrom([run()], mine, [pull()])!
+
+    expect(event!.summary).toContain('#5762')
+    expect(event!.summary).toContain('fix(products)')
+    expect(event!.summary).toContain('Lint failed')
+    expect(event!.url).toBe('https://github.com/o/r/pull/5762')
+  })
+
+  it('keys on the workflow run, so a second failure on the same pull request is news', () => {
+    // Keyed by pull request number, a branch pushed to and gone red again would
+    // never fire a second time — which is exactly when you want telling.
+    const again = run({ databaseId: 19_400_000_050, workflowName: 'Test' })
+    const events = checkEventsFrom([run(), again], mine, [pull()])
+
+    expect(events!.map(e => e.key)).toEqual([19_400_000_001, 19_400_000_050])
+  })
+
+  it('does not fire on a run that is still going, under any scope', () => {
+    // A run with no verdict yet is not news, and firing on it would fire again
+    // when it finishes.
+    const running = run({ status: 'in_progress', conclusion: '' })
+
+    expect(checkEventsFrom([running], mine, [pull()])).toEqual([])
+    expect(checkEventsFrom([running], { kind: 'check_failed' }, null)).toEqual([])
+    expect(checkEventsFrom([running], { kind: 'check_failed', branch: 'fix/products-lint' }, null))
+      .toEqual([])
+  })
+
+  it('fires nothing at all when your pull requests could not be listed', () => {
+    // The same rule `reviewRetire` states for an unreachable GitHub: not
+    // knowing is not an answer. Null propagates so the caller cannot advance
+    // its cursor past failures it never got to look at.
+    expect(checkEventsFrom([run()], mine, null)).toBeNull()
+  })
+
+  it('fires nothing when you have no open pull requests, without saying it could not ask', () => {
+    expect(checkEventsFrom([run()], mine, [])).toEqual([])
+  })
+
+  it('ignores a pull request of yours whose branch is not the one that failed', () => {
+    expect(checkEventsFrom([run({ headBranch: 'main' })], mine, [pull()])).toEqual([])
+  })
+
+  it('drops a pull request with nothing to link to rather than firing at nowhere', () => {
+    expect(checkEventsFrom([run()], mine, [pull({ url: undefined })])).toEqual([])
+  })
+})
+
+/**
+ * Every `check_failed` ritual already on disk was written before `scope`
+ * existed, and has to go on firing exactly as it does now. Asserted from
+ * fixtures of the old shape rather than by reasoning about a default.
+ */
+describe('a trigger saved before scopes existed', () => {
+  const stored: EventTrigger = JSON.parse('{"kind":"check_failed","branch":"main"}')
+  const storedWithoutBranch: EventTrigger = JSON.parse('{"kind":"check_failed"}')
+
+  const failure = (branch: string, id: number): CheckRunRow => ({
+    databaseId: id,
+    status: 'completed',
+    conclusion: 'failure',
+    headBranch: branch,
+    workflowName: 'Test',
+    url: `https://github.com/o/r/actions/runs/${id}`,
+  })
+
+  const rows = [failure('main', 1), failure('feat/other', 2)]
+
+  it('narrows to its branch, exactly as it did', () => {
+    expect(checkEventsFrom(rows, stored, null)!.map(e => e.key)).toEqual([1])
+  })
+
+  it('takes the whole repository when it named no branch', () => {
+    expect(checkEventsFrom(rows, storedWithoutBranch, null)!.map(e => e.key)).toEqual([1, 2])
+  })
+
+  it('still says what it always said', () => {
+    expect(describeTrigger(stored)).toBe('When a workflow run fails on main')
+    expect(describeTrigger(storedWithoutBranch)).toBe('When a workflow run fails')
+  })
+
+  it('reads its scope off the branch it already had', () => {
+    expect(checkScopeOf(stored)).toBe('branch')
+    expect(checkScopeOf(storedWithoutBranch)).toBe('any')
+  })
+
+  it('lets an explicit scope override a branch left behind', () => {
+    // Switching a ritual from one branch to your pull requests leaves the box
+    // it was typed in; the scope is what the poll obeys, so it is what the row
+    // has to say too.
+    const moved: EventTrigger = { kind: 'check_failed', branch: 'main', scope: 'any' }
+
+    expect(checkScopeOf(moved)).toBe('any')
+    expect(describeTrigger(moved)).toBe('When a workflow run fails')
+  })
+})
+
+describe('saying what a scoped check waits for', () => {
+  it('says whose pull requests, not which branch', () => {
+    expect(describeTrigger({ kind: 'check_failed', scope: 'mine' }))
+      .toBe('When a workflow run fails on a pull request you opened')
+  })
+
+  it('names the branch when that is what it is scoped to', () => {
+    expect(describeTrigger({ kind: 'check_failed', scope: 'branch', branch: 'main' }))
+      .toBe('When a workflow run fails on main')
   })
 })
 
