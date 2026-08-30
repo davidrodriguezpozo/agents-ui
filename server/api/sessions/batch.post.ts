@@ -20,8 +20,12 @@ import { checkBudget } from '../../utils/budget'
  * Enough for a morning's work, few enough that a fat-fingered paste cannot
  * quietly cut fifty branches. Refused rather than truncated: silently doing
  * some of what was asked is worse than doing none of it.
+ *
+ * Exported because `github/pulls/review-all` starts sessions the same way and
+ * for the same cost. Two numbers would be two ceilings on one machine, and the
+ * one that got raised would be whichever was found first.
  */
-const MAX_AT_ONCE = 20
+export const MAX_AT_ONCE = 20
 
 export interface BatchResult {
   started: (Session & { runId?: string; startError?: string })[]
