@@ -240,11 +240,15 @@ nothing but a string in a title.
 review session, what was posted, what came back, what it cost. Every list already half-knows
 this; nothing owns it.
 
-**D2. The verdict is a control, not a sentence you type.** *"Approve, and comment the WARN
-findings"*, *"Approve. Leave no comments"*, *"request changes, and comment the BLOCKING and
-WARN findings"* — typed by hand, in slightly different words, in most review sessions on
-record. That is three buttons and a severity filter. `reviewPost.ts` already posts with `gh`
-and already refuses to let an agent reach it, which is the right shape to hang it on.
+**D2. The verdict is a control, not a sentence you type — and this is already built.**
+Checked after writing the sentence above, which is the correct order to find this out in:
+`reviewReport.ts` parses the report's severities, `includeByDefault` includes BLOCKING and
+WARN and nothing else, `suggestedEvent` picks the event and deliberately never pre-selects
+APPROVE, `reviewDraft.ts` holds the editable draft, and `reviewPost.ts` sends it as one
+review behind a guard no agent can reach. It landed between 20 and 27 August; nearly all the
+typing in the corpus predates it. **The gap this was going to name does not exist**, and the
+right conclusion is the opposite one: the newest part of the app is the part built for what
+the app is actually used for, which is the strongest evidence in this document for D.
 
 **D3. Batch review.** Five waiting PRs is five presses, five worktrees and five pastes
 today. It should be one press, your own review command, and a queue walked with `j`/`k`,
@@ -357,8 +361,10 @@ that happens to open pull requests.** Most recorded use says so, the README says
 opposite, and the two headline features are answers to a question this machine has never
 asked.
 
-1. **D2 + D3 — the verdict as a control, and batch review.** The most-repeated typing in the
-   corpus, and the actual shape of the loop. `reviewPost.ts` is the foundation.
+1. **D3 — batch review.** 26 review sessions on record, each started by hand, and every
+   part of doing N at once already exists (`intentFor`, `turnForIntent`, `work.post.ts`,
+   `batch.post.ts`) with nothing composing them. D2 turned out to be built already — see
+   above — which is the good kind of finding.
 2. **A1 — failover instead of pause.** Three facts the app holds, joined at one refusal
    already written. It is also what keeps the loop moving after 16:00.
 3. **D4 — "fix the CI here" as a ritual on your own open PRs.** Typed five times by hand;

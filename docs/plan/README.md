@@ -92,6 +92,23 @@ way and run the same way; each says what it changes and what it must run alone a
 | # | Unit | Depends on |
 | --- | --- | --- |
 | 31 | One session, any agent | — |
+| 32 | Race the agents | 31 |
+| 33 | Fix the CI on the pull requests that are yours | — |
+| 34 | Review them all at once | — |
+| 35 | Carry on when Claude runs out | 31 |
+| 36 | Continue this session on the other agent | 31 |
+| 37 | The model on the run, and the ledger by provider | — |
+| 38 | The ten minutes that open the door | by hand |
+
+Units 33–38 come from [the sixth pass](../brainstorm-2026-08-30.md), which was a census of
+this machine's own store rather than a scan of anybody else's product. 33 and 34 are the
+first two units written for what the app turned out to be used for; 35 and 36 are the
+provider seam finally pointed at the reason it gets used; 37 is the smallest unit in the
+plan and the precondition for every cost question after it. 38 is by hand, like 00.
+
+Four of them can run at once — 33 owns `eventTriggers.ts`, 34 owns `land.vue`, 35 owns
+`budget.ts`, 37 owns `outcomes.ts`, and none of the four touches another's file. 36 wants
+35 merged first: it is the same idea with a person watching.
 
 ## Two honest caveats
 
