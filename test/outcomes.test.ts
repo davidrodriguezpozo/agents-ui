@@ -821,3 +821,82 @@ describe('reading whether a run reports its cost', () => {
     }).costReported).toBe(false)
   })
 })
+
+describe('which agent ran it', () => {
+  /**
+   * The dimension that has to cover the whole window.
+   *
+   * Every other grouping here drops what it cannot key: a turn with no model is
+   * left out of `byModel` rather than pooled under a name it did not have. This
+   * one cannot do that, because absence is not a gap — 401 of the 538 runs on
+   * the machine this was written for predate the provider field entirely, and
+   * every one of them ran on Claude Code. Pooling them under "unknown" would
+   * invent a third agent that has never existed.
+   */
+  it('reads an absent provider as Claude Code rather than as unknown', () => {
+    const report = joinOutcomes({
+      turns: [turn({ costUsd: 3 }), turn({ costUsd: 2, provider: 'claude' })],
+      sessions: [],
+      since: SINCE,
+    })
+
+    expect(report.byProvider.map(g => [g.key, g.costUsd])).toEqual([['claude', 5]])
+  })
+
+  it('separates the agents, largest spend first', () => {
+    const report = joinOutcomes({
+      turns: [
+        turn({ costUsd: 1, provider: 'cursor' }),
+        turn({ costUsd: 4, provider: 'claude' }),
+        turn({ costUsd: 2, provider: 'cursor' }),
+      ],
+      sessions: [],
+      since: SINCE,
+    })
+
+    expect(report.byProvider.map(g => [g.key, g.costUsd])).toEqual([
+      ['claude', 4],
+      ['cursor', 3],
+    ])
+  })
+
+  it('files an unrecognised provider under Claude Code, as every other reader does', () => {
+    // `providerFor` treats an unknown id as the default deliberately: a record
+    // naming a provider this build has dropped is better read as the original
+    // than as a crash. A second rule here would be a second answer.
+    const report = joinOutcomes({
+      turns: [turn({ costUsd: 1, provider: 'codex' })],
+      sessions: [],
+      since: SINCE,
+    })
+
+    expect(report.byProvider.map(g => g.key)).toEqual(['claude'])
+  })
+
+  it('covers the whole window: the groups add up to the total', () => {
+    const turns = [
+      turn({ costUsd: 3 }),
+      turn({ costUsd: 1, provider: 'cursor' }),
+      turn({ costUsd: 2, provider: 'claude' }),
+    ]
+    const report = joinOutcomes({ turns, sessions: [], since: SINCE })
+
+    const summed = report.byProvider.reduce((n, g) => n + g.costUsd, 0)
+    expect(summed).toBe(report.costUsd)
+  })
+
+  it('carries the provider off a run record', () => {
+    const asTurn = outcomeTurnOf({
+      id: 'r1',
+      title: 'a turn',
+      kind: 'chat',
+      status: 'completed',
+      createdAt: NOW - DAY,
+      provider: 'cursor',
+      stats: { costUsd: 1, model: 'composer-1' },
+    })
+
+    expect(asTurn.provider).toBe('cursor')
+    expect(asTurn.model).toBe('composer-1')
+  })
+})

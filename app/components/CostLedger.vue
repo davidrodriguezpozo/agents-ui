@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { LEDGER_DAYS, type LedgerDimension, type LedgerRow, type LedgerTable } from '~/composables/useLedger'
+import { providerLabel } from '~/utils/providers'
 
 /**
  * What the work that actually shipped cost.
  *
  * The spend chart answers what a day cost, a day late. This answers the question
  * that gets a bad ritual deleted: cost per accepted merge, by ritual, agent,
- * model and repository, next to the same figure for the window before.
+ * model, what ran it and repository, next to the same figure for the window
+ * before.
  *
  * Everything on this page is arithmetic somebody else did. `joinOutcomes` is the
  * join and `buildLedger` is the pairing; both have tests over fixtures. The one
@@ -65,6 +67,14 @@ const DIMENSIONS: Record<LedgerDimension, { heading: string; column: string; emp
     column: 'Model',
     empty: 'No turn in this window recorded which model answered it.',
   },
+  provider: {
+    heading: 'By what ran it',
+    column: 'Ran on',
+    // Every turn resolves to something — a record older than the seam ran on
+    // Claude Code and says so by saying nothing — so this line is only ever
+    // reached by a window with no turns in it at all.
+    empty: 'No turn ran in this window.',
+  },
   repository: {
     heading: 'By repository',
     column: 'Repository',
@@ -78,9 +88,13 @@ const DIMENSIONS: Record<LedgerDimension, { heading: string; column: string; emp
   },
 }
 
-/** A repository row reads as the project's name; everything else names itself. */
+/**
+ * A repository row reads as the project's name, and a provider row as the name
+ * the rest of the app calls it; everything else names itself.
+ */
 function rowName(table: LedgerTable, row: LedgerRow): string {
   if (table.dimension === 'repository') return nameFor(row.key)
+  if (table.dimension === 'provider') return providerLabel(row.key)
   return row.label ?? row.key
 }
 

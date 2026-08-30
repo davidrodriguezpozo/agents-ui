@@ -62,7 +62,7 @@ export interface LedgerRow {
   openCostUsd: number
 }
 
-export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'repository' | 'person'
+export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'provider' | 'repository' | 'person'
 
 export interface LedgerTable {
   dimension: LedgerDimension

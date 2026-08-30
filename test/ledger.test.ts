@@ -265,9 +265,12 @@ describe('the five breakdowns', () => {
     ],
   })
 
-  it('is by ritual, agent, model, repository and person, in that order', () => {
+  it('is by ritual, agent, model, what ran it, repository and person, in that order', () => {
+    // `provider` sits under `model` and not beside `agent` on purpose: "agent"
+    // one table up means the persona a turn ran as, and two tables called agent
+    // is a column somebody reads the wrong way exactly once.
     expect(ledger.tables.map(t => t.dimension))
-      .toEqual(['ritual', 'agent', 'model', 'repository', 'person'])
+      .toEqual(['ritual', 'agent', 'model', 'provider', 'repository', 'person'])
   })
 
   it('has an empty person table when nothing in the window was signed', () => {

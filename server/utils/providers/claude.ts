@@ -40,6 +40,28 @@ function previewToolResult(content: unknown): string {
   return text.length > 600 ? `${text.slice(0, 600)}…` : text
 }
 
+/**
+ * The model that actually answered, off one assistant message.
+ *
+ * `options.model` was the only thing recorded before this, and it is set only
+ * when somebody named a model — an agent's frontmatter, or the picker — which
+ * on the machine this was written for had happened 7 times in 540 runs. So the
+ * ledger's model grouping, which unit 11 built and unit 12 put on a page, was a
+ * single bucket called `undefined` for the entire life of the feature.
+ *
+ * The stream knows. Every assistant message carries the model that wrote it,
+ * and reading it here is what `cursor.ts` already does with `msg.model` — the
+ * newer provider got this right first.
+ *
+ * An empty string is treated as absent rather than recorded: a model called ""
+ * would become a row on the ledger, and a row nobody can act on is worse than a
+ * turn that admits it does not know.
+ */
+export function answeringModel(message: unknown): string | undefined {
+  const model = (message as { message?: { model?: unknown } } | null)?.message?.model
+  return typeof model === 'string' && model ? model : undefined
+}
+
 async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
   const { run, options, emit, patch, abort } = turn
 
@@ -127,6 +149,9 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
   /** Where one block of the answer ends and the next begins. */
   const breaks = paragraphBreaks()
 
+  /** The model that answered, observed rather than requested. See below. */
+  let model: string | undefined
+
   try {
     for await (const message of query({
       prompt,
@@ -172,6 +197,11 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
       }
 
       if (message.type === 'assistant') {
+        // Last one wins: a turn that changed model mid-flight is filed under
+        // the model that finished it, which is the rule `joinOutcomes` already
+        // uses to attribute a session to its last costed turn.
+        model = answeringModel(message) ?? model
+
         for (const block of message.message?.content ?? []) {
           if ((block as { type?: string }).type === 'tool_use') {
             const toolUse = block as { id: string; name: string; input: unknown }
@@ -247,7 +277,7 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
           costUsd: (message as { total_cost_usd?: number }).total_cost_usd ?? 0,
           durationMs: (message as { duration_ms?: number }).duration_ms ?? 0,
           numTurns: (message as { num_turns?: number }).num_turns ?? 0,
-          model: options.model,
+          model: model ?? options.model,
           permissionDenials: ((message as { permission_denials?: { tool_name: string }[] }).permission_denials ?? [])
             .map(d => ({ toolName: d.tool_name })),
         }

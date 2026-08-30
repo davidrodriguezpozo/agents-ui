@@ -54,3 +54,29 @@ invents a model called nothing. Unit 11 already chose this rule for changed file
 Choosing a cheaper model for anything. That is a direction of its own and it needs this unit
 first, which is most of the argument for doing this one now: today the app cannot even say
 what it has been spending its money on.
+
+## Findings
+
+- **Claude was the provider getting this wrong, and Cursor was already right.**
+  `cursor.ts` has read `msg.model` off its own stream since unit 31 (`model ?? options.model`,
+  twice). `claude.ts` recorded `options.model` alone — which is set only when somebody names a
+  model, and on this machine that had happened **7 times in 540 runs**. So the fix is not new
+  behaviour, it is the older provider catching up with the newer one, and it is four lines.
+- **`answeringModel` is exported and tested, rather than left inline.** `claude.ts` had no
+  exported helpers at all, but `cursor.ts` exports two for exactly this reason, and the rule
+  has a decision in it: last one wins, an empty string is absent, and a non-assistant message
+  never contributes. Testing the fold rather than only the extractor is what makes "last one
+  wins" a claim rather than a comment.
+- **Absence is resolved in `byProvider`, not dropped.** Every other dimension leaves out a
+  turn it cannot key. This one cannot: 401 of the 538 records on this machine predate the
+  provider field and every one ran on Claude Code, so `providerFor` resolves them the same way
+  every other reader does. It is the only dimension whose groups add back up to the window's
+  total, and there is a test asserting exactly that.
+- **The table is called "By what ran it", not "By agent".** `byAgent` already means the
+  persona a turn ran as. Two tables called agent — one about Claude Code versus Cursor, one
+  about `code-reviewer` — is a column somebody misreads exactly once, and the misreading is
+  expensive because both are plausible.
+- **What is still not true: the 538 records already on disk gain nothing.** They have no model
+  and they never will; back-filling would mean guessing. The model grouping is honest from
+  today forward and empty behind, which is the same trade unit 14 made with `sha` on old
+  landings.

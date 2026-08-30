@@ -121,7 +121,7 @@ export interface LedgerRow {
   openCostUsd: number
 }
 
-export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'repository' | 'person'
+export type LedgerDimension = 'ritual' | 'agent' | 'model' | 'provider' | 'repository' | 'person'
 
 export interface LedgerTable {
   dimension: LedgerDimension
@@ -233,6 +233,11 @@ export function buildLedger(input: LedgerInput): Ledger {
       { dimension: 'ritual', rows: rowsOf(current.byRitual, input.ritualTitles) },
       { dimension: 'agent', rows: rowsOf(current.byAgent) },
       { dimension: 'model', rows: rowsOf(current.byModel) },
+      // Below model rather than beside agent, because "agent" one table up
+      // already means the persona a turn ran as. Two tables called agent, one
+      // about Claude Code versus Cursor and one about `code-reviewer`, is the
+      // kind of column somebody reads the wrong way exactly once.
+      { dimension: 'provider', rows: rowsOf(current.byProvider) },
       { dimension: 'repository', rows: rowsOf(current.byRepository) },
       { dimension: 'person', rows: rowsOf(current.byPerson, personNames(input.runs)) },
     ],

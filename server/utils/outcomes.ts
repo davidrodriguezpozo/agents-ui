@@ -4,7 +4,7 @@ import { landedSince, type LandedHow, type SessionLanded } from './landed'
 import { personKey, type Identity } from './identity'
 import type { SessionReverted } from './revertWatch'
 import type { CheckStatus, SessionCheck } from './checks'
-import { capabilitiesOf } from './providers'
+import { capabilitiesOf, providerFor } from './providers'
 import type { SideCost } from './spend'
 
 /**
@@ -137,6 +137,13 @@ export interface OutcomeTurn {
   invocation?: string
   input?: string
   model?: string
+  /**
+   * Which agent took the turn. Absent means Claude Code, as everywhere else —
+   * but here that is a claim about a record rather than about a run, so the
+   * grouping resolves it through `providerFor` instead of pooling absence into
+   * a row of its own.
+   */
+  provider?: string
   /** The repository, for a turn that is not a session's. */
   projectDir?: string
   /**
@@ -228,6 +235,7 @@ export function outcomeTurnOf(run: OutcomeRunRecord): OutcomeTurn {
     invocation: run.invocation,
     input: run.input,
     model: run.stats?.model,
+    provider: run.provider,
     projectDir: run.projectDir,
     // Asked of the provider rather than inferred from a zero cost: a Claude
     // turn really can cost nothing (cached, instant, refused), and reading that
@@ -345,6 +353,14 @@ export interface OutcomeReport extends OutcomeTotals {
   byRitual: OutcomeGroup[]
   byAgent: OutcomeGroup[]
   byModel: OutcomeGroup[]
+  /**
+   * Which agent ran the work — Claude Code, `cursor-agent`, whatever comes
+   * next. Unlike every other dimension here, absence is not a gap: a record
+   * written before the provider seam existed ran on Claude Code and says so by
+   * saying nothing, so it is resolved rather than dropped. That is what makes
+   * this the one dimension that covers the whole window.
+   */
+  byProvider: OutcomeGroup[]
   bySkill: OutcomeGroup[]
   byRepository: OutcomeGroup[]
   /**
@@ -509,6 +525,7 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
     byRitual: new Map<string, Tally>(),
     byAgent: new Map<string, Tally>(),
     byModel: new Map<string, Tally>(),
+    byProvider: new Map<string, Tally>(),
     bySkill: new Map<string, Tally>(),
     byRepository: new Map<string, Tally>(),
     byPerson: new Map<string, Tally>(),
@@ -523,6 +540,8 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
       // every turn of a session run by an agent is that agent's work.
       byAgent: turn.agentSlug ?? session?.agentSlug,
       byModel: turn.model,
+      // Resolved, not passed through: see the field's note on the report.
+      byProvider: providerFor(turn.provider).id,
       bySkill: skillOf(turn),
       // A session's repository is on the session; a ritual or a command carries
       // its own.
@@ -670,6 +689,7 @@ export function joinOutcomes(input: OutcomeInput): OutcomeReport {
     byRitual: groups(dimensions.byRitual),
     byAgent: groups(dimensions.byAgent),
     byModel: groups(dimensions.byModel),
+    byProvider: groups(dimensions.byProvider),
     bySkill: groups(dimensions.bySkill),
     byRepository: groups(dimensions.byRepository),
     byPerson: groups(dimensions.byPerson),
