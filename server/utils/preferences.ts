@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { DEFAULT_EDITOR, sanitiseEditor, type EditorChoice } from './editors'
 import { defineJsonStore } from './jsonStore'
+import { asProviderId, type ProviderId } from './providers'
 import {
   DEFAULT_NOTION_INTAKE, sanitiseNotionIntake, type NotionIntakeConfig,
 } from './notionIntake'
@@ -209,6 +210,24 @@ export interface Preferences {
    */
   pauseOnQuotaWarning: boolean
   /**
+   * Which agent picks the work up when the pause above would have stopped it.
+   *
+   * Absent means stop, which is what the pause has always done. Naming an agent
+   * turns the refusal into a substitution: work nobody is watching carries on
+   * somewhere else until the limit resets.
+   *
+   * It is a second field rather than a third state on the boolean because the
+   * pause is read in three places and none of them changes here — and because
+   * the two answer different questions. The boolean is *should unattended work
+   * respect the subscription limit*; this is *and then what*. A file that says
+   * nothing about either still means what it always meant.
+   *
+   * **Never consulted for the dollar caps.** Those describe money, and the other
+   * agent also costs money; falling back there would turn a spending limit into
+   * a redirection. See `checkBudget`.
+   */
+  quotaFallbackProvider?: ProviderId
+  /**
    * What each pull request quick action runs. Empty strings throughout means
    * every action uses its built-in prompt, which is the default and was the
    * only behaviour before this setting existed.
@@ -375,6 +394,11 @@ export const preferencesStore = defineJsonStore<Preferences>({
     maxConcurrentRuns: parsed?.preferences?.maxConcurrentRuns ?? DEFAULT_PREFERENCES.maxConcurrentRuns,
     // Absent means off — a file written before this existed never chose it.
     pauseOnQuotaWarning: parsed?.preferences?.pauseOnQuotaWarning === true,
+    // Narrowed rather than trusted: a hand-edited file naming an agent this
+    // build does not have would otherwise become a fallback that silently never
+    // fires. `asProviderId` answers undefined for anything it does not know,
+    // which is the same as not having chosen one.
+    quotaFallbackProvider: asProviderId(parsed?.preferences?.quotaFallbackProvider),
     // Filled key by key, so a file written before this existed reads as "every
     // action uses its built-in prompt" rather than as undefined.
     pullActions: sanitisePullActions(parsed?.preferences?.pullActions),
@@ -422,6 +446,8 @@ export async function savePreferences(
     maxTurns?: number
     maxConcurrentRuns?: number
     pauseOnQuotaWarning?: boolean
+    /** Null clears it; an unknown agent is dropped rather than stored. */
+    quotaFallbackProvider?: ProviderId | null
     pullActions?: Partial<PullActionCommands>
     openStartedSessions?: boolean
     effort?: RunEffort
@@ -433,7 +459,7 @@ export async function savePreferences(
 ): Promise<Preferences> {
   const {
     summariseSessions, dailyCapUsd, runCapUsd, repairAttempts, maxTurns, maxConcurrentRuns,
-    pauseOnQuotaWarning, pullActions, openStartedSessions, effort, issueLabel, notionIntake,
+    pauseOnQuotaWarning, quotaFallbackProvider, pullActions, openStartedSessions, effort, issueLabel, notionIntake,
     issueWriteback, editor,
     ...notifications
   } = patch
@@ -452,6 +478,12 @@ export async function savePreferences(
       pauseOnQuotaWarning: pauseOnQuotaWarning === undefined
         ? current.pauseOnQuotaWarning
         : pauseOnQuotaWarning === true,
+      // Narrowed on the way in as well as on the way out. Null is how the
+      // settings page says "back to skipping", and is not the same as the field
+      // being absent, which means leave it alone.
+      quotaFallbackProvider: quotaFallbackProvider === undefined
+        ? current.quotaFallbackProvider
+        : asProviderId(quotaFallbackProvider),
       // Merged over what is stored, so saving one action does not blank the
       // other three — the settings page sends only the field that changed.
       pullActions: pullActions === undefined

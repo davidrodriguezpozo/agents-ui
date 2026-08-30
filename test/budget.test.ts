@@ -201,3 +201,134 @@ describe('leaving room on the subscription', () => {
       .resolves.toMatchObject({ allowed: true })
   })
 })
+
+/**
+ * Carrying on somewhere else instead of stopping.
+ *
+ * The two failures worth guarding against are opposites. One is a substitution
+ * that does not happen — the setting is on, the limit is gone, and the ritual is
+ * skipped anyway. The other is a substitution that happens where it must not: a
+ * *dollar* cap is a statement about money, and the other agent costs money too,
+ * so a fallback that answered that one would turn a spending limit into a
+ * redirection.
+ *
+ * "Installed" is asked of the same lookup a run uses, so these drive it through
+ * `CURSOR_AGENT_EXECUTABLE` rather than mocking the module: a fallback that is
+ * configured, looks configured and turns out at 03:00 to be a binary nobody
+ * installed is the exact thing being prevented.
+ */
+describe('carrying on when the subscription runs out', () => {
+  let quota: typeof import('../server/utils/quota')
+  const CURSOR_ENV = 'CURSOR_AGENT_EXECUTABLE'
+
+  beforeAll(async () => {
+    quota = await import('../server/utils/quota')
+  })
+
+  /** Put money on today's total, through a route `spentSince` already counts. */
+  async function spend(costUsd: number): Promise<void> {
+    const sessions = await import('../server/utils/sessions')
+    await sessions.saveSession({
+      id: `spend-${costUsd}-${Date.now()}`,
+      title: 'seeded',
+      repoDir: dir,
+      branch: 'main',
+      baseBranch: 'main',
+      status: 'idle',
+      runIds: [],
+      createdAt: NOW,
+      updatedAt: NOW,
+      worktreePath: dir,
+      summary: { text: 'seeded', at: NOW, costUsd },
+    } as any)
+  }
+
+  beforeEach(async () => {
+    // Something that exists and can be executed on any machine this runs on.
+    process.env[CURSOR_ENV] = '/bin/sh'
+    await (await import('../server/utils/sessions')).writeSessions([])
+    await preferences.savePreferences({
+      pauseOnQuotaWarning: true,
+      quotaFallbackProvider: 'cursor',
+      dailyCapUsd: 0,
+      runCapUsd: 0,
+    })
+  })
+
+  afterAll(() => {
+    delete process.env[CURSOR_ENV]
+  })
+
+  it('runs the work on the other agent instead of skipping it', async () => {
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+
+    const decision = await budget.checkBudget(NOW, { unattended: true })
+
+    expect(decision.allowed).toBe(true)
+    expect(decision.useProvider).toBe('cursor')
+  })
+
+  it('still skips when nobody named an agent to carry on with', async () => {
+    // `null` clears it. `undefined` would mean "leave it as it is", which is
+    // the distinction the settings page depends on when it saves one field.
+    await preferences.savePreferences({ quotaFallbackProvider: null })
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+
+    const decision = await budget.checkBudget(NOW, { unattended: true })
+
+    expect(decision.allowed).toBe(false)
+    expect(decision.useProvider).toBeUndefined()
+  })
+
+  it('refuses rather than falling back to an agent that is not on the machine', async () => {
+    // Reading an unknown agent as the default is right when loading an old
+    // record and wrong here: it would send the work to the very agent the
+    // fallback exists to get away from.
+    process.env[CURSOR_ENV] = join(dir, 'no-such-cursor-agent')
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+
+    const decision = await budget.checkBudget(NOW, { unattended: true })
+
+    expect(decision.allowed).toBe(false)
+    expect(decision.reason).toContain('not on this machine')
+    expect(decision.useProvider).toBeUndefined()
+  })
+
+  it('never falls back for a daily cap — that limit is about money', async () => {
+    // The one that would be discovered on an invoice. Spend is seeded as a
+    // session summary because `spentSince` counts those too, deliberately.
+    await preferences.savePreferences({ dailyCapUsd: 0.5 })
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+    await spend(1)
+
+    const decision = await budget.checkBudget(NOW, { unattended: true })
+
+    expect(decision.allowed).toBe(false)
+    expect(decision.reason).toContain('daily limit')
+    expect(decision.useProvider).toBeUndefined()
+  })
+
+  it('substitutes and still hands down the day\'s remaining ceiling', async () => {
+    // Both limits apply at once: the agent changes, the money does not.
+    await preferences.savePreferences({ dailyCapUsd: 5 })
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+    await spend(1)
+
+    const decision = await budget.checkBudget(NOW, { unattended: true })
+
+    expect(decision.allowed).toBe(true)
+    expect(decision.useProvider).toBe('cursor')
+    expect(decision.maxBudgetUsd).toBeCloseTo(4)
+  })
+
+  it('leaves a turn somebody typed exactly as it was', async () => {
+    await quota.recordQuota({ status: 'rejected' }, NOW)
+
+    const decision = await budget.checkBudget(NOW)
+
+    expect(decision.allowed).toBe(true)
+    // Nothing was substituted: an interactive turn was never held back, so
+    // there is nothing for a fallback to rescue.
+    expect(decision.useProvider).toBeUndefined()
+  })
+})

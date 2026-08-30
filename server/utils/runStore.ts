@@ -59,6 +59,20 @@ export interface Run {
    */
   provider?: ProviderId
   /**
+   * Why this run is on the agent it is on, when it was not the obvious one.
+   *
+   * Only ever `rate-limit-fallback` today, and only ever set by `checkBudget`
+   * deciding that the subscription's limit would otherwise have stopped the
+   * work. Absent means nobody substituted anything, which is every run ever
+   * recorded before this and most runs after it.
+   *
+   * It exists because the badge on the row says *which* agent ran it and cannot
+   * say *why*, and a substitution nobody can account for afterwards is how you
+   * find out at lunchtime that a morning's work went somewhere you did not
+   * choose.
+   */
+  providerReason?: 'rate-limit-fallback'
+  /**
    * The id this run's provider resumes the conversation with.
    *
    * Named for the SDK because it was, and on disk in every session record, which

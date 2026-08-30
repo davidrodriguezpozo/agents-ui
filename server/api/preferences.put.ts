@@ -1,4 +1,5 @@
 import { EDITOR_CHOICES, type EditorChoice } from '../utils/editors'
+import { asProviderId, type ProviderId } from '../utils/providers'
 import type { NotionIntakeConfig } from '../utils/notionIntake'
 import {
   savePreferences,
@@ -26,6 +27,7 @@ export default defineEventHandler(async (event) => {
     maxTurns?: number
     maxConcurrentRuns?: number
     pauseOnQuotaWarning?: boolean
+    quotaFallbackProvider?: string | null
     dailyCapUsd?: number
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
@@ -44,6 +46,7 @@ export default defineEventHandler(async (event) => {
     maxTurns?: number
     maxConcurrentRuns?: number
     pauseOnQuotaWarning?: boolean
+    quotaFallbackProvider?: ProviderId | null
     dailyCapUsd?: number
     runCapUsd?: number
     pullActions?: Partial<PullActionCommands>
@@ -70,6 +73,19 @@ export default defineEventHandler(async (event) => {
 
   if (typeof body?.pauseOnQuotaWarning === 'boolean') {
     patch.pauseOnQuotaWarning = body.pauseOnQuotaWarning
+  }
+
+  /*
+   * Null clears it, and so does a name this build does not know — cleared
+   * rather than ignored, because ignoring it would leave the previous agent in
+   * place under a page that has just said it saved. A fallback that is
+   * configured, looks configured and turns out at 03:00 to be nothing at all is
+   * the failure this whole field exists to avoid.
+   */
+  if (body?.quotaFallbackProvider !== undefined) {
+    patch.quotaFallbackProvider = body.quotaFallbackProvider === null
+      ? null
+      : asProviderId(body.quotaFallbackProvider) ?? null
   }
 
   // A boolean or nothing, like the switches above: a truthy string arriving

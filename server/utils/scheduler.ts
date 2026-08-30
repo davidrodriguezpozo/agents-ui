@@ -447,7 +447,7 @@ async function fire(schedule: Schedule, event?: TriggerEvent, lateBy?: number): 
     // read before the run that is about to join it.
     const before = await historyFor(schedule.id)
 
-    const run = await runOnce(schedule, budget.maxBudgetUsd, event, lateBy)
+    const run = await runOnce(schedule, budget.maxBudgetUsd, event, lateBy, budget.useProvider)
     await announce(schedule.title, run)
 
     // One more go at a failure that might not repeat. Nobody is awake to press
@@ -465,7 +465,7 @@ async function fire(schedule: Schedule, event?: TriggerEvent, lateBy?: number): 
       // the machine has been spending money throughout them.
       const retryBudget = await checkBudget(Date.now(), { unattended: true })
       if (retryBudget.allowed) {
-        const again = await runOnce(schedule, retryBudget.maxBudgetUsd, event, lateBy)
+        const again = await runOnce(schedule, retryBudget.maxBudgetUsd, event, lateBy, retryBudget.useProvider)
         await announce(schedule.title, again)
       }
     }
@@ -504,6 +504,8 @@ async function runOnce(
   maxBudgetUsd: number | undefined,
   event?: TriggerEvent,
   lateBy?: number,
+  /** The agent the budget substituted, when the rate limit made it choose one. */
+  useProvider?: ProviderId,
 ): Promise<Run> {
   const options = await resolveRunOptionsFor({
     // Nobody is at the keyboard, which is what lets a sandboxed command skip
@@ -544,10 +546,11 @@ async function runOnce(
    * ritual in a repository set to Cursor ran on Claude Code, silently and every
    * morning. Read once per firing, so a chain cannot change agent partway.
    */
-  const provider = await providerForSchedule(schedule)
+  const provider = useProvider ?? await providerForSchedule(schedule)
+  const providerReason = useProvider ? 'rate-limit-fallback' as const : undefined
 
   if (schedule.steps?.length) {
-    return runChain(schedule, schedule.steps, title, options, maxBudgetUsd, decorate, provider)
+    return runChain(schedule, schedule.steps, title, options, maxBudgetUsd, decorate, provider, providerReason)
   }
 
   const run = createRun({
@@ -559,6 +562,7 @@ async function runOnce(
     projectDir: options.cwd,
     scheduleId: schedule.id,
     provider,
+    providerReason,
   })
 
   // Advance the schedule before the run finishes, so a long run can't cause
@@ -603,6 +607,8 @@ async function runChain(
   maxBudgetUsd: number | undefined,
   decorate: (base: string) => string,
   provider: ProviderId,
+  /** Set when the agent above is a substitution rather than the ritual's own. */
+  providerReason?: 'rate-limit-fallback',
 ): Promise<Run> {
   const chainId = newChainId()
   const done: { title: string; output: string }[] = []
@@ -645,6 +651,7 @@ async function runChain(
       projectDir: options.cwd,
       scheduleId: schedule.id,
       provider,
+      providerReason,
       chainId,
       stepIndex: index,
     })

@@ -2,6 +2,9 @@ import { runsSince } from './runStore'
 import { readSessions } from './sessions'
 import { readPreferences } from './preferences'
 import { quotaBlocks, quotaReason, readQuota } from './quota'
+import { PROVIDER_IDS, type ProviderId } from './providers'
+import { findClaude } from './cli'
+import { findCursorAgent } from './cursorAgentExecutable'
 
 /**
  * Spending limits that actually stop things.
@@ -51,6 +54,20 @@ export async function spentSince(since: number): Promise<number> {
   return fromRuns + fromSummaries
 }
 
+/**
+ * Whether the machine actually has the agent, not merely whether this build
+ * knows the name.
+ *
+ * Asked of the same lookups a run uses — the failure worth preventing is a
+ * fallback that is configured, looks configured, and turns out at 03:00 to be a
+ * binary nobody installed. `race.post.ts` asks the identical question before
+ * cutting worktrees, for the identical reason.
+ */
+async function installed(id: ProviderId): Promise<boolean> {
+  if (!PROVIDER_IDS.includes(id)) return false
+  return id === 'cursor' ? Boolean(findCursorAgent()) : Boolean(await findClaude())
+}
+
 export interface BudgetDecision {
   /** False means do not start this at all. */
   allowed: boolean
@@ -64,6 +81,16 @@ export interface BudgetDecision {
   /** What has gone today, so callers can say how close this was. */
   spentToday: number
   dailyCapUsd?: number
+  /**
+   * Run this on somebody else's agent instead of the one you would have picked.
+   *
+   * Set only when the subscription's own limit would have stopped the work and
+   * a fallback agent is configured. A caller that ignores this field gets the
+   * behaviour it had before the field existed — which is the safe direction for
+   * whichever of the call sites is missed, since the worst case is work that
+   * waits rather than work that runs somewhere unexpected.
+   */
+  useProvider?: ProviderId
 }
 
 function money(usd: number): string {
@@ -85,12 +112,14 @@ export async function checkBudget(
   let dailyCapUsd: number | undefined
   let runCapUsd: number | undefined
   let pauseOnQuotaWarning = false
+  let fallback: ProviderId | undefined
 
   try {
     const prefs = await readPreferences()
     dailyCapUsd = prefs.dailyCapUsd || undefined
     runCapUsd = prefs.runCapUsd || undefined
     pauseOnQuotaWarning = prefs.pauseOnQuotaWarning
+    fallback = prefs.quotaFallbackProvider
   } catch {
     return { allowed: true, spentToday: 0 }
   }
@@ -105,14 +134,45 @@ export async function checkBudget(
    * refused by your own tool for something you deliberately started is the
    * wrong side of helpful.
    */
+  let useProvider: ProviderId | undefined
+
   if (opts.unattended && pauseOnQuotaWarning) {
     const quota = await readQuota()
     if (quotaBlocks(quota, now)) {
-      return { allowed: false, reason: quotaReason(quota!), spentToday: 0 }
+      /*
+       * The substitution, and the reason this is a fall-through rather than a
+       * second early return: the dollar caps below still have to run. A
+       * fallback answers "which agent", never "how much" — the other agent
+       * costs money too, and a daily limit that could be walked past by being
+       * out of Claude tokens would be a limit in name only.
+       */
+      if (!fallback) {
+        return { allowed: false, reason: quotaReason(quota!), spentToday: 0 }
+      }
+
+      if (!await installed(fallback)) {
+        /*
+         * Refused rather than quietly falling through to the default. Reading
+         * an unknown id as Claude Code is right when *loading an old record* —
+         * see `providerFor` — and wrong here: the record is a statement about
+         * the past, and this is a decision about work that has not run. Sending
+         * it to the agent the person was trying to get away from is the one
+         * outcome nobody asked for.
+         */
+        return {
+          allowed: false,
+          reason: `Your limit is used up and ${fallback} is not on this machine, so this was `
+            + 'skipped rather than run on the agent the fallback exists to get away from. '
+            + 'Install it, or choose another agent in Settings.',
+          spentToday: 0,
+        }
+      }
+
+      useProvider = fallback
     }
   }
 
-  if (!dailyCapUsd && !runCapUsd) return { allowed: true, spentToday: 0 }
+  if (!dailyCapUsd && !runCapUsd) return { allowed: true, spentToday: 0, useProvider }
 
   let spentToday = 0
   try {
@@ -120,7 +180,7 @@ export async function checkBudget(
   } catch {
     // Cannot tell what today cost, so cannot claim it is over. The per-run
     // ceiling still applies, which is the one that stops a runaway.
-    return { allowed: true, maxBudgetUsd: runCapUsd, spentToday: 0 }
+    return { allowed: true, maxBudgetUsd: runCapUsd, spentToday: 0, useProvider }
   }
 
   if (dailyCapUsd && spentToday >= dailyCapUsd) {
@@ -140,7 +200,7 @@ export async function checkBudget(
     .filter((v): v is number => typeof v === 'number' && v > 0)
     .reduce<number | undefined>((min, v) => (min === undefined ? v : Math.min(min, v)), undefined)
 
-  return { allowed: true, maxBudgetUsd, spentToday, dailyCapUsd }
+  return { allowed: true, maxBudgetUsd, spentToday, dailyCapUsd, useProvider }
 }
 
 /**

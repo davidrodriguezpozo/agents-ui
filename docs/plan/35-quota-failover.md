@@ -69,3 +69,50 @@ Mechanised in `test/budget.test.ts`, which already has the store and the clock:
 Switching a session that is already running — that is unit 36. Choosing the fallback per
 repository rather than per machine; `projectProvider.ts` is where that would go if it is ever
 wanted, and one answer is enough to prove the idea.
+
+## Findings
+
+- **Two fields, not a three-valued one.** `pauseOnQuotaWarning` stays a boolean and
+  `quotaFallbackProvider` sits beside it. The three states the brief asked for are exactly
+  what that produces — off, on-and-stop, on-and-continue — and it costs no change to the
+  three places that already read the boolean. The two are also different questions: the
+  boolean is *should unattended work respect the subscription limit*, this is *and then
+  what*. `undefined` means leave it alone and `null` means clear it, which the settings page
+  depends on because it saves one field at a time.
+
+- **The quota branch became a fall-through, and that is the whole safety property.** An early
+  return would have skipped the dollar caps underneath it, so being out of Claude tokens
+  would have been a way to walk past a daily limit. It now sets `useProvider` and carries on
+  into the caps, and there are two tests: one where the daily cap refuses with a fallback
+  configured, and one where the substitution happens *and* the day's remaining ceiling is
+  still handed down.
+
+- **"Installed" is asked of the same lookups a run uses**, not of `PROVIDER_IDS`. Knowing the
+  name is not having the binary, and the failure worth preventing is a fallback that is
+  configured, looks configured, and turns out at 03:00 to be something nobody installed. The
+  tests drive it through `CURSOR_AGENT_EXECUTABLE` rather than mocking the module, so they
+  exercise the real lookup.
+
+- **Refusing an uninstalled fallback rather than falling through to Claude Code.**
+  `providerFor` reads an unknown id as the default deliberately, and that rule is right for
+  loading an old record and wrong for a decision about work that has not run: it would send
+  the work to the agent the fallback exists to get away from.
+
+- **The scheduler is the only caller wired up, and that is a decision.** `runOnce` and
+  `runChain` take the substitution and stamp `providerReason: 'rate-limit-fallback'` on the
+  run. `digestCommands.ts` was deliberately left alone: its provider goes onto a *session*,
+  and a session outlives the five-hour window that made the choice — handing a session to
+  another agent belongs in unit 36, with the hand-off that needs. `prWatchRunner` is the same
+  case: it takes a turn in a session that already has an agent.
+
+- **Still unproven, and it needs a person.** Nothing here has run against a real exhausted
+  rate limit — a session cannot make one happen, and faking `quota.json` proves the branch,
+  not the substitution end to end. What is proved: the decision, the refusals, the ceiling,
+  and that the run records why. What is not: that `cursor-agent` picks up a ritual's
+  instruction and finishes it. The first afternoon the limit runs out with the setting on is
+  the test.
+
+- **Two places say so, not three.** The run carries `providerReason`, and a row whose agent
+  is not Claude Code already draws a badge (`providerLook`, and `app/utils/providers.ts`
+  explains why only the different one is marked). The morning report does not mention it yet;
+  that is one sentence in the digest and it is not in this unit.

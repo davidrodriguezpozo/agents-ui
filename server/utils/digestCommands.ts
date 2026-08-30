@@ -238,6 +238,12 @@ async function startFromReply(
       // Nobody is here to pick one, so the repository's choice is the whole
       // answer. A session started by replying to the digest is an ordinary
       // session and has to run on the agent this repository was set to.
+      //
+      // Deliberately not the rate-limit fallback: that decides one run, and a
+      // session outlives the window it was decided in. Handing a session to
+      // another agent is a thing you do to a session that already exists, with
+      // the hand-off that needs — not a side effect of what the clock said when
+      // it was created.
       provider: await providerForProject(repoDir),
     })
 

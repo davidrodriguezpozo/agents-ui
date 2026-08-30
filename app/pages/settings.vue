@@ -393,6 +393,25 @@ const dailyCap = ref('')
 const runCap = ref('')
 const spentToday = ref(0)
 const pauseOnQuotaWarning = ref(false)
+/**
+ * Which agent picks the work up instead of it being skipped.
+ *
+ * Empty means skip, which is what the pause has always done. Only offered when
+ * the machine has a second agent — a dropdown with one entry is a decision
+ * nobody has.
+ */
+const quotaFallbackProvider = ref('')
+
+/**
+ * The agents that could pick the work up — everything installed except the one
+ * whose limit is the problem. Falling back to Claude Code because Claude Code
+ * ran out is the one answer that cannot help.
+ */
+const otherAgents = computed(() =>
+  installedAgents.value
+    .filter(p => p.id !== 'claude')
+    .map(p => ({ label: p.label, value: p.id })),
+)
 
 /**
  * The command each pull request quick action runs. Empty means the built-in
@@ -513,6 +532,7 @@ async function saveCaps() {
         maxTurns: Math.max(0, Math.trunc(Number(maxTurns.value.trim()) || 0)),
         maxConcurrentRuns: maxConcurrentRuns.value,
         pauseOnQuotaWarning: pauseOnQuotaWarning.value,
+        quotaFallbackProvider: quotaFallbackProvider.value || null,
       },
     })
     const anyLimit = capToNumber(dailyCap.value) || capToNumber(runCap.value) || Number(maxTurns.value.trim())
@@ -550,6 +570,7 @@ onMounted(async () => {
       maxTurns: number
       maxConcurrentRuns: number
       pauseOnQuotaWarning: boolean
+      quotaFallbackProvider?: string | null
       dailyCapUsd: number
       runCapUsd: number
       pullActions?: Record<PullActionKey, string>
@@ -567,6 +588,7 @@ onMounted(async () => {
     maxConcurrentRuns.value = prefs.maxConcurrentRuns ?? 3
     effort.value = prefs.effort ?? 'high'
     pauseOnQuotaWarning.value = prefs.pauseOnQuotaWarning === true
+    quotaFallbackProvider.value = prefs.quotaFallbackProvider ?? ''
     dailyCap.value = prefs.dailyCapUsd ? String(prefs.dailyCapUsd) : ''
     runCap.value = prefs.runCapUsd ? String(prefs.runCapUsd) : ''
     // `??` rather than `||`: a stored empty string means the label half of the
@@ -1627,6 +1649,27 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
               <span class="field-toggle__thumb" />
             </span>
           </span>
+        </label>
+
+        <!--
+          Only where there is something to fall back to. On a machine with one
+          agent this is a choice between skipping and skipping.
+        -->
+        <label v-if="pauseOnQuotaWarning && otherAgents.length" class="field-row">
+          <span class="min-w-0">
+            <span class="type-strong text-body">Instead of skipping, carry on with</span>
+            <span class="type-meta">
+              What is held back above runs here until the limit resets, rather than waiting
+              for it. The run says which agent took it and that the limit is why. Spending
+              limits are unaffected — those are about money, and this agent costs money too.
+            </span>
+          </span>
+          <USelect
+            v-model="quotaFallbackProvider"
+            :items="[{ label: 'Skip it', value: '' }, ...otherAgents]"
+            size="sm"
+            class="w-44 shrink-0"
+          />
         </label>
 
         <UButton label="Save limits" size="sm" @click="saveCaps" />
