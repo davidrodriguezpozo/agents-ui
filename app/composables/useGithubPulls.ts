@@ -83,6 +83,20 @@ export interface StartedOnPull {
   note?: string
 }
 
+/**
+ * What "Review all" gives back.
+ *
+ * The batch shape — some started, some did not, and the whole press is legible
+ * either way. Three pull requests reviewed and one that would not check out is
+ * the ordinary outcome and it is not an error; a page that only knew how to draw
+ * "it worked" or "it threw" would have to pick one of those and be wrong.
+ */
+export interface ReviewAllResult {
+  started: StartedOnPull[]
+  /** Never made it as far as a workspace, and why. */
+  failed: { number: number; reason: string }[]
+}
+
 const EMPTY: PullsReading = {
   ok: true, repo: null, viewer: null, reviewing: [], mine: [],
   summary: { onYou: 0, toReview: 0, toMerge: 0, waiting: 0 },
@@ -111,6 +125,14 @@ export function useGithubPulls() {
   const poll = useState<ReturnType<typeof setInterval> | null>('githubPullsPoll', () => null)
   /** The pull request a button on it is busy with, so only that row spins. */
   const busy = useState<number | null>('githubPullsBusy', () => null)
+  /**
+   * Whether the whole band is being started, which no single row can say.
+   *
+   * Its own flag rather than `busy`, which holds one number: cutting several
+   * worktrees takes seconds each, and a control that looks pressable throughout
+   * is one that gets pressed twice.
+   */
+  const startingAll = useState('githubPullsStartingAll', () => false)
 
   async function refresh() {
     loading.value = true
@@ -168,6 +190,29 @@ export function useGithubPulls() {
     }
   }
 
+  /**
+   * Start a review on every one of them, in one request.
+   *
+   * One request rather than a loop of `work` calls, because the cap and the
+   * budget are questions about the press and not about each pull request: five
+   * sessions started and the sixth refused for spend is the outcome worth not
+   * having. The server does them one at a time regardless — concurrent
+   * `git worktree add` against one repository contends on the index lock.
+   */
+  async function reviewAll(numbers: number[]) {
+    startingAll.value = true
+    try {
+      const result = await $fetch<ReviewAllResult>('/api/github/pulls/review-all', {
+        method: 'POST',
+        body: { numbers },
+      })
+      void refresh()
+      return result
+    } finally {
+      startingAll.value = false
+    }
+  }
+
   async function merge(number: number) {
     busy.value = number
     try {
@@ -185,5 +230,8 @@ export function useGithubPulls() {
   const summary = computed(() => reading.value.summary)
   const all = computed(() => [...reading.value.reviewing, ...reading.value.mine])
 
-  return { reading, summary, all, loading, loaded, busy, refresh, watchContinuously, stopWatching, work, merge }
+  return {
+    reading, summary, all, loading, loaded, busy, startingAll,
+    refresh, watchContinuously, stopWatching, work, reviewAll, merge,
+  }
 }

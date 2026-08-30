@@ -32,7 +32,8 @@ import type { Arrival } from '~/composables/useQuickActions'
  */
 
 const {
-  reading, summary, loading, loaded, busy, refresh, watchContinuously, stopWatching, work, merge,
+  reading, summary, loading, loaded, busy, startingAll,
+  refresh, watchContinuously, stopWatching, work, reviewAll, merge,
 } = useGithubPulls()
 const {
   reading: issues, loading: issuesLoading, loaded: issuesLoaded, busy: issueBusy,
@@ -295,6 +296,67 @@ async function startWork(pull: Pull, intent?: WorkIntent) {
     }
 
     toast.add({ title: `Could not start on #${pull.number}`, description: errorMessage(e), color: 'error' })
+  }
+}
+
+/**
+ * The rows "Review all" would actually start on.
+ *
+ * `intent` rather than the whole band, so the count on the button is the number
+ * of sessions the press produces. The band can hold a row with no button on it —
+ * somebody else's draft that your review was requested on anyway — and counting
+ * that one would make the button promise five and deliver four.
+ */
+const reviewable = computed(() => reading.value.reviewing.filter(p => p.intent === 'review'))
+
+/**
+ * Review every one of them, which is the press this band was missing.
+ *
+ * Twenty-six of the sessions on this machine got here one row at a time. Nothing
+ * about the second review is different from the first — a detached checkout of
+ * that pull request's commit and a turn that reads it — so doing them one at a
+ * time was clicking, waiting and coming back, five times.
+ *
+ * It stays on the page. Arriving in one of five new sessions would be arriving in
+ * an arbitrary one, and the rows below say which pull requests now have work on
+ * them, which is the thing you actually want to see afterwards.
+ *
+ * The result is a partial one on purpose — see `review-all.post.ts` — so the
+ * toast says both halves rather than picking a winner.
+ */
+async function reviewEveryOne() {
+  const asked = reviewable.value.length
+  if (!asked) return
+
+  try {
+    const { started, failed } = await reviewAll(reviewable.value.map(p => p.number))
+    await fetchSessions()
+
+    if (!started.length) {
+      toast.add({
+        title: 'No review started',
+        description: failed[0]?.reason ?? 'Nothing came back.',
+        color: 'error',
+      })
+      return
+    }
+
+    toast.add({
+      title: `${started.length} ${started.length === 1 ? 'review' : 'reviews'} started`,
+      description: failed.length
+        ? `${failed.length} could not be checked out: ${failed.map(f => `#${f.number}`).join(', ')}. `
+          + 'Each row below says what it has.'
+        : 'Each has its own workspace and is reading its pull request now. Nothing is posted to GitHub.',
+      color: failed.length ? 'warning' : 'success',
+    })
+  } catch (e: any) {
+    // The cap and the budget refuse the whole press, so nothing was started and
+    // the reason is worth repeating exactly as the server put it.
+    toast.add({
+      title: `Could not start ${asked} reviews`,
+      description: errorMessage(e),
+      color: 'error',
+    })
   }
 }
 
@@ -675,7 +737,39 @@ const issuesEmptyLine = computed(() => {
 
           <template v-else>
             <section v-if="reading.reviewing.length" class="space-y-2">
-              <h3 class="text-section-label">Waiting for your review</h3>
+              <div class="flex items-center gap-3">
+                <h3 class="text-section-label flex-1 min-w-0">Waiting for your review</h3>
+                <!--
+                  From two upwards. On one row it would be a second button doing
+                  exactly what the button on that row already does.
+                -->
+                <button
+                  v-if="reviewable.length > 1"
+                  class="inline-flex items-center gap-1.5 fs-mono px-2.5 py-1.5 rounded-md font-medium press-scale focus-ring cursor-pointer shrink-0"
+                  style="background: var(--badge-subtle-bg); color: var(--text-secondary);"
+                  :disabled="startingAll"
+                  @click="reviewEveryOne()"
+                >
+                  <UIcon
+                    :name="startingAll ? 'i-lucide-loader-2' : 'i-lucide-scan-eye'"
+                    class="size-3.5"
+                    :class="{ 'animate-spin': startingAll }"
+                  />
+                  {{ startingAll ? 'Starting…' : `Review all ${reviewable.length}` }}
+                </button>
+              </div>
+
+              <!--
+                Both halves of the cost, before the press rather than after it.
+                The sessions are the obvious half; the disks are the one that
+                surprises people, because each of these is a full checkout of the
+                repository and on a large one that is gigabytes apiece.
+              -->
+              <p v-if="reviewable.length > 1" class="type-detail">
+                {{ reviewable.length }} sessions, one per pull request, each a full checkout of this
+                repository. Every one reads and reports back here; none of them posts to GitHub.
+              </p>
+
               <PullCard
                 v-for="pull in reading.reviewing"
                 :key="pull.number"
