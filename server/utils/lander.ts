@@ -288,7 +288,7 @@ async function land(sessionId: string): Promise<LandingStepResult> {
 
 /**
  * Start a landing run and return its record. Detached: it outlives the
- * request, exactly as a session turn and a workflow run do.
+ * request, exactly as a session turn does.
  */
 export async function startLanding(repoDir: string, baseBranch: string): Promise<LandingRun> {
   if (landing.has(repoDir)) {

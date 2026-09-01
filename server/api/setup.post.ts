@@ -27,7 +27,6 @@ export default defineEventHandler(async () => {
     resolveClaudePath('agents'),
     resolveClaudePath('commands'),
     resolveClaudePath('skills'),
-    resolveClaudePath('workflows'),
   ]
 
   // Recorded before anything is made, so the answer describes what this call

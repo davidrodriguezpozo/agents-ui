@@ -1,6 +1,5 @@
 import { closeInterruptedRuns } from '../utils/runStore'
 import { readSessions, patchSession } from '../utils/sessions'
-import { closeInterruptedWorkflowRuns } from '../utils/workflowRuns'
 import { closeInterruptedLandingRuns } from '../utils/landingRuns'
 import { resumeInterruptedRituals } from '../utils/restartRecovery'
 
@@ -29,11 +28,6 @@ export default defineNitroPlugin(async () => {
     for (const session of sessions) {
       if (session.status === 'running') await patchSession(session.id, { status: 'idle' })
     }
-
-    // Same reasoning: a workflow's steps were children of the process that
-    // went away, so nothing is going to finish them.
-    const workflows = await closeInterruptedWorkflowRuns()
-    if (workflows) console.log(`[startup] closed ${workflows} workflow run${workflows === 1 ? '' : 's'} interrupted by a restart`)
 
     // Merges that already happened are in git and are not in doubt; what is
     // lost is whatever was mid-flight when the process went away.

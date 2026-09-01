@@ -119,7 +119,7 @@ export function describeWindow(window: QuotaWindow | undefined): string {
  * Whether unattended work should wait.
  *
  * Only ever consulted for work nobody asked for right now — a ritual, a repair
- * turn, a workflow step. A turn you typed is never held back over this: you can
+ * turn, a landing step. A turn you typed is never held back over this: you can
  * see the state of your own account, and being told "no" by your own tool for
  * something you deliberately started is the wrong side of helpful.
  */

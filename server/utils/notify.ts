@@ -76,7 +76,7 @@ export function studioUrl(path = '/'): string {
  * The page that answers a banner about a run.
  *
  * A turn belongs to a session and is read there, in the conversation it is part
- * of; anything else — a ritual firing, a workflow step — has only its own run
+ * of; anything else — a ritual firing, a landing step — has only its own run
  * page, which is where its transcript is.
  */
 export function runPath(run: { id: string; sessionId?: string }): string {

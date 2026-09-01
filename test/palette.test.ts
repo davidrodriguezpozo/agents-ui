@@ -126,17 +126,17 @@ describe('actions', () => {
 
 describe('navigation', () => {
   /*
-   * The palette used to take an `isSimple` flag and drop Workflows, Plugins,
-   * MCP and Graph when it was set — so ⌘K could not reach a page that still
-   * existed, and typing its name returned nothing. Every destination is
-   * offered now; this is the assertion that no filter grew back.
+   * The palette used to take an `isSimple` flag and drop Plugins and MCP when it
+   * was set — so ⌘K could not reach a page that still existed, and typing its
+   * name returned nothing. Every destination is offered now; this is the
+   * assertion that no filter grew back.
    */
   it('offers every destination, authoring surfaces included', () => {
-    for (const term of ['graph', 'workflows', 'plugins', 'mcp']) {
+    for (const term of ['plugins', 'mcp', 'library', 'explore']) {
       const items = flattenPalette(buildPalette(source(), term))
       expect(items.length, `"${term}" should find something`).toBeGreaterThan(0)
     }
-    expect(labels(flattenPalette(buildPalette(source(), 'graph')))).toContain('Graph')
+    expect(labels(flattenPalette(buildPalette(source(), 'plugins')))).toContain('Plugins')
   })
 
   it('reaches every page in the sidebar from an empty query', () => {
@@ -219,8 +219,8 @@ describe('fuzzy matching', () => {
   })
 
   it('reaches a destination nothing else would have found', () => {
-    const items = flattenPalette(buildPalette(source(), 'wkfl'))
-    expect(items.some(i => i.to === '/workflows')).toBe(true)
+    const items = flattenPalette(buildPalette(source(), 'shpd'))
+    expect(items.some(i => i.to === '/shipped')).toBe(true)
   })
 })
 

@@ -50,7 +50,7 @@ const run = computed(() => live.value[id])
  * What this run was, in the one place it changes what can be offered.
  *
  * The blocked banner used to say "it ran on a schedule" about every run that
- * hit a wall, including session turns and workflow steps, and offered the one
+ * hit a wall, including session turns, and offered the one
  * thing only a ritual could do.
  */
 const blockedKind = computed<'ritual' | 'project' | 'neither'>(() => {

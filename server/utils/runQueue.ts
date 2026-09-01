@@ -15,7 +15,7 @@ import { readPreferences } from './preferences'
  * The distinction the queue draws is not by kind of work but by whether anyone
  * is waiting for it. A turn you typed goes now: you are sitting there, and a
  * spinner that means "queued behind a ritual" is worse than a slow machine. A
- * ritual firing at 08:00, a session fixing its own tests, a workflow stepping
+ * ritual firing at 08:00, a session fixing its own tests, a lander stepping
  * through its agents — none of those are being watched, and all of them can
  * wait ten seconds.
  */

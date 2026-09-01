@@ -11,7 +11,7 @@ import { getProjectDir } from '../utils/scope'
  *
  * The pinned note is capped, and the cap is a boundary rather than tidiness. It
  * goes into the system prompt of every cold-started run on this machine, so its
- * size is a cost paid on every ritual, every session and every workflow step.
+ * size is a cost paid on every ritual and every session.
  */
 export default defineEventHandler(async (event) => {
   interface Patch { pinned?: string; enabled?: boolean }

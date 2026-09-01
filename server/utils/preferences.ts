@@ -184,12 +184,12 @@ export interface Preferences {
    * describe how much work is reasonable. 0 means the built-in default.
    *
    * Was only reachable from the Agent Studio panel, which meant sessions,
-   * rituals and workflows — everything anyone actually runs — were fixed at 40
+   * rituals — everything anyone actually runs — were fixed at 40
    * with no way to say otherwise.
    */
   maxTurns: number
   /**
-   * How many unattended runs may go at once — rituals, self-repair, workflow
+   * How many unattended runs may go at once — rituals, self-repair, landing
    * steps. A turn you typed is never queued. 0 means no limit.
    *
    * Three by default rather than unlimited, which is what it was: ten rituals
@@ -249,7 +249,7 @@ export interface Preferences {
    * How hard every run thinks, unless it was asked for something else.
    *
    * One setting for the machine rather than one per session, for the same
-   * reason `maxTurns` is: sessions, rituals and workflows all pass nothing, so
+   * reason `maxTurns` is: sessions and rituals both pass nothing, so
    * a knob that only the Studio panel could reach would be a knob nobody
    * actually running work ever turned.
    */

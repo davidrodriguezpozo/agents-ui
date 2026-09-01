@@ -22,8 +22,8 @@ export interface NavShortcut {
 
 /**
  * Mnemonics where the first letter was free, and something defensible where it
- * was not: Land took `l`, so Library is `b` for books; Work took `w`, so
- * Workflows is `f` for flow; Graph took `g` for the chord itself, so it is `r`.
+ * was not: Land took `l`, so Library is `b` for books; Settings took `s`, so
+ * MCP is `c` for connect.
  */
 export const NAV_SHORTCUTS: NavShortcut[] = [
   { key: 'n', label: 'Now', to: '/' },
@@ -31,10 +31,8 @@ export const NAV_SHORTCUTS: NavShortcut[] = [
   { key: 'l', label: 'Land', to: '/land' },
   { key: 'd', label: 'Daily', to: '/schedules' },
   { key: 'b', label: 'Library', to: '/library' },
-  { key: 'f', label: 'Workflows', to: '/workflows' },
   { key: 'p', label: 'Plugins', to: '/plugins' },
   { key: 'c', label: 'MCP', to: '/mcp' },
-  { key: 'r', label: 'Graph', to: '/graph' },
   { key: 'm', label: 'Fleet', to: '/wall' },
   { key: 'e', label: 'Explore', to: '/explore' },
   { key: 's', label: 'Settings', to: '/settings' },

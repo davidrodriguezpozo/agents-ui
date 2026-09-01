@@ -7,7 +7,7 @@ import type { LandingNeed, LandingOutcome } from './landing'
  * A landing run: an attempt to put several finished sessions into the base
  * branch, kept.
  *
- * Durable for the same reason a workflow run is. Each session may need its
+ * Durable for the same reason a run record is. Each session may need its
  * checks run again, and a check is a test suite — six of them is half an hour
  * during which nobody is going to sit and watch. Closing the tab must not lose
  * the record of what merged and what did not, because that record is the only

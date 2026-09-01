@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const claudeDir = join(projectDir, '.claude')
   const created = !existsSync(claudeDir)
 
-  for (const sub of ['agents', 'commands', 'skills', 'workflows']) {
+  for (const sub of ['agents', 'commands', 'skills']) {
     await mkdir(join(claudeDir, sub), { recursive: true })
   }
 

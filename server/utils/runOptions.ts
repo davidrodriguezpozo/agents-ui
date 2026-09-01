@@ -51,7 +51,7 @@ export interface RunRequest {
    */
   repoDir?: string
   /**
-   * Nobody is watching this one — a ritual, a repair turn, a workflow step.
+   * Nobody is watching this one — a ritual, a repair turn, a landing step.
    *
    * Only affects whether a sandboxed run may skip its Bash prompts. A turn you
    * typed keeps them, because the trust level you chose promised them.
@@ -66,7 +66,7 @@ export interface RunRequest {
    * inside a web interface for managing agents is true.
    *
    * Opt-in, because it used to be the fallback for anything without an agent —
-   * which is to say for sessions, rituals and workflow steps, none of which are
+   * which is to say for sessions and rituals, neither of which is
    * managing anything. A pull request review opened believing its job was to
    * edit files in `~/.claude`.
    */
@@ -196,7 +196,7 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
     disallowedTools: body.disallowedTools?.length ? body.disallowedTools : undefined,
     permissionMode: body.permissionMode ?? 'acceptEdits',
     // An explicit request wins; then whatever this machine was set to; then
-    // the built-in. Sessions, rituals and workflows all pass nothing, which is
+    // the built-in. Sessions and rituals both pass nothing, which is
     // why the preference has to be consulted here rather than at each caller.
     maxTurns: Math.max(1, Math.min(body.maxTurns ?? preferredTurns ?? DEFAULT_MAX_TURNS, 200)),
     model: toSdkModel(body.model || agent?.model),
@@ -235,7 +235,7 @@ export async function resolveRunOptionsFor(body: RunRequest): Promise<ResolvedRu
  * fact the session was already told on turn one.
  *
  * Which is also why it is not a loss. A resumed session has the brief in its
- * context already; a ritual, a workflow step and the first turn of a session are
+ * context already; a ritual and the first turn of a session are
  * all cold starts, and they are exactly the runs this was built for.
  */
 export function systemPromptFor(options: ResolvedRunOptions, resuming: boolean): string {
@@ -268,7 +268,7 @@ export function toQueryOptions(
     // `CLAUDE_CODE_ARTIFACT` turns the Artifact tool back on. Claude Code
     // registers it only when the entrypoint is a human at a terminal, and the
     // SDK stamps `CLAUDE_CODE_ENTRYPOINT=sdk-ts` on every process it spawns —
-    // so every session, ritual and workflow step here asked for an artifact
+    // so every session and ritual here asked for an artifact
     // and got `No such tool available: Artifact`. The env var is the only
     // lever: the `enableArtifact` setting is read *after* that entrypoint
     // check, so turning it on in `/config` changed nothing. Past this point

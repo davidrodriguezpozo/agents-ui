@@ -1,14 +1,14 @@
 /**
  * Grouping by where a thing came from.
  *
- * Agents, commands, skills and workflows are five variations on the same idea —
- * a named thing, from somewhere, with a description — and each page had grown
- * its own way of listing them: a card grid, a dense table, grouped rows, cards
- * again. A user learned the interaction four times, and on the skills page the
- * one skill they had written sat alphabetically among 198 from plugins.
+ * Agents, commands and skills are three variations on the same idea — a named
+ * thing, from somewhere, with a description — and each page had grown its own
+ * way of listing them: a card grid, a dense table, grouped rows, cards again. A
+ * user learned the interaction three times, and on the skills page the one skill
+ * they had written sat alphabetically among 198 from plugins.
  *
  * The grouping was already right in one place (`useCommands`). This is that
- * logic, lifted out so the other three can have it too.
+ * logic, lifted out so the other two can have it too.
  */
 
 export type GroupKind = 'user' | 'project' | 'github' | 'plugin'

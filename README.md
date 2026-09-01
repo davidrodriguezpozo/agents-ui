@@ -79,9 +79,8 @@ change one line was the thing breaking that loop.
 | **Shipped** | What shipped, by day, in sentences somebody outside engineering can act on |
 | **Daily** | Rituals — work on a schedule, retried when it blips, stopped when it breaks |
 | **Library** | Agents, commands, skills and MCP servers — everything Claude can reach, with where each came from and which of it actually works |
-| **Workflows** | Agents chained into a pipeline, run to the end and kept |
 | **Plugins** | What is installed and what each one adds |
-| **Explore · Graph** | Find new things to install; see how what you have connects |
+| **Explore** | Find new things to install |
 | **Fleet** | Every run on one screen, for a monitor you leave on |
 
 The repositories you work in are not in that list — they are a switch at the bottom of the
@@ -150,7 +149,7 @@ agents-studio work -q || echo "something needs you"
 ```
 
 > **You'll need:** Node.js 18+, and Claude Code installed and signed in on this machine.
-> Sessions, rituals and workflows run through the Claude Agent SDK, which spawns that
+> Sessions and rituals run through the Claude Agent SDK, which spawns that
 > Claude Code and uses that login; there is no separate key to set up. It is found on
 > your `PATH` or where the installers put it — set `CLAUDE_CODE_EXECUTABLE` if yours
 > lives somewhere unusual. Nothing is compiled at install time — the package ships its
@@ -848,8 +847,8 @@ because a description of what runs are told is a thing that can be wrong about i
 
 It is left off a conversation already under way. Prompt caching is prefix-based, so changing
 the system prompt on turn nine means re-reading the whole conversation at full price — to
-buy a fact the session was told on turn one. Rituals, workflow steps and the first turn of a
-session are the cold starts, and they are what this is for.
+buy a fact the session was told on turn one. Rituals and the first turn of a session are the
+cold starts, and they are what this is for.
 
 One line it does not carry: the titles of what is waiting in Slack or Notion. Those are
 written by anyone with access to a channel you are in, and this text goes into the system
@@ -1284,7 +1283,7 @@ directory being deleted — and can be restored from the same panel.
 
 ---
 
-## Agents, commands and workflows
+## Agents, commands and skills
 
 <table>
 <tr>
@@ -1297,18 +1296,12 @@ directory being deleted — and can be restored from the same panel.
 </tr>
 </table>
 
-**Workflows** chain agents into a pipeline. Each step is resolved to a real agent and the
-model it will actually run on, so the cost of the whole thing is visible before you press Run.
-
-![Chaining agents into a pipeline](docs/screenshots/13-workflow-builder.jpg)
-
 ---
 
 ## Also in the box
 
 - **Skills** — write them, or import them from a GitHub repository by URL
 - **Plugins** — browse registered marketplaces and install without leaving the app
-- **Graph** — how your agents, commands, skills and plugins actually connect
 - **Explore** — templates and community skills, in one place
 - **Ask Claude** (`⌘J`) — a chat panel that knows about your configuration. Paste, drop or
   pick an image and it goes with the message, the way it does in Claude Code — up to five per
@@ -1361,7 +1354,7 @@ make demo-stop   # remove it again
 ### Tech stack
 
 [Nuxt 3](https://nuxt.com) (v4 compatibility mode) · [Vue 3](https://vuejs.org) · [Nuxt UI](https://ui.nuxt.com) +
-Tailwind CSS · [VueFlow](https://vueflow.dev) for the graph and the workflow canvas ·
+Tailwind CSS ·
 [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) for runs ·
 [Bun](https://bun.sh)
 

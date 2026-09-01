@@ -121,7 +121,7 @@ const summary = computed(() => {
       class="px-4 py-4 space-y-4"
     >
       <p class="type-body">
-        Handed to every run that starts cold — rituals, workflow steps, the first turn of a
+        Handed to every run that starts cold — rituals, the first turn of a
         session — so it stops rediscovering which branches are yours every morning. It is
         assembled from this machine's own records rather than written by a model, which is what
         makes it free and what stops it inventing a branch. A conversation already under way is

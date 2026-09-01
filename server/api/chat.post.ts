@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
   // `managerChat` is set here rather than by the caller because this endpoint
   // *is* the Studio's chat: with an agent the agent's prompt wins anyway, and
   // without one, being told you are an assistant inside the agent manager is
-  // the truth. Everything detached — sessions, rituals, workflow steps — goes
+  // the truth. Everything detached — sessions, rituals — goes
   // through the run path instead and is no longer told any of it.
   const options = await resolveRunOptions(event, { ...body, managerChat: true })
   const { agent, plugins, allowedTools, permissionMode, maxTurns, model } = options

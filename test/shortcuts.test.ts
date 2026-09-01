@@ -46,8 +46,7 @@ describe('every chord is live', () => {
    * assertion that no filter grew back in its place.
    */
   it('reaches the pages the shorter table used to drop', () => {
-    expect(chordTarget('r')?.to).toBe('/graph')
-    expect(chordTarget('f')?.to).toBe('/workflows')
+    expect(chordTarget('c')?.to).toBe('/mcp')
     expect(chordTarget('p')?.to).toBe('/plugins')
   })
 
@@ -68,8 +67,9 @@ describe('hints', () => {
   })
 
   it('hints every destination in the table', () => {
-    expect(chordHint('/graph')).toBe('g r')
-    expect(chordHint('/workflows')).toBe('g f')
+    for (const item of NAV_SHORTCUTS) {
+      expect(chordHint(item.to), `no hint for ${item.to}`).toBe(`g ${item.key}`)
+    }
   })
 })
 
@@ -326,10 +326,9 @@ describe('the rows the list keys walk', () => {
 /**
  * The pages that show a list, and must therefore be walkable.
  *
- * Settings and Graph are deliberately absent: one is a form and the other a
- * canvas, and on both `⌃d`/`⌃u` fall through to scrolling the page, which is
- * what `halfPage` does when it finds no rows. Detail pages are absent for the
- * same reason.
+ * Settings is deliberately absent: it is a form, and on it `⌃d`/`⌃u` fall
+ * through to scrolling the page, which is what `halfPage` does when it finds no
+ * rows. Detail pages are absent for the same reason.
  *
  * `pages/mcp.vue` was on this list until the servers became a facet of the
  * Library. It is a redirect now, with no rows of its own and nothing for a
@@ -346,7 +345,6 @@ const LIST_PAGES = [
   'pages/shipped.vue',
   'pages/explore.vue',
   'pages/wall.vue',
-  'pages/workflows/index.vue',
 ]
 
 describe('every list page', () => {

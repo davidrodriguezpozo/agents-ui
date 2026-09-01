@@ -1,12 +1,11 @@
 <script setup lang="ts">
 /**
- * One row, one shape, for every named thing you own — agent, command, skill,
- * workflow.
+ * One row, one shape, for every named thing you own — agent, command, skill.
  *
- * These four used to be a card grid, a dense table, grouped rows and cards
- * again: four ways to say "a named thing from somewhere, with a description",
- * so the interaction had to be learned four times. The anatomy is fixed here
- * and the type-specific parts are slots.
+ * These used to be a card grid, a dense table, grouped rows and cards again:
+ * four ways to say "a named thing from somewhere, with a description", so the
+ * interaction had to be learned four times. The anatomy is fixed here and the
+ * type-specific parts are slots.
  *
  *   [icon] [name] [#badges] [description] [#meta] [source] [›]
  */

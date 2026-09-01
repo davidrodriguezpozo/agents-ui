@@ -540,7 +540,7 @@ async function saveCaps() {
       title: 'Limits saved',
       description: anyLimit
         ? 'Work that would go past them is stopped rather than allowed to run on.'
-        : 'Nothing set — sessions, rituals and workflows run to the built-in defaults.',
+        : 'Nothing set — sessions and rituals run to the built-in defaults.',
       color: 'success',
     })
   } catch (e) {
@@ -1499,7 +1499,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             />
           </div>
           <p class="field-hint">
-            Applies to everything — sessions, rituals, workflow steps — unless something asked
+            Applies to everything — sessions, rituals — unless something asked
             for its own. Thinking is billed like any other output, so the levels above the
             default cost more and take longer; a model that has no such level is given the
             highest it does have rather than being refused.
@@ -1550,8 +1550,8 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
             />
           </div>
           <p class="field-hint">
-            Work nobody is watching — rituals, sessions fixing their own checks, workflow
-            steps — waits its turn above this. A turn you type is never queued: it starts
+            Work nobody is watching — rituals, sessions fixing their own checks —
+            waits its turn above this. A turn you type is never queued: it starts
             immediately whatever else is going on. Five rituals due at 08:00 used to mean
             five agents at once on a sleeping laptop.
           </p>
@@ -1628,7 +1628,7 @@ const lineCount = computed(() => rawJson.value.split('\n').length)
           <span>
             <span class="type-strong text-body block">Leave room when I am near my limit</span>
             <span class="type-meta">
-              Rituals and later workflow steps are skipped while Claude says you are close
+              Rituals are skipped while Claude says you are close
               to a rate limit, so what is left goes to work you are doing yourself. A turn
               you type is never held back.
               <template v-if="quota?.known">

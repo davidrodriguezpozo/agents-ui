@@ -70,17 +70,6 @@ export interface Settings {
   [key: string]: unknown
 }
 
-export type RelationshipType = 'spawns' | 'agent-frontmatter' | 'spawned-by'
-
-export interface Relationship {
-  sourceType: 'agent' | 'command' | 'skill' | 'plugin'
-  sourceSlug: string
-  targetType: 'agent' | 'command' | 'skill' | 'plugin'
-  targetSlug: string
-  type: RelationshipType
-  evidence: string
-}
-
 export interface AgentPayload {
   frontmatter: AgentFrontmatter
   body: string
@@ -318,39 +307,6 @@ export interface SkillInvocation {
 }
 
 export type WizardStep = 1 | 2 | 3
-
-export interface WorkflowStep {
-  id: string
-  agentSlug: string
-  label: string
-}
-
-export interface Workflow {
-  slug: string
-  name: string
-  description: string
-  steps: WorkflowStep[]
-  createdAt: string
-  lastRunAt?: string
-  filePath: string
-  scope?: Scope
-}
-
-export interface WorkflowPayload {
-  name: string
-  description: string
-  steps: WorkflowStep[]
-}
-
-export interface StepExecution {
-  stepId: string
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
-  input: string
-  output: string
-  error?: string
-  startedAt?: number
-  completedAt?: number
-}
 
 // ── Chat ──────────────────────────────────────────
 

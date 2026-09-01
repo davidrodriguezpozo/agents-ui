@@ -7,7 +7,6 @@ const { fetchAll: fetchAgents, agents } = useAgents()
 const { fetchAll: fetchCommands, commands } = useCommands()
 const { fetchAll: fetchPlugins, plugins } = usePlugins()
 const { fetchAll: fetchSkills, skills } = useSkills()
-const { fetchAll: fetchWorkflows, workflows } = useWorkflows()
 const { fetchAll: fetchSessions } = useSessions()
 const { sources: inboxSources, load: loadInbox } = useInbox()
 
@@ -65,7 +64,7 @@ async function refreshAll() {
   await loadConfig()
   await refreshScope()
   await Promise.all([
-    fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(), fetchWorkflows(),
+    fetchAgents(), fetchCommands(), fetchPlugins(), fetchSkills(),
     fetchSessions(),
     // A file read, so it is free — and the badge cannot count what it has not read.
     loadInbox(),
@@ -154,13 +153,13 @@ onUnmounted(() => {
  * One navigation, for everybody.
  *
  * There were two, chosen by a simple/advanced switch that defaulted to simple:
- * one hid Workflows, Plugins, Graph and MCP and led with a page of runnable
- * commands. It filtered *this list* and nothing else — Work, Land, Shipped and
- * Daily were in both sets and neither of them ever got simpler — so the switch
- * did not lower the difficulty of anything, it only decided which of two wrong
- * first screens you got. The Library holds the authoring surface behind a
- * facet, and Explore is where tools get installed; between them that is the
- * whole of what the shorter list was for.
+ * one hid Plugins and MCP and led with a page of runnable commands. It filtered
+ * *this list* and nothing else — Work, Land, Shipped and Daily were in both sets
+ * and neither of them ever got simpler — so the switch did not lower the
+ * difficulty of anything, it only decided which of two wrong first screens you
+ * got. The Library holds the authoring surface behind a facet, and Explore is
+ * where tools get installed; between them that is the whole of what the shorter
+ * list was for.
  */
 const navLinks = [
   { label: 'Now', icon: 'i-lucide-target', to: '/' },
@@ -178,13 +177,11 @@ const navLinks = [
   // MCP was a fourth: "what can Claude reach". The servers are a facet of
   // the Library now, reachable at /library?type=mcp.
   { label: 'Library', icon: 'i-lucide-library', to: '/library' },
-  { label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows' },
   { label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins' },
 ]
 
 const navSecondary = [
   { label: 'Explore', icon: 'i-lucide-compass', to: '/explore' },
-  { label: 'Graph', icon: 'i-lucide-workflow', to: '/graph' },
   // A screen to leave on rather than a page to work in, so it sits down
   // here with the other things you visit once and not every day.
   { label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall' },
@@ -255,7 +252,6 @@ function badgeFor(to: string) {
     return (agents.value.length + commands.value.length + skills.value.length) || null
   }
   if (to === '/plugins') return plugins.value.length || null
-  if (to === '/workflows') return workflows.value.length || null
   return null
 }
 </script>

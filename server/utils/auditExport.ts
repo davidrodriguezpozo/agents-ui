@@ -38,6 +38,14 @@ export const AUDIT_FORMAT = 'agents-studio.audit.v1'
 /** Beyond this a run's file list is a diff, and a diff belongs in git. */
 const MAX_FILES = 50
 
+/**
+ * What started a run.
+ *
+ * `workflow` is kept after the feature was removed, and on purpose: an audit
+ * file is built from the run history already on disk, and relabelling runs that
+ * really were workflow steps as `unknown` would put a gap in the record to save
+ * one line of code.
+ */
 export type AuditSource = 'session' | 'ritual' | 'workflow' | 'chat' | 'agent' | 'command' | 'unknown'
 
 export interface AuditExclusion {
@@ -243,6 +251,7 @@ export function sourceOf(run: AuditRun): AuditSource {
   if (run.sessionId) return 'session'
   if (run.kind === 'chat') return 'chat'
   if (run.kind === 'agent') return 'agent'
+  // Only ever true of a run from before workflows were removed. See `AuditSource`.
   if (run.invocation?.startsWith('workflow:')) return 'workflow'
   // A command invoked from the app is a thing somebody ran, and calling it
   // `unknown` in an audit file invites the one question the file exists to

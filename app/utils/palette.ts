@@ -79,13 +79,11 @@ function navigation(): PaletteItem[] {
     { key: 'go:library', kind: 'goto', label: 'Library', icon: 'i-lucide-library', to: '/library', keywords: 'agents commands skills mcp servers' },
     { key: 'go:wall', kind: 'goto', label: 'Fleet', icon: 'i-lucide-monitor-dot', to: '/wall', keywords: 'wall display screen monitor live glance kiosk' },
     { key: 'go:settings', kind: 'goto', label: 'Settings', icon: 'i-lucide-settings', to: '/settings', keywords: 'preferences limits sandbox backups' },
-    { key: 'go:workflows', kind: 'goto', label: 'Workflows', icon: 'i-lucide-git-branch', to: '/workflows', keywords: 'pipeline chain' },
     { key: 'go:plugins', kind: 'goto', label: 'Plugins', icon: 'i-lucide-puzzle', to: '/plugins', keywords: 'marketplace extensions' },
     // No longer a page of its own — a facet of the Library. Kept as its own
     // row because "MCP" is what you type when you want it, and the Library
     // row is not an obvious hit for that word.
     { key: 'go:mcp', kind: 'goto', label: 'MCP servers', icon: 'i-lucide-plug', to: '/library?type=mcp', keywords: 'servers tools external library' },
-    { key: 'go:graph', kind: 'goto', label: 'Graph', icon: 'i-lucide-workflow', to: '/graph', keywords: 'relationships connections' },
     // Last, because it is where you go once rather than every day.
     { key: 'go:explore', kind: 'goto', label: 'Explore', icon: 'i-lucide-compass', to: '/explore', keywords: 'add tools templates install' },
   ]
@@ -226,7 +224,7 @@ export function scoreItem(item: PaletteItem, query: string): number | null {
   /**
    * Last resort: the letters in order, anywhere.
    *
-   * This is what lets `wkfl` find Workflows and `dfpu` find `/defender:pickup`,
+   * This is what lets `sched` find Daily and `dfpu` find `/defender:pickup`,
    * which is how anybody who has used a palette before actually types. It ranks
    * below every literal match because on its own it is generous enough to match
    * half the library — it is the tier that catches what would otherwise have
