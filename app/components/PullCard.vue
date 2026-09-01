@@ -98,6 +98,10 @@ const TONES: Record<PullState, { fg: string; bg: string; icon: string }> = {
   'checks-running': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-loader-2' },
   'ready': { fg: 'var(--success)', bg: 'var(--success-tint)', icon: 'i-lucide-circle-check' },
   'awaiting-review': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-eye' },
+  // Green, but the quiet one: you have done your part and the row is a receipt
+  // rather than a request. `--success` here would put it in the same voice as
+  // "Ready to merge", which is a thing somebody still has to press.
+  'reviewed': { fg: 'var(--text-tertiary)', bg: 'var(--badge-subtle-bg)', icon: 'i-lucide-check-check' },
 }
 
 const tone = computed(() => TONES[props.pull.verdict.state])

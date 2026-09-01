@@ -47,6 +47,34 @@ export interface PullLabel {
 /** GitHub's verdict across all submitted reviews. */
 export type ReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | 'NONE'
 
+/** The states a single review can be left in. `PENDING` is one still being written. */
+export type MyReviewState = 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING'
+
+/**
+ * The last review *you* left on it.
+ *
+ * The one fact this page was missing, and the reason it kept asking for work
+ * already done. `reviewDecision` is GitHub's verdict across everybody, so a
+ * pull request you personally read and asked for changes on comes back saying
+ * `CHANGES_REQUESTED` — indistinguishable, from here, from one where somebody
+ * else asked and you have not looked yet. Both were drawn as "on you", both got
+ * a "Review it" button, and one of them was a queue entry for a job finished
+ * last Tuesday.
+ */
+export interface MyReview {
+  state: MyReviewState
+  /** When you submitted it. */
+  at: number
+  /**
+   * Whether it was written against the commit that is still on top.
+   *
+   * The whole difference between "you have answered this" and "you answered the
+   * version before last". A push after your review puts the pull request back
+   * in front of you; nothing else does.
+   */
+  onHead: boolean
+}
+
 export interface Pull {
   number: number
   title: string
@@ -82,6 +110,12 @@ export interface Pull {
   /** Reviews that took a position, latest one per person. Null like `unresolved`. */
   approvals: number | null
   changesRequested: number | null
+  /**
+   * Your own last review, or null for none — and null also when GitHub could
+   * not be asked, which is the safe direction: it means the row keeps asking
+   * for a review it may not need, rather than hiding one it does.
+   */
+  myReview: MyReview | null
 }
 
 /**
@@ -110,6 +144,8 @@ export type PullState =
   | 'ready'
   /** Open and nobody has said anything yet. */
   | 'awaiting-review'
+  /** Somebody else's, and you have already said what you think about this commit. */
+  | 'reviewed'
 
 export interface PullVerdict {
   state: PullState
@@ -158,8 +194,56 @@ export interface PullVerdict {
  * person reading a page and pressing merge themselves is entitled to the
  * distinction rather than to a refusal, so it is in the detail line.
  */
+/**
+ * Your own review of this commit, when you have left one that took a position.
+ *
+ * Three conditions, and each of them is load-bearing:
+ *
+ *   - **Not yours.** Reviewing your own pull request happens, and it says
+ *     nothing about whether the work on it is finished.
+ *   - **It took a position.** A `COMMENTED` review is a remark, not an answer:
+ *     the request for your review is still outstanding and GitHub agrees — it
+ *     leaves you on the reviewer list. `DISMISSED` is your answer having been
+ *     explicitly thrown out, which puts the pull request back in front of you.
+ *     `PENDING` is a review still open in a browser tab somewhere and not sent.
+ *   - **On the current head.** See `MyReview.onHead`.
+ */
+export function answeredByYou(pull: Pull): MyReview | null {
+  if (pull.mine) return null
+  const review = pull.myReview
+  if (!review || !review.onHead) return null
+  if (review.state !== 'APPROVED' && review.state !== 'CHANGES_REQUESTED') return null
+  return review
+}
+
 export function verdictFor(pull: Pull): PullVerdict {
   const mine = pull.mine
+
+  /*
+   * What you already said comes before anything about what the pull request
+   * needs — ahead of the draft flag and ahead of the conflict, which is further
+   * up than it looks.
+   *
+   * The reasoning is that every check below answers "what is wrong with this
+   * pull request", and this one answers "whose move is it". Once you have read
+   * it and said so, none of the others is yours: it conflicts with its base and
+   * the author brings it forward, CI is red and the author fixes it, three
+   * threads are open and the author replies to them. Ranking a conflict above
+   * your own answer is how a row you finished on Tuesday came back on Thursday
+   * wearing a different badge.
+   */
+  const answered = answeredByYou(pull)
+  if (answered) {
+    const requested = answered.state === 'CHANGES_REQUESTED'
+    return {
+      state: 'reviewed',
+      label: requested ? 'You asked for changes' : 'You approved it',
+      detail: requested
+        ? `Waiting on ${pull.author} to answer what you raised`
+        : `Waiting on ${pull.author} to land it`,
+      onYou: false,
+    }
+  }
 
   if (pull.draft) {
     return {
@@ -267,7 +351,14 @@ export function sortPulls(pulls: Pull[]): Pull[] {
 export interface PullsSummary {
   /** Will not move until you do something. What the sidebar badge counts. */
   onYou: number
-  /** Asked of you specifically. */
+  /**
+   * Asked of you specifically, and still waiting.
+   *
+   * Not `reviewing.length`. GitHub keeps a pull request in `review-requested:@me`
+   * after you have reviewed it — the request came via a team, or the author
+   * re-requested and you answered — so counting the list counted work you had
+   * finished, and the number over "to review" was the one everybody trusted.
+   */
   toReview: number
   /** Yours, approved and green. */
   toMerge: number
@@ -279,7 +370,7 @@ export function summarizePulls(reviewing: Pull[], mine: Pull[]): PullsSummary {
   const all = [...reviewing, ...mine]
   return {
     onYou: all.filter(p => verdictFor(p).onYou).length,
-    toReview: reviewing.length,
+    toReview: reviewing.filter(p => !answeredByYou(p)).length,
     toMerge: mine.filter(p => verdictFor(p).state === 'ready').length,
     waiting: mine.filter(p => !verdictFor(p).onYou).length,
   }
@@ -312,7 +403,23 @@ export type WorkIntent =
  * the same as what the badge already says.
  */
 export function intentFor(pull: Pull): WorkIntent | null {
-  if (!pull.mine) return pull.draft ? null : 'review'
+  /*
+   * Somebody else's is always readable, drafts included.
+   *
+   * A draft used to get no button, on the reasoning that it is not asking for
+   * anything yet. That is true of what the *author* wants and false of what you
+   * might want: a draft your review was requested on is in front of you because
+   * somebody wanted early eyes, and reading one before it is finished is when a
+   * review is worth most — the shape can still change. A review costs a
+   * detached checkout and posts nothing, so there is no version of this where
+   * offering it does harm.
+   *
+   * Offered on one you have already answered too, and deliberately. It is not
+   * *asked* of you any more — `verdictFor` says so, which is what takes the row
+   * off Now and out of the badge — but a second read of a pull request you have
+   * already read is an ordinary thing to want, and the button is how you get it.
+   */
+  if (!pull.mine) return 'review'
 
   const state = verdictFor(pull).state
   if (state === 'conflicted') return 'update'
@@ -566,6 +673,7 @@ export function parsePulls(rows: RawPull[], viewer: string): Pull[] {
         unresolved: null,
         approvals: null,
         changesRequested: null,
+        myReview: null,
       }
     })
 }
@@ -597,8 +705,20 @@ async function listPulls(cwd: string, which: Which, viewer: string): Promise<Pul
   }
 }
 
+/** What one GraphQL alias adds to a row that `gh pr list` could not. */
+interface PullExtras {
+  unresolved: number
+  approvals: number
+  changesRequested: number
+  /**
+   * Your own last review, with the commit it was written against — not yet
+   * compared to the head, because that lives on the row this joins onto.
+   */
+  myReview: { state: MyReviewState; at: number; commit: string } | null
+}
+
 /**
- * The two things `gh pr list` will not tell you, in one GraphQL round trip.
+ * The things `gh pr list` will not tell you, in one GraphQL round trip.
  *
  * Unresolved review threads are the closest thing GitHub has to "somebody is
  * waiting for you to reply", and there is no `--json` field for them at any
@@ -607,17 +727,25 @@ async function listPulls(cwd: string, which: Which, viewer: string): Promise<Pul
  * same reason: `latestReviews` carries the full text of each one, and all this
  * needs is how many said yes.
  *
+ * `viewerLatestReview` is the third, and it is the one that decides whether a
+ * row belongs on Now at all — see `MyReview`. It rides along here rather than in
+ * a query of its own precisely because it is the same round trip: the question
+ * "has anybody asked for something" and the question "did I already answer" are
+ * a single fact about a pull request, and asking them separately is how they end
+ * up read at different moments and disagreeing.
+ *
  * Aliased per pull request rather than paged, because the set is already known
  * and small. Failure is not an error: every field it fills stays null and the
  * page reads as if it never asked, which is the only honest fallback for a
- * count.
+ * count — and, for `myReview`, the fallback that keeps asking for a review
+ * rather than hiding one.
  */
 async function readThreadCounts(
   cwd: string,
   repo: { owner: string; name: string },
   numbers: number[],
-): Promise<Map<number, { unresolved: number; approvals: number; changesRequested: number }>> {
-  const out = new Map<number, { unresolved: number; approvals: number; changesRequested: number }>()
+): Promise<Map<number, PullExtras>> {
+  const out = new Map<number, PullExtras>()
   if (!numbers.length) return out
 
   const aliases = numbers.map(n => `p${n}: pullRequest(number: ${n}) { ...T }`).join('\n')
@@ -631,6 +759,7 @@ async function readThreadCounts(
       number
       reviewThreads(first: 100) { nodes { isResolved isOutdated } }
       latestOpinionatedReviews(first: 25) { nodes { state } }
+      viewerLatestReview { state submittedAt commit { oid } }
     }
   `
 
@@ -645,6 +774,11 @@ async function readThreadCounts(
           number?: number
           reviewThreads?: { nodes?: { isResolved?: boolean; isOutdated?: boolean }[] }
           latestOpinionatedReviews?: { nodes?: { state?: string }[] }
+          viewerLatestReview?: {
+            state?: string
+            submittedAt?: string | null
+            commit?: { oid?: string } | null
+          } | null
         } | null>
       }
     }
@@ -654,6 +788,7 @@ async function readThreadCounts(
 
       const threads = node.reviewThreads?.nodes ?? []
       const reviews = node.latestOpinionatedReviews?.nodes ?? []
+      const mine = node.viewerLatestReview
 
       out.set(node.number, {
         // Outdated threads are left out. A comment on a line that has since
@@ -663,6 +798,13 @@ async function readThreadCounts(
         unresolved: threads.filter(t => !t.isResolved && !t.isOutdated).length,
         approvals: reviews.filter(r => (r.state ?? '').toUpperCase() === 'APPROVED').length,
         changesRequested: reviews.filter(r => (r.state ?? '').toUpperCase() === 'CHANGES_REQUESTED').length,
+        myReview: mine?.state
+          ? {
+              state: mine.state.toUpperCase() as MyReviewState,
+              at: stamp(mine.submittedAt ?? undefined),
+              commit: mine.commit?.oid ?? '',
+            }
+          : null,
       })
     }
   } catch {
@@ -876,6 +1018,17 @@ export async function readPulls(repoDir: string | null): Promise<PullsReading> {
     pull.unresolved = count.unresolved
     pull.approvals = count.approvals
     pull.changesRequested = count.changesRequested
+    // The comparison happens here because this is the only place both halves
+    // are in hand: the head commit came from the list, the review's commit from
+    // the GraphQL query. An unknown commit on either side means "not on the
+    // head", which errs toward asking for the review again.
+    pull.myReview = count.myReview
+      ? {
+          state: count.myReview.state,
+          at: count.myReview.at,
+          onHead: Boolean(pull.headSha) && count.myReview.commit === pull.headSha,
+        }
+      : null
   }
 
   // Yours never appears twice. GitHub lets you request a review on your own

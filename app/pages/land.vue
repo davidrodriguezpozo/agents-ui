@@ -91,6 +91,22 @@ const mineOnYou = computed(() => reading.value.mine.filter(p => p.verdict.onYou)
 const mineWaiting = computed(() => reading.value.mine.filter(p => !p.verdict.onYou))
 
 /**
+ * Theirs, split the same way, and for a reason the page had been getting wrong.
+ *
+ * GitHub keeps a pull request in `review-requested:@me` after you have reviewed
+ * it — the request arrived via a team, or the author re-requested you and you
+ * answered — so the whole `reviewing` list sat under "Waiting for your review"
+ * including the ones you had already read and replied to. The heading was a
+ * claim about every row under it, and on a busy repository half of them made it
+ * false.
+ *
+ * They are still drawn, below and named for what they are: still open, still
+ * yours to look at again if you want, and no longer asking.
+ */
+const toReview = computed(() => reading.value.reviewing.filter(p => p.verdict.state !== 'reviewed'))
+const answered = computed(() => reading.value.reviewing.filter(p => p.verdict.state === 'reviewed'))
+
+/**
  * Reviews composed on this machine and not yet sent.
  *
  * Its own request rather than a field on the pull request reading, because the
@@ -302,12 +318,13 @@ async function startWork(pull: Pull, intent?: WorkIntent) {
 /**
  * The rows "Review all" would actually start on.
  *
- * `intent` rather than the whole band, so the count on the button is the number
- * of sessions the press produces. The band can hold a row with no button on it —
- * somebody else's draft that your review was requested on anyway — and counting
- * that one would make the button promise five and deliver four.
+ * The band it counts rather than the whole `reviewing` list, so the count on the
+ * button is the number of sessions the press produces. A pull request you have
+ * already answered still has a button — reading one twice is allowed — but it is
+ * not what "review all of them" means, and sweeping it in would spend a full
+ * checkout re-reading a diff you signed off this morning.
  */
-const reviewable = computed(() => reading.value.reviewing.filter(p => p.intent === 'review'))
+const reviewable = computed(() => toReview.value.filter(p => p.intent === 'review'))
 
 /**
  * Review every one of them, which is the press this band was missing.
@@ -736,7 +753,7 @@ const issuesEmptyLine = computed(() => {
           </div>
 
           <template v-else>
-            <section v-if="reading.reviewing.length" class="space-y-2">
+            <section v-if="toReview.length" class="space-y-2">
               <div class="flex items-center gap-3">
                 <h3 class="text-section-label flex-1 min-w-0">Waiting for your review</h3>
                 <!--
@@ -771,7 +788,7 @@ const issuesEmptyLine = computed(() => {
               </p>
 
               <PullCard
-                v-for="pull in reading.reviewing"
+                v-for="pull in toReview"
                 :key="pull.number"
                 :pull="pull"
                 :busy="busy === pull.number"
@@ -825,6 +842,25 @@ const issuesEmptyLine = computed(() => {
               <h3 class="text-section-label">Yours, waiting on somebody else</h3>
               <PullCard
                 v-for="pull in mineWaiting"
+                :key="pull.number"
+                :pull="pull"
+                :busy="busy === pull.number"
+                :work="workOnPulls.get(pull.number) ?? null"
+                class="stagger-item"
+                @work="intent => startWork(pull, intent)"
+              />
+            </section>
+
+            <!--
+              Answered, and last: the one band on this page where the next move
+              is somebody else's. Kept rather than hidden, because "I reviewed
+              that, didn't I?" is a real question and the alternative answer to
+              it is a browser tab.
+            -->
+            <section v-if="answered.length" class="space-y-2">
+              <h3 class="text-section-label">You have reviewed these</h3>
+              <PullCard
+                v-for="pull in answered"
                 :key="pull.number"
                 :pull="pull"
                 :busy="busy === pull.number"

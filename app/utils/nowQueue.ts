@@ -2,6 +2,7 @@ import type { Digest } from '~/composables/useDigest'
 import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
 import type { AttentionItem } from '~/composables/useAttention'
 import type { InboxItem, InboxSourceReading } from '~/composables/useInbox'
+import { workByPull, type PullWork, type WorkSession } from '~/utils/pullWork'
 
 /**
  * One queue of everything that will not move until you do something.
@@ -110,7 +111,25 @@ const INTENT_LABELS: Record<WorkIntent, string> = {
  * unmerged, and the queue only looked at ones where you were a requested
  * reviewer. Badge said three, queue showed one.
  */
-function pullItem(pull: Pull): NowItem {
+function pullItem(pull: Pull, work: PullWork | null): NowItem {
+  /*
+   * A review of this pull request that already exists on this machine.
+   *
+   * The other half of the same bug `Pull.myReview` fixes, and the half GitHub
+   * cannot answer. Land has drawn this since the day it was written — a chip on
+   * the row saying "Review open", and a note under the button explaining that
+   * pressing it opens a *second* read-only checkout — and Now, which is the
+   * screen you are supposed to be able to work straight down, knew nothing about
+   * it. So the queue kept offering "Review it" on pull requests that had a
+   * finished review sitting in a session two screens away, and taking it up
+   * spent another full checkout of the repository to read the same diff again.
+   *
+   * Set aside is not open work: you closed the book on it, and it must not stop
+   * the row offering the review afresh.
+   */
+  const reviewing = work?.workers.find(w => w.reviewing && !w.setAside) ?? null
+  const alreadyReviewing = reviewing && pull.intent === 'review'
+
   return {
     key: `pull:${pull.number}`,
     kind: 'review',
@@ -118,10 +137,18 @@ function pullItem(pull: Pull): NowItem {
     title: pull.title,
     // `#12 · Approved, nothing reported` — the label is the state, the detail
     // is the nuance, and both come from the server.
-    because: `#${pull.number} · ${pull.verdict.detail || pull.verdict.label}`,
-    href: pull.url,
+    because: alreadyReviewing
+      ? `#${pull.number} · ${pull.verdict.detail || pull.verdict.label} — you have a review of it open here`
+      : `#${pull.number} · ${pull.verdict.detail || pull.verdict.label}`,
+    // The row goes wherever the answer is. With a review of your own open, that
+    // is the session holding it and not github.com.
+    ...(alreadyReviewing ? { to: `/sessions/${reviewing.id}` } : { href: pull.url }),
     at: pull.updatedAt,
-    ...(pull.intent
+    // No button on a row you have already started. Starting a second review is
+    // still possible — it is a button on Land, next to the note saying what it
+    // will do — but a quick action is a claim that pressing it is the obvious
+    // next move, and here it is not.
+    ...(pull.intent && !alreadyReviewing
       ? {
           action: {
             label: INTENT_LABELS[pull.intent],
@@ -187,6 +214,17 @@ export interface NowInput {
    * finding them is a job that runs on its own, not a request this makes.
    */
   inbox?: InboxSourceReading[]
+  /**
+   * The sessions in the current project, so a pull request row knows whether you
+   * have already started on it.
+   *
+   * The same join Land makes, from the same function, for the reason
+   * `pullWork.ts` gives: both halves are already in memory and a third endpoint
+   * to tell you what two lists agree on can only be stale against the page that
+   * asked. Callers pass sessions from the pull requests' own repository — see
+   * `workersOnPull`, which cannot check it.
+   */
+  sessions?: WorkSession[]
   /** Passed in so that "has gone quiet" stays part of a pure function. */
   now?: number
 }
@@ -211,7 +249,9 @@ export interface NowInput {
  * and still has its button; it just stops claiming to be this morning's
  * problem. An expiring queue would be the same lie in the other direction.
  */
-export function buildNowQueue({ attention, pulls, digest, inbox, now = Date.now() }: NowInput): NowItem[] {
+export function buildNowQueue({
+  attention, pulls, digest, inbox, sessions, now = Date.now(),
+}: NowInput): NowItem[] {
   const items: NowItem[] = []
 
   // Current state first, and the only source for these two kinds.
@@ -312,11 +352,14 @@ export function buildNowQueue({ attention, pulls, digest, inbox, now = Date.now(
     for (const item of source.items) items.push(inboxRow(source, item))
   }
 
+  // One pass rather than a lookup per row — see `workByPull`.
+  const work = workByPull(pulls, sessions ?? [])
+
   for (const pull of pulls) {
-    // The server's judgement of whether this moves without you. A draft never
-    // is, and it already says so.
+    // The server's judgement of whether this moves without you. One you have
+    // already reviewed does not, and it says whose move it is instead.
     if (!pull.verdict.onYou) continue
-    items.push(pullItem(pull))
+    items.push(pullItem(pull, work.get(pull.number) ?? null))
   }
 
   // Marked in one place, after everything is collected, so no source of rows

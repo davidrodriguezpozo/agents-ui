@@ -2,8 +2,17 @@
 export type PullState =
   | 'draft' | 'conflicted' | 'changes-requested' | 'unanswered'
   | 'checks-failing' | 'checks-running' | 'ready' | 'awaiting-review'
+  | 'reviewed'
 
 export type WorkIntent = 'review' | 'address' | 'fix' | 'update'
+
+/** Mirrors `MyReview` on the server. */
+export interface MyReview {
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING'
+  at: number
+  /** Whether it was written against the commit still on top. */
+  onHead: boolean
+}
 
 export interface Reviewer {
   name: string
@@ -35,6 +44,8 @@ export interface Pull {
   unresolved: number | null
   approvals: number | null
   changesRequested: number | null
+  /** Your own last review, or null for none — and null when GitHub was not asked. */
+  myReview: MyReview | null
   /**
    * Worked out on the server and drawn here as given. Deciding it a second time
    * in the page is how two numbers on one screen start disagreeing.

@@ -132,6 +132,7 @@ function pullFor(f: Fixture): Pull {
     unresolved: 0,
     approvals: 0,
     changesRequested: 0,
+    myReview: null,
   }
 }
 

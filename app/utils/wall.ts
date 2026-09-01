@@ -532,6 +532,7 @@ export type WallPullState =
   | 'checks-running'
   | 'ready'
   | 'awaiting-review'
+  | 'reviewed'
 
 /**
  * One pull request, flattened for a row.
@@ -646,6 +647,9 @@ export const PULL_TONES: Record<WallPullState, WallTone> = {
   ready: 'success',
   'checks-running': 'quiet',
   draft: 'quiet',
+  // Answered, and waiting on somebody who is not in this room. Across a wall
+  // that is the definition of quiet.
+  reviewed: 'quiet',
 }
 
 /**

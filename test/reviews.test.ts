@@ -37,8 +37,13 @@ const pull = (over: Partial<Pull> = {}): Pull => ({
   unresolved: 0,
   approvals: 0,
   changesRequested: 0,
+  myReview: null,
   ...over,
 })
+
+/** A review of your own on the commit that is still on top. */
+const answeredNow = (state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED'): Pull['myReview'] =>
+  ({ state, at: 1_500, onHead: true })
 
 describe('where a pull request has got to', () => {
   it('puts a person ahead of a robot', () => {
@@ -144,10 +149,92 @@ describe('whether the next move is yours', () => {
   })
 })
 
+/**
+ * The bug this whole field exists for: Now offered "Review it" on pull requests
+ * that had been read, answered and handed back days earlier.
+ *
+ * `reviewDecision` is GitHub's verdict across everybody, so a pull request *you*
+ * asked for changes on is indistinguishable from one somebody else asked for
+ * changes on and you have not opened — and GitHub keeps both in
+ * `review-requested:@me` when the request came via a team.
+ */
+describe('a review of your own', () => {
+  it('takes the row off you when it is on this commit', () => {
+    const requested = verdictFor(pull({ myReview: answeredNow('CHANGES_REQUESTED') }))
+    expect(requested.state).toBe('reviewed')
+    expect(requested.onYou).toBe(false)
+    expect(requested.detail).toContain('someone')
+
+    const approved = verdictFor(pull({ myReview: answeredNow('APPROVED') }))
+    expect(approved.state).toBe('reviewed')
+    expect(approved.onYou).toBe(false)
+  })
+
+  it('outranks everything wrong with the pull request itself', () => {
+    // The reordering that matters. You reviewed it; the conflict, the red build
+    // and the open threads are all the author's move now, and each of those
+    // checks used to draw the row back onto your queue wearing a new badge.
+    for (const state of [
+      { mergeable: 'CONFLICTING' },
+      { checks: 'failing' as const, failing: [{ name: 'build', url: '' }] },
+      { unresolved: 3 },
+      { reviewDecision: 'CHANGES_REQUESTED' as const },
+      { draft: true },
+    ]) {
+      const verdict = verdictFor(pull({ ...state, myReview: answeredNow('CHANGES_REQUESTED') }))
+      expect(verdict.state, JSON.stringify(state)).toBe('reviewed')
+      expect(verdict.onYou, JSON.stringify(state)).toBe(false)
+    }
+  })
+
+  it('comes back to you the moment they push', () => {
+    // The one condition that makes this safe. A review of the version before
+    // last is not an answer to the version in front of you.
+    const verdict = verdictFor(pull({
+      reviewDecision: 'CHANGES_REQUESTED',
+      myReview: { state: 'CHANGES_REQUESTED', at: 1_500, onHead: false },
+    }))
+    expect(verdict.state).toBe('changes-requested')
+    expect(verdict.onYou).toBe(true)
+  })
+
+  it('does not count a remark as an answer', () => {
+    // A COMMENTED review leaves you on the reviewer list, and GitHub is right
+    // about that: you said something, you did not say whether it can land.
+    expect(verdictFor(pull({ myReview: answeredNow('COMMENTED') })).onYou).toBe(true)
+    expect(verdictFor(pull({ myReview: { state: 'DISMISSED', at: 1_500, onHead: true } })).onYou).toBe(true)
+  })
+
+  it('never quiets your own pull request', () => {
+    // Reviewing your own happens and says nothing about whether it can land.
+    const verdict = verdictFor(pull({ mine: true, reviewDecision: 'APPROVED', myReview: answeredNow('APPROVED') }))
+    expect(verdict.state).toBe('ready')
+    expect(verdict.onYou).toBe(true)
+  })
+
+  it('keeps asking when GitHub could not be asked', () => {
+    // `myReview` is null both for "you never reviewed it" and for "the GraphQL
+    // call failed". Erring toward asking again is the only safe direction:
+    // a duplicate review costs a checkout, a hidden one costs the review.
+    expect(verdictFor(pull({ myReview: null })).onYou).toBe(true)
+  })
+})
+
 describe('what the button does', () => {
-  it('offers a review on somebody else\'s, and nothing on their draft', () => {
+  it('offers a review on somebody else\'s, their draft included', () => {
+    // A draft used to get nothing, on the reasoning that it is not asking yet.
+    // That is a fact about what the author wants, not about what you might: a
+    // draft your review was requested on is the one where reading it early is
+    // worth most, because the shape can still change.
     expect(intentFor(pull())).toBe('review')
-    expect(intentFor(pull({ draft: true }))).toBe(null)
+    expect(intentFor(pull({ draft: true }))).toBe('review')
+  })
+
+  it('still offers a second read of one you have already answered', () => {
+    // It is off the queue and out of the badge — that is `verdictFor`'s job —
+    // but reading a pull request twice is an ordinary thing to want, and the
+    // button is the only way to get it.
+    expect(intentFor(pull({ myReview: answeredNow('APPROVED') }))).toBe('review')
   })
 
   it('offers CI on your red one and the review on your criticised one', () => {
@@ -253,6 +340,22 @@ describe('the order and the summary', () => {
     )
 
     expect(summary).toEqual({ onYou: 2, toReview: 1, toMerge: 1, waiting: 1 })
+  })
+
+  it('stops counting a review you have already given as one to give', () => {
+    // "to review: 4" over a band where two of them were answered this morning
+    // is the number that costs the header its credibility.
+    const summary = summarizePulls(
+      [pull({ number: 1 }), pull({ number: 2, myReview: answeredNow('APPROVED') })],
+      [],
+    )
+
+    expect(summary.toReview).toBe(1)
+    expect(summary.onYou).toBe(1)
+  })
+
+  it('starts a review of your own as unknown rather than as none', () => {
+    expect(parsePulls([{ number: 1, url: 'u' }], 'me')[0]!.myReview).toBe(null)
   })
 })
 

@@ -3,6 +3,7 @@ import { buildNowQueue, type NowItem } from '~/utils/nowQueue'
 import type { AttentionItem } from '~/composables/useAttention'
 import type { Digest } from '~/composables/useDigest'
 import type { Pull } from '~/composables/useGithubPulls'
+import type { WorkSession } from '~/utils/pullWork'
 
 function digest(over: Partial<Digest> = {}): Digest {
   return {
@@ -434,5 +435,85 @@ describe('work waiting elsewhere', () => {
       inbox: [source({ items: [], checkedAt: 123 })],
     })
     expect(items).toEqual([])
+  })
+})
+
+/**
+ * A review of your own that already exists on this machine.
+ *
+ * The queue's job is to be worked straight down, and a row offering "Review it"
+ * on a pull request that has a finished review sitting in a session two screens
+ * away breaks exactly that: taking it up spends another full checkout of the
+ * repository to read the same diff again. Land has drawn this since it was
+ * written — a chip on the row, and a note under the button — and Now knew nothing
+ * about it.
+ */
+describe('a pull request you have already started on', () => {
+  const session = (over: Partial<WorkSession> = {}): WorkSession => ({
+    id: 's1',
+    title: '#1 A pull request',
+    branch: 'h',
+    status: 'idle',
+    activity: 'idle',
+    updatedAt: 10,
+    detached: true,
+    ...over,
+  })
+
+  it('drops the button and points the row at the review instead', () => {
+    const [item] = buildNowQueue({
+      attention: [], pulls: [pull()], digest: null, sessions: [session()],
+    })
+
+    expect(item!.action).toBeUndefined()
+    expect(item!.to).toBe('/sessions/s1')
+    // The link goes to the review, so it must not also go to github.com.
+    expect(item!.href).toBeUndefined()
+    expect(item!.because).toContain('you have a review of it open here')
+  })
+
+  it('still offers the review when nothing is open on it', () => {
+    const [item] = buildNowQueue({ attention: [], pulls: [pull()], digest: null, sessions: [] })
+
+    expect(item!.action?.kind).toBe('work-on-pull')
+    expect(item!.href).toBe('https://x/1')
+  })
+
+  it('offers it again once you have set the review aside', () => {
+    // Filed is you saying you are done with it. Letting that keep the row quiet
+    // would make "I have dealt with this" mean "this can never be offered again".
+    const [item] = buildNowQueue({
+      attention: [], pulls: [pull()], digest: null, sessions: [session({ filedAt: 5 })],
+    })
+
+    expect(item!.action?.kind).toBe('work-on-pull')
+  })
+
+  it('is not fooled by a session that holds the branch rather than reviewing it', () => {
+    // Somebody else's pull request with a checkout of its branch on your machine
+    // is not a review of it, and the offer to read it still stands.
+    const [item] = buildNowQueue({
+      attention: [], pulls: [pull()], digest: null, sessions: [session({ detached: undefined })],
+    })
+
+    expect(item!.action?.kind).toBe('work-on-pull')
+  })
+
+  it('leaves the other intents alone', () => {
+    // Only a review is the thing that can happen twice for nothing. A session
+    // open on your own conflicting pull request is where "Resolve conflicts"
+    // lands — the button is how you get there, so it stays.
+    const [item] = buildNowQueue({
+      attention: [],
+      pulls: [pull({
+        mine: true,
+        intent: 'update',
+        verdict: { state: 'conflicted', label: 'Conflicts', detail: 'conflicts with main', onYou: true },
+      })],
+      digest: null,
+      sessions: [session({ detached: true })],
+    })
+
+    expect(item!.action?.label).toBe('Resolve conflicts')
   })
 })

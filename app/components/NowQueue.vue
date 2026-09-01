@@ -23,7 +23,7 @@ const { allowRules } = useSchedules()
 const {
   sources: inboxSources, refreshing, load: loadInbox, refresh: refreshInbox, setSchedule,
 } = useInbox()
-const { create: createSession } = useSessions()
+const { create: createSession, sessions, fetchAll: fetchSessions } = useSessions()
 /** Where a resolved row leaves you, on the same switch Land reads. */
 const { load: loadQuickActions, arrive } = useQuickActions()
 const toast = useToast()
@@ -32,11 +32,23 @@ onMounted(() => {
   if (!digest.value) void loadDigest()
   void loadInbox()
   void loadQuickActions()
+  // Needed to answer "have I already started on this pull request?" — see
+  // `NowInput.sessions`. `app.vue` fetches them at start-up, so this is usually
+  // a re-read of a list already in memory; it matters on a hard reload of `/`.
+  void fetchSessions()
 })
 
 /** Resolved locally so a row disappears the moment you deal with it. */
 const settled = ref<Set<string>>(new Set())
 const busy = ref<string | null>(null)
+
+/**
+ * Only this project's, which is what `workersOnPull` requires of its caller: a
+ * session knows its `repoDir` and a pull request, by the time it reaches here,
+ * does not — so #482 in one repository would otherwise match a session on #482
+ * in another.
+ */
+const sessionsHere = computed(() => sessions.value.filter(s => s.inCurrentProject))
 
 const items = computed(() =>
   buildNowQueue({
@@ -44,6 +56,7 @@ const items = computed(() =>
     pulls: pulls.value,
     digest: digest.value,
     inbox: inboxSources.value,
+    sessions: sessionsHere.value,
   }).filter(item => !settled.value.has(item.key)),
 )
 
