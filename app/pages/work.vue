@@ -1171,10 +1171,17 @@ async function closeEmpty(key: string, ids: string[]) {
             them was a line of text that never changed and never told you
             anything the label had not.
           -->
+          <!--
+            Amber rather than accent. Accent is this app's interactive colour —
+            every link and every pressable thing is that blue — so a sentence in
+            it that cannot be clicked is a false affordance, and this one sat
+            directly between two rows of controls. It is a caution about the
+            option just chosen, and caution has its own token.
+          -->
           <span
             v-if="startTrust === 'full'"
             class="type-detail flex items-center gap-1.5"
-            style="color: var(--accent);"
+            style="color: var(--warning);"
           >
             <UIcon name="i-lucide-zap" class="size-3.5 shrink-0" />
             Runs commands without asking, sandboxed, in its own workspace.

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { relativeTime } from '~/utils/time'
 import type { PullWork, PullWorkTone } from '~/utils/pullWork'
-import type { Pull, PullState, WorkIntent } from '~/composables/useGithubPulls'
+import { PULL_LOOK, type Pull, type WorkIntent } from '~/composables/useGithubPulls'
 
 /**
  * One pull request, and what it wants.
@@ -83,28 +83,12 @@ async function toggleThreads() {
 }
 
 /**
- * A colour per state, in the two roles a row uses it: the stripe and the badge.
+ * The stripe and the badge, from the map Now reads too — see `PULL_LOOK`.
  *
- * Red is spent only on things that are actually wrong. A pull request waiting
- * on a reviewer is not a problem, and a page where everything is red is a page
- * where nothing is.
+ * It lived here, which is exactly why the queue on Now had no colours: a table
+ * in a component is a table only that component can read.
  */
-const TONES: Record<PullState, { fg: string; bg: string; icon: string }> = {
-  'draft': { fg: 'var(--text-tertiary)', bg: 'var(--badge-subtle-bg)', icon: 'i-lucide-git-pull-request-draft' },
-  'conflicted': { fg: 'var(--error)', bg: 'var(--error-tint)', icon: 'i-lucide-git-merge' },
-  'changes-requested': { fg: 'var(--warning)', bg: 'var(--warning-tint)', icon: 'i-lucide-message-square-warning' },
-  'unanswered': { fg: 'var(--warning)', bg: 'var(--warning-tint)', icon: 'i-lucide-message-circle-more' },
-  'checks-failing': { fg: 'var(--error)', bg: 'var(--error-tint)', icon: 'i-lucide-circle-x' },
-  'checks-running': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-loader-2' },
-  'ready': { fg: 'var(--success)', bg: 'var(--success-tint)', icon: 'i-lucide-circle-check' },
-  'awaiting-review': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-eye' },
-  // Green, but the quiet one: you have done your part and the row is a receipt
-  // rather than a request. `--success` here would put it in the same voice as
-  // "Ready to merge", which is a thing somebody still has to press.
-  'reviewed': { fg: 'var(--text-tertiary)', bg: 'var(--badge-subtle-bg)', icon: 'i-lucide-check-check' },
-}
-
-const tone = computed(() => TONES[props.pull.verdict.state])
+const tone = computed(() => PULL_LOOK[props.pull.verdict.state])
 
 /**
  * The colours of "you have already started this".

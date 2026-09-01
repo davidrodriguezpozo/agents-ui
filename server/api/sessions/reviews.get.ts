@@ -1,5 +1,5 @@
 import { readSessions, type Session } from '../../utils/sessions'
-import { pendingDrafts, retiredSince } from '../../utils/reviewDraft'
+import { pendingDrafts, retiredSince, titleWithoutNumber } from '../../utils/reviewDraft'
 import { retireStale } from '../../utils/reviewRetire'
 import { getProjectDir } from '../../utils/scope'
 
@@ -55,7 +55,8 @@ export default defineEventHandler(async (event) => {
     .map(({ draft, session }) => ({
       sessionId: draft.sessionId,
       pr: draft.pr,
-      title: session.title,
+      // The band draws the number itself — see `titleWithoutNumber`.
+      title: titleWithoutNumber(draft.pr, session.title),
       repoDir: session.repoDir,
       comments: draft.findings.filter(f => f.include).length,
       blocking: draft.findings.filter(f => f.include && f.severity === 'BLOCKING').length,

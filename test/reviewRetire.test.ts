@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
-import { isPending, pendingDrafts, retiredSince, type ReviewDraft } from '../server/utils/reviewDraft'
+import { isPending, pendingDrafts, retiredSince, titleWithoutNumber, type ReviewDraft } from '../server/utils/reviewDraft'
 import {
   forgetLivePulls,
   retireStale,
@@ -241,5 +241,42 @@ describe('against a store', () => {
     // And nothing was written, so the next reading asks again rather than
     // inheriting a verdict nobody reached.
     expect((await pendingDrafts()).map(d => d.sessionId)).toEqual(['live'])
+  })
+})
+
+/**
+ * The number, once.
+ *
+ * The band on Land draws `#5831` from the draft and the title after it, and a
+ * review session is titled `#5831 fix(fina): …` — so the row read the number
+ * twice in the same six characters.
+ */
+describe('titleWithoutNumber', () => {
+  it('takes its own number off the front', () => {
+    expect(titleWithoutNumber(5831, '#5831 fix(fina): stop one backlogged mailbox'))
+      .toBe('fix(fina): stop one backlogged mailbox')
+  })
+
+  it('copes with whatever separator followed it', () => {
+    expect(titleWithoutNumber(12, '#12: do the thing')).toBe('do the thing')
+    expect(titleWithoutNumber(12, '#12 — do the thing')).toBe('do the thing')
+    expect(titleWithoutNumber(12, '  #12   do the thing')).toBe('do the thing')
+  })
+
+  it('leaves somebody else\'s number alone', () => {
+    // A title that mentions another pull request is the author saying something.
+    expect(titleWithoutNumber(5831, 'Revert #4102, which broke the collector'))
+      .toBe('Revert #4102, which broke the collector')
+    expect(titleWithoutNumber(5831, '#4102 fix the collector')).toBe('#4102 fix the collector')
+  })
+
+  it('will not match a longer number that starts with this one', () => {
+    // `#58310` is not `#5831`, and a word boundary is what says so.
+    expect(titleWithoutNumber(5831, '#58310 something else')).toBe('#58310 something else')
+  })
+
+  it('never returns nothing', () => {
+    // A title that is only the number leaves an empty row otherwise.
+    expect(titleWithoutNumber(12, '#12')).toBe('#12')
   })
 })

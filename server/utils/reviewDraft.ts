@@ -170,6 +170,22 @@ export function isPending(draft: ReviewDraft): boolean {
     && (draft.findings.some(f => f.include) || Boolean(draft.summary.trim()))
 }
 
+/**
+ * A session's title with the pull request number taken off the front.
+ *
+ * A review session is titled `#5831 fix(fina): …` — the number is how you find
+ * it in a rail of forty. The band on Land draws the number itself, from the
+ * draft, and then drew the title after it, so the row read
+ * `#5831 #5831 fix(fina): …`. Twice, in the same six characters.
+ *
+ * Only its *own* number comes off. `#5831` on a draft for #5831 is the
+ * duplicate; a title that happens to mention #4102 is the author saying
+ * something, and stripping that would be editing the sentence.
+ */
+export function titleWithoutNumber(pr: number, title: string): string {
+  return title.replace(new RegExp(`^\\s*#${pr}\\b[\\s:—-]*`), '').trim() || title.trim()
+}
+
 /** Drafts composed and not yet sent, for the band on Land. */
 export async function pendingDrafts(): Promise<ReviewDraft[]> {
   const { drafts } = await reviewDraftStore.read()

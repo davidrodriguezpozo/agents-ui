@@ -1,5 +1,5 @@
 import type { Digest } from '~/composables/useDigest'
-import type { Pull, WorkIntent } from '~/composables/useGithubPulls'
+import { PULL_LOOK, type Pull, type WorkIntent } from '~/composables/useGithubPulls'
 import type { AttentionItem } from '~/composables/useAttention'
 import type { InboxItem, InboxSourceReading } from '~/composables/useInbox'
 import { workByPull, type PullWork, type WorkSession } from '~/utils/pullWork'
@@ -79,6 +79,15 @@ export interface NowItem {
    * the order is the design.
    */
   quiet?: boolean
+  /**
+   * A glyph and a colour of this row's own, where the kind is too coarse.
+   *
+   * `NOW_LOOK` keys on the kind, and every pull request is one kind — so a queue
+   * of eleven reviews drew eleven identical icons in identical blue, and 24px of
+   * column said nothing that told a draft from a conflict. A pull request knows
+   * better: the verdict is already eight states with a look each.
+   */
+  look?: { icon: string; colour: string }
 }
 
 /**
@@ -144,6 +153,11 @@ function pullItem(pull: Pull, work: PullWork | null): NowItem {
     // is the session holding it and not github.com.
     ...(alreadyReviewing ? { to: `/sessions/${reviewing.id}` } : { href: pull.url }),
     at: pull.updatedAt,
+    // The state it is actually in, not "this is a pull request" eleven times.
+    look: {
+      icon: PULL_LOOK[pull.verdict.state].icon,
+      colour: PULL_LOOK[pull.verdict.state].fg,
+    },
     // No button on a row you have already started. Starting a second review is
     // still possible — it is a button on Land, next to the note saying what it
     // will do — but a quick action is a claim that pressing it is the obvious

@@ -249,9 +249,18 @@ export function verdictFor(pull: Pull): PullVerdict {
     return {
       state: 'draft',
       label: 'Draft',
+      /*
+       * Said once, and without the editorial.
+       *
+       * "Still a draft, and your review was requested anyway" sat beside a badge
+       * reading `Draft` — the sentence and the badge saying the same word — and
+       * on a repository where somebody had opened nine stacked drafts it was the
+       * most-printed string on both screens. "Anyway" was also arguing with the
+       * button next to it, now that a draft is something you can review.
+       */
       detail: mine
         ? 'Not asking for review yet'
-        : 'Still a draft, and your review was requested anyway',
+        : `Asked of you by ${pull.author} before it is finished`,
       onYou: true,
     }
   }

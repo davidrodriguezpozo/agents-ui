@@ -218,10 +218,11 @@ async function resolve(item: NowItem) {
         :key="item.key"
         class="flex items-start gap-3 px-4 py-3 hover-row"
       >
+        <!-- The row's own look when it has one — see `NowItem.look`. -->
         <UIcon
-          :name="NOW_LOOK[item.kind].icon"
+          :name="item.look?.icon ?? NOW_LOOK[item.kind].icon"
           class="size-4 shrink-0 mt-0.5"
-          :style="{ color: NOW_LOOK[item.kind].colour }"
+          :style="{ color: item.look?.colour ?? NOW_LOOK[item.kind].colour }"
         />
 
         <div class="flex-1 min-w-0">
@@ -239,19 +240,20 @@ async function resolve(item: NowItem) {
           <p class="type-detail mt-0.5">{{ item.because }}</p>
         </div>
 
+        <!--
+          The button, then the time — and the time last on purpose.
+
+          With the button on the outside there is no column at all: a label is
+          "Fix CI" on one row and "Allow this from now on" on the next, so every
+          timestamp sat at whatever x that row's button left it, and the two rows
+          in eleven with no button pushed their timestamp 72px further right than
+          the other nine. Two ragged edges where the eye wanted one.
+
+          Putting the time outermost in a fixed slot makes it a real column, and
+          the buttons then right-align against it — so both edges are straight
+          however wide the labels get and whichever rows have none.
+        -->
         <div class="flex items-center gap-2 shrink-0">
-          <!--
-            For a live row, when. For one that has gone quiet, how long — and
-            not hidden on a narrow screen, because on that row it is the fact
-            that decides whether you look at it at all. "Apr 20" in a right-hand
-            column is arithmetic; "quiet 4mo" is an answer.
-          -->
-          <span
-            v-if="item.at && item.quiet"
-            class="type-mono-meta text-meta"
-            :title="`Nothing has moved on it since ${new Date(item.at).toLocaleDateString()}.`"
-          >quiet {{ agedFor(item.at) }}</span>
-          <span v-else-if="item.at" class="type-mono-meta hidden sm:inline">{{ relativeTime(item.at) }}</span>
           <UButton
             v-if="item.action"
             :label="item.action.label"
@@ -261,6 +263,23 @@ async function resolve(item: NowItem) {
             :disabled="busy !== null && busy !== item.key"
             @click="resolve(item)"
           />
+          <!--
+            For a live row, when. For one that has gone quiet, how long — and
+            not hidden on a narrow screen, because on that row it is the fact
+            that decides whether you look at it at all. "Apr 20" in a right-hand
+            column is arithmetic; "quiet 4mo" is an answer.
+          -->
+          <span
+            v-if="item.at && item.quiet"
+            class="type-mono-meta text-meta w-[66px] text-right shrink-0"
+            :title="`Nothing has moved on it since ${new Date(item.at).toLocaleDateString()}.`"
+          >quiet {{ agedFor(item.at) }}</span>
+          <span
+            v-else-if="item.at"
+            class="type-mono-meta w-[66px] text-right shrink-0 hidden sm:inline-block"
+          >{{ relativeTime(item.at) }}</span>
+          <!-- Nothing to say about when, and the column still holds its place. -->
+          <span v-else class="w-[66px] shrink-0 hidden sm:inline-block" aria-hidden="true" />
         </div>
       </li>
     </ul>

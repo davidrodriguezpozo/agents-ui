@@ -6,6 +6,39 @@ export type PullState =
 
 export type WorkIntent = 'review' | 'address' | 'fix' | 'update'
 
+/**
+ * What a pull state looks like, in the one place that decides it.
+ *
+ * `PullCard` owned this and Now did not, which is how the queue came to draw
+ * thirteen rows with the same icon in the same colour: `NOW_LOOK` keys on the
+ * *kind* of row, and every pull request is one kind. So a column 24px wide sat
+ * beside a list of drafts, conflicts and unanswered comments saying nothing that
+ * distinguished them — while two screens away the same eight states each had a
+ * glyph and a colour of their own.
+ *
+ * Shared rather than copied for the reason `verdictFor` is on the server: a
+ * second implementation of the same judgement drifts, and two plausible answers
+ * disagreeing on one screen is worse than either being absent.
+ *
+ * Red is spent only on things that are actually wrong. A pull request waiting on
+ * a reviewer is not a problem, and a page where everything is red is a page
+ * where nothing is.
+ */
+export const PULL_LOOK: Record<PullState, { fg: string; bg: string; icon: string }> = {
+  'draft': { fg: 'var(--text-tertiary)', bg: 'var(--badge-subtle-bg)', icon: 'i-lucide-git-pull-request-draft' },
+  'conflicted': { fg: 'var(--error)', bg: 'var(--error-tint)', icon: 'i-lucide-git-merge' },
+  'changes-requested': { fg: 'var(--warning)', bg: 'var(--warning-tint)', icon: 'i-lucide-message-square-warning' },
+  'unanswered': { fg: 'var(--warning)', bg: 'var(--warning-tint)', icon: 'i-lucide-message-circle-more' },
+  'checks-failing': { fg: 'var(--error)', bg: 'var(--error-tint)', icon: 'i-lucide-circle-x' },
+  'checks-running': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-loader-2' },
+  'ready': { fg: 'var(--success)', bg: 'var(--success-tint)', icon: 'i-lucide-circle-check' },
+  'awaiting-review': { fg: 'var(--accent)', bg: 'var(--accent-muted)', icon: 'i-lucide-eye' },
+  // Green, but the quiet one: you have done your part and the row is a receipt
+  // rather than a request. `--success` here would put it in the same voice as
+  // "Ready to merge", which is a thing somebody still has to press.
+  'reviewed': { fg: 'var(--text-tertiary)', bg: 'var(--badge-subtle-bg)', icon: 'i-lucide-check-check' },
+}
+
 /** Mirrors `MyReview` on the server. */
 export interface MyReview {
   state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED' | 'PENDING'
