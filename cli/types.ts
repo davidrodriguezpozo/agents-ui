@@ -14,6 +14,26 @@ export type CheckStatus = 'passing' | 'failing' | 'errored' | 'running'
 export type RunStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
 export type TrustLevel = 'readonly' | 'edits' | 'full'
 
+/**
+ * A question the agent asked, and the choices it offered.
+ *
+ * Declared here rather than imported for the reason the header gives: the
+ * browser's copy lives in `~/types` and is structurally the same, so a prompt
+ * off the wall endpoint satisfies this without either side importing the other.
+ */
+export interface QuestionOption {
+  label: string
+  description: string
+  preview?: string
+}
+
+export interface QuestionPrompt {
+  question: string
+  header: string
+  options: QuestionOption[]
+  multiSelect: boolean
+}
+
 export interface WorktreeState {
   path: string
   exists: boolean
@@ -110,6 +130,8 @@ export interface PermissionRequest {
   blockedPath?: string
   canRemember: boolean
   suggestedRules: string[]
+  /** Set when the agent asked a question rather than to use a tool. */
+  questions?: QuestionPrompt[]
   createdAt: number
 }
 

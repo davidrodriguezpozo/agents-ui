@@ -228,6 +228,11 @@ export interface Session {
   /** What the session is doing right now — see the sessions index endpoint. */
   activity: SessionActivity
   pendingPermissions: number
+  /**
+   * How many of those are questions rather than permissions. Both block the
+   * turn; only one of them is answered by saying yes.
+   */
+  pendingQuestions: number
   lastRunId: string | null
   turnCount: number
   /** False when the session belongs to a repo other than the selected folder. */

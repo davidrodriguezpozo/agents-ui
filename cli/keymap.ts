@@ -106,6 +106,11 @@ export const BINDINGS: Binding[] = [
   { id: 'session.close', keys: 'D', label: 'Close it and remove the worktree', short: 'close', surface: 'session', press: ['D'], confirm: true },
   { id: 'session.allow', keys: 'y a', label: 'Allow once · allow for this run', short: 'allow once', surface: 'session', press: ['y', 'a'] },
   { id: 'session.deny', keys: 'n N', label: 'Deny · deny and say why', short: 'deny', surface: 'session', press: ['n', 'N'] },
+  // Digits, when what the session is waiting on is a question. Printed rather
+  // than bound for the same reason as `queue.pick`: which digits mean anything
+  // depends on the question. `session.allow` and `session.deny` are re-labelled
+  // alongside it — see `hintAs`.
+  { id: 'session.pick', keys: '1-9', label: 'Choose an option', short: 'choose', surface: 'session' },
   { id: 'session.back', keys: 'esc', label: 'Back to the rail', short: 'rail', surface: 'session', press: ['esc'] },
 
   // The diff.
@@ -133,6 +138,13 @@ export const BINDINGS: Binding[] = [
   { id: 'project.default', keys: 'S', label: 'Also make it the app default', short: 'make default', surface: 'project', press: ['S'] },
 
   // The queue of waiting prompts.
+  // Digits, when the prompt is a question rather than a permission — every
+  // option in it numbered once, so one key answers. No `press` of its own:
+  // which digits are on offer depends on the question, so the handler reads
+  // them directly and this entry exists to be printed and documented. `queue.allow` and `queue.deny` are re-labelled for that case —
+  // see `hintAs` — because one key cannot be bound twice on one surface and
+  // "send the answer" is what `y` means in front of a question.
+  { id: 'queue.pick', keys: '1-9', label: 'Choose an option', short: 'choose', surface: 'queue' },
   { id: 'queue.allow', keys: 'y', label: 'Allow it, once', short: 'once', surface: 'queue', press: ['y'] },
   { id: 'queue.session', keys: 'a', label: 'Allow it for the rest of this run', short: 'for the run', surface: 'queue', press: ['a'] },
   { id: 'queue.deny', keys: 'n', label: 'Deny it', short: 'deny', surface: 'queue', press: ['n'] },
@@ -196,6 +208,12 @@ export interface Keymap {
   bindingsFor: (surface: Surface) => Binding[]
   matches: (id: string, input: string, key: KeyState) => boolean
   hint: (ids: string[]) => string
+  /**
+   * The same footer, with labels of your own — for a surface where the keys
+   * mean something else this time round. Still built from the bindings, so a
+   * rebound key moves here too and a made-up id throws.
+   */
+  hintAs: (entries: [id: string, label: string][]) => string
   keysOf: (id: string) => string
   needsConfirm: (id: string) => boolean
 }
@@ -241,6 +259,7 @@ export function createKeymap(overrides: Record<string, string> = {}): Keymap {
      * word at the widths this runs at.
      */
     hint: ids => ids.map(id => `${binding(id).keys} ${label(id)}`).join('   '),
+    hintAs: entries => entries.map(([id, text]) => `${binding(id).keys} ${text}`).join('   '),
     keysOf: id => binding(id).keys,
     needsConfirm: id => Boolean(binding(id).confirm),
   }
@@ -259,5 +278,6 @@ const DEFAULT = createKeymap()
 export const binding = DEFAULT.binding
 export const bindingsFor = DEFAULT.bindingsFor
 export const hint = DEFAULT.hint
+export const hintAs = DEFAULT.hintAs
 export const needsConfirm = DEFAULT.needsConfirm
 export const matches = DEFAULT.matches

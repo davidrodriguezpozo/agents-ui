@@ -362,6 +362,24 @@ export type StreamActivity =
   | { type: 'permission'; name: string }
   | null
 
+/** One choice on offer in a question. */
+export interface QuestionOption {
+  label: string
+  description: string
+  /** A mockup or snippet the agent sent with the option, when it sent one. */
+  preview?: string
+}
+
+/** A question the agent stopped to ask. See `server/utils/askUserQuestion`. */
+export interface QuestionPrompt {
+  question: string
+  /** Short chip, e.g. `Approach`. */
+  header: string
+  options: QuestionOption[]
+  /** Several options may be chosen at once. */
+  multiSelect: boolean
+}
+
 /** A tool call waiting on the user before the agent can continue. */
 export interface PermissionRequest {
   id: string
@@ -378,10 +396,23 @@ export interface PermissionRequest {
    * These are what a ritual can permanently allow.
    */
   suggestedRules: string[]
+  /**
+   * Set when the agent asked a question rather than asking to use a tool. Both
+   * arrive in the same queue and are answered through the same endpoint, so
+   * only what renders a prompt needs to tell them apart.
+   */
+  questions?: QuestionPrompt[]
   createdAt: number
 }
 
-export type PermissionAnswer = { behavior: 'allow'; scope?: 'once' | 'session' } | { behavior: 'deny' }
+export type PermissionAnswer =
+  | {
+      behavior: 'allow'
+      scope?: 'once' | 'session'
+      /** Chosen labels — or typed text — per question. Empty is a skip. */
+      answers?: Record<string, string[]>
+    }
+  | { behavior: 'deny'; message?: string }
 
 // ── History ───────────────────────────────────────
 

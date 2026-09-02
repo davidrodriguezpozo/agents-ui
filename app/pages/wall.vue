@@ -554,7 +554,15 @@ function sessionMenu(row: WallRowData) {
   // Only what this row can actually do right now. An "Allow" on a row nothing is
   // asking about is a menu teaching you not to read it.
   const act: ContextMenuItem[] = []
-  if (prompt) {
+  // A question is answered in the session, not from a menu: allowing it sends
+  // no answer, and the options are the point. See `askUserQuestion`.
+  if (prompt?.questions?.length) {
+    act.push({
+      label: 'Answer the question',
+      icon: 'i-lucide-message-circle-question',
+      to: `/sessions/${row.sessionId}`,
+    })
+  } else if (prompt) {
     act.push(
       {
         label: 'Allow once',

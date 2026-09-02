@@ -59,12 +59,18 @@ export default defineEventHandler(async (event) => {
   const runs = await mapLimit(sessions, AT_ONCE, async (session) => {
     const lastRunId = session.runIds.at(-1)
     const lastRun = lastRunId ? getActive(lastRunId)?.run ?? await readRun(lastRunId) : null
-    const pending = lastRunId ? listPending(lastRunId).length : 0
+    const waiting = lastRunId ? listPending(lastRunId) : []
+    const pending = waiting.length
+    // Counted apart because "waiting for permission" is the wrong sentence for
+    // a session that stopped to ask you something — see `askUserQuestion`. Both
+    // block the turn the same way, which is why they share `pending`.
+    const questions = waiting.filter(request => request.questions?.length).length
 
     return {
       lastRunId: lastRunId ?? null,
       status: lastRun?.status ?? null,
       pending,
+      questions,
       live: pending > 0 || lastRun?.status === 'running' || lastRun?.status === 'queued',
     }
   })
@@ -91,7 +97,7 @@ export default defineEventHandler(async (event) => {
 
   const rows = sessions.map((session, index) => {
     const { status: worktree, fingerprint } = states[index]!
-    const { lastRunId, status, pending } = runs[index]!
+    const { lastRunId, status, pending, questions } = runs[index]!
 
     let activity: SessionActivity = 'idle'
     if (!worktree.exists) activity = 'missing'
@@ -138,6 +144,7 @@ export default defineEventHandler(async (event) => {
         drifted: Boolean(driftedTo),
       }),
       pendingPermissions: pending,
+      pendingQuestions: questions,
       lastRunId,
       turnCount: session.runIds.length,
       // Everything is returned so nothing is silently hidden, but the caller is

@@ -61,6 +61,11 @@ export interface Session {
   reviewOf?: { number: number; headSha: string }
   /** What GitHub says about that pull request now. */
   prNews?: { at: number; number: number; state: 'OPEN' | 'CLOSED' | 'MERGED'; headSha: string }
+  /**
+   * How many of the prompts blocking it are questions rather than permissions.
+   * `workList` reads it to say which of the two the row is waiting on.
+   */
+  pendingQuestions?: number
   updatedAt: number
   summary?: { text: string }
   branch?: string
