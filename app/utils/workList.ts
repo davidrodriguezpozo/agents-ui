@@ -240,7 +240,13 @@ export function fromSession(session: Session): WorkItem {
       case 'working':
         return ['running', 'Working']
       case 'needs-you':
-        if (session.activity === 'awaiting-permission') return ['needs-you', 'Waiting for permission']
+        if (session.activity === 'awaiting-permission') {
+          // A question and a permission stop a turn in the same way and are not
+          // the same thing to come back to, so the row says which it is.
+          return session.pendingQuestions
+            ? ['needs-you', 'Waiting on your answer']
+            : ['needs-you', 'Waiting for permission']
+        }
         if (session.activity === 'failed') return ['failed', 'Its last turn failed']
         // Finished, and does not work — which is not the same as failing to run.
         return ['needs-you', 'Checks fail']

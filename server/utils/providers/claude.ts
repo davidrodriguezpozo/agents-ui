@@ -78,6 +78,12 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
         patch({ suggestedRules: mergeRules(run.suggestedRules ?? [], request.suggestedRules) })
       }
 
+      // A question is not a permission, and the two branches below would both
+      // get it wrong: Auto would answer it by allowing it, which tells the
+      // agent nobody answered, and the unattended refusal would talk about
+      // approving a tool. See `askUserQuestion`.
+      const asking = Boolean(request.questions?.length)
+
       // Checked before everything below, including the unattended refusal: a
       // session someone deliberately set to Auto has said what it wants, and a
       // repair turn on it should not be refused for the crime of running while
@@ -89,7 +95,12 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
       // session stops asking, not that every command it happened to run gets
       // written into settings on disk. Answering each call costs nothing worth
       // measuring and leaves nothing behind.
-      if (await nowTrustedFully(run.sessionId)) {
+      //
+      // Never for a question. Auto is a statement about permission — this
+      // session stops stopping to ask whether it may — and a question is the
+      // one thing in this callback that is not asking whether it may. Allowing
+      // it with no answers is exactly the bug this whole path exists to fix.
+      if (!asking && await nowTrustedFully(run.sessionId)) {
         answerPermission(request.id, { behavior: 'allow', scope: 'once' })
         return
       }
@@ -98,14 +109,28 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
       // minute timeout would stall the ritual and then deny anyway, so refuse
       // immediately and flag the run — the person can rerun it themselves.
       if (turn.unattended) {
+        // Flagged either way, because either way the run did less than it was
+        // asked to. But a question is not a denied tool: `deniedTools` is what
+        // the digest reports as refused and what a lesson proposal offers to
+        // grant, and neither sentence is true of a question nobody was there
+        // to answer.
         patch({
           needsAttention: true,
-          deniedTools: [...new Set([...(run.deniedTools ?? []), request.toolName])],
+          ...(asking
+            ? {}
+            : { deniedTools: [...new Set([...(run.deniedTools ?? []), request.toolName])] }),
         })
-        answerPermission(request.id, {
-          behavior: 'deny',
-          message: `"${request.toolName}" needs your approval, and this ran on a schedule with nobody watching. Run it yourself to approve.`,
-        })
+        answerPermission(request.id, asking
+          // Allowed with nothing in it, which is how the CLI says a question
+          // went unanswered. A refusal would end the turn on an error; being
+          // told nobody is there leaves it free to pick the option it thinks
+          // best and say so, which is the useful outcome for work that fired
+          // at 08:45 at nobody.
+          ? { behavior: 'allow' }
+          : {
+              behavior: 'deny',
+              message: `"${request.toolName}" needs your approval, and this ran on a schedule with nobody watching. Run it yourself to approve.`,
+            })
         return
       }
 
@@ -115,7 +140,9 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
       void notify(
         'needsYou',
         `${run.title} needs you`,
-        `Waiting for approval to use ${request.toolName}.`,
+        asking
+          ? request.questions?.[0]?.question ?? 'Waiting for an answer to a question.'
+          : `Waiting for approval to use ${request.toolName}.`,
         runPath(run),
       )
     },

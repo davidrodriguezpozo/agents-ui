@@ -526,6 +526,99 @@ describe('the prompt queue', () => {
     expect(record.answers).toEqual([{ id: 'p1', behavior: 'deny', opts: { message: 'use bun' } }])
   })
 
+  /**
+   * A question is not a permission, and answering it with "allow" sends no
+   * answer at all — see `server/utils/askUserQuestion`. In a terminal the
+   * options are numbered, so the answer is a keystroke.
+   */
+  const withQuestion = {
+    wall: async (): Promise<never> => ({
+      at: 10,
+      tiles: [tile({
+        prompts: [{
+          id: 'q1',
+          toolName: 'AskUserQuestion',
+          input: {},
+          canRemember: false,
+          at: 1,
+          questions: [{
+            question: 'Tabs or spaces?',
+            header: 'Indent',
+            multiSelect: false,
+            options: [
+              { label: 'Tabs', description: 'Wider' },
+              { label: 'Spaces', description: 'Narrower' },
+            ],
+          }],
+        }],
+      })],
+      ticker: [],
+      upcoming: [],
+      landedToday: [],
+      spend: { todayUsd: 0, capUsd: null },
+      quota: null,
+      day: { runs: 1, failed: 0, lastHour: 1 },
+      liveSessions: 1,
+      pausedRituals: 0,
+    } as never),
+  } as Partial<Api>
+
+  it('shows a question as its options, numbered', async () => {
+    const { stdin, stdout } = await mount(withQuestion)
+
+    stdin.write('Y')
+    await settle()
+
+    expect(stdout.screen).toContain('wants to ask you something')
+    expect(stdout.screen).toContain('Tabs or spaces?')
+    expect(stdout.screen).toContain('1  Tabs')
+    expect(stdout.screen).toContain('2  Spaces')
+    // The footer says what the keys do here, which is not "allow once".
+    expect(stdout.screen).toContain('send')
+    expect(stdout.screen).not.toContain('once')
+  })
+
+  it('answers a question with a digit and sends it with one key', async () => {
+    const record: Recorded = { answers: [], started: [] }
+    const { stdin, stdout } = await mount(withQuestion, record)
+
+    stdin.write('Y')
+    await settle()
+    stdin.write('2')
+    await settle()
+    // Picked, and not sent yet — the agent hears nothing until you say so.
+    expect(stdout.screen).toContain('● 2  Spaces')
+    expect(record.answers).toEqual([])
+
+    stdin.write('y')
+    await settle()
+
+    expect(record.answers).toEqual([{
+      id: 'q1',
+      behavior: 'allow',
+      opts: { answers: { 'Tabs or spaces?': ['Spaces'] } },
+    }])
+  })
+
+  it('will not send an answer nobody gave', async () => {
+    const record: Recorded = { answers: [], started: [] }
+    const { stdin, stdout } = await mount(withQuestion, record)
+
+    stdin.write('Y')
+    await settle()
+    stdin.write('y')
+    await settle()
+
+    // Still there, because `y` with nothing picked is not an answer.
+    expect(record.answers).toEqual([])
+    expect(stdout.screen).toContain('Tabs or spaces?')
+
+    // `n` is how you say you are not answering it, which the agent is told.
+    stdin.write('n')
+    await settle()
+    expect(record.answers).toEqual([{ id: 'q1', behavior: 'allow', opts: {} }])
+  })
+
   it('says so plainly when there is nothing to answer', async () => {
     const { stdin, stdout } = await mount()
     stdin.write('Y')

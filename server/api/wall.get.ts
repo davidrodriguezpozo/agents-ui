@@ -3,6 +3,7 @@ import { readSessions, type Session } from '../utils/sessions'
 import { getActive, readRun, runsSince, type Run } from '../utils/runStore'
 import { listPending } from '../utils/permissionBroker'
 import { compactInput, latestStep, recentSteps } from '../utils/turnActivity'
+import { compactQuestions } from '../utils/askUserQuestion'
 import { spentSince, startOfToday } from '../utils/budget'
 import { readPreferences } from '../utils/preferences'
 import { describeWindow, isStale, readQuota, resetsAtMs } from '../utils/quota'
@@ -213,6 +214,10 @@ export default defineEventHandler(async (): Promise<WallSnapshot> => {
         input: compactInput(request.input),
         rule: request.suggestedRules?.[0],
         canRemember: request.canRemember,
+        // `compactInput` drops nested structures, so the questions would not
+        // survive the trip inside `input` — and without them a question reads
+        // on the wall as a request to use a tool called AskUserQuestion.
+        ...(request.questions?.length ? { questions: compactQuestions(request.questions) } : {}),
         at: request.createdAt,
       })),
       // Only while it is live: a run id on a finished turn is a cancel button

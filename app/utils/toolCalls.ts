@@ -43,6 +43,14 @@ function anyField(input: unknown): string | undefined {
   return undefined
 }
 
+/** The text of the first question in an `AskUserQuestion` call, if it has one. */
+function firstQuestion(input: unknown): string | undefined {
+  if (!input || typeof input !== 'object') return undefined
+  const questions = (input as Record<string, unknown>).questions
+  if (!Array.isArray(questions)) return undefined
+  return field(questions[0], 'question')
+}
+
 /**
  * Paths are absolute inside a worktree, and the worktree path is long and the
  * same for every line. What distinguishes one step from another is the tail.
@@ -86,6 +94,10 @@ export function describeToolCall(call: ToolCallLike, root?: string): ToolActivit
       return { verb: 'Searched the web for', target: field(input, 'query') ?? '', icon: 'i-lucide-globe', writes: false }
     case 'TodoWrite':
       return { verb: 'Updated the plan', target: '', icon: 'i-lucide-list-checks', writes: false }
+    case 'AskUserQuestion':
+      // The one tool whose input is a question rather than a target, so the
+      // question itself is the only thing worth putting on the row.
+      return { verb: 'Asked', target: firstQuestion(input) ?? '', icon: 'i-lucide-message-circle-question', writes: false }
     default:
       // Unknown tools still say something, rather than rendering as a blank row.
       return { verb: toolName, target: anyField(input) ?? '', icon: 'i-lucide-wrench', writes: false }
@@ -133,6 +145,7 @@ const PRESENT: Record<string, string> = {
   WebFetch: 'fetch',
   WebSearch: 'search the web for',
   TodoWrite: 'update the plan',
+  AskUserQuestion: 'ask you something',
 }
 
 export function presentVerb(toolName: string): string {

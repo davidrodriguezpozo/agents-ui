@@ -11,7 +11,7 @@ function session(over: Partial<Session> = {}): Session {
     id: 'a', title: 'a session', repoDir: '/r', worktreePath: '/w',
     branch: 'feature-a', baseBranch: 'main', baseSha: 'sha',
     status: 'idle', runIds: [], createdAt: 0, updatedAt: 100,
-    activity: 'idle', pendingPermissions: 0, lastRunId: null, turnCount: 2,
+    activity: 'idle', pendingPermissions: 0, pendingQuestions: 0, lastRunId: null, turnCount: 2,
     inCurrentProject: true,
     worktree: { path: '/w', exists: true, branch: 'feature-a', changedFiles: 0, dirty: false, ahead: 0, behind: 0 },
     ...over,
@@ -85,6 +85,10 @@ describe('a session says where it got to in its own words', () => {
 
   it('tells a blocked permission apart from a failed turn and a failing check', () => {
     expect(fromSession(session({ activity: 'awaiting-permission' })).outcome).toBe('Waiting for permission')
+    // A question stops the turn the same way and is not the same thing to
+    // come back to — see `server/utils/askUserQuestion`.
+    expect(fromSession(session({ activity: 'awaiting-permission', pendingQuestions: 1 })).outcome)
+      .toBe('Waiting on your answer')
     expect(fromSession(session({ activity: 'failed' })).outcome).toBe('Its last turn failed')
     expect(fromSession(session({ check: { status: 'failing' } } as Partial<Session>)).outcome).toBe('Checks fail')
   })

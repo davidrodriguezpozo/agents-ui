@@ -280,7 +280,7 @@ export function App({
   const answerFromQueue = useCallback(async (
     waiting: Waiting,
     behavior: 'allow' | 'deny',
-    opts: { scope?: 'once' | 'session'; message?: string } = {},
+    opts: { scope?: 'once' | 'session'; message?: string; answers?: Record<string, string[]> } = {},
   ) => {
     setAnswered(current => [...current, waiting.prompt.id])
     const ok = await jobs.run(

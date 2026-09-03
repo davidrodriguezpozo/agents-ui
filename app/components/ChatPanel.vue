@@ -73,11 +73,13 @@ const TOOL_LABELS: Record<string, string> = {
 }
 
 const statusText = computed(() => {
+  // A question is answered, not approved, so the two do not read the same.
+  if (pendingPermissions.value.some(p => p.questions?.length)) return 'Needs your answer'
   if (pendingPermissions.value.length) return 'Needs your OK'
   if (!isStreaming.value) return messages.value.length ? 'Ready' : 'Online'
   const a = activity.value
   if (!a) return 'Starting' + '.'.repeat(streamingDots.value)
-  if (a.type === 'permission') return 'Needs your OK'
+  if (a.type === 'permission') return a.name === 'AskUserQuestion' ? 'Needs your answer' : 'Needs your OK'
   if (a.type === 'thinking') return 'Thinking' + '.'.repeat(streamingDots.value)
   if (a.type === 'tool') return (TOOL_LABELS[a.name] || a.name) + '.'.repeat(streamingDots.value)
   if (a.type === 'writing') return 'Responding' + '.'.repeat(streamingDots.value)

@@ -1,4 +1,5 @@
 import type { CheckStatus, SessionActivity } from '~/composables/useSessions'
+import type { QuestionPrompt } from '~/types'
 
 /**
  * How a session's work got into the base branch. Mirrors `landed.ts` on the
@@ -57,6 +58,12 @@ export interface WallPrompt {
   rule?: string
   /** Whether "allow for the rest of this run" is a meaningful answer. */
   canRemember: boolean
+  /**
+   * Set when the agent asked a question rather than asking to use a tool.
+   * Previews are stripped on the way here — see `compactQuestions` — so this is
+   * enough to answer a question but not always enough to weigh one.
+   */
+  questions?: QuestionPrompt[]
   at: number
 }
 

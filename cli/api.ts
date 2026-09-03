@@ -115,7 +115,7 @@ export function createApi(client: StudioClient) {
     answerPermission: (
       id: string,
       behavior: 'allow' | 'deny',
-      opts: { scope?: 'once' | 'session'; message?: string } = {},
+      opts: { scope?: 'once' | 'session'; message?: string; answers?: Record<string, string[]> } = {},
     ) =>
       client.request(`/api/permissions/${encodeURIComponent(id)}`, {
         method: 'POST',
@@ -123,6 +123,10 @@ export function createApi(client: StudioClient) {
           behavior,
           scope: behavior === 'allow' ? (opts.scope ?? 'once') : undefined,
           message: behavior === 'deny' ? opts.message : undefined,
+          // Answers to a question, which is allowed rather than approved: the
+          // agent reads them out of the tool input it was handed back. Nothing
+          // in them means anything for an ordinary permission.
+          answers: behavior === 'allow' ? opts.answers : undefined,
         },
       }),
 

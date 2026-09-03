@@ -1,7 +1,16 @@
 import { Box, Text, useInput } from 'ink'
 import { useState } from 'react'
 import { plain, toLines } from '../format'
-import { canRemember, promptDetail, promptHeadline, type Waiting } from '../prompts'
+import {
+  answersFrom,
+  canRemember,
+  isQuestion,
+  pickOption,
+  promptDetail,
+  promptHeadline,
+  type Picked,
+  type Waiting,
+} from '../prompts'
 import { TextField } from './components'
 import { useStudio } from './context'
 import { ACCENT } from './theme'
@@ -34,7 +43,7 @@ export function PromptQueue({
   onAnswer: (
     waiting: Waiting,
     behavior: 'allow' | 'deny',
-    opts?: { scope?: 'once' | 'session'; message?: string },
+    opts?: { scope?: 'once' | 'session'; message?: string; answers?: Record<string, string[]> },
   ) => void
   onLeave: () => void
   onOpen: (sessionId: string) => void
@@ -43,8 +52,16 @@ export function PromptQueue({
   const [at, setAt] = useState(0)
   const [reason, setReason] = useState('')
   const [asking, setAsking] = useState(false)
+  /**
+   * What has been picked, per prompt id rather than per question — the queue
+   * moves under you as other prompts arrive and are answered, and a selection
+   * keyed only by the question would follow the cursor onto somebody else's.
+   */
+  const [picked, setPicked] = useState<Record<string, Picked>>({})
 
   const waiting = queue[Math.min(at, Math.max(0, queue.length - 1))]
+  const question = waiting ? isQuestion(waiting.prompt) : false
+  const chosen = waiting ? picked[waiting.prompt.id] ?? {} : {}
 
   useInput((input, key) => {
     if (!waiting) {
@@ -52,15 +69,37 @@ export function PromptQueue({
       return
     }
 
-    if (keys.matches('queue.allow', input, key)) return answer('allow', { scope: 'once' })
-    if (keys.matches('queue.session', input, key) && canRemember(waiting.prompt)) {
-      return answer('allow', { scope: 'session' })
+    // A question, answered with the digits its options are numbered with. `y`
+    // sends what is picked and `n` says nobody is answering it, which is a real
+    // answer — the agent is told the questions went unanswered and decides for
+    // itself, where a denial would hand it an error instead.
+    if (question) {
+      if (/^[1-9]$/.test(input)) {
+        const next = pickOption(waiting.prompt.questions ?? [], chosen, Number(input))
+        setPicked(current => ({ ...current, [waiting.prompt.id]: next }))
+        return
+      }
+      if (keys.matches('queue.allow', input, key)) {
+        const answers = answersFrom(chosen)
+        // Nothing picked yet is not an answer worth sending: `n` is how you say
+        // you are not answering, and it says so on the line below.
+        if (!Object.keys(answers).length) return
+        return answer('allow', { answers })
+      }
+      if (keys.matches('queue.deny', input, key)) return answer('allow')
     }
-    if (keys.matches('queue.deny', input, key)) return answer('deny')
-    if (keys.matches('queue.reason', input, key)) {
-      setReason('')
-      setAsking(true)
-      return
+
+    if (!question) {
+      if (keys.matches('queue.allow', input, key)) return answer('allow', { scope: 'once' })
+      if (keys.matches('queue.session', input, key) && canRemember(waiting.prompt)) {
+        return answer('allow', { scope: 'session' })
+      }
+      if (keys.matches('queue.deny', input, key)) return answer('deny')
+      if (keys.matches('queue.reason', input, key)) {
+        setReason('')
+        setAsking(true)
+        return
+      }
     }
     // Skipping moves past it without answering: the next one may be the one you
     // know the answer to, and coming back to this is what the rail is for.
@@ -78,10 +117,12 @@ export function PromptQueue({
 
   function answer(
     behavior: 'allow' | 'deny',
-    opts: { scope?: 'once' | 'session'; message?: string } = {},
+    opts: { scope?: 'once' | 'session'; message?: string; answers?: Record<string, string[]> } = {},
   ) {
     if (!waiting) return
     onAnswer(waiting, behavior, opts)
+    // Nothing left to pick for one that has been answered.
+    setPicked(({ [waiting.prompt.id]: _answered, ...rest }) => rest)
     // Not advancing the index: the answered one leaves the queue, so the next
     // one arrives at the same place. Advancing as well would skip it.
   }
@@ -104,7 +145,7 @@ export function PromptQueue({
   }
 
   const remaining = queue.length
-  const detail = promptDetail(waiting.prompt, undefined, Math.max(4, height - 10))
+  const detail = promptDetail(waiting.prompt, undefined, Math.max(4, height - 10), chosen)
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -157,9 +198,19 @@ export function PromptQueue({
       ) : (
         <Box paddingTop={1}>
           <Text color="gray" wrap="truncate">
-            {keys.hint(canRemember(waiting.prompt)
-              ? ['queue.allow', 'queue.session', 'queue.deny', 'queue.reason', 'queue.skip', 'queue.open', 'queue.leave']
-              : ['queue.allow', 'queue.deny', 'queue.reason', 'queue.skip', 'queue.open', 'queue.leave'])}
+            {question
+              // The same keys, doing what they mean in front of a question.
+              ? keys.hintAs([
+                  ['queue.pick', 'choose'],
+                  ['queue.allow', 'send'],
+                  ['queue.deny', 'do not answer'],
+                  ['queue.skip', 'skip'],
+                  ['queue.open', 'open'],
+                  ['queue.leave', 'leave'],
+                ])
+              : keys.hint(canRemember(waiting.prompt)
+                  ? ['queue.allow', 'queue.session', 'queue.deny', 'queue.reason', 'queue.skip', 'queue.open', 'queue.leave']
+                  : ['queue.allow', 'queue.deny', 'queue.reason', 'queue.skip', 'queue.open', 'queue.leave'])}
           </Text>
         </Box>
       )}

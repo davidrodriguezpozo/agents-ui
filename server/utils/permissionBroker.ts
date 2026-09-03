@@ -1,5 +1,12 @@
 import type { CanUseTool, PermissionResult, PermissionUpdate } from '@anthropic-ai/claude-agent-sdk'
 import { rulesFromSuggestions } from './permissionRules'
+import {
+  ASK_USER_QUESTION,
+  parseQuestions,
+  withAnswers,
+  type QuestionAnswers,
+  type QuestionPrompt,
+} from './askUserQuestion'
 
 /**
  * A tool call the agent cannot make until someone says yes.
@@ -25,11 +32,24 @@ export interface PermissionRequest {
    * a ritual can be granted permanently, so they outlive the prompt itself.
    */
   suggestedRules: string[]
+  /**
+   * Set when this is `AskUserQuestion` — a question rather than a tool call to
+   * approve. Everything that renders a prompt branches on this, and everything
+   * that routes one deliberately does not: it is the same queue, the same id
+   * and the same answer endpoint, because being asked something and being asked
+   * for permission block a run in exactly the same way. See `askUserQuestion`.
+   */
+  questions?: QuestionPrompt[]
   createdAt: number
 }
 
 export type PermissionDecision =
-  | { behavior: 'allow'; scope?: 'once' | 'session' }
+  | {
+      behavior: 'allow'
+      scope?: 'once' | 'session'
+      /** Answers to a question prompt. Absent, or empty, is a skip. */
+      answers?: QuestionAnswers
+    }
   | { behavior: 'deny'; message?: string }
 
 interface Pending {
@@ -48,6 +68,18 @@ const pending = new Map<string, Pending>()
  * the UI unblocks, rather than hanging until the server restarts.
  */
 export const PERMISSION_TIMEOUT_MS = 10 * 60_000
+
+/**
+ * A question waits longer than a permission, because it is worth more.
+ *
+ * Ten minutes is sized for someone who is at the keyboard and looking at the
+ * run. A question is the opposite case: the agent has stopped to ask which of
+ * two approaches to take, and the answer is worth walking back to a desk for.
+ * Denying it throws away the turn that produced the question, so the deadline
+ * is an hour and the CLI, which parks a question indefinitely by default, is
+ * happy to wait.
+ */
+export const QUESTION_TIMEOUT_MS = 60 * 60_000
 
 let seq = 0
 
@@ -68,12 +100,20 @@ export function createPermissionBroker(options: {
   onRequest: (request: PermissionRequest) => void
   onSettled?: (request: PermissionRequest, decision: PermissionDecision) => void
   timeoutMs?: number
+  questionTimeoutMs?: number
 }): PermissionBroker {
-  const { ownerId, onRequest, onSettled, timeoutMs = PERMISSION_TIMEOUT_MS } = options
+  const {
+    ownerId,
+    onRequest,
+    onSettled,
+    timeoutMs = PERMISSION_TIMEOUT_MS,
+    questionTimeoutMs = QUESTION_TIMEOUT_MS,
+  } = options
   const owned = new Set<string>()
 
   const canUseTool: CanUseTool = (toolName, input, ctx) => {
     const id = `${ownerId}--${seq++}`
+    const questions = toolName === ASK_USER_QUESTION ? parseQuestions(input) : []
     const request: PermissionRequest = {
       id,
       ownerId,
@@ -82,8 +122,13 @@ export function createPermissionBroker(options: {
       toolUseId: ctx.toolUseID,
       decisionReason: ctx.decisionReason,
       blockedPath: ctx.blockedPath,
-      canRemember: Boolean(ctx.suggestions?.length),
-      suggestedRules: rulesFromSuggestions(ctx.suggestions),
+      // Nothing about a question can be remembered. "Always allow
+      // AskUserQuestion" would grant the right to be asked, which nobody wants
+      // and which the CLI would then stop asking about — so the offer is never
+      // made, whatever the CLI suggested alongside it.
+      canRemember: questions.length ? false : Boolean(ctx.suggestions?.length),
+      suggestedRules: questions.length ? [] : rulesFromSuggestions(ctx.suggestions),
+      ...(questions.length ? { questions } : {}),
       createdAt: Date.now(),
     }
 
@@ -106,12 +151,20 @@ export function createPermissionBroker(options: {
         message: 'The run was stopped before this tool was approved.',
       })
 
-      const timer = setTimeout(() => settle({
-        behavior: 'deny',
-        message: `Nobody answered the permission prompt for ${toolName} within ${
-          Math.round(timeoutMs / 60_000)
-        } minutes, so it was denied. Explain what you needed and stop.`,
-      }), timeoutMs)
+      const deadline = questions.length ? questionTimeoutMs : timeoutMs
+      const timer = setTimeout(() => settle(questions.length
+        ? {
+            behavior: 'deny',
+            message: `Nobody answered your question within ${
+              Math.round(deadline / 60_000)
+            } minutes. Say what you needed to know and stop.`,
+          }
+        : {
+            behavior: 'deny',
+            message: `Nobody answered the permission prompt for ${toolName} within ${
+              Math.round(deadline / 60_000)
+            } minutes, so it was denied. Explain what you needed and stop.`,
+          }), deadline)
       // A waiting prompt should not keep the process alive on its own.
       ;(timer as { unref?: () => void }).unref?.()
 
@@ -146,7 +199,16 @@ export function createPermissionBroker(options: {
 export function answerPermission(id: string, decision: PermissionDecision): boolean {
   const entry = pending.get(id)
   if (!entry) return false
-  entry.settle(decision)
+
+  // A question is answered once and never remembered: `session` scope hands the
+  // CLI's own suggestions back as permission updates, and for a question those
+  // would buy the right to ask without being asked, which is not a thing anyone
+  // means to grant. Stripped here rather than trusted from a request body.
+  const answer: PermissionDecision = entry.request.questions?.length && decision.behavior === 'allow'
+    ? { behavior: 'allow', ...(decision.answers ? { answers: decision.answers } : {}) }
+    : decision
+
+  entry.settle(answer)
   return true
 }
 
@@ -170,9 +232,11 @@ function toResult(
 
   return {
     behavior: 'allow',
-    // The CLI validates an allow against a schema that requires this. Nothing
-    // here rewrites the call, so it goes back exactly as it came in.
-    updatedInput: input,
+    // The CLI validates an allow against a schema that requires this. For
+    // anything but a question nothing here rewrites the call, so it goes back
+    // exactly as it came in; a question's answers are the one thing that has
+    // to travel this way — see `askUserQuestion`.
+    updatedInput: decision.answers ? withAnswers(input, decision.answers) : input,
     // "Allow for this run" is exactly what the CLI's own suggestions encode, so
     // handing them straight back stops it asking again for the same thing.
     ...(decision.scope === 'session' && suggestions?.length

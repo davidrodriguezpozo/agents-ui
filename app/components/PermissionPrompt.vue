@@ -8,6 +8,15 @@ const props = defineProps<{
 
 const emit = defineEmits<{ answer: [decision: PermissionAnswer]; remember: [rule: string] }>()
 
+/**
+ * A question comes through the same queue as a permission — see
+ * `server/utils/askUserQuestion` — and is handed straight on to the component
+ * that can render it. Done here rather than at each of the four places that
+ * render this one, so a question appears wherever a prompt already did: the
+ * session view, the run page, the manager chat and the Studio's test panel.
+ */
+const isQuestion = computed(() => Boolean(props.request.questions?.length))
+
 const { describeRule } = usePermissionRuleLabels()
 
 /**
@@ -49,7 +58,15 @@ const detail = computed(() => {
 </script>
 
 <template>
+  <AgentQuestions
+    v-if="isQuestion"
+    :request="request"
+    :busy="busy"
+    @answer="emit('answer', $event)"
+  />
+
   <div
+    v-else
     class="rounded-lg overflow-hidden"
     style="background: var(--surface-raised); border: 1px solid var(--accent-glow);"
   >

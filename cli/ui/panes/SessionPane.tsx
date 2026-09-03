@@ -4,7 +4,7 @@ import { sessionBadge } from '~/utils/sessionBadge'
 import { anchorsFor, renderPatch } from '../../diffTool'
 import { fileAt, patchFiles, patchSummary, stepFile } from '../../diff'
 import { compactAge, plain, spinnerFrame, toneForBadge, toneForDiffLine, windowOf } from '../../format'
-import { promptDetail, promptHeadline } from '../../prompts'
+import { answersFrom, isQuestion, pickOption, promptDetail, promptHeadline, type Picked } from '../../prompts'
 import { followRun, type LiveRun } from '../../runStream'
 import { composeInEditor, defaultEditor, defaultShell, runInTty } from '../../shell'
 import { displayTurns, transcriptLines, type TranscriptLine } from '../../transcript'
@@ -60,6 +60,8 @@ export function SessionPane({
   const [overlay, setOverlay] = useState<Overlay | null>(null)
   const [answered, setAnswered] = useState<string[]>([])
   const [reason, setReason] = useState('')
+  /** Options picked so far, per prompt id — see the queue, which does the same. */
+  const [picked, setPicked] = useState<Record<string, Picked>>({})
   /**
    * The turns whose steps are open.
    *
@@ -190,6 +192,32 @@ export function SessionPane({
         if (input === 'n' || key.escape) setOverlay(null)
       }
       return
+    }
+
+    // A question, not a permission: the options are numbered and a digit picks
+    // one, `y` sends what is picked, `n` says nobody is answering — which the
+    // agent hears as the questions going unanswered, leaving it free to decide.
+    // See `server/utils/askUserQuestion`.
+    if (prompt && isQuestion(prompt)) {
+      const chosen = picked[prompt.id] ?? {}
+      if (/^[1-9]$/.test(input)) {
+        const next = pickOption(prompt.questions ?? [], chosen, Number(input))
+        setPicked(current => ({ ...current, [prompt.id]: next }))
+        return
+      }
+      // Both keys of each pair, because for a question the pair collapses:
+      // there is nothing to remember about an answer, and "not answering" has
+      // no reason to give. So `y`/`a` both send and `n`/`N` both decline, which
+      // is what the footer says they do.
+      if (input === 'y' || input === 'a') {
+        const answers = answersFrom(chosen)
+        if (!Object.keys(answers).length) return
+        return void answer(prompt, 'allow', { answers })
+      }
+      if (input === 'n' || input === 'N') return void answer(prompt, 'allow')
+      // Everything else falls through on purpose: being asked a question is not
+      // a reason to lose `esc`, `x` or the scroll keys. The permission block
+      // below only claims these same four keys, so it does nothing here.
     }
 
     if (prompt) {
@@ -329,9 +357,11 @@ export function SessionPane({
   async function answer(
     request: PermissionRequest,
     behavior: 'allow' | 'deny',
-    opts: { scope?: 'once' | 'session'; message?: string } = {},
+    opts: { scope?: 'once' | 'session'; message?: string; answers?: Record<string, string[]> } = {},
   ) {
     setAnswered(current => [...current, request.id])
+    // Nothing left to pick for one that has been answered.
+    setPicked(({ [request.id]: _answered, ...rest }) => rest)
     const ok = await jobs.run(
       `permission:${request.id}`,
       null,
@@ -579,12 +609,21 @@ export function SessionPane({
             />
           ) : (
             <Box flexDirection="column">
-              {promptDetail(prompt, session.worktreePath, 6).map((line, i) => (
+              {promptDetail(prompt, session.worktreePath, isQuestion(prompt) ? 12 : 6, picked[prompt.id] ?? {}).map((line, i) => (
                 <Text key={i} color={line.tone === 'cyan' ? ACCENT : line.tone} wrap="truncate">
                   {line.text}
                 </Text>
               ))}
-              <Text color="gray">{keys.hint(['session.allow', 'session.deny'])}</Text>
+              <Text color="gray">
+                {isQuestion(prompt)
+                  // The same two keys, doing what they mean in front of a question.
+                  ? keys.hintAs([
+                      ['session.pick', 'choose'],
+                      ['session.allow', 'send'],
+                      ['session.deny', 'do not answer'],
+                    ])
+                  : keys.hint(['session.allow', 'session.deny'])}
+              </Text>
             </Box>
           )}
         />

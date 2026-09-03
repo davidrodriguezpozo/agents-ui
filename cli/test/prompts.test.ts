@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { canRemember, promptDetail, promptHeadline, waitingPrompts } from '../prompts'
+import {
+  answersFrom,
+  canRemember,
+  isQuestion,
+  numberedOptions,
+  pickOption,
+  promptDetail,
+  promptHeadline,
+  questionLines,
+  waitingPrompts,
+  type QueuedPrompt,
+} from '../prompts'
 
 function tile(over: Record<string, unknown> = {}) {
   return {
@@ -17,7 +28,7 @@ function tile(over: Record<string, unknown> = {}) {
   } as never
 }
 
-function prompt(over: Record<string, unknown> = {}) {
+function prompt(over: Partial<QueuedPrompt & { at: number }> = {}): QueuedPrompt & { at: number } {
   return {
     id: 'p1',
     toolName: 'Bash',
@@ -96,5 +107,141 @@ describe('canRemember', () => {
   it('is the broker’s answer, so `a` is an offer rather than a lie', () => {
     expect(canRemember(prompt())).toBe(true)
     expect(canRemember(prompt({ canRemember: false }))).toBe(false)
+  })
+})
+
+/**
+ * A question in the terminal.
+ *
+ * It arrives in the same queue as a permission — see
+ * `server/utils/askUserQuestion` — and the queue is a good place to answer one:
+ * the options are numbered, so the answer is a digit. What it must not do is
+ * offer `y  allow once`, which sends no answer at all and tells the agent
+ * nobody was there.
+ */
+function asking(over: Partial<QueuedPrompt & { at: number }> = {}): QueuedPrompt & { at: number } {
+  return {
+    id: 'q1',
+    toolName: 'AskUserQuestion',
+    input: {},
+    canRemember: false,
+    at: 100,
+    questions: [
+      {
+        question: 'Tabs or spaces?',
+        header: 'Indent',
+        multiSelect: false,
+        options: [
+          { label: 'Tabs', description: 'Wider' },
+          { label: 'Spaces', description: 'Narrower' },
+        ],
+      },
+      {
+        question: 'Which linters?',
+        header: 'Linters',
+        multiSelect: true,
+        options: [
+          { label: 'eslint', description: '' },
+          { label: 'biome', description: '' },
+        ],
+      },
+    ],
+    ...over,
+  }
+}
+
+describe('a question in the queue', () => {
+  it('is told apart from a permission', () => {
+    expect(isQuestion(asking())).toBe(true)
+    expect(isQuestion(prompt())).toBe(false)
+  })
+
+  it('says it is a question rather than naming the tool', () => {
+    expect(promptHeadline(asking())).toBe('wants to ask you 2 things')
+    expect(promptHeadline(asking({ questions: asking().questions!.slice(0, 1) }))).toBe('wants to ask you something')
+  })
+
+  it('numbers every option once across the whole prompt, because the number is the key', () => {
+    const lines = questionLines(asking().questions!, {})
+
+    expect(lines.map(line => line.text)).toEqual([
+      'Tabs or spaces?',
+      '  ○ 1  Tabs  — Wider',
+      '  ○ 2  Spaces  — Narrower',
+      'Which linters?  [pick any]',
+      '  ○ 3  eslint',
+      '  ○ 4  biome',
+    ])
+  })
+
+  it('marks what has been picked', () => {
+    const lines = questionLines(asking().questions!, { 'Tabs or spaces?': ['Spaces'] })
+
+    expect(lines[2]!.text).toBe('  ● 2  Spaces  — Narrower')
+    expect(lines[2]!.tone).toBe('green')
+  })
+
+  /**
+   * Ten options across four questions is a prompt to answer in the browser. The
+   * ones past the digits are shown without one rather than given a key that
+   * would do nothing.
+   */
+  it('stops numbering where the digits run out', () => {
+    const many = Array.from({ length: 3 }, (_, q) => ({
+      question: `Q${q}?`,
+      header: 'H',
+      multiSelect: false,
+      options: Array.from({ length: 4 }, (_, o) => ({ label: `q${q}o${o}`, description: '' })),
+    }))
+    const numbered = numberedOptions(many)
+
+    expect(numbered.filter(option => option.digit !== null)).toHaveLength(9)
+    expect(numbered[9]!.digit).toBeNull()
+    expect(questionLines(many, {}).some(line => line.text.includes('· '))).toBe(true)
+  })
+
+  it('sends a digit to the option that carries it, whichever question that is', () => {
+    const questions = asking().questions!
+
+    expect(pickOption(questions, {}, 2)).toEqual({ 'Tabs or spaces?': ['Spaces'] })
+    expect(pickOption(questions, { 'Tabs or spaces?': ['Spaces'] }, 3))
+      .toEqual({ 'Tabs or spaces?': ['Spaces'], 'Which linters?': ['eslint'] })
+  })
+
+  /**
+   * The point of a flat numbering: the first question is still reachable after
+   * the second has been answered, which a per-question cursor could not do.
+   */
+  it('lets an answer be corrected after the next question is answered', () => {
+    const questions = asking().questions!
+    const both = { 'Tabs or spaces?': ['Spaces'], 'Which linters?': ['eslint'] }
+
+    expect(pickOption(questions, both, 1)['Tabs or spaces?']).toEqual(['Tabs'])
+  })
+
+  it('toggles on a multi-select and replaces on a single one', () => {
+    const questions = asking().questions!
+
+    // The same digit twice on a single-select clears it.
+    expect(pickOption(questions, { 'Tabs or spaces?': ['Tabs'] }, 1)['Tabs or spaces?']).toEqual([])
+    // Two digits on a multi-select keep both.
+    const one = pickOption(questions, {}, 3)
+    expect(pickOption(questions, one, 4)['Which linters?']).toEqual(['eslint', 'biome'])
+    expect(pickOption(questions, one, 3)['Which linters?']).toEqual([])
+  })
+
+  it('ignores a digit with no option behind it', () => {
+    const questions = asking().questions!
+    expect(pickOption(questions, {}, 7)).toEqual({})
+  })
+
+  it('sends only the questions that were answered', () => {
+    expect(answersFrom({ 'Tabs or spaces?': ['Tabs'], 'Which linters?': [] }))
+      .toEqual({ 'Tabs or spaces?': ['Tabs'] })
+  })
+
+  it('shows the question as the prompt detail, since there is no command to weigh', () => {
+    const lines = promptDetail(asking(), undefined, 12, { 'Tabs or spaces?': ['Tabs'] })
+    expect(lines[1]!.text).toBe('  ● 1  Tabs  — Wider')
   })
 })

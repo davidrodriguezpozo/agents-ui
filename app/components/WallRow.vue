@@ -109,11 +109,20 @@ const elapsed = computed(() => elapsedLabel(props.row.startedAt, props.now))
 const prompt = computed<WallPrompt | null>(() => props.row.prompts[0] ?? null)
 
 /**
+ * A question, not a tool call. Two buttons that say Allow and Deny are the
+ * wrong pair for one — allowing it answers nothing — so the row says what it is
+ * and sends you to the session, which is where a question can be answered.
+ */
+const asking = computed(() => Boolean(prompt.value?.questions?.length))
+
+/**
  * What it is asking for, in the present tense — the thing has not happened yet,
  * which is the entire reason it is asking. See `presentVerb`.
  */
 const promptText = computed(() => {
   if (!prompt.value) return ''
+  const question = prompt.value.questions?.[0]?.question
+  if (question) return `ask you: ${question}`
   const { target } = describeToolCall({ toolName: prompt.value.toolName, input: prompt.value.input })
   return `${presentVerb(prompt.value.toolName)} ${target}`.trim()
 })
@@ -207,15 +216,23 @@ function answer(behavior: 'allow' | 'deny', scope?: 'once' | 'session') {
         <span v-if="row.pending > 1" class="row-prompt-more">+{{ row.pending - 1 }} more</span>
 
         <span class="row-prompt-actions">
-          <button class="row-answer is-allow" :disabled="answering" @click.stop="answer('allow', 'once')">Allow</button>
-          <button
-            v-if="prompt.canRemember && prompt.rule"
-            class="row-answer"
-            :disabled="answering"
-            :title="`Allow ${prompt.rule} for the rest of this run`"
-            @click.stop="answer('allow', 'session')"
-          >Always</button>
-          <button class="row-answer is-deny" :disabled="answering" @click.stop="answer('deny')">Deny</button>
+          <NuxtLink
+            v-if="asking"
+            class="row-answer is-allow"
+            :to="`/sessions/${row.sessionId}`"
+            @click.stop
+          >Answer</NuxtLink>
+          <template v-else>
+            <button class="row-answer is-allow" :disabled="answering" @click.stop="answer('allow', 'once')">Allow</button>
+            <button
+              v-if="prompt.canRemember && prompt.rule"
+              class="row-answer"
+              :disabled="answering"
+              :title="`Allow ${prompt.rule} for the rest of this run`"
+              @click.stop="answer('allow', 'session')"
+            >Always</button>
+            <button class="row-answer is-deny" :disabled="answering" @click.stop="answer('deny')">Deny</button>
+          </template>
         </span>
       </div>
     </div>
@@ -427,6 +444,11 @@ function answer(behavior: 'allow' | 'deny', scope?: 'once' | 'session') {
   background: var(--surface-raised);
   color: var(--text-secondary);
   cursor: pointer;
+}
+
+/* The one that navigates is a link, so it needs saying that it is not underlined. */
+a.row-answer {
+  text-decoration: none;
 }
 
 .row-answer:hover:not(:disabled) {

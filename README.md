@@ -303,6 +303,10 @@ A scheduled run that hits a permission prompt does not sit and wait for ten minu
 then deny anyway. It stops immediately, tells you exactly what it was blocked on, and
 offers the one narrow rule it needed — `Bash(gh issue edit:*)`, not full access.
 
+A *question* is treated differently, because refusing one is not an answer. The run is
+told that nobody answered, which leaves it free to pick the option it thinks best and say
+so, and the run is flagged for you either way.
+
 ![A ritual that stopped on a permission prompt](docs/screenshots/07-ritual-needs-permission.jpg)
 
 ### Whether it still works
@@ -473,6 +477,21 @@ The conversation itself is rendered properly — headings, lists, tables and cod
 the agent wrote them.
 
 ![A session's conversation](docs/screenshots/03-session-conversation.jpg)
+
+### When it asks you something
+
+Claude Code can stop and ask a multiple-choice question — which of two approaches to
+take, which file you meant. Those questions used to reach nobody: the tool was allowed
+the way any other tool is allowed, the agent was told the user had not answered, and it
+concluded it was running somewhere non-interactive and guessed. Now the question appears
+in the session with its options on it, and the answer goes back to the turn that asked.
+
+Several questions arrive as one card. Any question can be answered in your own words
+instead of from the list, and **Skip** tells the agent nobody answered — which leaves it
+free to decide for itself and say what it assumed, rather than handing it an error.
+
+In the terminal app the options are numbered, because there the number is the key: a
+digit picks one, `y` sends what you picked, `n` says you are not answering.
 
 ### What it did
 
