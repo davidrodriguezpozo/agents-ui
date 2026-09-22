@@ -85,3 +85,53 @@ session does. Any automatic action on a reply — a reply is read by a person or
 that a person started, never by a rule.
 
 ## Findings
+
+- **The router is four booleans, and that is deliberate.** `routeFor` takes a `SessionShape`
+  — exists, a turn is running, ended, a pull request number — rather than a `Session`, because
+  a router handed a session invites the next reader to think it is looking at the branch, the
+  worktree or the diff. It is not. The order is the price list read top down, and the two ends
+  are the interesting ones: a running turn wins over everything including an open pull request,
+  and a session that is gone loses to nothing.
+
+- **The property worth defending is `quoteReply`.** A reviewer writing *"I'd worry about the
+  queue"* means *consider this*; handed to a session bare, at the top of a turn, in the app's
+  own voice, it reads as *remove the queue*, and the difference is a day of somebody's work. So
+  every reply that reaches a prompt is attributed by name, fenced line by line in quotation,
+  and followed by a sentence saying it is an opinion and that nothing obliges the session to
+  change anything. It is the only path from `decisions.ts` into a model.
+
+- **The spine had to be rebuilt, not appended to.** A first draft added one finding per reply,
+  which met the routing acceptance and failed the one that matters: *"unanswered decisions
+  appear rather than being omitted"*. A decision with no reply produced no finding at all, so
+  the quiet choices went through unread — the exact failure these four units exist to fix. Now
+  `decisionSpine` emits one finding **per decision**, holding its alternatives, its reason or
+  *no reason given*, and every reply underneath. A second reply changes one heading rather than
+  adding a second about the same choice.
+
+- **Unanswered decisions are kept and unchecked.** Shown on the draft, not sent to GitHub:
+  posting *"nobody said anything about this"* as a comment on somebody's pull request is noise.
+  It is the `alreadyRaised` precedent — keep the finding, do not tick it.
+
+- **A reply is `WARN`, never `BLOCKING`.** `BLOCKING` feeds `suggestedEvent`, which would turn
+  a sentence somebody typed in Slack into this app requesting changes on their behalf. That is
+  the app putting its weight behind an opinion it did not form. `OK` would bury it.
+
+- **`composeDraft` now calls the spine too**, so a draft composed by a review session opens by
+  decision without waiting for anybody to reply. A session that took no decisions gets exactly
+  what it got before — asserted.
+
+- **Replies route once, and the deduplication lives inside the store's lock.** A thread under a
+  running turn is read every fifteen seconds, so routing everything the record holds would
+  steer the same opinion into the same turn forty times. `addReplies` now returns what was new
+  *this time* rather than the merged record.
+
+- **Unproven, and it is the same gap unit 41 left.** The routing, the quoting, the anchoring
+  and the ordering are all tested. **No reply has travelled the whole road** — Slack to
+  `readDecisionThread` to `routeReply` to a real running turn. The `steered` and `queued` routes
+  go through `steerRun` and `queueMessage` unchanged, which are exercised by `liveSteer.test.ts`
+  against real sessions, so the seam is narrow; the seam is still unverified end to end.
+
+- **The `comment` route deliberately does nothing new.** It puts the finding on the draft, the
+  same as `draft` does, and differs only in what the page says and where `reviewPost.ts` will
+  eventually send it. Posting anything to GitHub that `reviewPost.ts` does not already post was
+  out of scope, and the routing is honest about being a label in that case.

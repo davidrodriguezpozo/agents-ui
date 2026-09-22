@@ -12,6 +12,7 @@ import {
   type Decision, type DecisionReply,
 } from './decisions'
 import { findSession } from './sessions'
+import { routeReply, type RouteResult } from './decisionReply'
 
 /**
  * Getting a decision to somebody who does not have this app open.
@@ -270,6 +271,8 @@ export function buildReplyPrompt(decision: Decision): string {
 export interface ReplyRead {
   decisionId: string
   replies: DecisionReply[]
+  /** Where each new reply was sent, and why there. See `decisionReply.ts`. */
+  routed?: RouteResult[]
   /** A tool error, verbatim, when the run could not read the thread. */
   blocked?: string
   costUsd?: number
@@ -333,11 +336,25 @@ export async function readDecisionThread(
     readAt: now,
   }))
 
-  await addReplies(decision.id, replies)
+  const kept = await addReplies(decision.id, replies)
+
+  /*
+   * Routed as they arrive, and only the ones that are new.
+   *
+   * A thread under a running turn is read every fifteen seconds, so routing
+   * everything the record holds would steer the same opinion into the same turn
+   * forty times. `addReplies` decides what was new inside its own lock, which is
+   * the only place that answer is safe.
+   */
+  const routed: RouteResult[] = []
+  for (const reply of kept?.added ?? []) {
+    routed.push(await routeReply(kept!.decision, reply))
+  }
 
   return {
     decisionId: decision.id,
     replies,
+    ...(routed.length ? { routed } : {}),
     ...(parsed.blocked || failure ? { blocked: parsed.blocked ?? failure } : {}),
     ...(costUsd ? { costUsd } : {}),
   }

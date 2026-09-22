@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { getClaudeDir } from './claudeDir'
 import { defineJsonStore } from './jsonStore'
 import { readRun } from './runStore'
+import { withDecisionSpine } from './decisionReply'
 import { findSession, type Session } from './sessions'
 import {
   anchorFor,
@@ -79,6 +80,14 @@ export interface DraftFinding {
   /** Unchecked findings are kept, not dropped: unchecking is not deleting. */
   include: boolean
   anchor: Anchor
+  /**
+   * The decision this finding is about, when it came from one.
+   *
+   * What makes a draft open by decision rather than by file — see
+   * `orderByDecision`. Absent on every finding parsed out of a review report,
+   * which is most of them.
+   */
+  decisionId?: string
   /**
    * A thread already open on the pull request that says this.
    *
@@ -297,6 +306,19 @@ export async function composeDraft(options: {
     }
   })
 
+  /*
+   * The decisions first, then what the reviewer found.
+   *
+   * This is the payoff of units 39 to 42 and the reason the order is decided
+   * here rather than in a template: a reviewer opening a pull request should
+   * not start at a blank diff and go looking for where a choice was made. Every
+   * choice is already a heading — answered, disagreed with, or nobody
+   * answered — with the mechanical findings underneath.
+   *
+   * A session that took no decisions gets exactly what it got before.
+   */
+  const spined = await withDecisionSpine(findings, session.id, positions)
+
   const context = [report.context.scope, report.context.featureModel, report.context.commits]
     .filter(Boolean)
     .join('\n\n')
@@ -309,7 +331,7 @@ export async function composeDraft(options: {
     event: previous?.event ?? suggestedEvent(report),
     summary: previous?.summaryEdited ? previous.summary : report.summary ?? '',
     summaryEdited: previous?.summaryEdited,
-    findings,
+    findings: spined,
     context: context || undefined,
     includeContext: previous?.includeContext ?? false,
     violations: report.violations,

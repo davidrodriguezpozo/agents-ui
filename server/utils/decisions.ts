@@ -673,9 +673,18 @@ export async function markDelivered(
  *
  * Matched to the decision by id, deduplicated on Slack's own message id, and
  * stored verbatim. Nothing here reads the text — that is deliberate and it is
- * the boundary this unit stops at.
+ * the boundary unit 41 stops at.
+ *
+ * `added` is what was new *this time*, and it is the load-bearing half of the
+ * answer. A thread is read every fifteen seconds while a turn is running, so a
+ * caller that routed everything the record holds would steer the same opinion
+ * into the same turn forty times. Deduplication decided inside the lock, so two
+ * readers cannot both believe they were first.
  */
-export async function addReplies(id: string, replies: DecisionReply[]): Promise<Decision | null> {
+export async function addReplies(
+  id: string,
+  replies: DecisionReply[],
+): Promise<{ decision: Decision; added: DecisionReply[] } | null> {
   if (!replies.length) return null
 
   return decisionsStore.update((file) => {
@@ -685,10 +694,10 @@ export async function addReplies(id: string, replies: DecisionReply[]): Promise<
     const held = decision.replies ?? []
     const seen = new Set(held.map(reply => reply.ts))
     const added = replies.filter(reply => !seen.has(reply.ts))
-    if (!added.length) return decision
+    if (!added.length) return { decision, added: [] }
 
     decision.replies = [...held, ...added].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0))
-    return decision
+    return { decision, added }
   })
 }
 
