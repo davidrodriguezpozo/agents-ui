@@ -1,4 +1,4 @@
-import { unansweredReasons } from '../../utils/decisions'
+import { deliveryNotice, unansweredReasons } from '../../utils/decisions'
 import { findSession } from '../../utils/sessions'
 
 /**
@@ -16,5 +16,9 @@ export default defineEventHandler(async () => {
     return session?.title ?? null
   })
 
-  return { sessions }
+  // Delivery's own state, said once and carried here because this is the
+  // surface a decision would otherwise have reached a person through. A machine
+  // with no Slack set up is not broken; it is a machine whose records stay
+  // local, and that is worth saying exactly once. See `decisionDelivery.ts`.
+  return { sessions, notice: await deliveryNotice() }
 })

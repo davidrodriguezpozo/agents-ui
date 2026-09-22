@@ -43,17 +43,28 @@ export interface UnansweredSession {
 export function useDecisions() {
   const sessions = useState<UnansweredSession[]>('decision-why', () => [])
   const loading = useState<boolean>('decision-why-loading', () => false)
+  /**
+   * What delivery last had to say for itself — most usefully, that no Slack is
+   * set up and the records are staying here. Said once, on the one surface a
+   * decision would otherwise have reached somebody through.
+   */
+  const notice = useState<{ at: number; message: string } | null>('decision-notice', () => null)
 
   async function load() {
     loading.value = true
     try {
-      const result = await $fetch<{ sessions: UnansweredSession[] }>('/api/decisions')
+      const result = await $fetch<{
+        sessions: UnansweredSession[]
+        notice?: { at: number; message: string }
+      }>('/api/decisions')
       sessions.value = result.sessions
+      notice.value = result.notice ?? null
     } catch {
       // A queue that could not be read shows nothing rather than an error: it
       // sits under rows that are genuinely blocking somebody, and a red line
       // about an unanswered "why" would outrank them by accident.
       sessions.value = []
+      notice.value = null
     } finally {
       loading.value = false
     }
@@ -80,5 +91,5 @@ export function useDecisions() {
     return true
   }
 
-  return { sessions, loading, load, say }
+  return { sessions, notice, loading, load, say }
 }

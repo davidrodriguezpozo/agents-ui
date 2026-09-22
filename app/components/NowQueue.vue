@@ -24,7 +24,7 @@ const {
   sources: inboxSources, refreshing, load: loadInbox, refresh: refreshInbox, setSchedule,
 } = useInbox()
 const { create: createSession, sessions, fetchAll: fetchSessions } = useSessions()
-const { sessions: whySessions, load: loadDecisions, say } = useDecisions()
+const { sessions: whySessions, notice: decisionNotice, load: loadDecisions, say } = useDecisions()
 /** Where a resolved row leaves you, on the same switch Land reads. */
 const { load: loadQuickActions, arrive } = useQuickActions()
 const toast = useToast()
@@ -393,6 +393,19 @@ async function resolve(item: NowItem) {
         </div>
       </li>
     </ul>
+    <!--
+      Said once, and only where it matters.
+
+      A machine with no Slack set up is not broken: the decisions are recorded,
+      they are here, and nothing has pretended to send them. That is worth one
+      line on the surface they would otherwise have left from, and it is worth
+      nothing repeated — see `noteDeliveryState`, which overwrites rather than
+      appends for exactly this reason.
+    -->
+    <p v-if="decisionNotice" class="type-meta mt-3">
+      {{ decisionNotice.message }}
+    </p>
+
     <!--
       Where the rows from elsewhere came from, and how old the answer is.
 

@@ -17,6 +17,7 @@ import { describeIncomplete } from './digest'
 import { tickInbox } from './inboxTick'
 import { tickDigestDelivery } from './digestSend'
 import { tickDigestCommands } from './digestCommands'
+import { REPLY_POLL_MS, tickDecisionReplies } from './decisionDelivery'
 import { tickTeamDigest } from './teamDelivery'
 import { refreshBrief } from './brief'
 import { withRunSlot } from './runQueue'
@@ -92,6 +93,8 @@ export function lateTitle(title: string, lateBy: number): string {
 
 let timer: ReturnType<typeof setInterval> | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
+/** The decision return leg. Its own timer because its interval is its own. */
+let replyTimer: ReturnType<typeof setInterval> | null = null
 /** Schedules with a run currently in flight, so a slow run can't stack up. */
 const inFlight = new Set<string>()
 
@@ -158,14 +161,32 @@ export function startScheduler(): void {
     void pollReverts()
   }, POLL_MS)
 
+  /*
+   * The decision return leg, on a timer of its own and four times faster than
+   * anything else here.
+   *
+   * It has to be: the thing waiting on the answer is a session somebody is
+   * sitting in front of, and the whole value of routing a reply is landing it
+   * while the turn it is about can still act on it. Two minutes would mean
+   * every reply arrived a turn too late, which is the failure unit 42 exists to
+   * prevent.
+   *
+   * Affordable because `stillWatching` is a file read on every tick where
+   * nothing has been delivered, which on a machine not using this is every
+   * tick. See `tickDecisionReplies`.
+   */
+  replyTimer = setInterval(() => void tickDecisionReplies(), REPLY_POLL_MS)
+
   console.log('[scheduler] started')
 }
 
 export function stopScheduler(): void {
   if (timer) clearInterval(timer)
   if (pollTimer) clearInterval(pollTimer)
+  if (replyTimer) clearInterval(replyTimer)
   timer = null
   pollTimer = null
+  replyTimer = null
 }
 
 /**

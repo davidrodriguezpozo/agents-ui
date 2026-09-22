@@ -51,13 +51,33 @@ import { repositoryRootOf } from './worktrees'
  */
 
 /**
- * The format version stamped on every line written here.
+ * The highest format this reader understands.
  *
- * Bumped when a line gains a field a reader has to understand to add it up
- * correctly. A reader that meets a higher number counts the line as unreadable
- * and reports it — see `readLedgerText`.
+ * A reader that meets a higher number counts the line as unreadable and reports
+ * it — see `readLedgerText`.
  */
-export const LEDGER_FORMAT = 1
+export const LEDGER_FORMAT = 2
+
+/**
+ * What a countable line is still written as, and why it was not bumped to 2.
+ *
+ * Every total on the team page is built out of `turn`, `landing`, `revert` and
+ * `check`, and none of them gained a field. Stamping them 2 would make a
+ * colleague who has not updated count every one of this machine's turns as
+ * unreadable — their spend total would quietly lose a person. So the version is
+ * per line and describes what the line needs, not when it was written.
+ */
+export const COUNTED_FORMAT = 1
+
+/**
+ * What a decision line is written as.
+ *
+ * Newer on purpose. Nothing adds a decision up, so an older reader meeting one
+ * skips it, counts it under `newer`, and arrives at exactly the right totals —
+ * which is the behaviour `LEDGER_FORMAT`'s note describes and the reason a new
+ * kind of line does not have to wait for everybody to update.
+ */
+export const DECISION_FORMAT = 2
 
 /** Where the local file and its siblings live, under the store. */
 export const LEDGER_DIR = 'ledger'
@@ -65,7 +85,10 @@ export const LEDGER_DIR = 'ledger'
 /** Holds this instance's id, so it stays the same file across restarts. */
 const MACHINE_FILE = 'machine'
 
-export type LedgerEvent = 'turn' | 'landing' | 'revert' | 'check'
+export type LedgerEvent = 'turn' | 'landing' | 'revert' | 'check' | 'decision'
+
+/** Mirrors `DecisionSource` in `decisions.ts`. An enum, which is not prose. */
+export type LedgerDecisionSource = 'ask_user_question' | 'denied' | 'steer' | 'marker'
 
 /** How the work got in, mirroring `LandedHow`. */
 export type LedgerLanding = 'merged' | 'pull-request' | 'elsewhere'
@@ -114,6 +137,22 @@ export interface LedgerEntry {
    * of it still adds every line up correctly. See `LEDGER_FORMAT`.
    */
   repo?: string
+  /**
+   * The decision this line points at, for `event: 'decision'`.
+   *
+   * The line says a decision exists, whose it is, where it was taken and
+   * whether anybody said why. It does not say **what** was decided, and that is
+   * the whole of the rule at the top of this file rather than an omission: the
+   * words of a decision are a colleague's prose, they would arrive in your
+   * browser through a file your machine concatenates blindly, and Slack is
+   * where they go instead. See `decisionMessage.ts`.
+   */
+  decisionId?: string
+  source?: LedgerDecisionSource
+  /** How many roads there were. A count; never the roads. */
+  alternatives?: number
+  /** That somebody said why. Never what they said. */
+  answered?: true
 }
 
 export interface LedgerTotals {
@@ -180,6 +219,12 @@ export function ledgerLine(entry: LedgerEntry): string {
   if (entry.verdict) line.verdict = entry.verdict
   if (entry.override) line.override = true
   if (entry.repo) line.repo = entry.repo
+  if (entry.decisionId) line.decisionId = entry.decisionId
+  if (entry.source) line.source = entry.source
+  if (typeof entry.alternatives === 'number' && Number.isFinite(entry.alternatives)) {
+    line.alternatives = Math.max(0, Math.round(entry.alternatives))
+  }
+  if (entry.answered) line.answered = true
 
   return JSON.stringify(line)
 }
@@ -214,7 +259,8 @@ export function parseLedgerLine(text: string): { entry: LedgerEntry } | { skip: 
   const event = line.event
   if (typeof id !== 'string' || !id) return { skip: 'corrupt' }
   if (typeof at !== 'number' || !Number.isFinite(at)) return { skip: 'corrupt' }
-  if (event !== 'turn' && event !== 'landing' && event !== 'revert' && event !== 'check') {
+  if (event !== 'turn' && event !== 'landing' && event !== 'revert' && event !== 'check'
+    && event !== 'decision') {
     return { skip: 'corrupt' }
   }
 
@@ -239,6 +285,16 @@ export function parseLedgerLine(text: string): { entry: LedgerEntry } | { skip: 
   if (line.verdict === 'passing' || line.verdict === 'failing') entry.verdict = line.verdict
   if (line.override === true) entry.override = true
   if (typeof line.repo === 'string' && line.repo) entry.repo = line.repo
+
+  if (typeof line.decisionId === 'string' && line.decisionId) entry.decisionId = line.decisionId
+  if (line.source === 'ask_user_question' || line.source === 'denied'
+    || line.source === 'steer' || line.source === 'marker') {
+    entry.source = line.source
+  }
+  if (typeof line.alternatives === 'number' && Number.isFinite(line.alternatives) && line.alternatives >= 0) {
+    entry.alternatives = line.alternatives
+  }
+  if (line.answered === true) entry.answered = true
 
   return { entry }
 }
@@ -334,7 +390,7 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
 
   for (const turn of input.turns) {
     entries.push({
-      v: LEDGER_FORMAT,
+      v: COUNTED_FORMAT,
       id: `turn:${turn.id}`,
       event: 'turn',
       at: turn.startedAt ?? turn.createdAt,
@@ -350,7 +406,7 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
     const landed = session.landed
     if (landed) {
       entries.push({
-        v: LEDGER_FORMAT,
+        v: COUNTED_FORMAT,
         id: `landing:${session.id}`,
         event: 'landing',
         at: landed.at,
@@ -365,7 +421,7 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
     const reverted = session.reverted
     if (reverted) {
       entries.push({
-        v: LEDGER_FORMAT,
+        v: COUNTED_FORMAT,
         id: `revert:${session.id}`,
         event: 'revert',
         // When the work went back out, not when this machine noticed.
@@ -380,7 +436,7 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
     // says the check could not run, which is a fact about a machine.
     if (check && (check.status === 'passing' || check.status === 'failing')) {
       entries.push({
-        v: LEDGER_FORMAT,
+        v: COUNTED_FORMAT,
         id: `check:${session.id}:${check.fingerprint || check.at}`,
         event: 'check',
         at: check.at,
@@ -392,6 +448,47 @@ export function ledgerEntriesOf(input: { turns: OutcomeTurn[]; sessions: Outcome
   }
 
   return entries
+}
+
+/**
+ * Decisions, as lines a colleague's machine can read without reading anything
+ * anybody wrote.
+ *
+ * Every field is an id, an enum, a count or a flag. `what`, `reason` and the
+ * alternatives themselves are all absent, and their absence is the design: the
+ * branch says a decision exists, where, whose, of what kind, how many roads it
+ * had and whether anybody explained it. What was actually decided reaches a
+ * person through Slack, which is a channel they chose to read rather than a
+ * file their browser concatenates.
+ *
+ * Keyed on the decision's own id, so appending the same window twice adds
+ * nothing.
+ */
+export function ledgerEntriesOfDecisions(
+  decisions: Array<{
+    id: string
+    sessionId: string
+    at: number
+    source: LedgerDecisionSource
+    alternatives: unknown[]
+    reason?: string
+    person?: string
+    repoDir?: string
+  }>,
+): LedgerEntry[] {
+  return decisions.map(decision => ({
+    v: DECISION_FORMAT,
+    id: `decision:${decision.id}`,
+    event: 'decision' as const,
+    at: decision.at,
+    decisionId: decision.id,
+    source: decision.source,
+    alternatives: decision.alternatives.length,
+    sessionId: decision.sessionId,
+    ...(decision.reason?.trim() ? { answered: true as const } : {}),
+    ...(decision.person ? { person: decision.person } : {}),
+    ...(repoName(decision.repoDir) ? { repo: repoName(decision.repoDir)! } : {}),
+  }))
 }
 
 /**
@@ -436,6 +533,10 @@ function count(totals: LedgerTotals, entry: LedgerEntry): void {
     totals.reverts++
     return
   }
+  // Counted by nothing. Said out loud rather than left to fall through to the
+  // verdict branch below, which would be true today and quietly wrong the first
+  // time a decision line carries one.
+  if (entry.event === 'decision') return
   if (entry.verdict === 'passing') totals.checks.passing++
   else if (entry.verdict === 'failing') totals.checks.failing++
 }

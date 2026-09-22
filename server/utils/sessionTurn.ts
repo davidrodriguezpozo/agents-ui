@@ -23,6 +23,7 @@ import { summariseAfterTurn } from './sessionSummary'
 import { composeAfterTurn } from './reviewDraft'
 import { clearRepair, planRepair } from './sessionRepair'
 import { recordDecision, recordMarkers, steerDecision } from './decisions'
+import { deliverDecisions } from './decisionDelivery'
 import { latestStep } from './turnActivity'
 import type { SessionCheck } from './checks'
 import { base64Bytes } from '~/utils/base64'
@@ -570,7 +571,14 @@ export async function startTurn(
       void recordMarkers(finished?.output, {
         sessionId: session.id,
         runId: run.id,
-      }).catch(() => {})
+      })
+        // Delivered after the turn rather than at the moment each decision was
+        // taken, and the delay is the point: a decision taken mid-turn is often
+        // revised by the same turn, and a reviewer who was told about both has
+        // been told about one thing twice. `deliverDecisions` refuses cheaply
+        // when no Slack is set up, which is most machines.
+        .then(() => deliverDecisions())
+        .catch(() => {})
     })
 
   return run.id

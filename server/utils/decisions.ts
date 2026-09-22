@@ -96,6 +96,35 @@ export interface Decision {
    * own unfinished homework.
    */
   stoppedAsking?: { at: number; detail: string }
+  /**
+   * Where this card went, once it went somewhere. See `decisionDelivery.ts`.
+   *
+   * The thread is what makes a reply findable again: Slack is the only place a
+   * reviewer with no clone can type one, and the only way back from their
+   * sentence to this record is the message it hangs under.
+   */
+  delivered?: { at: number; channelId: string; threadTs: string }
+  /**
+   * What somebody said about it.
+   *
+   * **Untrusted text from another person's machine.** It is rendered, never
+   * executed, and never interpolated into a prompt without being marked as
+   * somebody's quoted words — see unit 42, which is what does anything with it.
+   * This unit's job ends at delivering it intact.
+   */
+  replies?: DecisionReply[]
+}
+
+/** One thing somebody said in the thread under a decision. */
+export interface DecisionReply {
+  /** Slack's message id, which doubles as its ordering key. */
+  ts: string
+  /** The account that posted it, as Slack reports it. Never a display name. */
+  author: string
+  /** Their words, verbatim. Quoted wherever it is used; never an instruction. */
+  text: string
+  /** When this machine read it, which is not when it was written. */
+  readAt: number
 }
 
 /**
@@ -116,6 +145,16 @@ export type NewDecision = Omit<Decision, 'id'>
 
 interface DecisionFile {
   decisions: Decision[]
+  /**
+   * The last thing delivery had to say for itself, said once.
+   *
+   * Not per decision, and that is the point. "No Slack is configured" is one
+   * fact about this machine, and writing it onto every record would turn a
+   * missing setting into a hundred identical warnings. It is overwritten rather
+   * than appended, because only the current state is worth anything, and it is
+   * cleared by a send that works.
+   */
+  notice?: { at: number; message: string }
 }
 
 export const decisionsStore = defineJsonStore<DecisionFile>({
@@ -123,6 +162,7 @@ export const decisionsStore = defineJsonStore<DecisionFile>({
   path: () => join(getClaudeDir(), 'agents-ui', 'decisions.json'),
   empty: () => ({ decisions: [] }),
   decode: (parsed: any) => ({
+    ...(parsed?.notice ? { notice: parsed.notice } : {}),
     decisions: Array.isArray(parsed?.decisions)
       ? parsed.decisions.map((entry: any): Decision => ({
           ...entry,
@@ -133,7 +173,11 @@ export const decisionsStore = defineJsonStore<DecisionFile>({
         }))
       : [],
   }),
-  encode: value => ({ version: 1, decisions: value.decisions }),
+  encode: value => ({
+    version: 1,
+    decisions: value.decisions,
+    ...(value.notice ? { notice: value.notice } : {}),
+  }),
 })
 
 function newDecisionId(): string {
@@ -595,4 +639,74 @@ export async function setDecisionReason(id: string, reason: string): Promise<Dec
     delete decision.stoppedAsking
     return decision
   })
+}
+
+/** Decisions that have not been delivered anywhere yet, oldest first. */
+export async function undelivered(): Promise<Decision[]> {
+  const { decisions } = await decisionsStore.read()
+  return decisions.filter(d => !d.delivered).sort((a, b) => a.at - b.at)
+}
+
+/** Decisions whose thread is worth reading again. */
+export async function awaitingReplies(): Promise<Decision[]> {
+  const { decisions } = await decisionsStore.read()
+  return decisions.filter(d => d.delivered).sort((a, b) => b.delivered!.at - a.delivered!.at)
+}
+
+/** Note where a card landed, so a reply under it can be found again. */
+export async function markDelivered(
+  id: string,
+  where: { at: number; channelId: string; threadTs: string },
+): Promise<Decision | null> {
+  return decisionsStore.update((file) => {
+    const decision = file.decisions.find(d => d.id === id)
+    if (!decision) return null
+    decision.delivered = where
+    // A send that worked answers whatever the last notice was complaining about.
+    delete file.notice
+    return decision
+  })
+}
+
+/**
+ * Keep what somebody said, without acting on any of it.
+ *
+ * Matched to the decision by id, deduplicated on Slack's own message id, and
+ * stored verbatim. Nothing here reads the text — that is deliberate and it is
+ * the boundary this unit stops at.
+ */
+export async function addReplies(id: string, replies: DecisionReply[]): Promise<Decision | null> {
+  if (!replies.length) return null
+
+  return decisionsStore.update((file) => {
+    const decision = file.decisions.find(d => d.id === id)
+    if (!decision) return null
+
+    const held = decision.replies ?? []
+    const seen = new Set(held.map(reply => reply.ts))
+    const added = replies.filter(reply => !seen.has(reply.ts))
+    if (!added.length) return decision
+
+    decision.replies = [...held, ...added].sort((a, b) => (a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : 0))
+    return decision
+  })
+}
+
+/**
+ * Say, once, why nothing is being delivered.
+ *
+ * Overwritten rather than appended and never repeated: a machine with no Slack
+ * configured is in one state, not in a new state every fifteen seconds. The
+ * records still exist locally and nothing pretends to have sent anything.
+ */
+export async function noteDeliveryState(message: string, at = Date.now()): Promise<void> {
+  await decisionsStore.update((file) => {
+    if (file.notice?.message === message) return
+    file.notice = { at, message }
+  })
+}
+
+/** Whatever delivery last had to say for itself. */
+export async function deliveryNotice(): Promise<{ at: number; message: string } | undefined> {
+  return (await decisionsStore.read()).notice
 }
