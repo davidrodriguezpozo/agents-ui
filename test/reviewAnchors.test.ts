@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { anchorFor, describeDegraded, diffPositions, type DiffPositions } from '../server/utils/reviewAnchors'
+import { anchorFor, describeDegraded, diffPositions, resolvePath, type DiffPositions } from '../server/utils/reviewAnchors'
 
 /**
  * Where a finding can actually be posted.
@@ -116,6 +116,81 @@ describe('anchorFor', () => {
     expect(anchorFor({ path: 'gone.ts', line: 2, location: 'gone.ts:2' }, positions)).toMatchObject({
       kind: 'inline',
       side: 'LEFT',
+    })
+  })
+})
+
+/**
+ * The bug this was written for: every finding in a monorepo folded into the
+ * summary and the send button offered nought comments, because reports write
+ * `email-collector.ts` and the diff is keyed `packages/server/src/…`.
+ */
+describe('resolvePath', () => {
+  const positions = (...files: string[]): DiffPositions =>
+    ({ right: new Map(), left: new Map(), files: new Set(files) })
+
+  it('takes a repository-relative path as it stands', () => {
+    expect(resolvePath('packages/server/src/mail.ts', positions('packages/server/src/mail.ts')))
+      .toEqual({ path: 'packages/server/src/mail.ts' })
+  })
+
+  it('resolves a bare filename onto the one file in the diff that ends with it', () => {
+    expect(resolvePath('mail.ts', positions('packages/server/src/mail.ts', 'web/other.ts')))
+      .toEqual({ path: 'packages/server/src/mail.ts' })
+  })
+
+  it('resolves a partial path the same way', () => {
+    expect(resolvePath('src/mail.ts', positions('packages/server/src/mail.ts')))
+      .toEqual({ path: 'packages/server/src/mail.ts' })
+  })
+
+  /** Two candidates is a guess, and this file does not guess. */
+  it('refuses a name that two files in the diff could be', () => {
+    const resolved = resolvePath('mail.ts', positions('packages/server/mail.ts', 'packages/web/mail.ts'))
+    expect(resolved.path).toBeUndefined()
+    expect(resolved.ambiguous).toContain('matches 2 files')
+    expect(resolved.ambiguous).toContain('packages/web/mail.ts')
+  })
+
+  /** A suffix that is not a whole segment is a different file. */
+  it('does not let a name claim a file it is only the tail of', () => {
+    expect(resolvePath('collector.ts', positions('src/email-collector.ts'))).toEqual({})
+  })
+
+  it('says nothing when the diff holds no such file', () => {
+    expect(resolvePath('absent.ts', positions('src/mail.ts'))).toEqual({})
+  })
+})
+
+describe('anchorFor, against a path the report shortened', () => {
+  it('anchors inline on the resolved path', () => {
+    const anchor = anchorFor({ path: 'kept.ts', line: 5, location: 'kept.ts:5' }, positions)
+    expect(anchor).toMatchObject({ kind: 'inline', path: 'kept.ts', line: 5 })
+  })
+
+  it('reports the ambiguity rather than the absence', () => {
+    const two: DiffPositions = {
+      right: new Map(),
+      left: new Map(),
+      files: new Set(['a/mail.ts', 'b/mail.ts']),
+    }
+    const anchor = anchorFor({ path: 'mail.ts', line: 3, location: 'mail.ts:3' }, two)
+    expect(anchor.kind).toBe('summary')
+    expect(anchor.reason).toContain('matches 2 files')
+  })
+
+  /** The anchor carries the real path, because that is what gets posted. */
+  it('carries the resolved path, not the one the report wrote', () => {
+    const deep: DiffPositions = {
+      right: new Map([['packages/server/src/mail.ts', new Set([12])]]),
+      left: new Map(),
+      files: new Set(['packages/server/src/mail.ts']),
+    }
+    expect(anchorFor({ path: 'mail.ts', line: 12, location: 'mail.ts:12' }, deep)).toEqual({
+      kind: 'inline',
+      path: 'packages/server/src/mail.ts',
+      line: 12,
+      side: 'RIGHT',
     })
   })
 })

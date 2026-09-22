@@ -24,10 +24,15 @@ const exec = promisify(execFile)
  *     about a diff; it posts against the file rather than being nudged onto the
  *     nearest changed line, because a comment on the wrong line is worse than a
  *     comment on no line.
- *   - `summary` — no file at all, or a file the diff never touched. Folded into
- *     the review body, *visibly*. Silent truncation is the failure this whole
- *     feature exists to avoid: a review that quietly dropped its architectural
- *     finding reads as a review that did not have one.
+ *   - `summary` — no file at all, a file the diff never touched, or a name that
+ *     could be two of them. Folded into the review body, *visibly*. Silent
+ *     truncation is the failure this whole feature exists to avoid: a review
+ *     that quietly dropped its architectural finding reads as a review that did
+ *     not have one.
+ *
+ * A location is resolved against the diff before any of that — reports name
+ * files the way a person does, and the diff is keyed from the repository root.
+ * See `resolvePath`.
  */
 
 export type AnchorKind = 'inline' | 'file' | 'summary'
@@ -127,6 +132,48 @@ export async function diffPositions(cwd: string, baseRef: string): Promise<DiffP
   return out
 }
 
+/** What a location's path turned out to name, once checked against the diff. */
+export interface Resolved {
+  /** The repository-relative path, when exactly one file in the diff is it. */
+  path?: string
+  /** Set when more than one file could be meant, which is not a resolution. */
+  ambiguous?: string
+}
+
+/**
+ * The repository-relative path a finding's location meant.
+ *
+ * Reports name files the way a person reading them does — `email-collector.ts`,
+ * or `hooks/api/dashboard.ts` — while the diff is keyed from the repository
+ * root. An exact lookup therefore missed every finding in a repository with any
+ * depth to it: in the drafts this was found in, *every* anchor that resolved had
+ * a full path and not one bare filename ever did, so reviews of a monorepo
+ * folded entirely into the summary and the send button offered nought comments.
+ *
+ * So a path that is not in the diff is tried as a suffix of one. This is not the
+ * guessing the rest of this file refuses: a single file ending in `/<named>` is
+ * the file that was meant, and it is checked rather than assumed. Two would be a
+ * guess, so two stays in the summary and says which ones — the reviewer can see
+ * that their location was the ambiguous half.
+ */
+export function resolvePath(named: string, positions: DiffPositions): Resolved {
+  if (positions.files.has(named)) return { path: named }
+
+  // Anchored on a segment boundary, so `collector.ts` cannot claim
+  // `email-collector.ts` and `api/dashboard.ts` cannot claim `internal-api/dashboard.ts`.
+  const suffix = `/${named}`
+  const matches = [...positions.files].filter(file => file.endsWith(suffix))
+
+  if (matches.length === 1) return { path: matches[0]! }
+  if (matches.length > 1) {
+    return {
+      ambiguous: `${named} matches ${matches.length} files in this diff (${matches.slice(0, 3).join(', ')}${matches.length > 3 ? ', …' : ''})`,
+    }
+  }
+
+  return {}
+}
+
 /**
  * Where one finding goes.
  *
@@ -148,16 +195,17 @@ export function anchorFor(
     }
   }
 
-  const path = finding.path
-  const touched = positions.files.has(path)
+  const resolved = resolvePath(finding.path, positions)
 
-  if (!touched) {
+  if (!resolved.path) {
     return {
       kind: 'summary',
-      path,
-      reason: `${path} is not in this diff`,
+      path: finding.path,
+      reason: resolved.ambiguous ?? `${finding.path} is not in this diff`,
     }
   }
+
+  const path = resolved.path
 
   if (finding.line === undefined) {
     return { kind: 'file', path, reason: 'the finding is about the file rather than a line' }
