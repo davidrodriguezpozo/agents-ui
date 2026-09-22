@@ -141,9 +141,22 @@ describe('navigation', () => {
 
   it('reaches every page in the sidebar from an empty query', () => {
     const items = flattenPalette(buildPalette(source(), ''))
-    // /sessions and /runs became one destination when Work merged them.
-    for (const path of ['/', '/work', '/land', '/schedules', '/library', '/settings']) {
+    // /sessions and /runs became one destination when Work merged them, and
+    // Now and Land became one when the queue moved onto the landing page.
+    for (const path of ['/', '/work', '/schedules', '/library', '/settings']) {
       expect(items.some(i => i.to === path), `should reach ${path}`).toBe(true)
+    }
+  })
+
+  /**
+   * The merge took a nav item away and must not have taken a word with it.
+   * Somebody who types "now" and somebody who types "pr" are looking for the
+   * same page, and neither should have to learn that.
+   */
+  it('finds the landing page by either of the words it used to be called', () => {
+    for (const term of ['now', 'land', 'needs you', 'pull requests', 'merge']) {
+      const items = flattenPalette(buildPalette(source(), term))
+      expect(items.some(i => i.to === '/'), `"${term}" should find it`).toBe(true)
     }
   })
 
@@ -228,7 +241,7 @@ describe('recent picks', () => {
   it('opens on what you last chose, before anything else', () => {
     const groups = buildPalette(source({ recent: ['go:settings', 'go:land'] }), '')
     expect(groups[0]!.kind).toBe('recent')
-    expect(groups[0]!.items.map(i => i.to)).toEqual(['/settings', '/land'])
+    expect(groups[0]!.items.map(i => i.to)).toEqual(['/settings', '/'])
   })
 
   it('does not also leave them where they were', () => {

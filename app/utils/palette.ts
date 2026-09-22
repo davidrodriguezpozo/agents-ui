@@ -70,9 +70,10 @@ export interface PaletteSource {
 
 function navigation(): PaletteItem[] {
   const items: PaletteItem[] = [
-    { key: 'go:now', kind: 'goto', label: 'Now', icon: 'i-lucide-target', to: '/', keywords: 'home dashboard needs you' },
+    // One entry since the merge, carrying both sets of words — somebody who
+    // types "now" and somebody who types "pr" are looking for the same page.
+    { key: 'go:land', kind: 'goto', label: 'Land', icon: 'i-lucide-git-merge', to: '/', keywords: 'now home dashboard needs you reviews pull requests pr merge train ship' },
     { key: 'go:work', kind: 'goto', label: 'Work', icon: 'i-lucide-git-branch', to: '/work', keywords: 'sessions activity runs branches worktrees history log' },
-    { key: 'go:land', kind: 'goto', label: 'Land', icon: 'i-lucide-git-merge', to: '/land', keywords: 'reviews pull requests pr merge train ship' },
     { key: 'go:join', kind: 'goto', label: 'Joining a team', icon: 'i-lucide-user-plus', to: '/join', keywords: 'onboarding first hour new starter setup clone inherit shared' },
     { key: 'go:shipped', kind: 'goto', label: 'Shipped', icon: 'i-lucide-package-check', to: '/shipped', keywords: 'board what shipped landed yesterday for anyone plain english' },
     { key: 'go:daily', kind: 'goto', label: 'Daily', icon: 'i-lucide-alarm-clock', to: '/schedules', keywords: 'rituals schedule cron' },

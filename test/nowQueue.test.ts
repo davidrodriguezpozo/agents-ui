@@ -627,3 +627,63 @@ describe('decisions with no reason', () => {
     expect(NOW_LOOK['decision-why'].colour).not.toContain('warning')
   })
 })
+
+/**
+ * The queue, drawn above the list it used to duplicate.
+ *
+ * Now and Land asked one question in two places: every pull request the queue
+ * ranked was already a row on the landing page, with a verdict, an already-
+ * started join and a merge button that a single line cannot carry. Two counts
+ * of one piece of work, free to disagree — which is the bug `pullItem` already
+ * carries a comment about, made structural.
+ *
+ * So the merged page omits what it draws itself. These are the tests that the
+ * omission takes exactly that and nothing else.
+ */
+describe('drawn beside the bands that own it', () => {
+  const base = {
+    attention: [blockedSession(), failingRitual()],
+    pulls: [pull()],
+    digest: digest({ sessions: [{ id: 'r', title: 'Ready', state: 'ready' } as any] }),
+    decisions: [why()],
+  }
+
+  it('drops the pull requests the page lists in full', () => {
+    expect(kinds(buildNowQueue(base))).toContain('review')
+    expect(kinds(buildNowQueue({ ...base, omit: ['review'] }))).not.toContain('review')
+  })
+
+  /**
+   * The kinds nothing else on the page surfaces. A session frozen mid-turn is
+   * the one the whole queue was built to lead with, and losing it to a merge
+   * would be losing the reason the queue exists.
+   */
+  it('keeps everything the page cannot draw', () => {
+    const kept = kinds(buildNowQueue({ ...base, omit: ['review', 'ready-session'] }))
+
+    expect(kept).toContain('blocked-session')
+    expect(kept).toContain('failing-ritual')
+    expect(kept).toContain('decision-why')
+  })
+
+  it('leaves the order of what is left alone', () => {
+    const with_ = kinds(buildNowQueue({ ...base, omit: ['review'] }))
+    const without = kinds(buildNowQueue(base)).filter(kind => kind !== 'review')
+
+    expect(with_).toEqual(without)
+  })
+
+  it('omits nothing when the caller asks for nothing', () => {
+    expect(kinds(buildNowQueue({ ...base, omit: [] }))).toEqual(kinds(buildNowQueue(base)))
+  })
+
+  /**
+   * The conditional half, and the one worth getting right. The train is only
+   * drawn from two sessions upwards — so with one finished session the page
+   * shows no train, and omitting its row unconditionally would be how the only
+   * piece of work actually ready disappears off the front page.
+   */
+  it('keeps a ready session when the page is not drawing the train', () => {
+    expect(kinds(buildNowQueue({ ...base, omit: ['review'] }))).toContain('ready-session')
+  })
+})

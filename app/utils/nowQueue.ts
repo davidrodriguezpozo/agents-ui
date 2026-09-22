@@ -268,6 +268,21 @@ export interface NowInput {
    * nothing.
    */
   decisions?: UnansweredSession[]
+  /**
+   * Kinds this caller draws in full itself, and therefore does not want ranked
+   * a second time above its own list.
+   *
+   * The queue lives at the top of the landing page now, and that page already
+   * draws every pull request waiting on you and — when there are two or more —
+   * every session ready to land, with the merge and review affordances the
+   * queue's one-line rows cannot carry. A row in both places is not redundancy,
+   * it is two counts of the same work that can disagree, which is the exact bug
+   * `pullItem` already carries a comment about.
+   *
+   * Here rather than in the template because the ranking is a pure function
+   * with tests, and what is *in* the ranking is part of the ranking.
+   */
+  omit?: NowKind[]
   /** Passed in so that "has gone quiet" stays part of a pure function. */
   now?: number
 }
@@ -293,7 +308,7 @@ export interface NowInput {
  * problem. An expiring queue would be the same lie in the other direction.
  */
 export function buildNowQueue({
-  attention, pulls, digest, inbox, sessions, decisions, now = Date.now(),
+  attention, pulls, digest, inbox, sessions, decisions, omit, now = Date.now(),
 }: NowInput): NowItem[] {
   const items: NowItem[] = []
 
@@ -424,7 +439,9 @@ export function buildNowQueue({
     if (item.at !== undefined && now - item.at > QUIET_AFTER) item.quiet = true
   }
 
-  return items.sort((a, b) =>
+  const kept = omit?.length ? items.filter(item => !omit.includes(item.kind)) : items
+
+  return kept.sort((a, b) =>
     a.urgency - b.urgency
     || Number(Boolean(a.quiet)) - Number(Boolean(b.quiet))
     || (a.quiet ? (b.at ?? 0) - (a.at ?? 0) : (a.at ?? 0) - (b.at ?? 0))

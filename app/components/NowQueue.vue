@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { buildNowQueue, NOW_LOOK, type NowItem } from '~/utils/nowQueue'
+import { buildNowQueue, NOW_LOOK, type NowItem, type NowKind } from '~/utils/nowQueue'
 import { errorMessage } from '~/utils/errors'
 import { agedFor, relativeTime } from '~/utils/time'
 import type { Arrival } from '~/composables/useQuickActions'
@@ -16,6 +16,26 @@ import type { Arrival } from '~/composables/useQuickActions'
  * resolved. Reporting a blocked ritual and then sending you elsewhere to do
  * something about it is most of a feature.
  */
+const props = defineProps<{
+  /**
+   * Kinds the page around this draws in full itself — see `NowInput.omit`.
+   *
+   * Passed by the landing page for pull requests, and for sessions ready to
+   * land when it is actually drawing the train. Not a styling choice: a row in
+   * two places is two counts of one piece of work that can disagree.
+   */
+  omit?: NowKind[]
+  /**
+   * Set when this sits above another list rather than owning its page.
+   *
+   * It changes one thing, and it is the sentence rather than the layout: "Nothing
+   * is waiting on you" is an all-clear about the whole morning, and printed above
+   * five bands of pull requests it is simply false. Above a list, an empty queue
+   * says nothing at all — the bands underneath are the page.
+   */
+  inline?: boolean
+}>()
+
 const { digest, loading: digestLoading, load: loadDigest } = useDigest()
 const { all: pulls, loading: pullsLoading, work } = useGithubPulls()
 const { attention, refresh: refreshAttention } = useAttention()
@@ -60,6 +80,7 @@ const items = computed(() =>
     inbox: inboxSources.value,
     sessions: sessionsHere.value,
     decisions: whySessions.value,
+    ...(props.omit?.length ? { omit: props.omit } : {}),
   }).filter(item => !settled.value.has(item.key)),
 )
 
@@ -225,7 +246,7 @@ async function resolve(item: NowItem) {
 
 <template>
   <section aria-labelledby="now-queue-title">
-    <div class="flex items-baseline gap-2.5 mb-3">
+    <div v-if="!inline || items.length" class="flex items-baseline gap-2.5 mb-3">
       <h2 id="now-queue-title" class="text-section-label">Needs you</h2>
       <span v-if="items.length" class="type-mono-meta">{{ items.length }}</span>
     </div>
@@ -244,7 +265,7 @@ async function resolve(item: NowItem) {
       failure that would make somebody stop trusting this screen.
     -->
     <div
-      v-else-if="!items.length"
+      v-else-if="!items.length && !inline"
       class="rounded-lg px-4 py-5 flex items-start gap-3 bg-card"
     >
       <UIcon

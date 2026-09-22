@@ -32,7 +32,8 @@ describe('the chord table', () => {
   })
 
   it('reaches everything in the sidebar', () => {
-    for (const to of ['/', '/work', '/land', '/schedules', '/library', '/settings', '/wall', '/explore']) {
+    // `/land` is an alias of `/` since the queue moved onto the landing page.
+    for (const to of ['/', '/work', '/schedules', '/library', '/settings', '/wall', '/explore']) {
       expect(NAV_SHORTCUTS.some(item => item.to === to), `no chord reaches ${to}`).toBe(true)
     }
   })
@@ -338,7 +339,6 @@ describe('the rows the list keys walk', () => {
 const LIST_PAGES = [
   'pages/index.vue',
   'pages/work.vue',
-  'pages/land.vue',
   'pages/library.vue',
   'pages/schedules.vue',
   'pages/plugins/index.vue',

@@ -162,12 +162,17 @@ onUnmounted(() => {
  * list was for.
  */
 const navLinks = [
-  { label: 'Now', icon: 'i-lucide-target', to: '/' },
+  // Now and Land were one item's worth of question in two: everything Now
+  // ranked that mattered to shipping, Land already drew in full and could act
+  // on. The queue is a band at the top of this page now, carrying only the
+  // kinds nothing else surfaces — a frozen session, a broken ritual, a decision
+  // with no reason on it. `/land` is still an alias, so nothing anybody typed
+  // or bookmarked stopped working.
+  { label: 'Land', icon: 'i-lucide-git-merge', to: '/' },
   // Sessions and Activity were two lists over one event stream, split by
   // what *started* the work — a distinction the system cares about and
   // nobody else does.
   { label: 'Work', icon: 'i-lucide-git-branch', to: '/work' },
-  { label: 'Land', icon: 'i-lucide-git-merge', to: '/land' },
   // The one page in here written for somebody who does not run the work.
   // Kept in the navigation rather than behind a link, because the point of
   // it is that you can turn the laptop around.

@@ -26,9 +26,12 @@ export interface NavShortcut {
  * MCP is `c` for connect.
  */
 export const NAV_SHORTCUTS: NavShortcut[] = [
-  { key: 'n', label: 'Now', to: '/' },
+  // One chord since Now and Land merged, and it is `l` rather than `n`: the
+  // table is what `chordHint` reads to label a nav item, so two rows pointing
+  // at one page would make the hint ambiguous for the sake of a key nobody has
+  // a second page to press it for. `g n` is unbound now.
+  { key: 'l', label: 'Land', to: '/' },
   { key: 'w', label: 'Work', to: '/work' },
-  { key: 'l', label: 'Land', to: '/land' },
   { key: 'd', label: 'Daily', to: '/schedules' },
   { key: 'b', label: 'Library', to: '/library' },
   { key: 'p', label: 'Plugins', to: '/plugins' },
