@@ -12,6 +12,7 @@ leaving: edit the files, run a shell, see the app, and land it.
 <a href="#quick-start">Quick start</a> ·
 <a href="#daily-rituals">Rituals</a> ·
 <a href="#sessions">Sessions</a> ·
+<a href="#more-than-one-agent">Agents</a> ·
 <a href="#finishing-it-without-leaving">Workspace</a> ·
 <a href="#whether-it-works">Verification</a> ·
 <a href="#land">Land</a> ·
@@ -52,7 +53,7 @@ trapped inside it.
 | Lands several finished branches in an order that accounts for each other | — | ✅ |
 | Sandboxes what an unattended run may reach | — | ✅ |
 | A daily spend cap that skips work rather than billing you | Quota display | ✅ |
-| Holds work back when you're near your rate limit | Quota display | ✅ |
+| Holds work back when you're near your rate limit — or carries on with another agent | Quota display | ✅ |
 | Every repository at once, not one window's worth | — | ✅ |
 | Fires at 08:00, or when a PR opens, against your local repo | Cloud routines | ✅ |
 
@@ -154,6 +155,8 @@ agents-studio work -q || echo "something needs you"
 > your `PATH` or where the installers put it — set `CLAUDE_CODE_EXECUTABLE` if yours
 > lives somewhere unusual. Nothing is compiled at install time — the package ships its
 > own build with dependencies already inside it, so `npm install` has nothing to resolve.
+> To run sessions on [Cursor](#more-than-one-agent) as well, have `cursor-agent` on your
+> `PATH` and signed in; the app uses whichever agents it finds.
 
 <details>
 <summary>From source instead</summary>
@@ -294,6 +297,18 @@ are editing are not any one repository's.
 Work that runs on a schedule: a morning briefing, issue triage, a migration review
 before anyone opens the repo. Each ritual is a command, a recurrence and a next run —
 and it tells you which ones came from a plugin rather than being written by hand.
+
+**Or a ritual fires because something happened.** The clock caps a ritual at roughly one a
+morning, and the things scheduled agents are mostly adopted for are not times of day: a pull
+request opens, CI goes red, an issue gets labelled, a review is requested from you. Those are
+a recurrence too, and a ritual can take one instead.
+
+It watches through `gh`, with the sign-in you already have, rather than through webhooks.
+Taking webhooks would mean opening a port to the internet, which is a different product with
+a different threat model; polling asks the same question from behind your own firewall. A
+`check_failed` trigger can be narrowed to your own pull requests, because every failing run
+in a shared repository fires on everybody's failures and a branch named in advance changes
+with every pull request you open.
 
 ![Scheduled rituals with recurrence and next run](docs/screenshots/06-daily-rituals.jpg)
 
@@ -591,9 +606,8 @@ answers *that is nearly right, let me change one line* — and the answer to tha
 be: find the worktree on disk, open your editor, open a terminal, start the dev server,
 go to localhost. Four trips out of an app built so you would not have to make them.
 
-A session opens on its conversation. One strip above it holds four views of the same
-workspace, one at a time, and closing the one you are on gets you back to just the
-conversation.
+A session opens on its conversation. One strip above it holds the workspace, one view at a
+time, and closing the one you are on gets you back to just the conversation.
 
 | | |
 | --- | --- |
@@ -601,6 +615,7 @@ conversation.
 | **Files** | Browse and edit the workspace. A save lands in the session's branch exactly like something the agent wrote, so the checks go stale and want running again |
 | **Terminal** | A real shell in the workspace, on the session's branch. It keeps running when you close the tab, because a long build should survive navigating away |
 | **Preview** | Your project's dev command, on a port of its own, shown in the page |
+| **Review** | Only on a session reading somebody's pull request: the review it wrote, composed into comments you can edit and send. See [below](#sending-the-review-you-wrote) |
 
 ![Editing a file in the session's own workspace, beside the tree and the diff](docs/screenshots/14-workspace-editor.jpg)
 
@@ -629,6 +644,69 @@ The preview gets a port from the kernel rather than a guess, because several ses
 running at once is the point of worktrees and two dev servers fighting over 3000 is not.
 It is handed over in `PORT`; a project that hardcodes one instead will have its sessions
 collide, which the page says rather than pretends to have solved.
+
+---
+
+## More than one agent
+
+Claude Code is the default and most of this was built against it. It is no longer the only
+thing that can take a turn: **Cursor runs behind the same seam**, through `cursor-agent`, and
+everything downstream of a turn — the worktree, the checks, the merge train, the reviews, the
+ledger — sees the same events and never learns which CLI produced them.
+
+Pick one per repository in Settings, or per session in the box you start work in. A session
+keeps the agent it was started with.
+
+**What does not port is said out loud rather than emulated**, before the worktree is cut
+rather than after:
+
+| | Claude Code | Cursor |
+| --- | --- | --- |
+| Steering a turn that is heading the wrong way | ✅ | — no stdin stays open past the prompt |
+| Stopping to ask permission for a tool | ✅ | — policy is fixed when the process starts |
+| What a turn cost | ✅ | — nothing reports it, and it is not invented |
+| A turn limit | ✅ | ✅ enforced here, by counting model calls |
+| A dollar limit | ✅ | — the limit is in dollars and nothing reports dollars |
+| Commands, skills and agents from the Library | ✅ | — Cursor's formats, different schema |
+
+The dollar limit is the one worth reading twice. It could have been faked from a token count
+and a price table, and a limit whose number came from a guess is worse than a limit that says
+it does not apply. So it says it does not apply.
+
+### Race the agents
+
+One instruction, one session per agent, and whichever passes [your project's own
+checks](#whether-it-works) is the one worth landing. It needed no new machinery to gate it:
+checks already run themselves after any turn that changed files, so a race is a way of
+*starting* work and of *reading* it rather than a thing that runs. There is no coordinator,
+deliberately — that would be a second place for a session to get stuck.
+
+It is a checkbox on the box you start work in, naming the N-times cost before the press, and
+it is deliberately not remembered: racing costs a session per agent for one piece of work, so
+a setting that quietly stayed on would turn every instruction typed afterwards into N of
+them.
+
+The entrants stay ordinary independent sessions that happen to share an id, listed in a band
+on each other's pages. **Nothing picks a winner.** Two passing entrants is two answers, and
+landing the first to go green would be choosing on arrival order rather than on merit. What
+the band does make unmistakable is the pair of outcomes that N separate rows hide: everybody
+failed, and nobody committed anything. A stale verdict is never counted as a pass — it
+describes code that has since changed.
+
+On a one-line bug with an unambiguous fix, a race is wasted money: the entrants come back
+with the identical diff. It earns its keep where the approach is the open question.
+
+### When the tokens run out
+
+Claude until the limit, then the other agent, is a pattern people already run by hand every
+afternoon. Set **Instead of skipping, carry on with** in Settings and unattended work that
+would have been skipped runs on the agent you name instead, with the run recording that the
+limit is why.
+
+The dollar caps underneath it still apply. Being out of Claude tokens must not become a way
+to walk past a daily limit, because that limit is about money and the other agent costs money
+too. A fallback that is not installed on this machine refuses and says so, rather than
+sending the work to the agent the fallback exists to get away from.
 
 ---
 
@@ -702,9 +780,16 @@ reads as the second, because only one of those is somebody sitting at the other 
 press cuts a worktree with the pull request in it and starts a turn that knows why it is
 there — read this diff and tell me what is wrong with it; work out why CI went red and
 fix the failure rather than the check; do what the reviewer asked, and say so where you
-think they are wrong. Nothing is posted to GitHub by any of them. The review comes back
-into the session for you to read, because a review left under your name that you have not
-read is the worst thing this could possibly do for you.
+think they are wrong. No agent here posts to GitHub: none of them holds a tool that can.
+The review comes back into the session for you to read, because a review left under your
+name that you have not read is the worst thing this could possibly do for you.
+
+**And "Review all N"** sits on the heading of the band, for the morning where the answer to
+every row is the same. It says both halves of what the press costs before you take it — N
+sessions, and N full checkouts of this repository — refuses rather than truncating if that
+is over the cap, and checks the budget once for the press rather than once per pull request,
+so a refusal has started nothing. One pull request that will not check out costs only
+itself. Starting N reviews saves clicks; finishing one is still a person reading it.
 
 **And pressing it again works.** Git allows a branch in exactly one working copy, which
 used to make a second press on the same row a dead end: "fatal: branch X is already
@@ -733,6 +818,52 @@ The same rows can be reached by right-click from **Fleet**, which is how you act
 without leaving a screen you left running. Every entry there that writes selects the right
 project first and then calls this page's own route, so it re-reads the pull request before
 it builds a prompt — the screen's minute-old copy decides what to offer, never what to do.
+
+### Sending the review you wrote
+
+A review session ends with findings in a conversation and the work of getting them onto the
+pull request still to do. That was the last trip out of this app the workspace panes were
+built to remove: read the review here, retype it into github.com.
+
+So a session started to read a pull request gets a fifth pane. It holds the review as it
+will be sent — a verdict, a body, and one comment per finding anchored to the line it is
+about — and everything in it is editable. The tab is not there on any other session, because
+a tab that opens onto an explanation of why it is empty is worse than no tab.
+
+Two properties are the whole of it, and both are about the agent:
+
+- **The agent never posts.** The reviewing session holds no tool that writes to GitHub and
+  the prompt tells it not to try. What reaches the pull request is the record in this pane,
+  sent by the server, after somebody read it. A diff that talks its way into the review
+  cannot talk its way into publishing it.
+- **Nothing in it is invented.** The comment bodies are parsed out of the report the run
+  already wrote, not summarised by a second model — that would cost money on every review
+  and flatten a mechanism, a scenario with real values and a named regression test into
+  whatever fits in a sentence. The anchors come from the real diff, read with git in the
+  session's own checkout.
+
+That last half is why it works at all. GitHub refuses an inline comment on a line outside
+the diff, and it refuses the **whole review** rather than the one comment — so a single
+mis-aimed finding loses the other seven. Every anchor is checked against the diff on this
+machine before GitHub is asked anything, and each finding says on the row where it will
+land: on its line, on the file when the line is not in the diff, or folded into the body
+when the file is not either. Folded is *visible*, with the reason. A review that quietly
+dropped its architectural finding reads as a review that did not have one.
+
+A finding somebody else has already raised on that pull request arrives kept but unchecked,
+and names the thread — a second comment saying what a colleague already said is how a review
+reads as noise. Where the report broke its own format, the pane says so rather than posting
+a table cell as a comment.
+
+Recompose reads the session's newest report again, for when you asked the reviewer about the
+migration and it found two more things. Anything you rewrote by hand survives that: a draft
+that silently reverted your edit would mean the text you approved and the text that went out
+were different, and nothing would say so.
+
+A review is taken off the list when GitHub says it can no longer be sent — you answered the
+pull request yourself, it closed, or it was pushed over and every anchor it holds is dead —
+and the pane says which of those happened, because a row that vanishes with no explanation
+is the same problem as a row that should have vanished and did not.
 
 ### When it lands
 
@@ -1290,6 +1421,10 @@ A run stopped by either is marked as needing you, keeps whatever it wrote, and r
 what it spent — a limit whose own enforcement was invisible to the spend page would be a
 poor limit.
 
+Running out of your Claude *rate* limit is the one case with a way through rather than a
+stop: name a fallback agent and unattended work [carries on with it](#when-the-tokens-run-out)
+instead of being skipped. The dollar caps above are unaffected by that, deliberately.
+
 ---
 
 ## Backups
@@ -1374,7 +1509,8 @@ make demo-stop   # remove it again
 
 [Nuxt 3](https://nuxt.com) (v4 compatibility mode) · [Vue 3](https://vuejs.org) · [Nuxt UI](https://ui.nuxt.com) +
 Tailwind CSS ·
-[Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) for runs ·
+[Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) and
+`cursor-agent` for runs ·
 [Bun](https://bun.sh)
 
 ---
