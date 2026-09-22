@@ -99,6 +99,10 @@ way and run the same way; each says what it changes and what it must run alone a
 | 36 | Continue this session on the other agent | 31 |
 | 37 | The model on the run, and the ledger by provider | — |
 | 38 | The ten minutes that open the door | by hand |
+| 39 | What was decided | — |
+| 40 | The reason, while you still have it | 39 |
+| 41 | The doorbell | 39 |
+| 42 | Where the reply lands | 39, 41 |
 
 Units 33–38 come from [the sixth pass](../brainstorm-2026-08-30.md), which was a census of
 this machine's own store rather than a scan of anybody else's product. 33 and 34 are the
@@ -109,6 +113,28 @@ plan and the precondition for every cost question after it. 38 is by hand, like 
 Four of them can run at once — 33 owns `eventTriggers.ts`, 34 owns `land.vue`, 35 owns
 `budget.ts`, 37 owns `outcomes.ts`, and none of the four touches another's file. 36 wants
 35 merged first: it is the same idea with a person watching.
+
+## 39–42, the decision review
+
+A second reading of the same store, and a different complaint. 39–42 are one system: a
+review that happens **when a decision is taken** rather than when a pull request is ready.
+
+Two numbers from this machine are the whole argument. The human's own words come to a median
+of **17 per session** across the 71 sessions that still have a transcript; the branches those
+sessions produced come to a median of **1205 lines changed**. Review today is reading the
+second to recover the first. And the reviews that *are* composed do not arrive: 47 drafts hold
+529 findings, 41 of them `BLOCKING`, **none posted** — 22 of the 45 retirements are
+`head_moved` or `pr_closed`, which is to say the world moved before anybody sent the opinion.
+
+So: 39 records a decision at the moment it is taken, with the alternatives it had. 40 asks for
+the reason while the developer still has it. 41 carries the card to somebody who does not have
+this app open — including a reviewer with no clone, who is often the right reader of a product
+decision. 42 routes the reply by how much it can still change: into the running turn, into the
+next one, into a draft, or into a comment, in that order of preference.
+
+They run in order. 39 is the only one that can start alone, and 40 and 41 can run at once
+once it has merged — 40 owns the Now queue, 41 owns delivery, and neither touches the other's
+files. 42 wants both.
 
 ## Two honest caveats
 
