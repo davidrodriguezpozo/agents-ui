@@ -86,7 +86,30 @@ export interface Decision {
   files: string[]
   /** The turn it happened in, when it happened inside one. */
   runId?: string
+  /**
+   * Set when the app gave up asking for a reason. See `WHY_WINDOW_MS`.
+   *
+   * It retires the *question*, never the decision: the record still goes to a
+   * reviewer, marked as having no reason given, because a reviewer seeing an
+   * unexplained choice has learned something real. Holding it back until
+   * somebody answered would turn a review feed into a queue of the developer's
+   * own unfinished homework.
+   */
+  stoppedAsking?: { at: number; detail: string }
 }
+
+/**
+ * How long a *why* is worth asking for.
+ *
+ * Three days, and the number is chosen for the one case that decides it: a
+ * decision taken on Friday evening is still on the queue through the whole of
+ * Monday. Past that the answer stops being a reason and becomes a
+ * reconstruction — the developer is reading their own diff to work out what
+ * they were thinking, which is exactly the archaeology this whole system exists
+ * to abolish. `reviewDraft.ts` retires a stale draft for the same reason and
+ * this follows it: retired with a sentence, never silently.
+ */
+export const WHY_WINDOW_MS = 3 * 24 * 60 * 60 * 1000
 
 /** A decision before the store gives it an id. */
 export type NewDecision = Omit<Decision, 'id'>
@@ -450,4 +473,126 @@ export async function recordMarkers(
   }
 
   return filed
+}
+
+/**
+ * Whether this decision is still worth asking about.
+ *
+ * Three ways it is not: somebody already said why, the app already gave up
+ * asking, or it is older than the window. A refusal usually answers the first
+ * of those on its own — `denialDecision` keeps whatever was typed into the deny
+ * box as the reason — but a refusal somebody pressed without typing anything is
+ * a decision with no reason, and it is asked about like the rest.
+ */
+export function wantsReason(decision: Decision, now = Date.now()): boolean {
+  if (decision.reason?.trim()) return false
+  if (decision.stoppedAsking) return false
+  return now - decision.at < WHY_WINDOW_MS
+}
+
+/**
+ * The sentence for a *why* that ran out of time, or null while it still has any.
+ *
+ * Pure, so the window is testable without a clock and without a store — the
+ * `retirementFor` precedent in `reviewRetire.ts`.
+ */
+export function whyRetirement(
+  decision: Decision,
+  now = Date.now(),
+): { at: number; detail: string } | null {
+  if (decision.reason?.trim() || decision.stoppedAsking) return null
+  if (now - decision.at < WHY_WINDOW_MS) return null
+
+  return {
+    at: now,
+    detail: `Nobody said why within ${Math.round(WHY_WINDOW_MS / 86_400_000)} days, so this stopped asking. `
+      + 'The decision still goes to a reviewer, marked as having no reason given.',
+  }
+}
+
+/** One session's unanswered decisions, batched the way the queue shows them. */
+export interface UnansweredSession {
+  sessionId: string
+  /** The session's own title, so the row does not read as an id. */
+  title: string
+  decisions: Decision[]
+}
+
+/**
+ * Everything still worth asking about, by session, and the retirements applied
+ * on the way past.
+ *
+ * Retiring on read rather than on a timer, for the reason `reviewRetire.ts`
+ * gives about the same choice: a background sweep that only ever changes rows
+ * nobody is looking at is machinery bought for nothing, and the moment somebody
+ * looks is the moment the answer has to be right.
+ *
+ * Sessions that no longer exist are left out. A decision taken in a session you
+ * have since closed is still delivered — 41 carries it either way — but a row
+ * in the queue is a claim that pressing it leads somewhere, and that one leads
+ * to a page about a session that is gone. The store on this machine has 239
+ * session ids across its runs against 144 sessions on disk, so this is the
+ * common case and not the edge.
+ */
+export async function unansweredReasons(
+  titleFor: (sessionId: string) => Promise<string | null>,
+  now = Date.now(),
+): Promise<UnansweredSession[]> {
+  const live = await decisionsStore.update((file) => {
+    const keep: Decision[] = []
+
+    for (const decision of file.decisions) {
+      const retirement = whyRetirement(decision, now)
+      if (retirement) {
+        decision.stoppedAsking = retirement
+        continue
+      }
+      if (wantsReason(decision, now)) keep.push(decision)
+    }
+
+    return keep
+  })
+
+  const bySession = new Map<string, Decision[]>()
+  for (const decision of live) {
+    const held = bySession.get(decision.sessionId)
+    if (held) held.push(decision)
+    else bySession.set(decision.sessionId, [decision])
+  }
+
+  const sessions: UnansweredSession[] = []
+  for (const [sessionId, decisions] of bySession) {
+    const title = await titleFor(sessionId)
+    if (!title) continue
+    sessions.push({ sessionId, title, decisions: decisions.sort((a, b) => a.at - b.at) })
+  }
+
+  // Oldest first: the decision closest to running out of time is the one worth
+  // answering, and it is the one whose reason is still most nearly intact.
+  return sessions.sort((a, b) => (a.decisions[0]?.at ?? 0) - (b.decisions[0]?.at ?? 0))
+}
+
+/**
+ * Write the reason somebody gave, on the one record it is about.
+ *
+ * Returns null for an id that is not there — a decision answered twice from two
+ * tabs, or one whose store was reset — because a 404 for a row that has already
+ * done its job is a worse answer than nothing happening.
+ */
+export async function setDecisionReason(id: string, reason: string): Promise<Decision | null> {
+  const said = reason.trim()
+  if (!said) return null
+
+  return decisionsStore.update((file) => {
+    const decision = file.decisions.find(d => d.id === id)
+    if (!decision) return null
+
+    decision.reason = said
+    // Answering it is also the end of asking about it. Without this a reason
+    // given on the last day would leave a record that both has a reason and is
+    // marked as having stopped asking for one, which reads as a contradiction
+    // wherever the two are shown together.
+    delete decision.stoppedAsking
+    return decision
+  })
 }

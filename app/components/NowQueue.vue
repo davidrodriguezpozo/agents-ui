@@ -24,6 +24,7 @@ const {
   sources: inboxSources, refreshing, load: loadInbox, refresh: refreshInbox, setSchedule,
 } = useInbox()
 const { create: createSession, sessions, fetchAll: fetchSessions } = useSessions()
+const { sessions: whySessions, load: loadDecisions, say } = useDecisions()
 /** Where a resolved row leaves you, on the same switch Land reads. */
 const { load: loadQuickActions, arrive } = useQuickActions()
 const toast = useToast()
@@ -32,6 +33,7 @@ onMounted(() => {
   if (!digest.value) void loadDigest()
   void loadInbox()
   void loadQuickActions()
+  void loadDecisions()
   // Needed to answer "have I already started on this pull request?" — see
   // `NowInput.sessions`. `app.vue` fetches them at start-up, so this is usually
   // a re-read of a list already in memory; it matters on a hard reload of `/`.
@@ -57,6 +59,7 @@ const items = computed(() =>
     digest: digest.value,
     inbox: inboxSources.value,
     sessions: sessionsHere.value,
+    decisions: whySessions.value,
   }).filter(item => !settled.value.has(item.key)),
 )
 
@@ -111,6 +114,61 @@ async function onSchedule(source: { key: string; label: string; refreshAt?: stri
       : 'It will only look when you press refresh.',
     color: 'success',
   })
+}
+
+/**
+ * Which *why* row is open, and what has been typed into it.
+ *
+ * Opened rather than answered in place, because the question needs its context:
+ * "why did you pick that" is unanswerable without the thing that was picked and
+ * the options beside it. Closed by default, so the queue still reads as a list
+ * of one-line rows.
+ *
+ * One row open at a time. Two open rows is a form, and a form is the thing unit
+ * 40 is written to avoid.
+ */
+const openWhy = ref<string | null>(null)
+const drafts = ref<Record<string, string>>({})
+const saving = ref<string | null>(null)
+
+function toggleWhy(key: string) {
+  openWhy.value = openWhy.value === key ? null : key
+}
+
+/**
+ * Save one reason. The row shrinks by a line; it does not close, because a
+ * session with six decisions is answered six times and closing after each would
+ * make the common case the annoying one.
+ */
+async function onSay(decisionId: string) {
+  const reason = (drafts.value[decisionId] ?? '').trim()
+  if (!reason) return
+
+  saving.value = decisionId
+  try {
+    const ok = await say(decisionId, reason)
+    if (!ok) {
+      toast.add({
+        title: 'Could not save that',
+        description: 'The reason was not written. Nothing else changed.',
+        color: 'error',
+      })
+      return
+    }
+    const { [decisionId]: _gone, ...rest } = drafts.value
+    drafts.value = rest
+  } finally {
+    saving.value = null
+  }
+}
+
+/** `date-fns` over `luxon`, for a card. The chosen one leads. */
+function alternativeLine(decision: { alternatives: { what: string; chosen?: true }[] }): string {
+  if (!decision.alternatives.length) return ''
+  const chosen = decision.alternatives.filter(a => a.chosen).map(a => a.what)
+  const rest = decision.alternatives.filter(a => !a.chosen).map(a => a.what)
+  if (!chosen.length) return `instead of ${rest.join(', ')}`
+  return rest.length ? `${chosen.join(', ')} over ${rest.join(', ')}` : chosen.join(', ')
 }
 
 /** The same words either way a row is resolved into a session. */
@@ -216,8 +274,9 @@ async function resolve(item: NowItem) {
       <li
         v-for="item in items"
         :key="item.key"
-        class="flex items-start gap-3 px-4 py-3 hover-row"
+        class="px-4 py-3 hover-row"
       >
+       <div class="flex items-start gap-3">
         <!-- The row's own look when it has one — see `NowItem.look`. -->
         <UIcon
           :name="item.look?.icon ?? NOW_LOOK[item.kind].icon"
@@ -254,8 +313,20 @@ async function resolve(item: NowItem) {
           however wide the labels get and whichever rows have none.
         -->
         <div class="flex items-center gap-2 shrink-0">
+          <!--
+            The one row whose control opens something rather than doing
+            something. Said in the label: "Say why" is a promise about what
+            happens next, and it is not "this is sent somewhere".
+          -->
           <UButton
-            v-if="item.action"
+            v-if="item.decisions"
+            :label="openWhy === item.key ? 'Close' : 'Say why'"
+            size="xs"
+            variant="soft"
+            @click="toggleWhy(item.key)"
+          />
+          <UButton
+            v-else-if="item.action"
             :label="item.action.label"
             size="xs"
             variant="soft"
@@ -280,6 +351,45 @@ async function resolve(item: NowItem) {
           >{{ relativeTime(item.at) }}</span>
           <!-- Nothing to say about when, and the column still holds its place. -->
           <span v-else class="w-[66px] shrink-0 hidden sm:inline-block" aria-hidden="true" />
+        </div>
+       </div>
+
+        <!--
+          The reasons, in place, one line each.
+
+          Never a modal and never a blocking prompt: this app's whole posture is
+          that you can leave it running, and a dialog that stops you to ask why
+          is the opposite of that. It would be switched off within a week.
+
+          Nothing here blocks anything. Closing the row unanswered is a complete
+          answer — the decision goes to the reviewer either way, marked as having
+          no reason given, which is itself worth knowing.
+        -->
+        <div v-if="item.decisions && openWhy === item.key" class="mt-3 pl-7 space-y-3">
+          <div v-for="decision in item.decisions.decisions" :key="decision.id">
+            <p class="type-strong">{{ decision.what }}</p>
+            <p v-if="alternativeLine(decision)" class="type-detail mt-0.5">
+              {{ alternativeLine(decision) }}
+            </p>
+            <div class="flex items-center gap-2 mt-1.5">
+              <UInput
+                v-model="drafts[decision.id]"
+                placeholder="Why? One line."
+                size="sm"
+                class="flex-1"
+                :disabled="saving === decision.id"
+                @keyup.enter="onSay(decision.id)"
+              />
+              <UButton
+                label="Save"
+                size="xs"
+                variant="soft"
+                :loading="saving === decision.id"
+                :disabled="!(drafts[decision.id] ?? '').trim()"
+                @click="onSay(decision.id)"
+              />
+            </div>
+          </div>
         </div>
       </li>
     </ul>

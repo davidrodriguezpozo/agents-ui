@@ -3,6 +3,7 @@ import { PULL_LOOK, type Pull, type WorkIntent } from '~/composables/useGithubPu
 import type { AttentionItem } from '~/composables/useAttention'
 import type { InboxItem, InboxSourceReading } from '~/composables/useInbox'
 import { workByPull, type PullWork, type WorkSession } from '~/utils/pullWork'
+import type { UnansweredSession } from '~/composables/useDecisions'
 
 /**
  * One queue of everything that will not move until you do something.
@@ -25,6 +26,7 @@ export type NowKind =
   | 'inbox'
   | 'ready-session'
   | 'missed-ritual'
+  | 'decision-why'
 
 /**
  * Lower sorts first. The principle: work frozen *right now* outranks work
@@ -44,7 +46,20 @@ const URGENCY: Record<NowKind, number> = {
   // review — but nobody is blocked on it this minute, so it sits below one.
   inbox: 4,
   'ready-session': 5,
-  'missed-ritual': 6,
+  /*
+   * Last but one, and above only the thing that heals itself.
+   *
+   * Nothing is blocked on an unanswered *why* — that is the design of unit 40
+   * and the reason this row exists at all rather than a modal. It ranks below
+   * every kind of stuck work and below a session waiting to land, because the
+   * moment it starts outranking something that cannot move without you, it has
+   * become the interruption it was written to avoid.
+   *
+   * Above `missed-ritual` alone, because this one expires for good: a ritual's
+   * turn comes round again and a reason does not.
+   */
+  'decision-why': 6,
+  'missed-ritual': 7,
 }
 
 export interface NowAction {
@@ -70,6 +85,14 @@ export interface NowItem {
   href?: string
   /** Resolvable from here, without going to another page first. */
   action?: NowAction
+  /**
+   * The decisions this row is asking about, when it is that kind of row.
+   *
+   * Carried on the item rather than looked up again in the component, because
+   * the batching is part of the ranking: one row per session is what keeps this
+   * from becoming six rows, and the two have to be decided in one place.
+   */
+  decisions?: UnansweredSession
   /** For ordering within a rank, and for "3h ago". */
   at?: number
   /**
@@ -239,6 +262,12 @@ export interface NowInput {
    * `workersOnPull`, which cannot check it.
    */
   sessions?: WorkSession[]
+  /**
+   * Decisions taken here that nobody has said why about, already grouped by
+   * session on the server. Empty is the ordinary state and costs one row of
+   * nothing.
+   */
+  decisions?: UnansweredSession[]
   /** Passed in so that "has gone quiet" stays part of a pure function. */
   now?: number
 }
@@ -264,7 +293,7 @@ export interface NowInput {
  * problem. An expiring queue would be the same lie in the other direction.
  */
 export function buildNowQueue({
-  attention, pulls, digest, inbox, sessions, now = Date.now(),
+  attention, pulls, digest, inbox, sessions, decisions, now = Date.now(),
 }: NowInput): NowItem[] {
   const items: NowItem[] = []
 
@@ -366,6 +395,19 @@ export function buildNowQueue({
     for (const item of source.items) items.push(inboxRow(source, item))
   }
 
+  /*
+   * One row per session, never one per decision.
+   *
+   * A session that took six decisions asks about six on one line. The queue is
+   * the surface this app has already twice nearly ruined by putting a row on it
+   * per event, and a developer who takes six decisions in an afternoon is the
+   * ordinary case rather than the busy one.
+   */
+  for (const session of decisions ?? []) {
+    if (!session.decisions.length) continue
+    items.push(whyRow(session))
+  }
+
   // One pass rather than a lookup per row — see `workByPull`.
   const work = workByPull(pulls, sessions ?? [])
 
@@ -390,6 +432,33 @@ export function buildNowQueue({
   )
 }
 
+/**
+ * The decisions one session took without saying why, as one row.
+ *
+ * The copy is the whole of this unit's manners. It says how many, it says the
+ * answer is one line, and it says when it will stop asking — because a row that
+ * disappears without having said it was going to is indistinguishable from one
+ * that was lost.
+ */
+function whyRow(session: UnansweredSession): NowItem {
+  const count = session.decisions.length
+  // The oldest is the one closest to running out, so it sets the row's clock.
+  const oldest = session.decisions.reduce((a, b) => (a.at <= b.at ? a : b))
+
+  return {
+    key: `why:${session.sessionId}`,
+    kind: 'decision-why',
+    urgency: URGENCY['decision-why'],
+    title: session.title,
+    because: count === 1
+      ? 'One decision here has no reason recorded. A line now is worth more to a reviewer than the diff.'
+      : `${count} decisions here have no reason recorded. A line each now is worth more to a reviewer than the diff.`,
+    to: `/sessions/${session.sessionId}`,
+    at: oldest.at,
+    decisions: session,
+  }
+}
+
 /** The tone each kind carries. Severity, never decoration. */
 export const NOW_LOOK: Record<NowKind, { icon: string; colour: string }> = {
   'blocked-session': { icon: 'i-lucide-hand', colour: 'var(--error)' },
@@ -399,4 +468,7 @@ export const NOW_LOOK: Record<NowKind, { icon: string; colour: string }> = {
   'ready-session': { icon: 'i-lucide-circle-check', colour: 'var(--success)' },
   inbox: { icon: 'i-lucide-inbox', colour: 'var(--plugin)' },
   'missed-ritual': { icon: 'i-lucide-clock-alert', colour: 'var(--text-tertiary)' },
+  // Not a warning colour. Nothing is wrong, and nothing is blocked; somebody is
+  // being asked a question they are free to ignore.
+  'decision-why': { icon: 'i-lucide-message-circle-question', colour: 'var(--text-tertiary)' },
 }

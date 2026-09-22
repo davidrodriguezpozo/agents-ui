@@ -1,9 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { buildNowQueue, type NowItem } from '~/utils/nowQueue'
+import { buildNowQueue, NOW_LOOK, type NowItem } from '~/utils/nowQueue'
 import type { AttentionItem } from '~/composables/useAttention'
 import type { Digest } from '~/composables/useDigest'
 import type { Pull } from '~/composables/useGithubPulls'
 import type { WorkSession } from '~/utils/pullWork'
+import type { Decision, UnansweredSession } from '~/composables/useDecisions'
 
 function digest(over: Partial<Digest> = {}): Digest {
   return {
@@ -515,5 +516,114 @@ describe('a pull request you have already started on', () => {
     })
 
     expect(item!.action?.label).toBe('Resolve conflicts')
+  })
+})
+
+/**
+ * A decision with no reason on it, as a row you are free to ignore.
+ *
+ * The three properties worth asserting are all about restraint: one row per
+ * session however many decisions it holds, a rank below everything that is
+ * actually stuck, and a row that says when it will stop asking rather than
+ * vanishing one morning.
+ */
+function why(over: Partial<UnansweredSession> = {}): UnansweredSession {
+  return {
+    sessionId: 's1',
+    title: 'Add the decision record',
+    decisions: [{
+      id: 'd1', sessionId: 's1', at: 1000, source: 'marker',
+      what: 'Used a queue', alternatives: [], files: [],
+    }],
+    ...over,
+  }
+}
+
+function decision(over: Partial<Decision> = {}): Decision {
+  return {
+    id: 'd', sessionId: 's1', at: 1000, source: 'marker',
+    what: 'Used a queue', alternatives: [], files: [],
+    ...over,
+  }
+}
+
+describe('decisions with no reason', () => {
+  const base = { attention: [], pulls: [], digest: null }
+
+  it('raises one row for a session, whatever it decided', () => {
+    const six = why({
+      decisions: Array.from({ length: 6 }, (_, i) =>
+        decision({ id: `d${i}`, what: `Decision ${i}`, at: 1000 + i })),
+    })
+
+    const items = buildNowQueue({ ...base, decisions: [six] })
+
+    expect(items).toHaveLength(1)
+    expect(items[0]!.kind).toBe('decision-why')
+    expect(items[0]!.because).toContain('6 decisions')
+    expect(items[0]!.decisions!.decisions).toHaveLength(6)
+  })
+
+  it('says "one decision" rather than "1 decisions"', () => {
+    const [item] = buildNowQueue({ ...base, decisions: [why()] })
+    expect(item!.because).toContain('One decision')
+  })
+
+  it('raises a row per session, not per decision', () => {
+    const items = buildNowQueue({
+      ...base,
+      decisions: [why(), why({ sessionId: 's2', title: 'Another' })],
+    })
+
+    expect(items.map(i => i.key)).toEqual(['why:s1', 'why:s2'])
+  })
+
+  /**
+   * The rank is the promise. The moment an unanswered *why* draws above
+   * something that genuinely cannot move without you, it has become the
+   * interruption unit 40 exists to avoid.
+   */
+  it('sorts below every kind of stuck work', () => {
+    const items = buildNowQueue({
+      attention: [blockedSession(), failingRitual()],
+      pulls: [pull()],
+      digest: digest({ sessions: [{ id: 'r', title: 'Ready', state: 'ready' } as any] }),
+      decisions: [why()],
+    })
+
+    expect(kinds(items).indexOf('decision-why')).toBe(kinds(items).length - 1)
+  })
+
+  it('sorts above a missed ritual, which comes round again', () => {
+    const items = buildNowQueue({
+      ...base,
+      digest: digest({ missed: [{ id: 'm', title: 'Morning brief', dueAt: 500 } as any] }),
+      decisions: [why()],
+    })
+
+    expect(kinds(items)).toEqual(['decision-why', 'missed-ritual'])
+  })
+
+  it('takes its clock from the oldest decision, which runs out first', () => {
+    const [item] = buildNowQueue({
+      ...base,
+      decisions: [why({
+        decisions: [decision({ id: 'a', at: 9000 }), decision({ id: 'b', at: 3000 })],
+      })],
+    })
+
+    expect(item!.at).toBe(3000)
+  })
+
+  it('raises nothing for a session whose decisions all have reasons', () => {
+    expect(buildNowQueue({ ...base, decisions: [why({ decisions: [] })] })).toEqual([])
+    expect(buildNowQueue({ ...base, decisions: [] })).toEqual([])
+    expect(buildNowQueue({ ...base })).toEqual([])
+  })
+
+  /** It is a question, not a fault. Nothing red, nothing shaped like a warning. */
+  it('carries no alarming look', () => {
+    expect(NOW_LOOK['decision-why'].colour).not.toContain('error')
+    expect(NOW_LOOK['decision-why'].colour).not.toContain('warning')
   })
 })

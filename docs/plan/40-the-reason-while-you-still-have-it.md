@@ -65,3 +65,39 @@ plausible sentence, not a reason, and it is the one thing here that would poison
 Any notification for an unanswered *why*.
 
 ## Findings
+
+- **The window is three days**, and the number was chosen for one case: a decision taken on
+  Friday evening is still on the queue through the whole of Monday. Past that the answer stops
+  being a reason and becomes a reconstruction — which is the archaeology this system exists to
+  abolish, arrived at from the other end. `WHY_WINDOW_MS` in `server/utils/decisions.ts`; the
+  retirement writes a sentence onto the record (`stoppedAsking`) rather than deleting
+  anything, and the copy on the row says the count and the expiry out loud.
+
+- **The row expands; it does not answer in place.** *"Why did you pick that"* is unanswerable
+  without the thing that was picked and the options beside it, so **Say why** opens the row and
+  shows each decision with its alternatives and a one-line input. One row open at a time — two
+  open rows is a form, and a form is the thing this unit is written to avoid. Answering shrinks
+  the row by a line rather than closing it, because a session with six decisions is answered
+  six times.
+
+- **Retirement happens on read, not on a timer.** `reviewRetire.ts`'s argument applies
+  unchanged: a background sweep that only ever changes rows nobody is looking at is machinery
+  bought for nothing, and the moment somebody looks is the moment the answer has to be right.
+
+- **A session that no longer exists raises no row.** The decision is still delivered — 41
+  carries it either way — but a queue row is a claim that pressing it leads somewhere, and that
+  one leads to a page about a session that is gone. Unit 39's replay found 239 session ids
+  across this machine's runs against 144 sessions on disk, so this is the common case.
+
+- **"Nothing about this blocks a turn, a session or a merge" is asserted two ways**, and only
+  one of them is a test. The test proves `unansweredReasons` never removes or alters a decision,
+  including after ten windows have passed — the record stays intact and deliverable with
+  `reason` absent. The other half is structural and worth stating rather than asserting:
+  nothing in `sessionTurn.ts`, `lander.ts` or the merge path imports anything added here. The
+  queue reads the store; the store does not read the queue.
+
+- **Not done: `denied` decisions arrive with a reason and are still asked about.** Whatever was
+  typed into the deny box becomes the `reason`, so most refusals never reach the queue — but a
+  refusal somebody pressed without typing anything does, and it is asked about like the rest. A
+  first draft of `wantsReason` exempted the whole source on the theory that a refusal explains
+  itself; it does not, and the comment claiming so was removed rather than the check added.

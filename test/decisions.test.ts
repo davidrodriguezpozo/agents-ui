@@ -10,7 +10,13 @@ import {
   questionDecisions,
   recordDecision,
   recordMarkers,
+  setDecisionReason,
   steerDecision,
+  unansweredReasons,
+  wantsReason,
+  WHY_WINDOW_MS,
+  whyRetirement,
+  type Decision,
 } from '../server/utils/decisions'
 import {
   answerPermission,
@@ -435,5 +441,189 @@ describe('how a prompt settled', () => {
     await call
 
     expect(settled[0]![1]).toBe('dispose')
+  })
+})
+
+/**
+ * Asking why, while the answer is still true.
+ *
+ * An imperative carries no reason. "Build it with a queue" records cleanly and
+ * the one thing a reviewer wants is the one thing it does not have. The tests
+ * that matter here are the ones about restraint: it expires rather than
+ * accusing somebody forever, it never holds a decision back, and it batches.
+ */
+describe('the reason, while you still have it', () => {
+  let dir: string
+
+  beforeAll(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'decisions-why-'))
+    process.env.CLAUDE_DIR = dir
+  })
+
+  afterAll(async () => {
+    delete process.env.CLAUDE_DIR
+    await rm(dir, { recursive: true, force: true })
+  })
+
+  beforeEach(async () => {
+    await decisionsStore.write({ decisions: [] })
+  })
+
+  const titled = async (id: string) => (id.startsWith('gone') ? null : `Session ${id}`)
+
+  function entry(over: Partial<Decision> = {}): Decision {
+    return {
+      id: 'd1', sessionId: 's1', at: NOW, source: 'marker',
+      what: 'Used a queue', alternatives: [], files: [], ...over,
+    }
+  }
+
+  describe('wantsReason', () => {
+    it('asks about a decision nobody explained', () => {
+      expect(wantsReason(entry(), NOW)).toBe(true)
+    })
+
+    it('does not ask when somebody already said', () => {
+      expect(wantsReason(entry({ reason: 'it serialises' }), NOW)).toBe(false)
+      expect(wantsReason(entry({ reason: '   ' }), NOW)).toBe(true)
+    })
+
+    it('does not ask again once it gave up', () => {
+      expect(wantsReason(entry({ stoppedAsking: { at: NOW, detail: 'gave up' } }), NOW)).toBe(false)
+    })
+
+    it('stops asking past the window', () => {
+      expect(wantsReason(entry(), NOW + WHY_WINDOW_MS - 1)).toBe(true)
+      expect(wantsReason(entry(), NOW + WHY_WINDOW_MS)).toBe(false)
+    })
+
+    /** Friday evening, answered any time up to the end of Monday. */
+    it('leaves a weekend inside the window', () => {
+      expect(WHY_WINDOW_MS).toBeGreaterThanOrEqual(3 * 86_400_000)
+    })
+  })
+
+  describe('whyRetirement', () => {
+    it('says why it went, rather than going quietly', () => {
+      const retirement = whyRetirement(entry(), NOW + WHY_WINDOW_MS)
+
+      expect(retirement!.detail).toContain('stopped asking')
+      expect(retirement!.detail).toContain('no reason given')
+      expect(retirement!.at).toBe(NOW + WHY_WINDOW_MS)
+    })
+
+    it('retires nothing that was answered or is still in time', () => {
+      expect(whyRetirement(entry(), NOW)).toBeNull()
+      expect(whyRetirement(entry({ reason: 'because' }), NOW + WHY_WINDOW_MS)).toBeNull()
+    })
+  })
+
+  describe('unansweredReasons', () => {
+    it('batches a session\'s decisions into one entry, oldest first', async () => {
+      for (let i = 0; i < 3; i++) {
+        await recordDecision({
+          sessionId: 's1', at: NOW - i * 1000, source: 'marker',
+          what: `Decision ${i}`, alternatives: [], files: [],
+        })
+      }
+
+      const sessions = await unansweredReasons(titled, NOW)
+
+      expect(sessions).toHaveLength(1)
+      expect(sessions[0]!.title).toBe('Session s1')
+      expect(sessions[0]!.decisions.map(d => d.what)).toEqual(['Decision 2', 'Decision 1', 'Decision 0'])
+    })
+
+    it('leaves out a session that no longer exists', async () => {
+      await recordDecision({
+        sessionId: 'gone-1', at: NOW, source: 'marker', what: 'Used a queue', alternatives: [], files: [],
+      })
+
+      expect(await unansweredReasons(titled, NOW)).toEqual([])
+    })
+
+    /** The retirement is written, so the row goes for good and says why it went. */
+    it('retires what ran out of time, on the way past', async () => {
+      const filed = await recordDecision({
+        sessionId: 's1', at: NOW, source: 'marker', what: 'Used a queue', alternatives: [], files: [],
+      })
+
+      expect(await unansweredReasons(titled, NOW + WHY_WINDOW_MS)).toEqual([])
+
+      const [kept] = await decisionsFor('s1')
+      expect(kept!.id).toBe(filed!.id)
+      expect(kept!.stoppedAsking!.detail).toContain('stopped asking')
+    })
+
+    /**
+     * The decision worth defending: an unanswered *why* never holds anything
+     * back. The record is intact and deliverable either way — a reviewer seeing
+     * an unexplained choice has learned something real.
+     */
+    it('never removes or alters the decision itself', async () => {
+      await recordDecision({
+        sessionId: 's1', at: NOW, source: 'ask_user_question', what: 'Which runner?',
+        alternatives: [{ what: 'vitest', chosen: true }, { what: 'jest' }], files: ['a.ts'],
+      })
+
+      await unansweredReasons(titled, NOW + WHY_WINDOW_MS * 10)
+
+      const [kept] = await decisionsFor('s1')
+      expect(kept).toMatchObject({
+        what: 'Which runner?',
+        files: ['a.ts'],
+        alternatives: [{ what: 'vitest', chosen: true }, { what: 'jest' }],
+      })
+      expect(kept!.reason).toBeUndefined()
+    })
+
+    it('puts the session closest to running out first', async () => {
+      await recordDecision({
+        sessionId: 's1', at: NOW, source: 'marker', what: 'Newer', alternatives: [], files: [],
+      })
+      await recordDecision({
+        sessionId: 's2', at: NOW - 60_000, source: 'marker', what: 'Older', alternatives: [], files: [],
+      })
+
+      expect((await unansweredReasons(titled, NOW)).map(s => s.sessionId)).toEqual(['s2', 's1'])
+    })
+  })
+
+  describe('setDecisionReason', () => {
+    it('writes the reason and takes it off the queue', async () => {
+      const filed = await recordDecision({
+        sessionId: 's1', at: NOW, source: 'marker', what: 'Used a queue', alternatives: [], files: [],
+      })
+
+      const saved = await setDecisionReason(filed!.id, '  it serialises by path  ')
+
+      expect(saved!.reason).toBe('it serialises by path')
+      expect(await unansweredReasons(titled, NOW)).toEqual([])
+    })
+
+    it('clears a retirement, so a record never says both', async () => {
+      const filed = await recordDecision({
+        sessionId: 's1', at: NOW, source: 'marker', what: 'Used a queue', alternatives: [], files: [],
+      })
+      await unansweredReasons(titled, NOW + WHY_WINDOW_MS)
+
+      const saved = await setDecisionReason(filed!.id, 'late, but true')
+
+      expect(saved!.reason).toBe('late, but true')
+      expect(saved!.stoppedAsking).toBeUndefined()
+    })
+
+    it('says nothing happened for an id that is gone, rather than throwing', async () => {
+      expect(await setDecisionReason('nope', 'because')).toBeNull()
+    })
+
+    it('refuses an empty reason rather than storing one', async () => {
+      const filed = await recordDecision({
+        sessionId: 's1', at: NOW, source: 'marker', what: 'Used a queue', alternatives: [], files: [],
+      })
+
+      expect(await setDecisionReason(filed!.id, '   ')).toBeNull()
+      expect((await decisionsFor('s1'))[0]!.reason).toBeUndefined()
+    })
   })
 })
