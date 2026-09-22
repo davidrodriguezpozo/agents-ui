@@ -43,6 +43,19 @@ export interface PermissionRequest {
   createdAt: number
 }
 
+/**
+ * Which of the four endings a prompt reached.
+ *
+ * Every one of them arrives at `onSettled` looking the same — an allow or a
+ * deny — and three of them are nobody deciding anything. A prompt that ran out
+ * its ten minutes is denied; a run that was stopped mid-call is denied; a
+ * broker disposed at the end of a turn denies everything still open. Callers
+ * that only care about unblocking the run can keep ignoring this. `decisions.ts`
+ * cannot: filing a timeout would put a refusal on the record that no person
+ * made, and a record nobody can be held to is worse than no record.
+ */
+export type SettledBy = 'answer' | 'timeout' | 'abort' | 'dispose'
+
 export type PermissionDecision =
   | {
       behavior: 'allow'
@@ -54,7 +67,7 @@ export type PermissionDecision =
 
 interface Pending {
   request: PermissionRequest
-  settle: (decision: PermissionDecision) => void
+  settle: (decision: PermissionDecision, by: SettledBy) => void
 }
 
 /**
@@ -98,7 +111,11 @@ export interface PermissionBroker {
 export function createPermissionBroker(options: {
   ownerId: string
   onRequest: (request: PermissionRequest) => void
-  onSettled?: (request: PermissionRequest, decision: PermissionDecision) => void
+  onSettled?: (
+    request: PermissionRequest,
+    decision: PermissionDecision,
+    by: SettledBy,
+  ) => void
   timeoutMs?: number
   questionTimeoutMs?: number
 }): PermissionBroker {
@@ -135,21 +152,21 @@ export function createPermissionBroker(options: {
     return new Promise<PermissionResult>((resolve) => {
       let settled = false
 
-      const settle = (decision: PermissionDecision) => {
+      const settle = (decision: PermissionDecision, by: SettledBy) => {
         if (settled) return
         settled = true
         clearTimeout(timer)
         pending.delete(id)
         owned.delete(id)
         ctx.signal.removeEventListener('abort', onAbort)
-        onSettled?.(request, decision)
+        onSettled?.(request, decision, by)
         resolve(toResult(decision, input, ctx.suggestions))
       }
 
       const onAbort = () => settle({
         behavior: 'deny',
         message: 'The run was stopped before this tool was approved.',
-      })
+      }, 'abort')
 
       const deadline = questions.length ? questionTimeoutMs : timeoutMs
       const timer = setTimeout(() => settle(questions.length
@@ -164,7 +181,7 @@ export function createPermissionBroker(options: {
             message: `Nobody answered the permission prompt for ${toolName} within ${
               Math.round(deadline / 60_000)
             } minutes, so it was denied. Explain what you needed and stop.`,
-          }), deadline)
+          }, 'timeout'), deadline)
       // A waiting prompt should not keep the process alive on its own.
       ;(timer as { unref?: () => void }).unref?.()
 
@@ -185,7 +202,7 @@ export function createPermissionBroker(options: {
     canUseTool,
     dispose(message: string) {
       for (const id of [...owned]) {
-        pending.get(id)?.settle({ behavior: 'deny', message })
+        pending.get(id)?.settle({ behavior: 'deny', message }, 'dispose')
       }
     },
     hasPending: () => owned.size > 0,
@@ -208,7 +225,7 @@ export function answerPermission(id: string, decision: PermissionDecision): bool
     ? { behavior: 'allow', ...(decision.answers ? { answers: decision.answers } : {}) }
     : decision
 
-  entry.settle(answer)
+  entry.settle(answer, 'answer')
   return true
 }
 

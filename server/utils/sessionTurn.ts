@@ -22,6 +22,8 @@ import { verifySessionAfterTurn } from './sessionChecks'
 import { summariseAfterTurn } from './sessionSummary'
 import { composeAfterTurn } from './reviewDraft'
 import { clearRepair, planRepair } from './sessionRepair'
+import { recordDecision, recordMarkers, steerDecision } from './decisions'
+import { latestStep } from './turnActivity'
 import type { SessionCheck } from './checks'
 import { base64Bytes } from '~/utils/base64'
 import type { ModelImage } from '~/utils/imageAttachments'
@@ -264,7 +266,31 @@ export async function sendSteered(
   // The last run is the only one that can be running — a session takes one turn
   // at a time, which `startTurn` guarantees.
   const runId = session.runIds.at(-1)
-  if (runId && steerRun(runId, input, images)) return { steered: true, runId }
+
+  /*
+   * What the turn was in the middle of, read before the sentence lands.
+   *
+   * This is the alternative the steer overrode, and it exists for about as long
+   * as it takes the next tool call to start — which is why it is taken here and
+   * not afterwards. Read from the active run only: a turn that is not in memory
+   * is not running, and its last step is not something anybody just interrupted.
+   */
+  const doing = runId ? latestStep(getActive(runId)?.run.events) : null
+
+  const steered = Boolean(runId && steerRun(runId, input, images))
+
+  /*
+   * Filed whichever way it went, and detached, because this is a note about the
+   * sentence rather than part of sending it. When nothing was running the record
+   * carries no alternative — see `steerDecision`, which will not invent one.
+   */
+  const entry = steerDecision(input, steered ? doing : null, {
+    sessionId: session.id,
+    ...(steered && runId ? { runId } : {}),
+  })
+  if (entry) void recordDecision(entry).catch(() => {})
+
+  if (steered) return { steered: true, runId: runId! }
 
   return sendOrQueue(session, input, images)
 }
@@ -532,6 +558,19 @@ export async function startTurn(
       if (session.reviewOf && finished?.status !== 'cancelled') {
         void composeAfterTurn(session.id)
       }
+
+      /*
+       * What the turn said it decided.
+       *
+       * A parser over text this run already produced, so it costs nothing and
+       * runs on every ending — including a cancelled one, because a turn you
+       * stopped has usually already written down the thing you stopped it over.
+       * See `decisions.ts`; a line it cannot read files nothing.
+       */
+      void recordMarkers(finished?.output, {
+        sessionId: session.id,
+        runId: run.id,
+      }).catch(() => {})
     })
 
   return run.id

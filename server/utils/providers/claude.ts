@@ -2,7 +2,14 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { toQueryOptions } from '../runOptions'
 import { refusedHostsIn } from '../sandboxViolations'
 import { recordQuota } from '../quota'
-import { answerPermission, createPermissionBroker } from '../permissionBroker'
+import {
+  answerPermission,
+  createPermissionBroker,
+  type PermissionDecision,
+  type PermissionRequest,
+  type SettledBy,
+} from '../permissionBroker'
+import { denialDecision, PERSON_SETTLED, questionDecisions, recordDecision } from '../decisions'
 import { mergeRules } from '../permissionRules'
 import { notify, runPath } from '../notify'
 import { budgetStoppedMessage, turnsStoppedMessage } from '../budget'
@@ -67,6 +74,17 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
 
   // Anything the CLI wants approval for becomes an event in the run log, so it
   // survives a page refresh and replays for whoever attaches next.
+  /**
+   * Prompts this app answered on its own, so they are never filed as decisions.
+   *
+   * Auto-trust allowing a call and the unattended refusal below both go through
+   * `answerPermission`, which is indistinguishable at `onSettled` from a person
+   * pressing a button. The difference is the whole of what `decisions.ts` is
+   * careful about: a policy this app applied is not a choice anybody made, and
+   * recording it would put a colleague's name on a refusal they never saw.
+   */
+  const answeredByApp = new Set<string>()
+
   const broker = createPermissionBroker({
     ownerId: run.id,
     onRequest: async (request) => {
@@ -101,6 +119,7 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
       // one thing in this callback that is not asking whether it may. Allowing
       // it with no answers is exactly the bug this whole path exists to fix.
       if (!asking && await nowTrustedFully(run.sessionId)) {
+        answeredByApp.add(request.id)
         answerPermission(request.id, { behavior: 'allow', scope: 'once' })
         return
       }
@@ -120,6 +139,7 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
             ? {}
             : { deniedTools: [...new Set([...(run.deniedTools ?? []), request.toolName])] }),
         })
+        answeredByApp.add(request.id)
         answerPermission(request.id, asking
           // Allowed with nothing in it, which is how the CLI says a question
           // went unanswered. A refusal would end the turn on an error; being
@@ -146,12 +166,49 @@ async function runTurn(turn: ProviderTurn): Promise<SteerMessage[]> {
         runPath(run),
       )
     },
-    onSettled: (request, decision) => emit({
-      type: 'permission_resolved',
-      id: request.id,
-      behavior: decision.behavior,
-    }),
+    onSettled: (request, decision, by) => {
+      emit({
+        type: 'permission_resolved',
+        id: request.id,
+        behavior: decision.behavior,
+      })
+
+      // Detached, and swallowed: a store write must never be able to fail the
+      // tool call it is a note about.
+      void fileDecision(request, decision, by).catch(() => {})
+    },
   })
+
+  /**
+   * The decision in a prompt somebody just answered, if there was one.
+   *
+   * Three things have to be true before anything is written, and each of them
+   * is a way the record would otherwise lie: the prompt has to belong to a
+   * session, because a decision with nothing to hang off is a decision nobody
+   * can review; it has to have been settled by an answer rather than by a
+   * timeout, a stop or the end of a turn; and the answer has to have come from
+   * outside this app.
+   */
+  async function fileDecision(
+    request: PermissionRequest,
+    decision: PermissionDecision,
+    by: SettledBy,
+  ): Promise<void> {
+    const sessionId = run.sessionId
+    if (!sessionId || by !== PERSON_SETTLED || answeredByApp.has(request.id)) return
+
+    const context = { sessionId, runId: run.id }
+
+    if (decision.behavior === 'allow') {
+      for (const entry of questionDecisions(request, decision.answers, context)) {
+        await recordDecision(entry)
+      }
+      return
+    }
+
+    const denied = denialDecision(request, decision.message, context)
+    if (denied) await recordDecision(denied)
+  }
 
   /**
    * What each tool call was asked to do, so a refusal can be traced back to it.

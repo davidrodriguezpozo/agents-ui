@@ -10,6 +10,22 @@ the half that does not change. A session prompt is one line:
 Nobody will answer a question. Decide, write down what you decided, and finish. A brief
 that turns out to be wrong about the code is a finding to record, not a reason to stop.
 
+**Name the decisions as you take them.** When an instruction, a fork in the code or a
+constraint you hit decides the design beyond what the brief said, write one line for it in
+your output, on its own line:
+
+```
+[DECISION] <what you decided> — <why>
+```
+
+One line, one decision. The reason goes on the same line when there is one, after an em
+dash, a colon or a hyphen; leave it off when there is genuinely nothing to say rather than
+padding it. Name files in backticks and they are kept with the decision.
+
+The server reads these off the turn and files them — see `server/utils/decisions.ts`. A
+line it cannot read is filed as nothing at all, never as half a record, so a decision you
+cared about is worth the second it takes to write on one line.
+
 ## The gate
 
 `make check` — vitest, `nuxt typecheck`, and `tsc` over `cli/`. It passes on `main` and it
