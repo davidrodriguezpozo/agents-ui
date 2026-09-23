@@ -182,6 +182,17 @@ let gone = false
 
 const liveRun = computed(() => (activeRunId.value ? live.value[activeRunId.value] : null))
 const prompts = computed(() => (activeRunId.value ? promptsFor(activeRunId.value).value : []))
+/**
+ * What the live turn is stopped on, said where "Working" would otherwise be.
+ * A message sent now arrives only once it moves again, so that is said too.
+ */
+const waitingOn = computed(() =>
+  prompts.value.some(p => p.questions?.length)
+    ? 'Waiting on your answer above — it cannot continue, or read new messages, until you give one.'
+    : 'Waiting for your OK above — it cannot continue, or read new messages, until you give it.',
+)
+/** Whether the turn the prompts belong to is on the page to draw them under. */
+const promptTurnShown = computed(() => Boolean(session.value?.turns.some(t => t.id === activeRunId.value)))
 const isBusy = computed(() => session.value?.status === 'running' || liveRun.value?.status === 'running')
 
 /**
@@ -1917,8 +1928,9 @@ const totalChanges = computed(() => {
               >{{ session.check.output }}</pre>
             </div>
 
-            <!-- Blocked on you: the session cannot continue until these are answered -->
-            <div v-if="prompts.length" class="space-y-2">
+            <!-- Blocked on you, before the turn that asked is on the page: it
+                 moves under that turn, where it is watched, once there is one -->
+            <div v-if="prompts.length && !promptTurnShown" class="space-y-2">
               <PermissionPrompt
                 v-for="request in prompts"
                 :key="request.id"
@@ -2026,7 +2038,7 @@ const totalChanges = computed(() => {
                       :style="{ background: index === stepsFor(turn).length - 1 && isLive(turn) ? 'var(--surface-raised)' : undefined }"
                     >
                       <UIcon
-                        v-if="isLive(turn) && index === stepsFor(turn).length - 1 && !step.result"
+                        v-if="isLive(turn) && index === stepsFor(turn).length - 1 && !step.result && !prompts.length"
                         name="i-lucide-loader-2"
                         class="size-3 shrink-0 animate-spin"
                         style="color: var(--accent);"
@@ -2060,11 +2072,33 @@ const totalChanges = computed(() => {
                   </div>
                 </div>
 
+                <!--
+                  Blocked on you: the turn cannot continue until these are
+                  answered. Drawn here, under the step that asked, because this is
+                  where anyone watching the turn is looking — above the
+                  conversation it sat off-screen while the line below said
+                  "Working", and a session waiting on an answer read as stuck.
+                -->
+                <div v-if="turn.id === activeRunId && prompts.length" class="space-y-2">
+                  <PermissionPrompt
+                    v-for="request in prompts"
+                    :key="request.id"
+                    :request="request"
+                    :busy="isAnsweringPermission(request.id)"
+                    @answer="answerPermission(request.id, $event)"
+                    @remember="onRemember(request.id, $event)"
+                  />
+                </div>
+
                 <div
                   v-if="turn.output"
                   class="markdown type-body"
                   v-html="renderMarkdown(turn.id === activeRunId && liveRun?.output ? liveRun.output : turn.output)"
                 />
+                <div v-else-if="turn.status === 'running' && turn.id === activeRunId && prompts.length" class="flex items-center gap-2 type-meta">
+                  <UIcon name="i-lucide-circle-pause" class="size-3 ink-accent" />
+                  {{ waitingOn }}
+                </div>
                 <div v-else-if="turn.status === 'running'" class="flex items-center gap-2 type-meta">
                   <UIcon name="i-lucide-loader-2" class="size-3 animate-spin ink-accent" />
                   Working — you can close this tab and come back.
